@@ -2,11 +2,11 @@
 import Link from "next/link";
 import { Card, Note } from "../(designed)/designed-ui";
 import { useEffect, useRef, useState } from "react";
-import type { BriefProgress, BriefProgressCommand, CrewBrief } from "@jobguard/api/workspace";
+import type { BriefProgress, BriefProgressCommand, BriefTaskStatus, CrewBrief } from "@jobguard/api/workspace";
 
-import { progressPhotoLabel } from "./brief-progress-photo";
+import { needsNewProofPhoto, progressPhotoLabel, taskStatusLabel } from "./brief-progress-photo";
 
-type View = { briefs: (CrewBrief & { current: boolean })[]; progress: BriefProgress[] };
+type View = { briefs: (CrewBrief & { current: boolean })[]; progress: BriefProgress[]; tasks: BriefTaskStatus[] };
 const messages: Record<string, string> = {
   BRIEF_PROGRESS_REGENERATE: "This brief needs regenerating",
   BRIEF_PROGRESS_STALE_BRIEF: "This brief has changed. Reload before recording progress.",
@@ -17,6 +17,7 @@ const messages: Record<string, string> = {
 };
 export function BriefProgressView({ jobId }: { jobId: string }) {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState("");
+  const [loads, setLoads] = useState(0);
   const path = `/api/jobs/${encodeURIComponent(jobId)}/brief-progress`;
   useEffect(() => {
     let active = true;
@@ -26,7 +27,7 @@ export function BriefProgressView({ jobId }: { jobId: string }) {
       if (active) setView(result);
     }).catch(cause => { if (active) setError(String(cause.message)); });
     return () => { active = false; };
-  }, [path]);
+  }, [path, loads]);
   return <main style={{ maxWidth: 760, padding: 16, margin: "0 auto", overflowWrap: "anywhere" }}>
     <Link href={`/jobs/${encodeURIComponent(jobId)}/work`}>Back to work</Link>
     <h1>Brief progress</h1>
@@ -41,26 +42,27 @@ export function BriefProgressView({ jobId }: { jobId: string }) {
       {!brief.current && <p>This brief needs regenerating</p>}
       {brief.content.tasks.map(task => <TaskProgress key={`${task.scopeItemId}:${task.taskKey}`} brief={brief} task={task}
         progress={view.progress.filter(row => row.trade === brief.trade && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey)}
-        path={path} onSaved={row => setView(current => current && ({ ...current, progress: [...current.progress, row] }))}/>)}
+        status={view.tasks?.find(item => item.trade === brief.trade && item.scopeItemId === task.scopeItemId && item.taskKey === task.taskKey)?.status}
+        path={path} onSaved={row => { setView(current => current && ({ ...current, progress: [...current.progress, row] })); setLoads(count => count + 1); }}/>)}
       {view.progress.filter(row => row.trade === brief.trade && !brief.content.tasks.some(task =>
         task.scopeItemId === row.scopeItemId && task.taskKey === row.taskKey)).map(row =>
         <div key={row.commandId}>Earlier brief revision {row.briefVersion}: {row.kind} · {row.note} · Recorded by you<ProgressPhoto row={row}/></div>)}
     </Card></section>)}
   </main>;
 }
-function TaskProgress({ brief, task, progress, path, onSaved }: {
+function TaskProgress({ brief, task, progress, status, path, onSaved }: {
   brief: CrewBrief & { current: boolean }; task: CrewBrief["content"]["tasks"][number];
-  progress: BriefProgress[]; path: string; onSaved: (row: BriefProgress) => void;
+  progress: BriefProgress[]; status: BriefTaskStatus["status"] | undefined; path: string; onSaved: (row: BriefProgress) => void;
 }) {
   const [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   // Keep the exact command for an uncertain network outcome; retries cannot duplicate a press.
   const [attachPhoto, setAttachPhoto] = useState(false);
   const pending = useRef<BriefProgressCommand | null>(null);
   const revision = Math.max(0, ...progress.map(row => row.version));
-  async function record(kind: BriefProgressCommand["kind"]) {
+  async function record(kind: BriefProgressCommand["kind"], withPhoto = attachPhoto) {
     if (busy) return;
     setBusy(true); setError("");
-    const command = pending.current ?? { version: "v2-brief-progress-command.v2" as const, ...(attachPhoto && { photoId: crypto.randomUUID() }), commandId: crypto.randomUUID(),
+    const command = pending.current ?? { version: "v2-brief-progress-command.v2" as const, ...(withPhoto && { photoId: crypto.randomUUID() }), commandId: crypto.randomUUID(),
       trade: brief.trade, briefVersion: brief.version, scopeItemId: task.scopeItemId, taskKey: task.taskKey,
       expectedVersion: revision, kind, note };
     pending.current = command;
@@ -85,6 +87,8 @@ function TaskProgress({ brief, task, progress, path, onSaved }: {
   return <section className="card-body form" aria-label={task.title}>
     <h3>{task.title}</h3><p>{task.scope.description}</p>
     <p>Proof needed: {task.proofNeeded.join(", ") || "See the work plan"}</p>
+    {taskStatusLabel(status) && <p role="status" aria-label={`Status: ${task.title}`}><strong>{taskStatusLabel(status)}</strong>
+      {needsNewProofPhoto(status) && " · This task stays open until its proof photo is verified."}</p>}
     {!task.taskKey && <p>This brief needs regenerating</p>}
     <label>Reason or what changed<textarea aria-label={`Reason or what changed: ${task.title}`} value={note}
       maxLength={2000} disabled={busy || pending.current !== null} onChange={event => setNote(event.target.value)} style={{ display: "block", width: "100%", boxSizing: "border-box", minHeight: 80 }}/></label>
@@ -95,6 +99,8 @@ function TaskProgress({ brief, task, progress, path, onSaved }: {
       {(["done", "blocked", "changed"] as const).map(kind => <button key={kind} type="button" className="btn"
         disabled={disabled || (pending.current !== null && pending.current.kind !== kind) || (kind !== "done" && !note.trim())}
         onClick={() => void record(kind)} style={{ minHeight: 44, minWidth: 80 }}>{kind.charAt(0).toUpperCase() + kind.slice(1)}</button>)}
+      {needsNewProofPhoto(status) && <button type="button" className="btn" disabled={disabled || (pending.current !== null && pending.current.kind !== "done")}
+        onClick={() => void record("done", true)} style={{ minHeight: 44 }}>Done with a new photo</button>}
     </div>
     {busy && <p role="status">Recording…</p>}{error && <p role="alert">{error}</p>}
     <ul>{progress.map(row => <li key={row.commandId}>{row.kind.charAt(0).toUpperCase() + row.kind.slice(1)}{row.note ? `: ${row.note}` : ""}

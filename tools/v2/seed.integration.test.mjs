@@ -1881,6 +1881,66 @@ test("F1-P photo upload and all progress kinds: audit, replay, live state, isola
   await verifyTenantChain(context.tenantId);
 });
 
+// V2-F2 own block: a Done task that needs proof stays open until its photo is verified (derived only).
+test("F2 proof holds the task open: missing, pending then verified with no new record, rejected then a new verified Done, isolation", async () => {
+  const owner = await signIn("builder"), outsider = await signIn("second-builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: foreignContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const brief = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  const task = brief.content.tasks.at(-1);
+  assert.ok(task.proofNeeded.length > 0, "every practice task has a proof point");
+  const status = async () => (await app.briefProgress.read(jobId)).tasks.find(item =>
+    item.trade === brief.trade && item.scopeItemId === task.scopeItemId && item.taskKey === task.taskKey);
+  const next = async () => (await status())?.version ?? 0;
+  const done = async photoId => app.briefProgress.record(jobId, progressCommand(brief, task, {
+    version: "v2-brief-progress-command.v2", ...(photoId && { photoId }), expectedVersion: await next() }));
+  const photo = () => ({ version: "v2-brief-progress-photo-command.v1", commandId: randomUUID(), scopeItemId: task.scopeItemId, fixture: "completion-photo" });
+  // Done with no photo.
+  await done();
+  assert.equal((await status()).status, "done_proof_missing");
+  // Done with a photo still pending: begin the upload, fail its finalize, then finish it with the same command.
+  const failing = { async connect() {
+    const client = await runtime.connect(), original = client.query.bind(client), release = client.release.bind(client);
+    client.query = async (sql, ...args) => {
+      const result = await original(sql, ...args);
+      if (typeof sql === "string" && sql.includes("app.append_audit(") && JSON.stringify(args).includes("v2.progress_photo.finalized")) throw new Error("F2_FORCED");
+      return result;
+    };
+    client.release = (...args) => { client.query = original; return release(...args); };
+    return client;
+  } };
+  const { uploadBriefProgressPhoto } = await import("../../apps/api/dist/workspace/brief-progress-photo.application.js");
+  const pending = photo();
+  await assert.rejects(uploadBriefProgressPhoto(failing, context, jobId, owner.membershipId, pending), /F2_FORCED/u);
+  assert.equal((await admin.query("SELECT state FROM app.evidence_upload WHERE id=$1", [pending.commandId])).rows[0].state, "pending");
+  const pendingDone = await done(pending.commandId);
+  assert.equal(pendingDone.photoState, "pending");
+  assert.equal((await status()).status, "done_proof_pending");
+  const rowsBefore = (await app.briefProgress.read(jobId)).progress.length;
+  assert.equal((await app.briefProgress.uploadPhoto(jobId, pending)).state, "verified");
+  assert.deepEqual(await status(), { trade: brief.trade, scopeItemId: task.scopeItemId, taskKey: task.taskKey,
+    version: pendingDone.version, status: "done" });
+  assert.equal((await app.briefProgress.read(jobId)).progress.length, rowsBefore, "verification adds no record");
+  // A rejected photo reopens the task; a new Done with a verified photo closes it.
+  await admin.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='verification_invalid' WHERE id=$1", [pending.commandId]);
+  assert.equal((await status()).status, "done_proof_rejected");
+  const replacement = photo();
+  await app.briefProgress.uploadPhoto(jobId, replacement);
+  await done(replacement.commandId);
+  assert.equal((await status()).status, "done");
+  // Blocked keeps its kind even with a verified photo.
+  await app.briefProgress.record(jobId, progressCommand(brief, task, { version: "v2-brief-progress-command.v2",
+    photoId: replacement.commandId, kind: "blocked", note: "F2 fictional no power", expectedVersion: await next() }));
+  assert.equal((await status()).status, "blocked");
+  // The second firm reads no status for the first firm's job (rule 30 A/B, as jobguard_runtime).
+  const foreign = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(foreign.briefProgress.read(jobId), { code: "NOT_FOUND" });
+  await assert.rejects(new BriefProgressRepository(runtime).read(foreignContext, jobId), { code: "NOT_FOUND" });
+  assert.ok((await new BriefProgressRepository(runtime).read(context, jobId)).tasks.length > 0, "positive control");
+  await verifyTenantChain(context.tenantId);
+});
+
 // V2-F1: preserve the existing job-stage boundary and historical reads.
 test("F1 refuses non-live and closed job presses without rows or audit", async () => {
   const owner = await signIn("builder");
