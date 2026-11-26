@@ -15,6 +15,7 @@
         "packages/db/test/migration-proofs/2015_v2_brief_progress.proof.json",
         "packages/db/src/index.ts",
         "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts",
         "apps/api/src/workspace/brief-progress.application.ts",
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/index.ts",

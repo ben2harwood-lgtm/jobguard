@@ -12,6 +12,7 @@ import {
   PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository,
   DiscrepancyRepository, ReadinessRepository, InboxRelevanceRepository,
   EvidenceService, ProofCommandService, MaterialRepository, JobPartiesRepository, JobWorkStateRepository,
+  BriefProgressRepository,
 } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
@@ -76,8 +77,10 @@ afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.sto
 function attempts(jobId: string, uploadId: string) {
   const id = randomUUID(), commandId = randomUUID();
   const po = new PurchaseOrderRepository(runtime), docs = new SupplierDocumentRepository(runtime), match = new SupplierMatchRepository(runtime), checks = new DiscrepancyRepository(runtime), ready = new ReadinessRepository(runtime), inbox = new InboxRelevanceRepository(runtime), evidence = new EvidenceService(runtime, storage), proof = new ProofCommandService(runtime, storage);
-  const work = new JobWorkStateRepository(runtime);
+  const work = new JobWorkStateRepository(runtime), progress = new BriefProgressRepository(runtime);
   return [
+    // V2-F1: the live guard refuses before any brief or session lookup.
+    ["record", () => progress.record(context, jobId, "fictional-session", { version: "v2-brief-progress-command.v1", commandId, trade: "Tiler", briefVersion: 1, scopeItemId: id, taskKey: "fictional-task", expectedVersion: 0, kind: "done", note: "" })],
     ["finish", () => work.finish(context, jobId, member, { version: "job-work-state-command.v1", action: "finish", commandId, expectedRevision: 0 })],
     ["cancelFinish", () => work.cancelFinish(context, jobId, member, { version: "job-work-state-command.v1", action: "cancel_finish", commandId, expectedRevision: 0, markerId: id })],
     ["revise", () => po.revise(context, jobId, { version: "purchase-order-draft.v1", requirementId: id, quantity: "10", unitPricePence: 2000, recipient: "orders@fictional.invalid", requiredDate: "2026-10-01", expectedRevision: 0 })],
