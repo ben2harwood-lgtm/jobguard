@@ -49,7 +49,9 @@ beforeAll(async () => {
         // V2 b1a walk session record
         "_v2_walk_record.sql",
         // V2 B1C: local-only filing migration deferral.
-        "_v2_walk_photo_filing.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_walk_photo_filing.sql",
+        // V2-C3C
+        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);

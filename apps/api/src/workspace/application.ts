@@ -36,6 +36,7 @@ import { QuoteApplication } from "../quote/quote.application.js";
 import { WorkPlanApplication } from "./work-plan.application.js";
 // V2 b1a walk session record
 import { WalkApplication } from "./walk.application.js";
+import { CrewContactApplication } from "./crew-contact.application.js";
 import { VariationApplication } from "../variation/variation.application.js";
 import { RecoveryApplication } from "./recovery.application.js";
 import { DecisionsApplication } from "../decisions/decisions.application.js";
@@ -109,7 +110,9 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   const finalAccountLock = new FinalAccountLockApplication(dependencies.pool,dependencies.sessionId);
   const successFees = new SuccessFeeApplication(dependencies.pool,dependencies.sessionId);
   const attribution = new RecoveryAttributionApplication(dependencies.pool,dependencies.sessionId);
-  return Object.freeze({ workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId),
+  // V2-C3C crew records.
+  const crewContacts = new CrewContactApplication(dependencies.pool, dependencies.sessionId);
+  return Object.freeze({ workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts,
     // V2 b1a walk session record
     walk: new WalkApplication(dependencies.pool, dependencies.sessionId),
     commercialIntegrityV3: Object.freeze({
