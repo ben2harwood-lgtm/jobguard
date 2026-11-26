@@ -67,6 +67,9 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   // V2 b1a walk session record
   await client.query(readFileSync(new URL("../../packages/db/migrations/2008_v2_walk_record.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
+  // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
+  await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // B1C mount, owned by B1A #920: 2029 precedes the final 2054 firm lock when integrated.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_walk_photo_filing.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
