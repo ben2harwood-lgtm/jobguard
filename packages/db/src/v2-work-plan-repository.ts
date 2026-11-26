@@ -134,6 +134,11 @@ export class WorkPlanRepository {
       if ((!existing && !newCustom) || (position !== undefined && position > plan.tasks.length + Number(!existing))) {
         throw new WorkPlanError("WORK_PLAN_INVALID_EDIT");
       }
+      // V2-C3C: only this firm's crew record (row security hides others'). The insert trigger re-checks the job's firm.
+      if (command.changes.assigneeRef && !(await client.query(
+        "SELECT FROM app.v2_crew_contact WHERE crew_id = $1 LIMIT 1", [command.changes.assigneeRef])).rowCount) {
+        throw new WorkPlanError("WORK_PLAN_INVALID_EDIT");
+      }
       const { rows: [saved] } = await client.query<EditReceipt>(`
         INSERT INTO app.v2_work_plan_edit
           (tenant_id, job_id, quote_revision_id, command_id, scope_item_id, template_task_key, expected_version, changes,
@@ -154,7 +159,8 @@ export class WorkPlanRepository {
     const changed = Object.entries(command.changes).filter(([, value]) => value !== undefined)
       .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
     return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
-      eventType: "v2_work_plan.edited", subjectType: "job", subjectRef: jobId,
+      eventType: command.changes.assigneeRef === undefined ? "v2_work_plan.edited" : "v2.work_plan.task_assigned",
+      subjectType: "job", subjectRef: jobId,
       payload: {
         references: { commandId: command.commandId, quoteRevisionId: command.quoteRevisionId,
           scopeItemId: command.scopeItemId, taskKey: command.taskKey,
