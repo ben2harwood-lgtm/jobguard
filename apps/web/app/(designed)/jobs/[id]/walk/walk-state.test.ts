@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
+import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, leavesWalk, newEntry, nextCaptureOrder, restoreEntry, validMeasurement, type EntryView } from "./walk-state";
 
 const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
   ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
@@ -42,5 +42,20 @@ describe("B1C needs-room helpers", () => {
       photo("no_room"), photo("waiting")];
     expect(roomSummaryEntries(rows, "Hall")).toEqual(rows.slice(0, 2));
     expect(roomSummaryEntries(rows, "Kitchen")).toEqual([rows[2]]);
+  });
+});
+
+describe("Codex P2 repairs", () => {
+  it("restores a refused entry's content for resubmission", () => {
+    expect(restoreEntry({ kind: "room", room: "Hall" })).toEqual({ room: "Hall" });
+    expect(restoreEntry({ kind: "note", text: "Damp" })).toEqual({ note: "Damp" });
+    expect(restoreEntry({ kind: "measurement", quantity: "2.5", unit: "m" })).toEqual({ quantity: "2.5", unit: "m" });
+  });
+  it("treats links and section buttons as leaving the walk", () => {
+    const at = (match: string | null) => ({ closest: (selector: string) => (match && selector.includes(match) ? {} : null) });
+    expect(leavesWalk(at("a[href]"))).toBe(true);
+    expect(leavesWalk(at("nav button"))).toBe(true);
+    expect(leavesWalk(at(null))).toBe(false);
+    expect(leavesWalk(null)).toBe(false);
   });
 });

@@ -43,3 +43,17 @@ export function filingLabel(entry: EntryView) {
     ? `Filed under ${entry.linkedRoom} (taken in ${entry.originalLinkedRoom ?? "no room"})`
     : entry.link === "linked" ? entry.linkedRoom ?? "Room link needs checking" : "Room link needs checking";
 }
+
+// Codex P2 4705257589: a refused slot is permanent, so the preserved content goes back into the form to resubmit.
+// Codex P2 4711069734: only the rejected entry's own fields come back, so other unsent drafts stay.
+export function restoreEntry(entry: WalkEntryCommand["entry"]): { room?: string; note?: string; quantity?: string; unit?: string } | null {
+  return entry.kind === "room" ? { room: entry.room }
+    : entry.kind === "note" ? { note: entry.text }
+    : entry.kind === "measurement" ? { quantity: entry.quantity, unit: entry.unit }
+    : null;
+}
+
+// Codex P2 4705257574: in-app links and the job section buttons leave the walk without a beforeunload.
+export function leavesWalk(target: { closest(selector: string): unknown } | null) {
+  return Boolean(target?.closest("a[href], nav button"));
+}
