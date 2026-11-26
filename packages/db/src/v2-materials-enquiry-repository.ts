@@ -91,8 +91,10 @@ type EnquiryContent = {
   customerSupplied: { scopeItemId: string; lineKey: string; product: string | null; neededBy: string | null;
     notes: string | null }[];
 };
+// overrideBasisPacks is the calculated sum a builder's pack count was set against: reconfirming the same
+// count against a new sum changes which quantity the enquiry carries.
 type BasisEntry = { scopeItemId: string; lineKey: string; lineVersion: number;
-  measurement: MeasurementBasis | null; inputs: LineInputs };
+  measurement: MeasurementBasis | null; inputs: LineInputs; overrideBasisPacks: string | null };
 type EnquiryRow = { version: number; commandId: string; basisDigest: string; basis: BasisEntry[];
   content: EnquiryContent; actorMembershipId: string; generatedAt: Date };
 
@@ -154,6 +156,9 @@ function changedInputs(before: BasisEntry | undefined, after: BasisEntry | undef
   if ((was?.confirmed ?? false) !== (now?.confirmed ?? false)) changed.push("confirmation");
   for (const [key, name] of Object.entries(inputNames) as [keyof LineInputs, string][]) {
     if (canonical(before.inputs[key]) !== canonical(after.inputs[key])) changed.push(name);
+  }
+  if ((before.overrideBasisPacks ?? null) !== (after.overrideBasisPacks ?? null) && !changed.includes("packs_override")) {
+    changed.push("packs_override");
   }
   return changed;
 }
@@ -242,7 +247,10 @@ export class MaterialsEnquiryRepository {
       if ((latest?.version ?? 0) !== command.expectedVersion) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
       let result = latest;
       // Generating from unchanged inputs returns the enquiry that is already current.
-      if (latest?.basisDigest !== live.digest) {
+      const creating = latest?.basisDigest !== live.digest;
+      if (creating) {
+        // A concurrent copy of this command can still win the receipt below; the new version must not outlive it.
+        await $client.query("SAVEPOINT v2_material_enquiry_insert");
         const inserted = await $client.query(`
           INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
             actor_membership_id)
@@ -258,7 +266,10 @@ export class MaterialsEnquiryRepository {
           actor_membership_id)
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
       `, [context.tenantId, jobId, command.commandId, command.expectedVersion, result!.version, actor]);
-      if (!recorded.rowCount) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      if (!recorded.rowCount) {
+        if (creating) await $client.query("ROLLBACK TO SAVEPOINT v2_material_enquiry_insert");
+        return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      }
       await this.audit(database, actor, jobId, "v2_materials.enquiry_generated", {
         commandId: command.commandId, expectedVersion: String(command.expectedVersion),
         enquiryVersion: String(result!.version), created: String(result!.version === command.expectedVersion + 1),
@@ -348,10 +359,11 @@ export class MaterialsEnquiryRepository {
       return { ...line, measurement, calculation: calculate(line, measurement) };
     });
     const basis: BasisEntry[] = lines.map(({ scopeItemId, lineKey, version: lineVersion, measurement, ...line }) => ({
-      scopeItemId, lineKey, lineVersion, measurement,
+      scopeItemId, lineKey, lineVersion, measurement, overrideBasisPacks: line.overrideBasisPacks,
       inputs: Object.fromEntries(Object.keys(emptyLine).map(key => [key, line[key as keyof LineInputs]])) as LineInputs,
     }));
-    // Currency compares inputs only, as outOfDate does: a revision that changes nothing keeps the enquiry current.
+    // Currency compares inputs and the override basis only, as outOfDate does: a revision that changes nothing
+    // keeps the enquiry current.
     const digest = sha256(canonical(basis.map(({ lineVersion: _version, measurement, ...entry }) => ({ ...entry,
       measurement: measurement && { quantity: measurement.quantity, unit: measurement.unit, confirmed: measurement.confirmed } }))));
 
