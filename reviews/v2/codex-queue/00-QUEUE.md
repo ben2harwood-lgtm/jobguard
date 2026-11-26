@@ -76,6 +76,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D16 | Q51 | V2-K5A-1 the payment schedule counts every approved extra (drops the origin filter; same rule as K10) | **Opus** | K5A-2 #961 `claude/project-thread-ek9rje-k5a-2` | none | RED money |
 | D17 | Q52 | V2-F7M "My brief" for a crew member by their own link: Done, Blocked, Changed as crew presses the builder confirms into F1 (no photos by link yet) | **Opus** | F2 #991 `claude/project-thread-trp08u` | 2041 | RED |
 | D18 | Q53 | V2-G1 snag register: crew owner, who fixed and who checked (a different person), agreed outstanding, Snags screen; main's QW-4 unchanged | **Opus** | SYNC-1 #980 `claude/project-thread-ctngmn` (screen: M3 #956) | 2042 | RED |
+| D19 | Q54 | V2-DV1 + K3-D the builder marks diary notes "Customer can see this", and the Friday update draft offers them (amount rule, builder still reviews) | **Opus** | K3 #935 `codex/sandbox/v2-k3` | 2036 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 

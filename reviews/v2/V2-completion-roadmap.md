@@ -72,8 +72,8 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | E4 | **F7** daywork sheet (hours and materials, approve by link) | ★★★ | M | A | f6, M3 | 2033 | RED money |
 | E5 | **K5B** deposit and stage invoices drafted and issued (practice) | ★★★ | M | O | K5A-1, SYNC-1 | 2034 | RED money |
 | E6 | **K6B** merchant invoice real attached files | ★★ | M | O | K6A #927, PX | 2035 | RED |
-| E7 | **DV1** diary entries get a "customer can see this" flag (touches main's diary) | ★★ | S | O | SYNC-1 | 2036 | RED |
-| E8 | **K3-D** Friday update includes flagged diary entries | ★★ | S | A | DV1, k3 | none | RED |
+| E7 | **DV1** diary entries get a "customer can see this" flag (beside main's diary, no change to it). Packet Q54 with K3-D, on K3 #935; SYNC-1 not needed | ★★ | S | O | k3 | 2036 | RED |
+| E8 | **K3-D** Friday update includes flagged diary entries (in Q54 with DV1) | ★★ | S | A | DV1, k3 | none | RED |
 | E9 | **C6** add a line to a priced quote (quote track; makes c5 prompts actionable). **Ben, 25 Nov 17:39 UK: in V2, practice first** (he first pressed "On main", then asked for the recommendation). | ★★ | M | O | SYNC-1 | 2037 | RED money |
 
 ## Batch F: about 29 Nov to 1 Dec, tomorrow and crews
