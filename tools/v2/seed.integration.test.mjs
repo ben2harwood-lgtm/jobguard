@@ -106,6 +106,47 @@ before(async () => {
 });
 after(async () => Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]));
 
+// V2-SX revision 5: fixed GET boundaries, using this suite's existing cache.
+// Pilot gate: these tests do not prove main's MON-5/MON-8 real-role refusals.
+import { assertBuilderPositive, assertBuilderRouteRefuses, assertSignedOutBuilderRefuses,
+  bindBuilderRoutes, guardCachedSignIn } from "./test/refusals.mjs";
+const sxCachedSignIn = signIn;
+signIn = guardCachedSignIn(sxCachedSignIn);
+let sxRoutes;
+async function sxRequest(path, { transport, method, body, cookies, csrf, tenantId } = {}) {
+  const target = transport === "api" ? settings.NEXT_PUBLIC_API_URL : origin;
+  return fetch(target + path, {
+    method: method ?? (body === undefined ? "GET" : "POST"), redirect: "manual",
+    headers: { origin, "content-type": "application/json", ...(cookies && { cookie: cookies }),
+      ...(csrf && { "x-csrf-token": csrf }), ...(tenantId && { "x-tenant-id": tenantId }) },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  });
+}
+test("SX fixed GET list has working positive controls before checking refusals", async t => {
+  const routes = bindBuilderRoutes({ jobId, tenantId: DEMO_TENANT_ID });
+  sxRoutes = [];
+  // Finish ALL mandatory positives first. In particular 2, 6 and 9 must not
+  // be mistaken for refusals if this seed cannot read them (planner stop).
+  for (const route of routes) {
+    if (await assertBuilderPositive({ request: sxRequest, signIn, route })) sxRoutes.push(route);
+    else t.diagnostic(`SX dropped optional route 10: ${route.path}; no 200 illustration source`);
+  }
+  const second = await signIn("second-builder");
+  assert.notEqual(second.realContext.tenantId, DEMO_TENANT_ID);
+  const { context: practice } = await authenticatePracticeSession(runtime, second.sessionId);
+  assert.equal(practice.tenantId, DEMO_TENANT_ID);
+  for (const context of [second.realContext, practice]) {
+    await withTenant(runtime, context, async db => {
+      assert.equal((await db.$client.query("SELECT id FROM app.job WHERE id=$1", [jobId])).rowCount, 0);
+    });
+  }
+  for (const route of sxRoutes) {
+    const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
+    for (const result of observed) t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} ${result.case}: ${result.status} ${result.code}`);
+  }
+});
+// End V2-SX positive and refusal block.
+
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
   const { cookies } = await signIn("builder");
   const first = await json(await request(jobsPath, { cookies }));
@@ -2497,4 +2538,13 @@ test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyReposito
   assert.deepEqual(await replyEvents("v2.fact_reply.applied_by_builder"), recorded, "audit-chain: replay");
   assert.equal((await replyEvents("v2_open_fact.answer")).length, before.answers.length + 1);
   await replyChain(context.tenantId);
+});
+
+// must stay the last test: it signs the cached builder out
+// Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
+test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
+  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
+  await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
+    record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
+  });
 });
