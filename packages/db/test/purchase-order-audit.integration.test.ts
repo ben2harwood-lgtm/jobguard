@@ -45,7 +45,9 @@ beforeAll(async () => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
-        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql", "_v2_crew_brief.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql", "_v2_crew_brief.sql",
+        // V2-C3C
+        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // V2-F1: defer the additive V2-only schema in the previous-schema rehearsal.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress.sql")) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
