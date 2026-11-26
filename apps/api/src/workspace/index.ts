@@ -137,3 +137,4 @@ export { ConnectorPromotionApplication } from "../connectors/promotion.applicati
 
 // V2-F6: local customer agreement links; existing approval command unchanged.
 export { V2CustomerExtraLinkApplication } from "../v2-customer-extra-link.application.js";
+export * from "../v2-change-draft.application.js";

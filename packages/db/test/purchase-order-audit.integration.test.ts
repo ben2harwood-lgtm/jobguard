@@ -47,7 +47,9 @@ beforeAll(async () => {
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql",
         // V2-C3C
-        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_crew_contact.sql",
+        // V2-F3
+        "_v2_change_draft.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -63,6 +65,8 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  // V2-F3: the change draft table stays absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_change_draft') AS draft")).rows[0].draft).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

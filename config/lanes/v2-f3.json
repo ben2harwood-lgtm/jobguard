@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f3": {
+      "branches": [
+        "claude/project-thread-trp08u-f3"
+      ],
+      "note": "RED Q55 V2-F3 change draft: one new quantity on an accepted quote line drafts the price (an existing-scope variation through main path), extra time and material needs. Migration 2031 (number final at merge). Base codex/sandbox/v2-f6 @ 9f9c6e088. F3 mount, owned by main: packages/db/src/variation-repository.ts logBuilderExtra body moved into exported logBuilderExtraIn so a change draft joins its transaction; captureCommandFailure exported; behaviour unchanged. F3 mount, owned by F6 #923: apps/web/app/v2/jobs/[id]/extra-links/view.tsx one link to the change screen. F3 mount, owned by core index: packages/core/src/index.ts, packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. F3 mount, owned by main: packages/core/src/watchdog.ts one registry line. F3 mount, owned by F6 #923: tools/v2/bootstrap.mjs one migration line; packages/db/test/purchase-order-audit.integration.test.ts the _v2_change_draft.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs and tools/v2/customer-extra-links.browser.test.mjs own appended cases.",
+      "allow": [
+        "apps/api/src/v2-change-draft.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/change-drafts/route.test.ts",
+        "apps/web/app/api/jobs/[id]/change-drafts/route.ts",
+        "apps/web/app/lib/v2-change-draft-server.ts",
+        "apps/web/app/ui/v2-change-draft-label.test.tsx",
+        "apps/web/app/ui/v2-change-draft-label.ts",
+        "apps/web/app/v2/jobs/[id]/changes/page.tsx",
+        "apps/web/app/v2/jobs/[id]/changes/view.tsx",
+        "apps/web/app/v2/jobs/[id]/extra-links/view.tsx",
+        "packages/core/src/index.ts",
+        "packages/core/src/v2-change-draft.test.ts",
+        "packages/core/src/v2-change-draft.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2031_v2_change_draft.md",
+        "packages/db/migrations/2031_v2_change_draft.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-change-draft-repository.ts",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/migration-proofs/2031_v2_change_draft.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/customer-extra-links.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

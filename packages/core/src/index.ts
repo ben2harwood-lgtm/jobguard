@@ -18,6 +18,7 @@ export * from "./acceptance.js";
 export * from "./activation.js";
 export * from "./decision-checks.js";
 export * from "./variation.js";
+export * from "./v2-change-draft.js";
 export * from "./proof.js";
 export * from "./final-account.js";
 export * from "./customer-billing.js";

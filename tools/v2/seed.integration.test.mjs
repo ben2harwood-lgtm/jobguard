@@ -1266,6 +1266,176 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   assert.deepEqual(await protectedFacts(), untouched);
 });
 
+// V2-F3 (Q55, migration 2031): one new quantity drafts the price, extra time and materials together.
+const f3 = {
+  async job() {
+    const jobId = await acceptedPracticeJob();
+    const builder = await signIn("builder");
+    const app = createWorkspaceApplication({ pool: runtime, sessionId: builder.sessionId });
+    await app.workPlan.read(jobId, planQuery);
+    await app.quote.activate(jobId, switchLive());
+    await app.crewBriefs.generate(jobId, { version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade: "tiler",
+      expectedVersion: 0, accessWindow: "F3 fictional mornings", photoIds: [] });
+    const { ChangeDraftApplication, VariationApplication } = await import("../../apps/api/dist/workspace/index.js")
+      .then(async workspace => ({ ...workspace, VariationApplication: (await import("../../apps/api/dist/variation/variation.application.js")).VariationApplication }));
+    const drafts = new ChangeDraftApplication(runtime, builder.sessionId);
+    const { lines } = await drafts.list(jobId);
+    const tile = lines.find(line => line.description === "Tile the kitchen");
+    return { jobId, builder, app, drafts, tile, variations: new VariationApplication(runtime, builder.sessionId) };
+  },
+  confirm: (tile, fields = {}) => ({ version: "v2-change-draft-command.v1", action: "confirm", commandId: randomUUID(),
+    quoteLineId: tile.quoteLineId, newQuantity: "1.25", unitRatePence: tile.unitRatePence, description: "F3 fictional longer splashback",
+    tasks: [], ...fields }),
+  snapshot: async jobId => (await admin.query(`SELECT
+    (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM app.quote_line l WHERE l.job_id=$1) lines,
+    (SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM app.scope_revision s WHERE s.job_id=$1) scope,
+    (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.command_id) FROM app.v2_work_plan_edit e WHERE e.job_id=$1) edits,
+    (SELECT jsonb_agg(to_jsonb(b) ORDER BY b.command_id) FROM app.v2_crew_brief b WHERE b.job_id=$1) briefs`, [jobId])).rows[0],
+  counts: async jobId => (await admin.query(`SELECT (SELECT count(*)::int FROM app.variation WHERE job_id=$1) variations,
+    (SELECT count(*)::int FROM app.v2_change_draft WHERE job_id=$1) drafts`, [jobId])).rows[0],
+};
+
+test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced variation; agreed by link; one press adds the time", async () => {
+  const { jobId, builder, app, drafts, tile, variations } = await f3.job();
+  assert.deepEqual([tile.quantity, tile.unit, tile.unitRatePence], ["1", "item", 9500]);
+  const before = await f3.snapshot(jobId);
+  const preview = await drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.25" });
+  assert.deepEqual([preview.delta, preview.direction, preview.previewPence], ["0.25", "addition", 2375]);
+  assert.deepEqual(preview.priceProposal, { quantity: "0.25", unit: "item", unitRatePence: 9500 });
+  const grout = preview.tasks.find(task => task.taskKey === "tile-splashback");
+  assert.deepEqual([grout.title, grout.proposedMinutes, grout.materialNeeds], ["Fit and grout the splashback", 60, ["Tiles", "Adhesive", "Grout"]]);
+  assert.deepEqual(await f3.counts(jobId), { variations: 0, drafts: 0 }, "a preview writes nothing");
+  const command = f3.confirm(tile, { tasks: preview.tasks.map(({ taskKey, proposedMinutes }) => ({ taskKey, proposedMinutes })) });
+  const saved = await drafts.command(jobId, command);
+  assert.equal(saved.state, "priced");
+  assert.equal(saved.signedDeltaPence, 2375);
+  assert.deepEqual(await drafts.command(jobId, command), { ...saved, replayed: true });
+  await assert.rejects(drafts.command(jobId, { ...command, newQuantity: "1.3" }), { code: "CHANGE_DRAFT_COMMAND_CONFLICT" });
+  assert.deepEqual(await f3.counts(jobId), { variations: 1, drafts: 1 });
+  const variation = (await variations.get(jobId)).variations.find(row => row.id === saved.variationId);
+  assert.deepEqual([variation.existingScopeItemId, variation.scopeItemId, variation.state], [tile.scopeItemId, tile.scopeItemId, "priced"]);
+  const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE payload->'references'->>'commandId'=$1
+    OR subject_ref=$1 ORDER BY sequence`, [command.commandId])).rows.map(row => row.event_type);
+  assert.deepEqual(events, ["variation.builder_logged", "v2.change_draft.confirmed"]);
+  assert.deepEqual(await f3.snapshot(jobId), before, "agreed scope, the plan and the brief are unchanged while pending");
+  // F6 link for that exact revision shows that exact amount; the customer agrees, the builder approves.
+  const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
+  const { randomBytes } = await import("node:crypto");
+  const auth = await authenticatePracticeSession(runtime, builder.sessionId);
+  const links = new V2CustomerExtraLinkRepository(runtime);
+  const link = await links.create(auth.context, jobId, auth.membershipId, { version: "v2-extra-link.v1", action: "create",
+    commandId: randomUUID(), expectedVersion: 1, occurredAt: new Date().toISOString(), variationId: saved.variationId,
+    revisionId: saved.revisionId, token: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 86400000).toISOString(), photoIds: [] });
+  assert.equal((await links.open(link.capability)).amount, "23.75");
+  assert.equal((await drafts.list(jobId)).drafts[0].linked, true);
+  await variations.command(jobId, { version: "variation-command.v1", action: "approve", variationId: saved.variationId,
+    revisionId: saved.revisionId, approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const planBefore = await app.workPlan.read(jobId, planQuery);
+  const groutBefore = planBefore.tasks.find(task => task.key === "tile-splashback" && task.scopeItemId === tile.scopeItemId);
+  const added = await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "add_time", revisionId: saved.revisionId });
+  assert.deepEqual([added.state, added.timeOnPlan], ["approved", true]);
+  const planAfter = await app.workPlan.read(jobId, planQuery);
+  assert.equal(planAfter.tasks.find(task => task.key === "tile-splashback" && task.scopeItemId === tile.scopeItemId).durationMinutes,
+    groutBefore.durationMinutes + 60);
+  // A second press adds nothing.
+  await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "add_time", revisionId: saved.revisionId });
+  assert.deepEqual((await app.workPlan.read(jobId, planQuery)).tasks, planAfter.tasks);
+  const brief = (await app.briefProgress.read(jobId)).briefs.find(row => row.trade === "tiler");
+  assert.equal(brief.current, false, "the brief now shows as outdated");
+});
+
+test("F3 revise makes a new revision and draft; the old F6 link is refused; an omission drafts a negative delta and no time", async () => {
+  const { jobId, builder, drafts, tile } = await f3.job();
+  const first = await drafts.command(jobId, f3.confirm(tile));
+  const revised = await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "revise", commandId: randomUUID(),
+    variationId: first.variationId, expectedRevisionId: first.revisionId, newQuantity: "1.5", unitRatePence: 9500,
+    description: "F3 fictional revised splashback", tasks: [] });
+  assert.equal(revised.revision, 2);
+  assert.equal(revised.signedDeltaPence, 4750);
+  assert.equal(revised.tasks.find(task => task.taskKey === "tile-splashback").proposedMinutes, 120);
+  const rows = (await drafts.list(jobId)).drafts;
+  assert.deepEqual(rows.map(row => [row.revision, row.current]), [[1, false], [2, true]]);
+  await assert.rejects(drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "revise", commandId: randomUUID(),
+    variationId: first.variationId, expectedRevisionId: first.revisionId, newQuantity: "1.75", unitRatePence: 9500,
+    description: "stale", tasks: [] }), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
+  const { randomBytes } = await import("node:crypto");
+  const auth = await authenticatePracticeSession(runtime, builder.sessionId);
+  const links = new V2CustomerExtraLinkRepository(runtime);
+  const create = (revisionId, expectedVersion) => links.create(auth.context, jobId, auth.membershipId, { version: "v2-extra-link.v1",
+    action: "create", commandId: randomUUID(), expectedVersion, occurredAt: new Date().toISOString(), variationId: first.variationId,
+    revisionId, token: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 86400000).toISOString(), photoIds: [] });
+  await assert.rejects(create(first.revisionId, 1));
+  assert.equal((await links.open((await create(revised.revisionId, 2)).capability)).amount, "47.50");
+  // A separate omission on another line of the same quote.
+  const { lines } = await drafts.list(jobId);
+  const hall = lines.find(line => line.description === "Decorate the hall");
+  const less = await drafts.command(jobId, f3.confirm(hall, { newQuantity: "0.5" }));
+  assert.deepEqual([less.direction, less.signedDeltaPence], ["omission", -4750]);
+  assert.ok(less.tasks.every(task => task.proposedMinutes === 0 && task.materialNeeds.length === 0));
+});
+
+test("F3 refusals write nothing: unpriced, no change, superseded or foreign line, non-owner, bad task; mismatch trigger; append only; firm B sees nothing", async () => {
+  const { jobId, builder, drafts, tile } = await f3.job();
+  const auth = await authenticatePracticeSession(runtime, builder.sessionId);
+  const { ChangeDraftRepository } = await import("../../packages/db/dist/index.js");
+  const repository = new ChangeDraftRepository(runtime);
+  const refuse = async (input, code, membership = auth.membershipId) => {
+    const before = await f3.counts(jobId);
+    await assert.rejects(repository.command(auth.context, jobId, builder.sessionId, membership, input), { code });
+    assert.deepEqual(await f3.counts(jobId), before);
+  };
+  await refuse(f3.confirm(tile, { newQuantity: "1" }), "CHANGE_DRAFT_NO_CHANGE");
+  await refuse(f3.confirm(tile, { quoteLineId: randomUUID() }), "CHANGE_DRAFT_LINE_NOT_FOUND");
+  await refuse(f3.confirm(tile, { tasks: [{ taskKey: "paint-hall", proposedMinutes: 10 }] }), "CHANGE_DRAFT_TASK_NOT_FOUND");
+  await refuse(f3.confirm(tile), "CHANGE_DRAFT_FORBIDDEN", randomUUID());
+  await refuse({ ...f3.confirm(tile), unitRatePence: -1 }, "CHANGE_DRAFT_INVALID_COMMAND");
+  // A line of a superseded quote revision, and another job's line.
+  const superseded = (await admin.query(`SELECT l.id FROM app.quote_line l JOIN app.quote_revision r ON (r.tenant_id, r.id) = (l.tenant_id, l.quote_revision_id)
+    WHERE l.job_id = $1 AND r.revision = 1 LIMIT 1`, [jobId])).rows[0];
+  if (superseded && superseded.id !== tile.quoteLineId) await refuse(f3.confirm(tile, { quoteLineId: superseded.id }), "CHANGE_DRAFT_LINE_NOT_FOUND");
+  const otherJob = await f3.job();
+  await refuse(f3.confirm(tile, { quoteLineId: otherJob.tile.quoteLineId }), "CHANGE_DRAFT_LINE_NOT_FOUND");
+  // The preview refuses as confirm does. (An unpriced line is covered by the helper's unit test: every seeded line has a rate.)
+  await assert.rejects(drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1" }),
+    { code: "CHANGE_DRAFT_NO_CHANGE" });
+  const saved = await drafts.command(jobId, f3.confirm(tile));
+  // The mismatch trigger refuses a draft whose revision does not describe it.
+  await assert.rejects(admin.query(`INSERT INTO app.v2_change_draft (tenant_id, job_id, variation_id, revision_id, quote_line_id,
+    accepted_quantity, new_quantity, direction, command_id, request_digest, actor_membership_id)
+    SELECT tenant_id, job_id, variation_id, $2, quote_line_id, accepted_quantity, '2', direction, $3, request_digest, actor_membership_id
+    FROM app.v2_change_draft WHERE revision_id = $1`, [saved.revisionId, randomUUID(), randomUUID()]));
+  const { context } = auth;
+  const query = (scope, sql, args) => withTenant(runtime, scope, db => db.$client.query(sql, args));
+  for (const table of ["app.v2_change_draft", "app.v2_change_draft_task"]) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT') AS can_write,
+      has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_write: true, can_mutate: false });
+    assert.ok((await query(context, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount > 0);
+    for (const sql of [`UPDATE ${table} SET job_id=job_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(query(context, sql, [jobId]), { code: "42501" });
+      await assert.rejects(admin.query(sql, [jobId]), "rows are immutable even to the owner");
+    }
+    const outsider = await signIn("second-builder");
+    const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+    for (const scope of [shared, outsider.realContext]) assert.equal((await query(scope, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount, 0);
+    const { ChangeDraftApplication } = await import("../../apps/api/dist/workspace/index.js");
+    await assert.rejects(new ChangeDraftApplication(runtime, outsider.sessionId).list(jobId));
+    await assert.rejects(new ChangeDraftApplication(runtime, undefined).list(jobId));
+    await assert.rejects(new ChangeDraftApplication(runtime, randomUUID()).list(jobId));
+  }
+});
+
+test("F3 migration 2031 reruns without changing grants or policies", async () => {
+  const state = async () => (await admin.query(`SELECT (SELECT count(*)::int FROM pg_policy WHERE polname LIKE 'v2_change_draft%') policies,
+    (SELECT count(*)::int FROM pg_trigger WHERE tgname LIKE 'v2_change_draft%') triggers,
+    has_table_privilege('jobguard_runtime','app.v2_change_draft','INSERT') AS insert`)).rows[0];
+  const before = await state();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2031_v2_change_draft.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await state(), before);
+});
+
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
 const crewTable = "app.v2_crew_contact";
 const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),

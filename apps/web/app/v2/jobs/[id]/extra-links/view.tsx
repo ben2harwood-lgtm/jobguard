@@ -39,6 +39,8 @@ export function BuilderExtraLinks({ jobId }: { jobId: string }) {
   }
   return <main style={{ maxWidth: 760, margin: "0 auto", padding: 20, overflowWrap: "anywhere" }}>
     <h1>Customer agreement links</h1><p>Practice links go only to the local test inbox. A typed agreement still needs your approval below.</p>
+    {/* V2-F3 mount: one link to the change draft screen. */}
+    <p><a href={`/v2/jobs/${encodeURIComponent(jobId)}/changes`}>Change a quantity</a></p>
     {notice && <p role="alert">{notice}</p>}
     <fieldset disabled={busy}><legend>Photos to include with the next link (optional)</legend>
       {state?.photos.length ? state.photos.map((photo, i) => <label key={photo.id} style={{ display: "block", margin: "12px 0" }}>
