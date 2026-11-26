@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const workspace = vi.hoisted(() => ({ briefProgress: { read: vi.fn(), record: vi.fn() } }));
+const workspace = vi.hoisted(() => ({ briefProgress: { read: vi.fn(), record: vi.fn(), uploadPhoto: vi.fn() } }));
 vi.mock("../../../../lib/workspace-server", () => ({ workspaceApplication: vi.fn(async () => workspace) }));
 vi.mock("../../../../lib/synthetic-server", () => ({ practiceFailure: () => null }));
 vi.mock("@jobguard/api/workspace", () => ({ BriefProgressError: class extends Error {} }));
@@ -50,4 +50,18 @@ describe("V2-F1 trusted browser adapter", () => {
     workspace.briefProgress.record.mockRejectedValueOnce(Object.assign(new Error("JOB_NOT_LIVE"), { code: "JOB_NOT_LIVE" }));
     expect((await POST(request({ origin }), context)).status).toBe(409);
   });
+});
+
+it("dispatches photo bodies through the same origin-gated route", async () => {
+  const body = { version: "v2-brief-progress-photo-command.v1", commandId: "photo", scopeItemId: "scope", fixture: "completion-photo" };
+  const make = (allowed: boolean) => new Request("http://127.0.0.1:9999/api/jobs/job-id/brief-progress", {
+    method: "POST", headers: { "content-type": "application/json", ...(allowed && { origin }) }, body: JSON.stringify(body),
+  });
+  workspace.briefProgress.uploadPhoto.mockResolvedValue({ uploadId: "photo", evidenceId: "photo", state: "verified" });
+  expect((await POST(make(true), context)).status).toBe(200);
+  expect(workspace.briefProgress.uploadPhoto).toHaveBeenCalledWith("job-id", body);
+  expect((await POST(make(false), context)).status).toBe(403);
+  expect(workspace.briefProgress.uploadPhoto).toHaveBeenCalledTimes(1);
+  vi.stubEnv("JOBGUARD_LOCAL_V2", "0");
+  expect((await POST(make(true), context)).status).toBe(404);
 });

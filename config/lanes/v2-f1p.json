@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f1p": {
+      "branches": [
+        "codex/sandbox/v2-f1p"
+      ],
+      "note": "RED. Q43 V2-F1-P photo observations. Direct parent codex/sandbox/v2-f1 at 30fc44b81; pending PX firm lock and independent Claude/Astra checks.",
+      "allow": [
+        "apps/api/src/workspace/brief-progress-photo.application.ts",
+        "apps/api/src/workspace/brief-progress.application.ts",
+        "apps/web/app/api/jobs/[id]/brief-progress/route.test.ts",
+        "apps/web/app/api/jobs/[id]/brief-progress/route.ts",
+        "apps/web/app/ui/brief-progress-photo.test.ts",
+        "apps/web/app/ui/brief-progress-photo.ts",
+        "apps/web/app/ui/brief-progress.tsx",
+        "packages/db/migration-notes/2053_v2_brief_progress_photo.md",
+        "packages/db/migrations/2053_v2_brief_progress_photo.sql",
+        "packages/db/src/v2-brief-progress-repository.ts",
+        "packages/db/src/v2-brief-progress.test.ts",
+        "packages/db/test/migration-proofs/2053_v2_brief_progress_photo.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/brief-progress.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

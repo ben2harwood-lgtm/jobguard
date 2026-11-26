@@ -1,15 +1,17 @@
-import { BriefProgressRepository, PracticeAccessError } from "@jobguard/db";
+import { BriefProgressRepository, PracticeAccessError, withTenant, BriefProgressError } from "@jobguard/db";
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { PracticeAccess } from "../practice-access.js";
+import { uploadBriefProgressPhoto } from "./brief-progress-photo.application.js";
 import { CrewBriefApplication } from "./crew-brief.application.js";
 
-export { BriefProgressError, briefProgressCommandV1, type BriefProgress, type BriefProgressCommand } from "@jobguard/db";
+export { BriefProgressError, briefProgressCommandV1, briefProgressCommandV2, briefProgressPhotoCommandV1, type BriefProgress, type BriefProgressCommand } from "@jobguard/db";
 
 export class BriefProgressApplication {
   private readonly access: PracticeAccess;
   private readonly progress: BriefProgressRepository;
   private readonly briefs: CrewBriefApplication;
-  constructor(pool: Pool, private readonly sessionId?: string) {
+  constructor(private readonly pool: Pool, private readonly sessionId?: string) {
     this.access = new PracticeAccess(pool, sessionId);
     this.progress = new BriefProgressRepository(pool);
     this.briefs = new CrewBriefApplication(pool, sessionId);
@@ -24,6 +26,13 @@ export class BriefProgressApplication {
     const { context } = await this.authorize(jobId);
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
     return this.progress.record(context, jobId, this.sessionId, raw);
+  }
+  async uploadPhoto(jobId: string, raw: unknown) {
+    const practice = await this.authorize(jobId);
+    const editor = await withTenant(this.pool, practice.context, async db => (await db.$client.query<{ id: string | null }>(
+      "SELECT app.v2_work_plan_editor($1) AS id", [createHash("sha256").update(this.sessionId!).digest("hex")])).rows[0]?.id);
+    if (!editor) throw new BriefProgressError("BRIEF_PROGRESS_EDITOR_REQUIRED");
+    return uploadBriefProgressPhoto(this.pool, practice.context, jobId, editor, raw);
   }
   private authorize(jobId: string) {
     if (process.env.JOBGUARD_LOCAL_V2 !== "1" || process.env.JOBGUARD_ENV !== "synthetic_demo") {

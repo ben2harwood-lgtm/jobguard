@@ -1,0 +1,6 @@
+{
+  "migration": "2053_v2_brief_progress_photo.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

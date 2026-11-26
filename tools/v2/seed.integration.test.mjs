@@ -1745,6 +1745,142 @@ test("F1 refuses a press on a brief the plan has outdated since it loaded, then 
   assert.equal((await progressEvents(saved.commandId)).length, 1);
 });
 
+// V2-F1-P own block: migration rerun preserves all grants and policies.
+test("F1-P migration 2053 reruns without changing grants or policies", async () => {
+  const catalog = () => admin.query(`SELECT c.relname,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity,
+    p.polname,pg_get_expr(p.polqual,p.polrelid) AS predicate,pg_get_expr(p.polwithcheck,p.polrelid) AS check_predicate
+    FROM pg_class c LEFT JOIN pg_policy p ON p.polrelid=c.oid
+    WHERE c.oid IN ('app.v2_brief_progress'::regclass,'app.evidence_upload'::regclass)
+    ORDER BY c.relname,p.polname`).then(r => r.rows);
+  const before = await catalog();
+  const sql = readFileSync(new URL("../../packages/db/migrations/2053_v2_brief_progress_photo.sql", import.meta.url), "utf8");
+  await admin.query(sql); await admin.query(sql);
+  assert.deepEqual(await catalog(), before);
+  const fk = await admin.query(`SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+    WHERE conrelid='app.v2_brief_progress'::regclass AND conname='v2_brief_progress_photo_fk'`);
+  assert.match(fk.rows[0].definition, /FOREIGN KEY \(tenant_id, photo_reference\) REFERENCES app.evidence_upload\(tenant_id, id\)/u);
+});
+
+// V2-F1-P own block: reuse F1's live job before its closing-boundary test below.
+test("F1-P photo upload and all progress kinds: audit, replay, live state, isolation and rollback", async () => {
+  const owner = await signIn("builder"), outsider = await signIn("second-builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: foreignContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const view = await app.briefProgress.read(jobId), brief = view.briefs.find(item => item.trade === "tiler");
+  const task = brief.content.tasks[0];
+  const next = async () => Math.max(0, ...(await app.briefProgress.read(jobId)).progress
+    .filter(row => row.trade === brief.trade && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
+  const photo = { version: "v2-brief-progress-photo-command.v1", commandId: randomUUID(), scopeItemId: task.scopeItemId, fixture: "completion-photo" };
+  const auditRows = id => admin.query(`SELECT event_type,payload FROM app.audit_event WHERE subject_ref=$1
+    AND event_type LIKE 'v2.progress_photo.%' AND (payload->'references'->>'commandId'=$2 OR payload->'references'->>'uploadCommandId'=$2)`, [jobId,id]).then(r => r.rows);
+  const uploaded = await app.briefProgress.uploadPhoto(jobId, photo);
+  assert.deepEqual(uploaded, { uploadId: photo.commandId, evidenceId: photo.commandId, state: "verified" });
+  // Codex P2 4703616019: a progress photo is never a stage-proof upload for its scope.
+  assert.deepEqual((await admin.query(`SELECT u.scope_item_id AS upload, e.scope_item_id AS evidence, e.evidence_type
+    FROM app.evidence_upload u JOIN app.evidence_object e ON (e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE u.id=$1`,
+  [photo.commandId])).rows, [{ upload: null, evidence: null, evidence_type: "progress_photo" }]);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.evidence_upload WHERE job_id=$1 AND scope_item_id=$2`,
+    [jobId, task.scopeItemId])).rows[0].n, 0, "the proof card's newest-upload-for-scope query cannot see it");
+  const events = await auditRows(photo.commandId);
+  assert.deepEqual(events.map(e => e.event_type).sort(), ["v2.progress_photo.attached", "v2.progress_photo.finalized"]);
+  assert.equal(new Set(events.map(event => event.payload.references.commandId)).size, 2,
+    "begin and finalize have separate durable command identities and one event each");
+  assert.deepEqual(await app.briefProgress.uploadPhoto(jobId, photo), uploaded);
+  assert.deepEqual(await auditRows(photo.commandId), events);
+  await assert.rejects(app.briefProgress.uploadPhoto(jobId, { ...photo, fixture: "j3-drainage-photo" }));
+  // Codex P2 4707412001: overlapping uploads reusing one commandId with different scopes: one wins, one conflicts.
+  // Upload binds scope only through its audit event, so any other scope id exercises the race.
+  const otherScope = randomUUID();
+  const raced = { ...photo, commandId: randomUUID() };
+  const outcomes = await Promise.allSettled([app.briefProgress.uploadPhoto(jobId, raced),
+    app.briefProgress.uploadPhoto(jobId, { ...raced, scopeItemId: otherScope })]);
+  assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
+  const [lost] = outcomes.filter(outcome => outcome.status === "rejected");
+  assert.equal(lost.reason.code, "BRIEF_PROGRESS_COMMAND_CONFLICT");
+  const racedEvents = await auditRows(raced.commandId);
+  assert.deepEqual(racedEvents.map(e => e.event_type).sort(), ["v2.progress_photo.attached", "v2.progress_photo.finalized"]);
+  const winner = outcomes.findIndex(outcome => outcome.status === "fulfilled") === 0 ? task.scopeItemId : otherScope;
+  for (const event of racedEvents) assert.equal(event.payload.references.scopeItemId, winner);
+  for (const kind of ["done", "blocked", "changed"]) {
+    const command = progressCommand(brief, task, { version: "v2-brief-progress-command.v2", photoId: uploaded.uploadId,
+      kind, note: kind === "blocked" ? "no power" : "F1-P fictional observation", expectedVersion: await next() });
+    const first = await app.briefProgress.record(jobId, command);
+    assert.equal(first.photoReference, uploaded.uploadId);
+    assert.equal(first.photoState, "verified");
+    assert.match(first.thumbnail, /^data:image\/png;base64,/u);
+    assert.deepEqual(await app.briefProgress.record(jobId, command), first);
+    assert.equal((await progressEvents(command.commandId)).length, 1);
+    await assert.rejects(app.briefProgress.record(jobId, { ...command, photoId: randomUUID() }), { code: "BRIEF_PROGRESS_COMMAND_CONFLICT" });
+    const restored = (await createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).briefProgress.read(jobId)).progress.find(row => row.commandId === command.commandId);
+    assert.deepEqual(restored, first);
+  }
+  // Forced failure after the actual append must remove the row and event for every photo-bearing kind.
+  let failEvent = "";
+  const failing = { async connect() {
+    const client = await runtime.connect(), original = client.query.bind(client), release = client.release.bind(client);
+    client.query = async (sql, ...args) => {
+      const result = await original(sql, ...args);
+      if (typeof sql === "string" && sql.includes("app.append_audit(") && (!failEvent || JSON.stringify(args).includes(failEvent))) throw new Error("F1P_FORCED");
+      return result;
+    };
+    client.release = (...args) => { client.query = original; return release(...args); };
+    return client;
+  } };
+  for (const kind of ["done", "blocked", "changed"]) {
+    const command = progressCommand(brief, task, { version: "v2-brief-progress-command.v2", photoId: uploaded.uploadId,
+      kind, note: "no power", expectedVersion: await next() });
+    await assert.rejects(new BriefProgressRepository(failing).record(context, jobId, owner.sessionId, command), /F1P_FORCED/u);
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.deepEqual(await progressEvents(command.commandId), []);
+  }
+  const failedPhoto = { ...photo, commandId: randomUUID() };
+  const { uploadBriefProgressPhoto } = await import("../../apps/api/dist/workspace/brief-progress-photo.application.js");
+  await assert.rejects(uploadBriefProgressPhoto(failing, context, jobId, owner.membershipId, failedPhoto), /F1P_FORCED/u);
+  assert.equal((await admin.query("SELECT 1 FROM app.evidence_upload WHERE id=$1", [failedPhoto.commandId])).rowCount, 0);
+  assert.equal((await admin.query("SELECT 1 FROM app.synthetic_evidence_original WHERE upload_id=$1", [failedPhoto.commandId])).rowCount, 0);
+  assert.deepEqual(await auditRows(failedPhoto.commandId), []);
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE photo_reference=$1", [failedPhoto.commandId])).rowCount, 0);
+  failEvent = "v2.progress_photo.finalized";
+  const failedFinalize = { ...photo, commandId: randomUUID() };
+  await assert.rejects(uploadBriefProgressPhoto(failing, context, jobId, owner.membershipId, failedFinalize), /F1P_FORCED/u);
+  assert.equal((await admin.query("SELECT 1 FROM app.evidence_object WHERE upload_id=$1", [failedFinalize.commandId])).rowCount, 0);
+  assert.deepEqual((await auditRows(failedFinalize.commandId)).map(row => row.event_type), ["v2.progress_photo.attached"]);
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE photo_reference=$1", [failedFinalize.commandId])).rowCount, 0);
+  await app.briefProgress.uploadPhoto(jobId, failedFinalize);
+  assert.equal((await auditRows(failedFinalize.commandId)).length, 2);
+  // The same-tenant wrong-job link is refused by the insert guard, independently of the API.
+  const otherUpload = (await admin.query("SELECT id FROM app.evidence_upload WHERE tenant_id=$1 AND job_id<>$2 LIMIT 1", [DEMO_TENANT_ID,jobId])).rows[0];
+  assert.ok(otherUpload, "earlier full-suite proof fixtures provide another job's upload");
+  await assert.rejects(app.briefProgress.record(jobId, progressCommand(brief, task, { version: "v2-brief-progress-command.v2",
+    photoId: otherUpload.id, expectedVersion: await next() })), /V2_PROGRESS_PHOTO_OTHER_JOB/u);
+  const foreign = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(foreign.briefProgress.read(jobId), { code: "NOT_FOUND" });
+  await assert.rejects(foreign.briefProgress.uploadPhoto(jobId, photo), { code: "NOT_FOUND" });
+  for (const scope of [outsider.realContext, foreignContext]) {
+    // PX #964 (2025) locks the evidence tables to the firm, so the second firm sees none of this job's rows.
+    for (const table of ["v2_brief_progress", "evidence_upload", "evidence_object", "synthetic_evidence_original"]) {
+      assert.equal((await withTenant(runtime, scope, db => db.$client.query(
+        `SELECT * FROM app.${table} WHERE job_id=$1`, [jobId]))).rowCount, 0, table);
+    }
+    try {
+      const changed = await withTenant(runtime, scope, db => db.$client.query(
+        "UPDATE app.evidence_upload SET state='rejected' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID,uploaded.uploadId]));
+      assert.equal(changed.rowCount, 0);
+    } catch (error) { assert.equal(error.code, "42501"); }
+    await assert.rejects(withTenant(runtime, scope, db => db.$client.query(
+      "DELETE FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID,uploaded.uploadId])), { code: "42501" });
+  }
+  // Live state comes from evidence_upload, without updating the immutable progress observation.
+  await admin.query("UPDATE app.evidence_upload SET state='rejected',rejection_code='verification_invalid' WHERE id=$1", [uploaded.uploadId]);
+  const rejected = (await app.briefProgress.read(jobId)).progress.filter(row => row.photoReference === uploaded.uploadId);
+  assert.equal(rejected.length, 3);
+  assert.ok(rejected.every(row => row.photoState === "rejected" && row.thumbnail === null));
+  const legacy = await app.briefProgress.record(jobId, progressCommand(brief, task, { expectedVersion: await next() }));
+  assert.equal(legacy.photoReference, null);
+  await verifyTenantChain(context.tenantId);
+});
+
 // V2-F1 repair (Codex P2 4705000559): progress ids share the tenant-wide watchdog command namespace, both ways.
 test("F1 progress command ids conflict with another watchdog command's id in both directions", async () => {
   const { owner } = await f1Setup();
@@ -1822,7 +1958,11 @@ test("F1 refuses non-live and closed job presses without rows or audit", async (
   await app.workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close",
     expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length,
     reason: "cancelled_by_customer", note: "F1 fictional closing fixture" });
-  const closed = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  // F1-P's block runs first and adds rows for this task, so read the current version rather than a literal.
+  const task = brief.content.tasks[0];
+  const current = Math.max(0, ...(await app.briefProgress.read(jobId)).progress
+    .filter(row => row.trade === brief.trade && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
+  const closed = progressCommand(brief, task, { expectedVersion: current });
   await assert.rejects(app.briefProgress.record(jobId, closed), { message: "JOB_WORK_CLOSED" });
   assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [closed.commandId])).rowCount, 0);
   assert.deepEqual(await progressEvents(closed.commandId), []);
