@@ -21,3 +21,23 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
    The outer paint leaves its text position and the workspace layout unchanged. */
 .jgd .work-heading>.page-head{background:var(--white);border-radius:10px;box-shadow:0 0 0 12px var(--white)}
 .jgd .work-heading .kicker{color:var(--teal2)}
+
+/* V2-SQ1 (from DUI-1a #890): the New job walk uses the reference form and card classes. */
+.jgd .designed-capture{max-width:none;min-width:0;overflow-wrap:anywhere}
+.jgd .designed-capture h1{margin:6px 0;font:500 clamp(25px,4vw,36px)/1.2 Georgia,serif;color:var(--ink)}
+.jgd .designed-capture .back{padding-inline:0;margin-bottom:8px}
+.jgd .designed-capture .btn:focus-visible,.jgd .designed-capture :is(input,select,textarea,summary,a):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd .designed-capture .btn:disabled{opacity:.62;cursor:not-allowed}
+.jgd .designed-capture .dictation{align-items:start;gap:8px;margin:18px 0 0}
+.jgd .designed-capture .dictation button{margin:0;min-height:44px}
+.jgd .designed-capture .walk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px;margin-top:16px}
+.jgd .designed-capture .walk-grid > .card{margin-top:0}
+.jgd .designed-capture .walk-input{gap:10px}
+.jgd .designed-capture .walk-input label{margin:0}
+.jgd .designed-capture .walk-input textarea{margin:0;height:205px;min-height:150px}
+.jgd .designed-capture .result-message:empty{display:none}
+.jgd .capture-proposal li{padding:8px 0;border-bottom:1px solid var(--line)}
+.jgd .capture-proposal li span{margin-inline-start:8px;white-space:nowrap}
+.jgd .capture-proposal details{margin-bottom:12px}
+.jgd .capture-proposal pre{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:760px){.jgd .designed-capture .walk-grid{grid-template-columns:minmax(0,1fr)}}

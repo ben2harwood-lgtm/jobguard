@@ -240,7 +240,7 @@ for (const speech of ["installed", "unavailable"] as const) {
    await expect(description).toHaveValue(reviewed);
    await checkAccessibility(page, "dictation-used");
   } else {
-   await expect(page.getByText("On-device voice is unavailable in this browser. Type or use the example.", { exact: true })).toBeVisible();
+   await expect(page.getByText("Voice doesn't work in this browser. Type the job below. It works the same way.", { exact: true })).toBeVisible();
    await checkAccessibility(page, "dictation-unavailable");
    await description.fill(reviewed);
   }

@@ -62,7 +62,7 @@ export function createLocalSpeechAdapter(progress:(percent:number)=>void):LocalS
           worker.postMessage({action:"boot"});
         });
         return true;
-      } catch {dispose();return false}
+      } catch (error) {dispose();throw error} // getUserMedia's DOMException name tells a refusal from a missing microphone
     },
     start(cb){
       if(!ready||!worker||!context||!stream)throw Error("Local speech not ready");
