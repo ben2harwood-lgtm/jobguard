@@ -90,7 +90,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 ## Batch G: about 1 to 3 Dec, close-out
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
 |---|---|---|---|---|---|---|---|
-| G1 | **G1** snag register (adopts QW-4 from main) | ★★★ | M | A | SYNC-1, M3 | 2042 | RED |
+| G1 | **G1** snag register (adopts QW-4 from main). Packet Q53, stacked on SYNC-1 #980 | ★★★ | M | A | SYNC-1, M3 | 2042 | RED |
 | G2 | **G2 and G3** handover pack, versions and release (adopts QW-5) | ★★★ | M | O | G1, G0, SYNC-1 | 2043 | RED |
 | G3 | **G4** who can read the pack (other firm, cancelled recipient) | ★★ | S | O | G2 | none | RED |
 | G4 | **G5** hidden findings stay hidden (twin-job comparison) | ★★ | M | O | G2, E4 | none | RED |
