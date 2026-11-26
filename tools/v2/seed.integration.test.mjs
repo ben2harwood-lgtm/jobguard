@@ -8,6 +8,8 @@ import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { CrewBriefRepository, DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+// V2-C3C
+import { CrewContactRepository } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -1672,6 +1674,229 @@ test("D4B route has a builder positive control and refuses absent, invalid, unis
   }
   // Rule 29: pending V2-SX. Append this GET to builderGetRoutes and use
   // assertBuilderRouteRefuses after SX merges. Never sign out the shared session here.
+});
+
+// V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
+const crewTable = "app.v2_crew_contact";
+const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
+  expectedRevision: 0, displayName: "Sam Fictional", trade: "tiler", phone: "07700 900123",
+  email: "sam@crew.jobguard-v2.invalid", ...changes });
+const crewApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).crewContacts;
+const crewEvents = async crewId => (await admin.query(`SELECT tenant_id, actor_ref, event_type, payload FROM app.audit_event
+  WHERE subject_type = 'crew_contact' AND subject_ref = $1 ORDER BY sequence`, [crewId])).rows;
+const assignedEvents = async jobRef => (await admin.query(`SELECT payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2.work_plan.task_assigned' ORDER BY sequence`, [jobRef])).rows;
+
+test("C3C: crew records are forced to their own firm in the shared practice tenant and the second firm's real tenant", async () => {
+  const owner = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const mine = await crewApp(owner.sessionId).record(crewCommand());
+  const { rows: [acl] } = await admin.query(`SELECT
+    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid=$1::regclass`, [crewTable]);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(shared.tenantId, DEMO_TENANT_ID, "both firms' practice sessions share one backing tenant");
+  const { rows: [row] } = await admin.query(`SELECT tenant_id, firm_key FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId]);
+  assert.equal(row.tenant_id, DEMO_TENANT_ID);
+  assert.ok(!(await crewApp(outsider.sessionId).list({ version: "crew-contact-query.v1" }))
+    .some(contact => contact.crewId === mine.crewId));
+  for (const scope of [shared, outsider.realContext]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    assert.equal((await query(`SELECT * FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId])).rowCount, 0);
+    assert.equal((await query(`SELECT * FROM ${crewTable}`)).rows.filter(r => r.firm_key === row.firm_key).length, 0);
+    await assert.rejects(query(`INSERT INTO ${crewTable} (tenant_id, firm_key, crew_id, revision, command_id, display_name,
+      trade, phone, actor_membership_id) VALUES ($1, $2, $3, 1, $4, 'Copy', 'tiler', '07700900124', $5)`,
+    [row.tenant_id, row.firm_key, randomUUID(), randomUUID(), mine.actorMembershipId]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(`UPDATE ${crewTable} SET trade = 'x' WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
+    await assert.rejects(query(`DELETE FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
+  }
+  // Nor can a raw insert give another firm's crewId a later revision: it must name a predecessor in its own firm.
+  for (const previous of [null, 1]) {
+    await assert.rejects(withTenant(runtime, shared, async db => {
+      const { rows: [{ key }] } = await db.$client.query("SELECT app.current_firm_profile_key() AS key");
+      return db.$client.query(`INSERT INTO ${crewTable} (tenant_id, firm_key, crew_id, revision, previous_revision, command_id,
+        display_name, trade, phone, actor_membership_id) VALUES ($1, $2, $3, 2, $4, $5, 'Copy', 'tiler', '07700900124', $6)`,
+      [DEMO_TENANT_ID, key, mine.crewId, previous, randomUUID(), mine.actorMembershipId]);
+    }), { code: previous === null ? "23514" : "23503" });
+  }
+  // The second firm cannot take over the crewId either: it is refused as stale, never revealed.
+  await assert.rejects(crewApp(outsider.sessionId).record(crewCommand({ crewId: mine.crewId })),
+    { code: "CREW_CONTACT_VERSION_CONFLICT" });
+  await assert.rejects(crewApp(outsider.sessionId).record(crewCommand({ crewId: mine.crewId, expectedRevision: 1 })),
+    { code: "CREW_CONTACT_VERSION_CONFLICT" });
+  // The owner's own firm context sees its row; the runtime cannot change it.
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const own = (sql, params) => withTenant(runtime, context, db => db.$client.query(sql, params));
+  assert.equal((await own(`SELECT * FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId])).rowCount, 1);
+  await assert.rejects(own(`UPDATE ${crewTable} SET trade = 'x' WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
+  await assert.rejects(own(`DELETE FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
+});
+
+test("C3C: contacts hold practice data only, and a correction is a new revision", async () => {
+  const owner = await signIn("builder");
+  const crew = crewApp(owner.sessionId);
+  for (const bad of [{ phone: "07911 123456" }, { phone: "020 7946 1234" }, { email: "sam@example.com" }, { displayName: " " }]) {
+    await assert.rejects(crew.record(crewCommand(bad)), { code: "CREW_CONTACT_INVALID" });
+  }
+  const first = await crew.record(crewCommand({ email: null }));
+  // The database refuses real-looking contact data even when the app check is bypassed.
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { rows: [{ firm_key: firmKey }] } = await admin.query(`SELECT firm_key FROM ${crewTable} WHERE crew_id = $1`, [first.crewId]);
+  for (const [phone, email] of [["07911123456", null], ["07700900125", "sam@example.com"]]) {
+    await assert.rejects(withTenant(runtime, context, db => db.$client.query(`INSERT INTO ${crewTable}
+      (tenant_id, firm_key, crew_id, revision, command_id, display_name, trade, phone, email, actor_membership_id)
+      VALUES ($1, $2, $3, 1, $4, 'Raw', 'tiler', $5, $6, $7)`,
+    [DEMO_TENANT_ID, firmKey, randomUUID(), randomUUID(), phone, email, first.actorMembershipId])), { code: "23514" });
+  }
+  const correction = await crew.record(crewCommand({ crewId: first.crewId, expectedRevision: 1, phone: "01632 960001" }));
+  assert.equal(correction.revision, 2);
+  assert.equal(correction.phone, "01632960001");
+  const { rows } = await admin.query(`SELECT revision, previous_revision, phone FROM ${crewTable} WHERE crew_id = $1
+    ORDER BY revision`, [first.crewId]);
+  assert.deepEqual(rows, [{ revision: 1, previous_revision: null, phone: "07700900123" },
+    { revision: 2, previous_revision: 1, phone: "01632960001" }], "the first revision is kept unchanged");
+  const listed = (await crew.list({ version: "crew-contact-query.v1" })).filter(contact => contact.crewId === first.crewId);
+  assert.deepEqual(listed.map(contact => contact.revision), [2]);
+  await assert.rejects(crew.record(crewCommand({ crewId: first.crewId, expectedRevision: 1 })),
+    { code: "CREW_CONTACT_VERSION_CONFLICT" });
+});
+
+test("audit-chain: packages/db/src/v2-crew-contact-repository.ts#CrewContactRepository.record", async () => {
+  const owner = await signIn("builder");
+  const crew = crewApp(owner.sessionId);
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const command = crewCommand();
+  const contact = await crew.record(command);
+  const [event, ...extra] = await crewEvents(command.crewId);
+  assert.equal(extra.length, 0, "audit-chain: event");
+  assert.equal(event.event_type, "v2.crew_contact.recorded");
+  assert.equal(event.tenant_id, DEMO_TENANT_ID);
+  assert.equal(event.actor_ref, `membership:${contact.actorMembershipId}`);
+  assert.deepEqual(event.payload.references, { ...event.payload.references, commandId: command.commandId, crewId: command.crewId,
+    expectedRevision: "0", revision: "1" });
+  assert.match(event.payload.hashes.contact, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /Sam|07700|900123|invalid|tiler/u, "no contact data in the payload");
+
+  assert.deepEqual(await crew.record(command), contact);
+  await Promise.all([crew.record(command), crew.record(command)]);
+  assert.equal((await crewEvents(command.crewId)).length, 1, "audit-chain: replay");
+  await assert.rejects(crew.record({ ...command, displayName: "Someone else" }), { code: "CREW_CONTACT_COMMAND_CONFLICT" });
+
+  const next = crewCommand({ crewId: command.crewId, expectedRevision: 1, trade: "plasterer" });
+  await assert.rejects(new CrewContactRepository(failingAuditPool(runtime)).record(context, owner.sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(`SELECT count(*)::int AS count FROM ${crewTable} WHERE command_id = $1`,
+    [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.equal((await crewEvents(command.crewId)).length, 1, "audit-chain: rollback");
+  assert.equal((await crew.record(next)).revision, 2);
+  assert.equal((await crewEvents(command.crewId)).length, 2);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("C3C: two crew records with the same name get separate assignments, and old free text still displays", async () => {
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  const crew = crewApp(sessionId);
+  const [samA, samB] = [await crew.record(crewCommand()), await crew.record(crewCommand({ phone: "07700900456" }))];
+  assert.equal(samA.displayName, samB.displayName);
+  const plan = await read();
+  const [first, second, third] = plan.tasks;
+  await edit(planEdit(plan, first, { assigneeRef: samA.crewId }));
+  await edit(planEdit(await read(), second, { assigneeRef: samB.crewId }));
+  await edit(planEdit(await read(), third, { assignee: "Typed name" }));
+  const current = await read();
+  const byKey = id => current.tasks.find(task => task.scopeItemId === id.scopeItemId && task.key === id.key);
+  assert.equal(byKey(first).assigneeRef, samA.crewId);
+  assert.equal(byKey(second).assigneeRef, samB.crewId);
+  assert.notEqual(byKey(first).assigneeRef, byKey(second).assigneeRef);
+  assert.equal(byKey(third).assignee, "Typed name", "an old free-text assignee still displays");
+  assert.equal(byKey(third).assigneeRef, undefined, "free text is never resolved to a crew record");
+  const tasksFor = crewId => current.tasks.filter(task => task.assigneeRef === crewId).map(task => task.key + task.scopeItemId);
+  assert.deepEqual(tasksFor(samA.crewId), [first.key + first.scopeItemId]);
+  assert.deepEqual(tasksFor(samB.crewId), [second.key + second.scopeItemId]);
+  // Unassign clears the record.
+  await edit(planEdit(current, first, { assigneeRef: null }));
+  assert.equal((await read()).tasks.find(task => task.key === first.key &&
+    task.scopeItemId === first.scopeItemId).assigneeRef, null);
+  assert.equal((await assignedEvents(draftJob)).length, 3);
+});
+
+test("C3C: a task can never be assigned to another firm's crew record, even past the app check", async () => {
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  const outsider = await signIn("second-builder");
+  const theirs = await crewApp(outsider.sessionId).record(crewCommand({ displayName: "Their crew" }));
+  const plan = await read();
+  const task = plan.tasks[0];
+  await assert.rejects(edit(planEdit(plan, task, { assigneeRef: theirs.crewId })), { code: "WORK_PLAN_INVALID_EDIT" });
+  await assert.rejects(edit(planEdit(plan, task, { assigneeRef: randomUUID() })), { code: "WORK_PLAN_INVALID_EDIT" });
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { rows: [{ actor }] } = await admin.query(`SELECT actor_membership_id AS actor FROM ${crewTable} WHERE crew_id = $1`,
+    [theirs.crewId]);
+  const rawEdit = (pool, scope) => withTenant(pool, scope, db => db.$client.query(`INSERT INTO app.v2_work_plan_edit
+    (tenant_id, job_id, quote_revision_id, command_id, scope_item_id, template_task_key, expected_version, changes, actor_membership_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [DEMO_TENANT_ID, draftJob, plan.quoteRevisionId, randomUUID(), task.scopeItemId,
+    task.key, plan.version, JSON.stringify({ assigneeRef: theirs.crewId }), actor]));
+  await assert.rejects(rawEdit(runtime, context), { code: "23503", message: /CREW_CONTACT_UNAVAILABLE/u });
+  // Even the migration owner, which row security does not filter, cannot bind the job to the other firm's record.
+  await assert.rejects(admin.query(`INSERT INTO app.v2_work_plan_edit
+    (tenant_id, job_id, quote_revision_id, command_id, scope_item_id, template_task_key, expected_version, changes, actor_membership_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [DEMO_TENANT_ID, draftJob, plan.quoteRevisionId, randomUUID(), task.scopeItemId,
+    task.key, plan.version, JSON.stringify({ assigneeRef: theirs.crewId }), actor]), { code: "23503" });
+  assert.equal((await read()).version, plan.version, "nothing was recorded");
+});
+
+// Covers the assigneeRef path of the edit command (V2-C3C).
+test("audit-chain: packages/db/src/v2-work-plan-repository.ts#WorkPlanRepository.edit", async () => {
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const sam = await crewApp(sessionId).record(crewCommand());
+  const plan = await read();
+  const command = planEdit(plan, plan.tasks[0], { assigneeRef: sam.crewId });
+  const receipt = await edit(command);
+  const [event, ...extra] = await assignedEvents(draftJob);
+  assert.equal(extra.length, 0, "audit-chain: event");
+  assert.equal(event.payload.references.changedFields, "assigneeRef");
+  assert.equal("version" in event.payload.references, false);
+  assert.equal((await editEvents(draftJob)).length, 0, "one event per edit, under the assignment name");
+  assert.deepEqual(await edit(command), receipt);
+  await Promise.all([edit(command), edit(command)]);
+  assert.equal((await assignedEvents(draftJob)).length, 1, "audit-chain: replay");
+  await assert.rejects(edit({ ...command, changes: { assigneeRef: null } }), { code: "WORK_PLAN_COMMAND_CONFLICT" });
+  const next = planEdit(await read(), plan.tasks[1], { assigneeRef: sam.crewId });
+  await assert.rejects(new WorkPlanRepository(failingAuditPool(runtime)).edit(context, draftJob, sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_work_plan_edit WHERE command_id = $1", [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.equal((await assignedEvents(draftJob)).length, 1, "audit-chain: rollback");
+});
+
+test("C3C: an old free-text edit keeps its saved changes, audit hash and replay", async () => {
+  const { draftJob, read, edit } = await draftForPlan();
+  const plan = await read();
+  const changes = { durationMinutes: 70, assignee: "Sam (typed)" };
+  const command = planEdit(plan, plan.tasks[0], changes);
+  const receipt = await edit(command);
+  const { rows: [saved] } = await admin.query("SELECT changes::text AS changes FROM app.v2_work_plan_edit WHERE command_id = $1",
+    [command.commandId]);
+  assert.deepEqual(JSON.parse(saved.changes), changes);
+  assert.equal("assigneeRef" in JSON.parse(saved.changes), false);
+  const [event] = await editEvents(draftJob);
+  const sorted = Object.fromEntries(Object.entries(changes).sort(([a], [b]) => a < b ? -1 : 1));
+  assert.equal(event.payload.hashes.changes,
+    createHash("sha256").update(JSON.stringify(sorted)).digest("hex"));
+  assert.equal(event.payload.references.changedFields, "assignee/durationMinutes");
+  assert.deepEqual(await edit(command), receipt, "the old command still replays");
 });
 
 // V2-PX (Q27, migration 2025): Ben's photo lock, and the shared real-upload photo helper.
