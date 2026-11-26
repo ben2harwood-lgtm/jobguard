@@ -18,6 +18,7 @@ export * from "../decisions/decisions.application.js";
 
 export * from "../proof/contracts.js";
 export * from "../proof/proof.application.js";
+export * from "../snag.application.js";
 export * from "./fee-illustration.contracts.js";
 export * from "./fee-illustration.application.js";
 
@@ -89,6 +90,7 @@ export * from "../recovery-allocation.contracts.js";
 export * from "../job-source.application.js";
 export * from "../job-source.contracts.js";
 export * from "../job-source.errors.js";
+export * from "../quote-line-packs.application.js";
 
 export * from "../plan-entitlements.application.js";
 export * from "../contractor/practice-worker-switch.application.js";
@@ -133,3 +135,4 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+export * from "../variation-register.application.js";

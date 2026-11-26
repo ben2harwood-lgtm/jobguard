@@ -146,7 +146,7 @@ export function BillingView({ jobId, view, send, busy = false, practice = false 
             <label>Destination <input value={route(e.id).destination} onChange={x => setRoutes({ ...routes, [e.id]: { ...route(e.id), destination: x.target.value } })}/></label>
             <button type="button" disabled={busy} onClick={() => send(deliveryCommand(e, route(e.id).channel, route(e.id).destination, crypto.randomUUID(), new Date()))}>Approve delivery</button>
           </fieldset>}
-          {sent.some(d => d.adapter === "fake_download" && d.status === "succeeded") && <a className={styles.action} href={`/api/contractor/jobs/${jobId}/billing/download?batchId=${e.id}`}>Download CSV</a>}
+          {sent.some(d => d.adapter === "fake_download" && d.status === "succeeded") && <a className={styles.action} href={`/api/contractor/jobs/${jobId}/billing/download?batchId=${e.id}`} download>Download CSV</a>}
         </div>; }) : <p className={styles.muted}>No export batches yet.</p>}
     </section>
     <section aria-label="Invoices and payments">

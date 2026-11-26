@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as React from "react";
 import JobRecordsPage from "../(designed)/jobs/[id]/records/page";
+import { PilotJobs } from "../(designed)/pilot-jobs";
 import { V2CertificatesPanel } from "./v2-certificates-panel";
 import { certificateStorageKey, isCertificateTickValid, parseCertificateTicks, serialiseCertificateTicks,
   v2Certificates, V2_CERTIFICATES_TEMPLATE_KEY } from "./v2-certificates";
 
+vi.mock("../(designed)/pilot-jobs", () => ({ PilotJobs: () => null }));
 vi.mock("../(designed)/jobs-screens", () => ({ DesignedJob: () => null }));
 vi.mock("./job-sources", () => ({ JobDiary: () => null, CustomerMessages: () => null }));
 vi.mock("./v2-certificates-panel", () => ({ V2CertificatesPanel: () => null }));
@@ -73,6 +75,7 @@ describe("Q30 V2-G0 certificate drafts", () => {
 
   it("mounts the checklist exactly once only in V2 and keeps the job binding", async () => {
     vi.stubGlobal("React", React);
+    vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     for (const mode of [undefined, "0", "true", "1"]) {
       vi.stubEnv("JOBGUARD_LOCAL_V2", mode);
       const page = await JobRecordsPage({ params: Promise.resolve({ id: "job-a" }) });
@@ -81,6 +84,16 @@ describe("Q30 V2-G0 certificate drafts", () => {
       expect(panels).toHaveLength(mode === "1" ? 1 : 0);
       expect(children).toHaveLength(mode === "1" ? 3 : 2);
       if (mode === "1") expect(panels[0].props.jobId).toBe("job-a");
+    }
+  });
+  it("preserves the pilot records screen without mounting device-only V2 drafts", async () => {
+    vi.stubGlobal("React", React);
+    vi.stubEnv("JOBGUARD_ENV", "pilot_no_charge");
+    for (const mode of [undefined, "1"]) {
+      vi.stubEnv("JOBGUARD_LOCAL_V2", mode);
+      const page = await JobRecordsPage({ params: Promise.resolve({ id: "pilot-job" }) });
+      expect(page.type).toBe(PilotJobs);
+      expect(page.props).toEqual({ screen: "review", jobId: "pilot-job" });
     }
   });
 });

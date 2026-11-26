@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-05": {
+      "branches": [
+        "codex/sandbox/pilot-05"
+      ],
+      "note": "RED pilot final-account review, disclosure approval and lock.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-final-account.ts",
+        "apps/web/app/(designed)/pilot-final-account.tsx",
+        "apps/web/app/(designed)/pilot-job-continuation.tsx",
+        "apps/web/app/api/jobs/[id]/final-account/dispositions/route.ts",
+        "apps/web/app/api/jobs/[id]/final-account/lock/route.ts",
+        "apps/web/app/api/jobs/[id]/final-account/review-extras/route.ts",
+        "apps/web/app/api/jobs/[id]/final-account/route.ts",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "packages/core/src/final-account-lock.ts",
+        "packages/db/migrations/0776_pilot_final_account.sql",
+        "packages/db/src/final-account-lock-repository.ts",
+        "packages/db/src/final-account-repository.ts",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0776_pilot_final_account.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

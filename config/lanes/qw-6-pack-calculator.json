@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "qw-6-pack-calculator": {
+      "branches": [
+        "claude/project-thread-khfnp8"
+      ],
+      "note": "QW-6: pack count on a quote line (practice mode, read only, no migration). Ports calculateMaterialPackCount from v2/main unchanged. T2: Ben merges after an independent check.",
+      "allow": [
+        "apps/api/src/quote-line-packs.application.ts",
+        "apps/api/src/quote-line-packs.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/quote-lines/[lineId]/packs/route.ts",
+        "apps/web/app/api/jobs/[id]/quote-lines/[lineId]/packs/route.test.ts",
+        "packages/core/src/materials.ts",
+        "packages/core/src/material-pack-count.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/quote-line-pack-repository.ts",
+        "packages/db/test/quote-line-packs.integration.test.ts"
+      ]
+    }
+  }
+}

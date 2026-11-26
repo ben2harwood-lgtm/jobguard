@@ -1,0 +1,157 @@
+{
+  "migration": "0774_pilot_job_continuation.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_authorize_job_command(uuid,uuid,uuid,uuid,text,text,text,text,text,integer,bigint,text,text,text,text,uuid,integer)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.activation_acceptance_operation_use"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.pilot_capture_real_binding"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_record_quote_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,timestamp with time zone,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-activation-v3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_record_quote_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,timestamp with time zone,uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_record_quote_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,timestamp with time zone,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp3_input_hash",
+          "app.pilot_authorize_job_command",
+          "app.record_builder_attested_acceptance"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_switch_job_live(uuid,uuid,uuid,uuid,uuid,integer,character,integer,bigint,bigint,uuid,timestamp with time zone,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-activation-v3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_switch_job_live(uuid,uuid,uuid,uuid,uuid,integer,character,integer,bigint,bigint,uuid,timestamp with time zone,uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_switch_job_live(uuid,uuid,uuid,uuid,uuid,integer,character,integer,bigint,bigint,uuid,timestamp with time zone,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp3_input_hash",
+          "app.pilot_authorize_job_command",
+          "app.reference_recovery_cap",
+          "app.switch_job_live"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_authorize_job_command",
+        "args": "p_tenant uuid, p_actor uuid, p_command uuid, p_authorization uuid, p_command_type text, p_action text, p_subject_type text, p_subject text, p_hash text, p_version integer, p_amount bigint, p_currency text, p_recipient text, p_policy text, p_payload text, p_job uuid, p_expected integer",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_record_quote_acceptance",
+        "args": "p_tenant uuid, p_acceptance uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_total bigint, p_expected integer, p_actor uuid, p_customer character varying, p_accepted_at timestamp with time zone, p_command uuid, p_authorization uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_switch_job_live",
+        "args": "p_tenant uuid, p_activation uuid, p_cap_snapshot uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_net bigint, p_cap bigint, p_actor uuid, p_accepted_at timestamp with time zone, p_command uuid, p_authorization uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

@@ -1,5 +1,5 @@
 "use client";
-import { jobPageFetch as fetch } from "./job-page-fetch";
+import { jobPageFetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { customerTypes, jobPartiesCommandResultV1, jobPartiesImportResultV1, jobPartiesWorkspaceV1, siteMatchKey, suggestCapturePartyClause, partiesFieldErrors, jobPartiesFormV1, type JobPartiesCommandV1 } from "@jobguard/core";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
@@ -27,7 +27,9 @@ function conflictSince(observed: View, latest: View, refs: DraftRefs): string | 
   if (isLive(observed.status) !== isLive(latest.status)) return WENT_LIVE_MESSAGE;
   return partiesChanged(observed, latest, refs) ? CHANGED_MESSAGE : null;
 }
-export function JobParties({ jobId }: { jobId: string }) {
+export function JobParties({ jobId, pilotFetch }: { jobId: string; pilotFetch?: typeof jobPageFetch }) {
+  const fetch = pilotFetch ?? jobPageFetch;
+  const partiesPath = `/api/jobs/${jobId}/parties`;
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [customerRevisionId, setCustomerRevisionId] = useState("");
   const [customerId, setCustomerId] = useState(""), [name, setName] = useState("Practice Customer"), [type, setType] = useState<(typeof customerTypes)[number]>("person");
@@ -41,7 +43,7 @@ export function JobParties({ jobId }: { jobId: string }) {
   const errorRef = useRef<HTMLParagraphElement>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const fetchView = useCallback(async () => {
-    const response = await fetch(`/api/jobs/${jobId}/parties`, { cache: "no-store" });
+    const response = await fetch(partiesPath, { cache: "no-store" });
     if (!response.ok) throw new Error("Customer and site could not load. Try again.");
     return jobPartiesWorkspaceV1.parse(await response.json());
   }, [jobId]);
@@ -97,7 +99,7 @@ export function JobParties({ jobId }: { jobId: string }) {
   let key: string | null = null; try { key = siteMatchKey(site); } catch { /* The form shows validation errors on save. */ }
   const suggestions = view?.sites.filter(s => (key!==null&&JSON.stringify(JSON.parse(s.matchKey))===key)||s.site.postcode.replace(/\s/gu, "") === postcode.toUpperCase().replace(/\s/gu, "")) ?? [];
   async function command(input: JobPartiesCommandV1) {
-    const response = await fetch(`/api/jobs/${jobId}/parties`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+    const response = await fetch(partiesPath, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
     const result = await response.json();
     if (!response.ok) {
       if (result.code === "REVISION_CONFLICT") throw new PartiesConflict(CHANGED_MESSAGE);
@@ -174,13 +176,13 @@ export function JobParties({ jobId }: { jobId: string }) {
   }
   return <section className={`review ${styles.panel}`} aria-labelledby={`parties-${jobId}`} style={{ minWidth: 0 }}>
     <h2 id={`parties-${jobId}`}>Customer and site</h2>
-    <a href={`/jobs/${jobId}/imports`}>Bring in a job that's already under way</a>
+    {!pilotFetch && <a href={`/jobs/${jobId}/imports`}>Bring in a job that's already under way</a>}
     <p>Use the supplied fictional details only. Do not enter real names, addresses or contact details.</p>
     {view?.current ? <dl data-testid="job-party-details"><dt>Customer</dt><dd data-testid="party-customer">{view.current.customer.name}</dd><dt>Site</dt><dd data-testid="party-site">{[view.current.site.unit, ...view.current.site.addressLines, view.current.site.town, view.current.site.postcode].filter(Boolean).join(", ")}</dd><dt>Who pays?</dt><dd data-testid="party-payer">{view.current.payingParty.name}</dd></dl> : <p>{view ? "Details needed — add a customer and site before previewing a quote or switching live." : "Loading customer and site…"}</p>}
     {view?.current && <details><summary>Technical details</summary><dl><dt>Saved binding</dt><dd style={{ overflowWrap: "anywhere" }} data-testid="party-binding-id">{view.current.bindingId}</dd></dl></details>}
-    <p>You can bring in the practice job that's already under way, using these saved details. Its £1,000.00 starting value is the figure you gave; it creates no past bills.</p>
+    {!pilotFetch && <><p>You can bring in the practice job that's already under way, using these saved details. Its £1,000.00 starting value is the figure you gave; it creates no past bills.</p>
     <button type="button" disabled={!view?.current||busy} onClick={()=>void adopt()}>Bring in the practice job already under way</button>
-    {!view?.current&&<p>Customer and site are required before adopting an underway job.</p>}
+    {!view?.current&&<p>Customer and site are required before adopting an underway job.</p>}</>}
     {error && <p ref={errorRef} tabIndex={-1} role="alert">{error}</p>}
     {!view ? <button onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form ref={formRef} noValidate onChange={() => { touched.current = true; }} onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">
       {!view.current && <p>{suggested ? "Suggested from your words — check before saving" : "Practice example — check before saving"}</p>}

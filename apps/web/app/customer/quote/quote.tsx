@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { cancellationKitRows, type QuoteDocument } from "@jobguard/core";
 type View = { jobId: string; jobRevision: number; status: string; quote: { id: string; revision: number; hash: string; document: QuoteDocument } | null };
-export default function CustomerQuote() {
+export default function CustomerQuote({ pilot = false }: { pilot?: boolean }) {
   const [view,setView]=useState<View>(), [message,setMessage]=useState("Loading your quote…"), [busy,setBusy]=useState(false);
   const [commandId,setCommandId]=useState<string>();
   useEffect(()=>{
@@ -24,7 +24,7 @@ export default function CustomerQuote() {
   }
   const quote=view?.quote, d=quote?.document;
   const gbp=(pence:number)=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(pence/100);
-  return <main><h1>Your quote</h1><p>Synthetic practice only</p><p role="status">{message}</p>{quote&&d&&<>
+  return <main><h1>Your quote</h1><p>{pilot ? "No-charge pilot fixture" : "Synthetic practice only"}</p><p role="status">{message}</p>{quote&&d&&<>
     <h2>{d.reference} · revision {quote.revision}</h2><p>From {d.issuer.name} · {d.issuer.email}</p><p>{d.issuer.address.join(", ")}</p><p>To {d.customer.name} · {d.customer.email}</p><p>{d.customer.address.join(", ")}</p>
     {d.jobParties&&<><p>Paying party: {d.jobParties.payingParty.name}</p><p>Site: {[d.jobParties.site.unit,...d.jobParties.site.addressLines,d.jobParties.site.town,d.jobParties.site.postcode].filter(Boolean).join(", ")}</p></>}
     <ul>{d.lines.map(line=><li key={line.scopeItemId}>{line.description}: {line.quantity} {line.unit} — {gbp(line.netPence)}</li>)}</ul>

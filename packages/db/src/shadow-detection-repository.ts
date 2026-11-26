@@ -165,12 +165,26 @@ export class FinalCheckCompletionRepository {
  * generated practice proof photo through a practice-only reader; verified readable typed text may yield
  * an examined zero. Other unsupported evidence never becomes a claimed zero result. Reconciliation is the same pure rule as the test harness. */
 export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string, drainagePhotoSha256?: string) {
+  return finalCheckPorts(shadowPool, { runtimePool, practicePhotoSha256, drainagePhotoSha256 });
+}
+
+export function pilotFixtureFinalCheckPorts(shadowPool: Pool, fixturePhotoSha256: string) {
+  return finalCheckPorts(shadowPool, { fixturePhotoSha256 });
+}
+
+function finalCheckPorts(shadowPool: Pool, options:
+  | { runtimePool: Pool; practicePhotoSha256: string; drainagePhotoSha256: string | undefined }
+  | { fixturePhotoSha256: string }) {
+  const pilot = "fixturePhotoSha256" in options;
+  const practicePhotoSha256 = pilot ? options.fixturePhotoSha256 : options.practicePhotoSha256;
+  const drainagePhotoSha256 = pilot ? undefined : options.drainagePhotoSha256;
   const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
   const baselineCaptures = (context: VerifiedTenantContext, m: FinalCheckManifest) => m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
     revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
   const readForJob = (context: VerifiedTenantContext, jobId: string) => async <T>(read: (db: TenantTransaction) => Promise<T>): Promise<T | undefined> => {
+    if (pilot) return undefined;
     try {
-      return await withObservationRead(runtimePool, context, jobId, read, shadowPool);
+      return await withObservationRead(options.runtimePool, context, jobId, read, shadowPool);
     } catch (error) {
       if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
       throw error;
@@ -218,6 +232,22 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
           frozenManifest.comparisons.tenantId !== context.tenantId || JSON.stringify(frozenManifest.comparisons) !== JSON.stringify(m.comparisons) ||
           JSON.stringify(binding) !== JSON.stringify(frozenBinding))
           return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
+      }
+      if (pilot) {
+        // The frozen inventory establishes the upload's provenance. Only the exact
+        // fictional proof image has a decoder on this path. Other originals stay incomplete.
+        const fixture = s.processable && s.evidenceId && s.sourceKind === "completion_photo" &&
+          s.sha256 === options.fixturePhotoSha256 ? decodePracticePhoto(s.sha256, options.fixturePhotoSha256) : null;
+        if (!fixture) return { version: "final-check.source-result.v1", inputHash: s.inputHash,
+          status: "unsupported", failureCode: s.processable ? "UNSUPPORTED_SOURCE" : "SOURCE_INVALID", signalIds: [] };
+        const observation = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
+          kind: "completion_photo", ...fixture, evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId,
+            sha256: s.sha256, serverReceivedAt: s.receivedAt } });
+        const captures = m.comparisons.captures.map(c => shadowCaptureV1.parse(c));
+        const proposals = detectShadowObservations([observation], captures, new Date().toISOString());
+        await sink.persist(context, { version: "shadow-detection-batch.v1", jobId: m.comparisons.jobId,
+          observations: [observation], captures, proposals });
+        return sourceResult(context, m, s);
       }
       if (structured) {
         return { version: "final-check.source-result.v1", inputHash: s.inputHash,

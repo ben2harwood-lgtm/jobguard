@@ -1,0 +1,1117 @@
+{
+  "migration": "0782_snag_list.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-snag-list",
+        "title": "Snag list",
+        "description": "The job's snag list in practice mode. A snag is written once and each change of details is a new revision; fixed, checked and reopened are append-only events from which the state is derived, and up to six verified snag photos of the same job link to a snag once each. The runtime may only read these tables under tenant RLS. Every write goes through a SECURITY DEFINER routine that refuses any database other than the practice one, requires the bound practice credential and its own job, takes the watchdog live guard, and records the command so an exact retry replays and a reused command id conflicts. A check needs a prior fix, and comes from someone other than the fixer once another active member has worked on the job's snag list. No role may update or delete the rows. A forward migration can drop the routines while keeping the rows as site history.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep snag reads and writes bound to the request's tenant and the practice session that owns the job.",
+          "LP-12": "Keep snag rows append-only, written only by the checked routines, and link only verified snag photos of the same job."
+        },
+        "sources": [
+          "packages/db/migrations/0782_snag_list.sql",
+          "packages/db/src/snag-repository.ts",
+          "apps/api/src/snag.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/snag-list.integration.test.ts",
+          "packages/core/src/snag.test.ts",
+          "apps/api/src/snag.application.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-snag-list",
+        "title": "Snag list",
+        "kind": "evidence",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep snag writes inside the checked practice routines and the runtime read-only."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep snag reads and writes bound to the request's tenant and the practice session that owns the job.",
+          "LP-12": "Keep snag rows append-only, written only by the checked routines, and link only verified snag photos of the same job."
+        },
+        "downstream": "The job's snag list in practice mode. A snag is written once and each change of details is a new revision; fixed, checked and reopened are append-only events from which the state is derived, and up to six verified snag photos of the same job link to a snag once each. The runtime may only read these tables under tenant RLS. Every write goes through a SECURITY DEFINER routine that refuses any database other than the practice one, requires the bound practice credential and its own job, takes the watchdog live guard, and records the command so an exact retry replays and a reused command id conflicts. A check needs a prior fix, and comes from someone other than the fixer once another active member has worked on the job's snag list. No role may update or delete the rows. A forward migration can drop the routines while keeping the rows as site history.",
+        "path": "ap-snag-list",
+        "sources": [
+          "packages/db/migrations/0782_snag_list.sql",
+          "packages/db/src/snag-repository.ts",
+          "apps/api/src/snag.application.ts"
+        ],
+        "tests": [
+          "packages/db/test/snag-list.integration.test.ts",
+          "packages/core/src/snag.test.ts",
+          "apps/api/src/snag.application.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag_command|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag_event|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag_photo_upload|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag_photo|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag_revision|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.snag|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.snag_add(uuid,uuid,uuid,text,text,text,date)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.snag_attach_photo(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.snag_bind_photo_upload(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.snag_record_event(uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_command|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_event|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_photo_upload|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_photo|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_revision|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_add(uuid,uuid,uuid,text,text,text,date)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_attach_photo(uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_bind_photo_upload(uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_record_event(uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_add(uuid,uuid,uuid,text,text,text,date)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag",
+          "app.snag_command"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
+          "app.snag_audit",
+          "app.snag_practice_actor",
+          "app.snag_replay"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_attach_photo(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag_photo"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
+          "app.snag_audit",
+          "app.snag_practice_actor"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_bind_photo_upload(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag_photo_upload"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
+          "app.snag_practice_actor"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_audit(uuid,uuid,uuid,uuid,text,jsonb,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_current_revision(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_last_event(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_practice_actor(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_check_bound_practice",
+          "app.final_check_practice_owns_job"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_record_event(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag_command",
+          "app.snag_event"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
+          "app.snag_audit",
+          "app.snag_last_event",
+          "app.snag_practice_actor",
+          "app.snag_replay"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_replay(uuid,uuid,uuid,text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_reserved_command_id()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag_command",
+          "app.snag_revision"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
+          "app.snag_audit",
+          "app.snag_current_revision",
+          "app.snag_last_event",
+          "app.snag_practice_actor",
+          "app.snag_replay"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_command|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_event|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_photo|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_revision|rls=t|forced=t"
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_photo_upload|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_command|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_event|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_photo|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_revision|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_photo_upload|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag|snag_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag|snag_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_command|snag_command_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_command|snag_command_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_event|snag_event_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_event|snag_event_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo|snag_photo_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo|snag_photo_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_revision|snag_revision_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_revision|snag_revision_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.watchdog_command_identity|c_snag_command_id_before_insert|app.snag_reserved_command_id|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo_upload|snag_photo_upload_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo_upload|snag_photo_upload_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_command",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_command_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_event",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_event_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_tenant_id_evidence_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_tenant_id_snag_id_position_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_revision",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_revision_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_tenant_id_job_id_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_upload",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_upload_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_add",
+        "args": "j uuid, c uuid, s uuid, p_title text, p_location text, p_assignee text, p_due date",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_attach_photo",
+        "args": "j uuid, s uuid, evidence uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_bind_photo_upload",
+        "args": "j uuid, s uuid, u uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_audit",
+        "args": "t uuid, j uuid, s uuid, actor uuid, k text, refs jsonb, h text, result jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_current_revision",
+        "args": "t uuid, s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_last_event",
+        "args": "t uuid, s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_practice_actor",
+        "args": "t uuid, j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_record_event",
+        "args": "j uuid, c uuid, s uuid, p_kind text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_replay",
+        "args": "t uuid, j uuid, c uuid, k text, h text, actor uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_reserved_command_id",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_revise",
+        "args": "j uuid, c uuid, s uuid, p_expected integer, p_title text, p_location text, p_assignee text, p_due date",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_command",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_event",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_photo",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_revision",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_photo_upload",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "snag",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_command",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_event",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_photo",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_revision",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_photo_upload",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

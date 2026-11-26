@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-06": {
+      "branches": [
+        "codex/sandbox/pilot-06"
+      ],
+      "note": "RED G1 customer sign-in, single-job authority and exact customer actions.",
+      "allow": [
+        "apps/api/src/auth/customer-message.ts",
+        "apps/api/src/auth/customer-quote.ts",
+        "apps/api/src/auth/customer-signin.controller.ts",
+        "apps/api/src/auth/customer-signin.ts",
+        "apps/api/src/auth/customer-stages.ts",
+        "apps/api/src/auth/customer-variation.ts",
+        "apps/api/src/pilot-ingress.test.ts",
+        "apps/api/src/pilot-ingress.ts",
+        "apps/web/app/api/customer-portal/issue/route.ts",
+        "apps/web/app/api/customer-portal/messages/route.ts",
+        "apps/web/app/api/customer-portal/quote-accept/route.ts",
+        "apps/web/app/api/customer-portal/quote/route.ts",
+        "apps/web/app/api/customer-portal/read/route.ts",
+        "apps/web/app/api/customer-portal/revoke/route.ts",
+        "apps/web/app/api/customer-portal/signin/route.ts",
+        "apps/web/app/api/customer-portal/signout/route.ts",
+        "apps/web/app/api/customer-portal/stage-acknowledge/route.ts",
+        "apps/web/app/api/customer-portal/stages/route.ts",
+        "apps/web/app/api/customer-portal/variation-approvals/route.ts",
+        "apps/web/app/api/customer-portal/variations/read/route.ts",
+        "apps/web/app/customer/extras/extras.tsx",
+        "apps/web/app/customer/extras/page.tsx",
+        "apps/web/app/customer/quote/page.tsx",
+        "apps/web/app/customer/quote/quote.tsx",
+        "apps/web/app/customer/sign-in/page.tsx",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/app/lib/customer-portal-server.ts",
+        "apps/web/e2e/pilot-04a.browser.ts",
+        "docs/contracts/customer-portal-authority-proposal.md",
+        "packages/db/migrations/0775_pilot_customer_portal.sql",
+        "packages/db/src/pilot-quote-delivery-repository.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0775_pilot_customer_portal.proof.json",
+        "packages/db/test/pilot-customer-portal.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

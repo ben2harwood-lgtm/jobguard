@@ -78,20 +78,25 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
   const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
   const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
-  // Exact successor metadata is checked above. Project the reviewed LP-12
-  // and LP-11 deltas back to compare the original raw catalogue fields.
+  // Exact successor metadata is checked above. Project the reviewed LP-11,
+  // LP-12 and pilot deltas back to compare the original raw catalogue fields.
   const lp11 = successors.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql")!;
   const lp12 = successors.find(proof => proof.migration === "0768_lp12_narrow_owners.sql")!;
+  const pilotFinalCheck = successors.find(proof => proof.migration === "0777_pilot_final_check.sql")!;
+  const pilotEmail = successors.find(proof => proof.migration === "0778_pilot_commercial_email.sql")!;
+  const variationPhoto = successors.find(proof => proof.migration === "0781_variation_revision_photo.sql")!;
   const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
   const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
-  const lp12Policies = lp12.upgrade.filter(change => change.section === "policies").filter(change => change.before === null);
+  // QW-1 (0781) adds only the customer photo read policy on evidence_object; its metadata is in the 0781 proof.
+  const addedPolicies = [...lp12.upgrade, ...pilotFinalCheck.upgrade, ...pilotEmail.upgrade, ...variationPhoto.upgrade]
+    .filter(change => change.section === "policies" && change.before === null);
   const lp12Relations = lp12.upgrade.filter(change => change.section === "relations");
   const replayCatalog = installedCatalog.map(relation => {
     const predecessor = beforeCatalog.find(row => row.nspname === relation.nspname && row.relname === relation.relname);
     if (!predecessor) return relation;
     const policyChanges = lp11Policies.filter(change => change.after?.schemaname === relation.nspname && change.after.tablename === relation.relname);
     const policies = relation.policies?.flatMap((policy: { polname: string; polqual: string | null; polwithcheck: string | null }) => {
-      if (lp12Policies.some(entry => entry.after?.schemaname === relation.nspname &&
+      if (addedPolicies.some(entry => entry.after?.schemaname === relation.nspname &&
         entry.after.tablename === relation.relname && entry.after.policyname === policy.polname)) return [];
       const change = policyChanges.find(entry => entry.after?.policyname === policy.polname);
       if (!change) return [policy];
@@ -242,12 +247,13 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
     ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
-    ["app.customer_portal_current(g app.customer_portal_grant)", "0733_real_customer_link_own_quote.sql"],
+    ["app.customer_portal_current(g app.customer_portal_grant)", "0775_pilot_customer_portal.sql"],
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0733_real_customer_link_own_quote.sql"],
-    ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0733_real_customer_link_own_quote.sql"],
-    ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0733_real_customer_link_own_quote.sql"],
+    ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0775_pilot_customer_portal.sql"],
+    ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0775_pilot_customer_portal.sql"],
     ["identity.customer_stages(t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text)", "0765_lp11_bound_tenant_rls.sql"],
-    ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0765_lp11_bound_tenant_rls.sql"],
+    // QW-1 (0781) is the latest body for this exact identity.
+    ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0781_variation_revision_photo.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0765_lp11_bound_tenant_rls.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0742_fee_webhook_receipt_binding.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
@@ -418,9 +424,69 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   }
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  const receiptDedupSql = await readFile(new URL("../migrations/0780_receipt_deduplication.sql", import.meta.url), "utf8");
+  const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
+  lp6dBodies.set("app.record_practice_customer_receipt(p_tenant,p_job,p_invoice,p_actor,p_command,p_paid_on,p_amount,p_method,p_reference)", receiptDedupBody);
+  // QW-1 (0781) supersedes the LP-11 customer_variation body; catalogue metadata is still checked above.
+  const variationPhotoSql = await readFile(new URL("../migrations/0781_variation_revision_photo.sql", import.meta.url), "utf8");
+  lp6dBodies.set("identity.customer_variation(t,j,c,digest,command)", variationPhotoSql.split("CREATE OR REPLACE FUNCTION identity.customer_variation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
+  // 0772 supersedes the two invitation bodies. The catalogue proof still checks all routine metadata.
+  const pilotInvitationsSql = await readFile(new URL("../migrations/0772_pilot_identity_invitations.sql", import.meta.url), "utf8");
+  for (const [name, args] of [["invite_member", "session_digest,t,recipient,assigned_role"], ["lp11_invitation_sso_state", "d,t"]]) {
+    const body = pilotInvitationsSql.split(`CREATE OR REPLACE FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+    lp6dBodies.set(`identity.${name}(${args})`, body);
+  }
+  // 0775 supersedes the LP-11 and earlier portal bodies; catalogue metadata is still checked above.
+  const pilotPortalSql = await readFile(new URL("../migrations/0775_pilot_customer_portal.sql", import.meta.url), "utf8");
+  const pilotPortalBodies = new Map<string, string>();
+  for (const match of pilotPortalSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotPortalBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
+  const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
+  // 0777 succeeds these exact worker bodies without changing the catalogue metadata.
+  const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
+  const pilotFinalCheckBodies = new Map<string, string>();
+  for (const match of pilotFinalCheckSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
+  for (const match of pilotRevealSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    const pilotFinalCheckBody = pilotFinalCheckBodies.get(lp6dKey(row));
+    if (pilotFinalCheckBody !== undefined) {
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotFinalCheckBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      } else {
+        expect(row.definition.split("$function$")[1], identity).toBe(pilotFinalCheckBody);
+      }
+      continue;
+    }
+    const pilotPortalBody = pilotPortalBodies.get(lp6dKey(row));
+    if (pilotPortalBody !== undefined) {
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotPortalBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      } else {
+        expect(row.definition.split("$function$")[1], identity).toBe(pilotPortalBody);
+      }
+      continue;
+    }
+    if (identity === "app.guard_final_lock_disclosure_terms()") {
+      expect(row.definition.split("$function$")[1], identity).toBe(pilotDisclosureBody);
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotDisclosureBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      }
+      continue;
+    }
     // 0751 succeeds LP-6d for this exact overload; check it before LP-6d's generic body handling.
     if (identity === "app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)") {
       const parts = prior!.definition.split("$function$");
