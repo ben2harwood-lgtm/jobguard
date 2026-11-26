@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
+import { extraNotPlannedReason, type ExtraNotPlanned } from "./work-plan-command";
 
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
@@ -16,6 +17,7 @@ type PlanView = {
   unplanned: { scopeItemId: string; title: string; key: string }[];
   // Approved extras: the approved variation revision each scope item was planned from.
   variationRevisions?: Record<string, string>;
+  extrasNotPlanned?: ExtraNotPlanned[];
 };
 type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
@@ -238,6 +240,10 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         <p>Needs a trade, duration and place in the plan</p>
         {taskEditor(item)}
       </article>)}
+    </div>}
+    {!!plan?.extrasNotPlanned?.length && <div className="card-body">
+      <h3>Approved extras not on the plan</h3>
+      <ul>{plan.extrasNotPlanned.map(extra => <li key={extra.scopeItemId}>{extra.title}: {extraNotPlannedReason(extra)}</li>)}</ul>
     </div>}
   </Card>;
 }

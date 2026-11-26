@@ -118,6 +118,22 @@ describe("Plan card after changes in the job workspace", () => {
   });
 });
 
+// C3B-1 mount, owned by c4 #903: the read-only list of approved extras that are not on the plan.
+describe("Plan card lists approved extras that are not on the plan", () => {
+  it("shows each one with its plain reason", async () => {
+    request.mockResolvedValueOnce(Response.json({ ...view("rev-1", "accepted", [task("fit", "Fit doors")]), extrasNotPlanned: [
+      { scopeItemId: "00000000-0000-4000-8000-000000000011", title: "Leave out the shelf", reason: "omission", planningDropped: false },
+      { scopeItemId: "00000000-0000-4000-8000-000000000012", title: "Move the socket", reason: "direction_unknown", planningDropped: true },
+    ] }));
+    await mount();
+    await vi.waitFor(() => expect(taskKeys()).toEqual([`${scopeItemId}/fit`]));
+    expect(shown().some(node => node.type === "h3" && node.props.children === "Approved extras not on the plan")).toBe(true);
+    const items = shown().filter(node => node.type === "li").map(node => [node.props.children].flat().join(""));
+    expect(items).toEqual(["Leave out the shelf: removed work, nothing to plan",
+      "Move the socket: no price change: say whether it adds or removes work · planning on this extra was set aside"]);
+  });
+});
+
 describe("Plan task edits", () => {
   const crew = "00000000-0000-4000-8000-000000000020";
   const approved = "00000000-0000-4000-8000-000000000030";

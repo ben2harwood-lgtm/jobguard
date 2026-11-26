@@ -182,6 +182,86 @@ test("seeded plan edits persist at both widths and existing Switch live works ov
   checkRequests();
 });
 
+// C3B-1 (Q47): an approved extra's task is planned from the screen. Runs on the seeded job after the test above.
+test("an approved extra can be planned from the screen and a later approval makes the open edit stale", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  const checkRequests = trackRequests(page, baseURL!);
+  const jobs = await json<{ jobs: { id: string; title: string }[] }>(
+    await page.request.get(`/api/jobs?tenantId=${tenantId}`));
+  const job = jobs.jobs.find(row => row.title === "Occupied-home kitchen splashback and hall decorating");
+  expect(job).toBeDefined();
+  const path = planPath(job!.id);
+  const card = planCard(page);
+  if ((await json<{ state: string }>(await page.request.get(path))).state !== "live") {
+    await json(await page.request.post(`/api/v2-backend/jobs/${job!.id}/quotes/activation`, { data: {
+      version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" } }));
+  }
+  type Variations = { variations: { id: string; currentRevisionId: string | null }[] };
+  const vary = async (fields: Record<string, unknown>) => json<Variations>(await page.request.post(
+    `/api/jobs/${job!.id}/variations`, { data: { version: "variation-command.v1", ...fields } }));
+  const attestation = "Builder-recorded practice acceptance — not an authenticated customer signature";
+  const approved = async (description: string, unitRatePence: number, direction: "addition" | "omission") => {
+    const proposalId = randomUUID();
+    const proposed = await vary({ action: "propose", proposalId, scopeItemId: randomUUID(), existingScopeItemId: null,
+      lineageParentScopeItemId: null, description, captureText: description,
+      price: { quantity: "1", unit: "item", unitRatePence, direction } });
+    const revisionId = proposed.variations.find(row => row.id === proposalId)!.currentRevisionId!;
+    await vary({ action: "approve", variationId: proposalId, revisionId, approvalId: randomUUID(), attestation });
+    return { proposalId, revisionId };
+  };
+  const trim = await approved("Add trim", 12500, "addition");
+  await approved("Leave out the hall shelf", 4000, "omission");
+
+  await page.goto(`/jobs/${job!.id}/work`);
+  await expect(card.getByRole("heading", { name: "Approved extras not on the plan" })).toBeVisible();
+  await expect(card.getByText("Leave out the hall shelf: removed work, nothing to plan")).toBeVisible();
+  const plans = [
+    { width: 360, button: "Plan task Add trim", trade: "Joiner", day: "2026-12-02", shown: "2 Dec" },
+    { width: 1280, button: "Edit task Add trim", trade: "Carpenter", day: "2026-12-03", shown: "3 Dec" },
+  ];
+  for (const { width, button, trade, day, shown } of plans) {
+    await page.setViewportSize({ width, height: 800 });
+    await card.getByRole("button", { name: button }).click();
+    await card.getByLabel("Trade", { exact: true }).fill(trade);
+    await card.getByLabel("Duration (minutes)").fill("45");
+    await card.getByLabel("Day", { exact: true }).fill(day);
+    const response = page.waitForResponse(r => r.url().endsWith(path) && r.request().method() === "POST");
+    await card.getByRole("button", { name: "Save task" }).click();
+    const saved = await response;
+    expect(saved.ok(), await saved.text()).toBe(true);
+    expect(saved.request().postDataJSON()).toMatchObject({ version: "work-plan-edit.v1", taskKey: "custom-scope-item",
+      variationRevisionId: trim.revisionId, changes: { trade, durationMinutes: 45, scheduledDate: day } });
+    await expect(card.getByText("Task saved.")).toBeVisible();
+    await page.reload();
+    const row = card.getByRole("article").filter({ has: page.getByRole("heading", { name: /Add trim$/u }) });
+    await expect(row).toContainText(`${trade} · 45 min · ${shown}`);
+    await expect(card.getByRole("heading", { name: "Unplanned" })).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await card.screenshot({ path: resolve(shots, `../v2-c3b1/extra-planned-${width}.png`), animations: "disabled",
+      style: "nextjs-portal, .rr-mobile-nav { display: none !important; }" });
+  }
+
+  // The screen holds the first approved revision while a second one is approved elsewhere.
+  await card.getByRole("button", { name: "Edit task Add trim" }).click();
+  const nextRevision = randomUUID();
+  await vary({ action: "revise", variationId: trim.proposalId, expectedRevisionId: trim.revisionId, revisionId: nextRevision,
+    description: "Add oak trim", price: { quantity: "1", unit: "item", unitRatePence: 15000, direction: "addition" } });
+  await vary({ action: "approve", variationId: trim.proposalId, revisionId: nextRevision, approvalId: randomUUID(), attestation });
+  await card.getByLabel("Trade", { exact: true }).fill("Unsaved trade");
+  const refused = page.waitForResponse(r => r.url().endsWith(path) && r.request().method() === "POST");
+  await card.getByRole("button", { name: "Save task" }).click();
+  const stale = await refused;
+  expect(stale.status()).toBe(409);
+  expect(await stale.json()).toEqual({ code: "WORK_PLAN_VERSION_CONFLICT" });
+  await expect(card.getByRole("alert")).toContainText("The plan changed since you opened it. This edit was not saved.");
+  await card.getByRole("button", { name: "Reload plan" }).click();
+  const revised = card.getByRole("article").filter({ has: page.getByRole("heading", { name: /Add oak trim$/u }) });
+  await expect(revised).toContainText("Carpenter · 45 min · 3 Dec");
+  await expect(revised.getByText("Review previous edits")).toBeVisible();
+  await expect(card.getByText("Unsaved trade")).toHaveCount(0);
+  checkRequests();
+});
+
 test("empty, changed draft and problem states match the checked mock-up at both widths", async ({ page, baseURL }) => {
   const checkRequests = trackRequests(page, baseURL!);
   const { jobId, proposalId, reviewId, proposal } = await json<{
