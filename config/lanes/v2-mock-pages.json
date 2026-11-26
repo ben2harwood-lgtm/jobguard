@@ -1,0 +1,60 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-mock-pages": {
+      "branches": [
+        "claude/project-thread-99dmkk"
+      ],
+      "note": "V2-M2: local clickable mock-ups of the K3 Friday update, E2 reply page, K9 RAMS draft and F1 My brief pages, with Playwright screenshots.",
+      "allow": [
+        "apps/web/app/(designed)/v2-mock-pages/fixture.ts",
+        "apps/web/app/(designed)/v2-mock-pages/page.tsx",
+        "apps/web/app/(designed)/v2-mock-pages/pages-mock.tsx",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-customer-message-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-customer-message-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/friday-update-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-blocked-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-blocked-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-changed-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-changed-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-no-signal-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-no-signal-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/my-brief-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-signed-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/rams-draft-signed-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-already-answered-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-already-answered-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-link-expired-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-link-expired-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-merchant-question-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-merchant-question-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-question-changed-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-pages/reply-page-question-changed-360.png",
+        "apps/web/e2e/v2-mock-pages.spec.ts",
+        "apps/web/playwright.v2-mock-pages.config.ts"
+      ]
+    }
+  }
+}
