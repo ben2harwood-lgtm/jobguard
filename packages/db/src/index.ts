@@ -242,3 +242,5 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // Q06 V2-K9 RAMS draft (separate registration block).
 export { RamsRepository } from "./v2-rams-repository.js";
 export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash, RamsError, type RamsDraft } from "./v2-rams-draft.js";
+// V2-C3C crew records.
+export * from "./v2-crew-contact-repository.js";
