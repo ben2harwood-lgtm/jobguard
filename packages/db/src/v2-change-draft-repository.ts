@@ -76,6 +76,21 @@ export class ChangeDraftRepository {
     return rows.map(row => ({ ...row, unitRatePence: row.unitRatePence === null ? null : Number(row.unitRatePence) }));
   }
 
+  /** The line as currently agreed: a change is drafted from the latest approved change's total, never the original
+   * quote quantity twice. A second change while one is still waiting for the customer is a version conflict. */
+  private async agreedLine(client: PoolClient, tenantId: string, jobId: string, line: ChangeDraftLineRow, exceptVariationId: string | null) {
+    const { rows: [row] } = await client.query<{ pending: boolean; agreed: string | null }>(`SELECT
+      EXISTS (SELECT FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
+        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.current_revision_id = d.revision_id
+          AND v.state IN ('draft', 'priced') AND v.id IS DISTINCT FROM $4::uuid) AS pending,
+      (SELECT d.new_quantity FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
+        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.current_revision_id = d.revision_id AND v.state = 'approved'
+          AND v.id IS DISTINCT FROM $4::uuid ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1) AS agreed`,
+    [tenantId, jobId, line.quoteLineId, exceptVariationId]);
+    if (row?.pending) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_VERSION_CONFLICT");
+    return row?.agreed ? { ...line, quantity: String(row.agreed) } : line;
+  }
+
   /** The plan's tasks on one scope item, with any builder edits applied. */
   private async planTasks(context: VerifiedTenantContext, jobId: string, line: ChangeDraftLineRow) {
     const plan = await this.plans.read(context, { version: "work-plan-source.v1", jobId, quoteRevisionId: line.quoteRevisionId })
@@ -98,7 +113,10 @@ export class ChangeDraftRepository {
   async preview(context: VerifiedTenantContext, jobId: string, input: unknown) {
     const parsed = changeDraftPreviewV1.safeParse(input);
     if (!parsed.success) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_INVALID_COMMAND");
-    const [line] = await withTenant(this.pool, context, ({ $client }) => this.acceptedLines($client, context.tenantId, jobId, parsed.data.quoteLineId));
+    const line = await withTenant(this.pool, context, async ({ $client }) => {
+      const [accepted] = await this.acceptedLines($client, context.tenantId, jobId, parsed.data.quoteLineId);
+      return accepted ? this.agreedLine($client, context.tenantId, jobId, accepted, null) : null;
+    });
     if (!line) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_LINE_NOT_FOUND");
     const { tasks } = await this.planTasks(context, jobId, line);
     const draft = this.draft(line, parsed.data.newQuantity, parsed.data.unitRatePence, tasks);
@@ -133,8 +151,9 @@ export class ChangeDraftRepository {
         if (prior.jobId !== jobId || prior.digest !== digest) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_COMMAND_CONFLICT");
         return { revisionId: prior.revisionId, replayed: true };
       }
-      const [line] = await this.acceptedLines($client, context.tenantId, jobId, variationLine);
-      if (!line) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_LINE_NOT_FOUND");
+      const [accepted] = await this.acceptedLines($client, context.tenantId, jobId, variationLine);
+      if (!accepted) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_LINE_NOT_FOUND");
+      const line = await this.agreedLine($client, context.tenantId, jobId, accepted, command.action === "revise" ? command.variationId : null);
       const draft = this.draft(line, command.newQuantity, command.unitRatePence, planTasks);
       const price = { ...draft.priceProposal, direction: draft.direction, confirmedByMembershipId: actorMembershipId,
         rateProvenance: { kind: "human_entered" as const, sourceRef: "synthetic://builder-entered", sourceHash, rateVersion: "builder-price-v1" } };

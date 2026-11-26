@@ -9,12 +9,14 @@ type Preview = { delta: string; direction: "addition" | "omission"; previewPence
   priceProposal: { quantity: string; unit: string; unitRatePence: number };
   tasks: { taskKey: string; title: string; proposedMinutes: number; materialNeeds: string[] }[] };
 type Revise = { variationId: string; expectedRevisionId: string } | null;
+type Inputs = { lineId: string; quantity: string; rate: string };
+const sameInputs = (a: Inputs, b: Inputs) => a.lineId === b.lineId && a.quantity === b.quantity && a.rate === b.rate;
 
 export function ChangeDrafts({ jobId }: { jobId: string }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/change-drafts`;
   const [state, setState] = useState<State | null>(null), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const [lineId, setLineId] = useState(""), [quantity, setQuantity] = useState(""), [rate, setRate] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null), [minutes, setMinutes] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<(Preview & { inputs: Inputs }) | null>(null), [minutes, setMinutes] = useState<Record<string, string>>({});
   const [revise, setRevise] = useState<Revise>(null);
   // One command id per drafted change until a response arrives, so a retried Confirm prices once.
   const pending = useRef<{ key: string; commandId: string } | null>(null);
@@ -25,6 +27,9 @@ export function ChangeDrafts({ jobId }: { jobId: string }) {
   }, [endpoint]);
   useEffect(() => { void load().catch(() => setNotice("Sign in to the correct practice firm to change quantities.")); }, [load]);
   const line = state?.lines.find(row => row.quoteLineId === lineId) ?? null;
+  // The inputs as they are now, read after a request returns: a preview for older inputs is discarded.
+  const inputs = useRef<Inputs>({ lineId, quantity: quantity.trim(), rate });
+  inputs.current = { lineId, quantity: quantity.trim(), rate };
 
   async function post(body: Record<string, unknown>) {
     setBusy(true); setNotice("");
@@ -50,14 +55,18 @@ export function ChangeDrafts({ jobId }: { jobId: string }) {
   }
 
   async function draft() {
+    const asked = { ...inputs.current };
     const unitRatePence = penceFromPounds(rate);
     const result = await post({ version: "v2-change-draft-preview.v1", quoteLineId: lineId, newQuantity: quantity.trim(),
       ...(unitRatePence !== null && { unitRatePence }) }) as Preview | null;
-    if (result) { setPreview(result); setMinutes(Object.fromEntries(result.tasks.map(task => [task.taskKey, String(task.proposedMinutes)]))); }
+    if (result && !sameInputs(asked, inputs.current)) return;
+    if (result) { setPreview({ ...result, inputs: asked }); setMinutes(Object.fromEntries(result.tasks.map(task => [task.taskKey, String(task.proposedMinutes)]))); }
   }
 
   async function confirm() {
     if (!preview || !line) return;
+    // Confirm only the inputs the shown preview was drafted from.
+    if (!sameInputs(preview.inputs, inputs.current)) { setPreview(null); return; }
     const body = { version: "v2-change-draft-command.v1", newQuantity: quantity.trim(), unitRatePence: preview.priceProposal.unitRatePence,
       description: changeDescription(line.description, quantity.trim(), line.unit ?? ""),
       tasks: preview.tasks.map(task => ({ taskKey: task.taskKey, proposedMinutes: Math.max(0, Math.round(Number(minutes[task.taskKey] ?? task.proposedMinutes))) })),

@@ -1342,6 +1342,13 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
   assert.deepEqual((await app.workPlan.read(jobId, planQuery)).tasks, planAfter.tasks);
   const brief = (await app.briefProgress.read(jobId)).briefs.find(row => row.trade === "tiler");
   assert.equal(brief.current, false, "the brief now shows as outdated");
+  // A later change is drafted from the agreed 1.25, not the quoted 1: 1.25 to 1.5 is +0.25 (£23.75), never £47.50.
+  const again = await drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.5" });
+  assert.deepEqual([again.line.quantity, again.delta, again.previewPence], ["1.25", "0.25", 2375]);
+  const second = await drafts.command(jobId, f3.confirm(tile, { newQuantity: "1.5" }));
+  assert.deepEqual([second.acceptedQuantity, second.signedDeltaPence], ["1.25", 2375]);
+  // While that one waits for the customer, another independent change on the line is refused.
+  await assert.rejects(drafts.command(jobId, f3.confirm(tile, { newQuantity: "2" })), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
 });
 
 test("F3 revise makes a new revision and draft; the old F6 link is refused; an omission drafts a negative delta and no time", async () => {
