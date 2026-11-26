@@ -1,0 +1,6 @@
+{
+  "migration": "2058_v2_handover_release.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

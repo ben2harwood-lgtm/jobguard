@@ -1,10 +1,11 @@
 "use client";
-// V2-G2 (Q56): Job › Records › Handover, following M3's Handover mock. Save replaces the mock's Release (that is G3).
+// V2-G2 (Q56): Job › Records › Handover, following M3's Handover mock. G3 mounts Release in the version history.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HandoverChoice, HandoverContent, HandoverRefusal, HandoverSectionKey, HandoverSources, HandoverVersion } from "@jobguard/api/workspace";
 import { Card, Empty, Note } from "../(designed)/designed-ui";
 import { HandoverPack, handoverEmpty, handoverIntro, handoverProblem, handoverProblemText, handoverRefusalText, handoverSaved,
   handoverTitle, handoverVersionLine } from "./v2-handover-label";
+import { HandoverReleases } from "./v2-handover-release";
 
 const sections: { key: HandoverSectionKey; title: string }[] = [{ key: "done", title: "What was done" }, { key: "changes", title: "Changes" },
   { key: "photos", title: "Photos" }, { key: "certificates", title: "Manuals and certificates" }, { key: "snags", title: "Outstanding snags" },
@@ -69,7 +70,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
     <label key={id} style={tick}><input type="checkbox" style={box} disabled={busy} checked={choice[key].includes(id)}
       onChange={event => change({ ...choice, [key]: toggle(choice[key], id, event.target.checked) })}/>{label}</label>;
   return <div className="form" data-testid="handover" style={{ overflowWrap: "anywhere" }}>
-    <Card title={handoverTitle((versions.at(-1)?.version ?? 0) + 1)} sub="Practice job · nothing is sent from this screen">
+    <Card title={handoverTitle((versions.at(-1)?.version ?? 0) + 1)} sub="Practice job · saving sends nothing">
       <div className="card-body form"><p>{handoverIntro}</p>
         {sections.map(section => <fieldset key={section.key} style={{ border: 0, padding: 0, margin: 0 }}>
           <label style={tick}><input type="checkbox" style={box} disabled={busy} checked={on(section.key)}
@@ -114,7 +115,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
           {opened === row.version ? "Close" : `Open version ${row.version}`}</button>
         {opened === row.version && <HandoverPack content={row.content}/>}
       </div>) : <p>No version saved yet.</p>}
-      <p>Releasing a version to the customer comes next. Nothing is sent from this screen.</p>
+      {versions.length > 0 && <HandoverReleases jobId={jobId} versions={versions.map(row => row.version)}/>}
     </div></Card>
   </div>;
 }

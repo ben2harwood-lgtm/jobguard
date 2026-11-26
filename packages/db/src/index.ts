@@ -253,3 +253,4 @@ export * from "./snag-repository.js";
 export * from "./v2-crew-contact-repository.js";
 export * from "./v2-snag-register-repository.js";
 export * from "./v2-handover-repository.js";
+export * from "./v2-handover-release-repository.js";

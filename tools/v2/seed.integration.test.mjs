@@ -8,6 +8,8 @@ import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+// V2-G3
+import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
@@ -1786,5 +1788,180 @@ test("G2 migration 2043 reruns without changing policies, triggers or rows", asy
     (SELECT count(*)::int FROM app.v2_handover_version) AS rows`)).rows[0];
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G3 (Q57, migration 2058): release a saved handover version by customer link, and "Acknowledge receipt".
+const g3 = {
+  // No V2 command completes site work yet, so the fixture marks every scope item complete directly
+  // (the same final state main's proof command reaches through app.transition_scope_progress).
+  complete: jobId => admin.query(`UPDATE app.scope_progress SET stage='complete', revision=revision+1, updated_at=clock_timestamp()
+    WHERE job_id=$1 AND stage<>'complete'`, [jobId]),
+  release: (handoverVersion, commandId = randomUUID()) => ({ version: "v2-handover-release-command.v1", commandId, handoverVersion }),
+  releases: f => request(`${f.path}/releases`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/releases`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  open: token => request(`/handover/${token}`),
+  acknowledge: (token, status = 200, cookies) => request("/api/v2/handover", { cookies, body: { version: "v2-handover-acknowledge.v1", token } })
+    .then(response => json(response, status)),
+  // In process, for the catcher count and a past clock. The catcher logs metadata only, under local V2.
+  async direct(f, body, clock) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new HandoverReleaseRepository(practiceMaterialPool(runtime, auth.digest), clock);
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.release(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  async ready() {
+    const f = await g2.job();
+    await g3.complete(f.job);
+    const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+    const line = view.sources.lines[0].id;
+    const v1 = (await f.post(g2.save({ sections: ["done", "snags", "contacts"], lineIds: [line], variationIds: [], photoIds: [],
+      snagIds: [f.snagId], certificates: [] }))).saved;
+    return { ...f, line, v1 };
+  },
+};
+const linkTables = ["app.snag_event", "app.variation_approval", "app.final_account_lock", "app.customer_invoice", "app.v2_snag_owner",
+  "app.v2_snag_agreed", "app.v2_handover_version", "app.v2_handover_release"];
+const linkSnapshot = async jobId => Object.fromEntries(await Promise.all(linkTables.map(async table =>
+  [table, (await admin.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS rows
+    FROM ${table} t WHERE job_id=$1`, [jobId])).rows[0]])));
+
+test("G3 done when: the customer opens v1 by link, sees the outstanding snag, acknowledges, and later receives a corrected v2", async () => {
+  const f = await g3.ready();
+  const first = await g3.direct(f, g3.release(1));
+  assert.equal(first.result.replayed, false);
+  assert.deepEqual(first.captured, [{ event: "v2.delivery.captured", kind: "v2_handover_release" }], "one catcher delivery, metadata only");
+  const { rows: [stored] } = await admin.query("SELECT recipient_email, token_hash FROM app.v2_handover_release WHERE id=$1", [first.result.release.releaseId]);
+  assert.equal(stored.recipient_email, "customer@jobguard-v2.invalid");
+  assert.equal(stored.token_hash, createHash("sha256").update(first.result.token).digest("hex"), "only the hash is stored");
+  // The customer, with no sign-in.
+  const page = await g3.open(first.result.token);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get("cache-control")?.includes("no-store") ?? false, true);
+  const html = await page.text();
+  assert.match(html, /Outstanding snags/u);
+  assert.match(html, /Refit the hall door stop/u);
+  assert.match(html, /Receipt only: acknowledging this pack does not agree the account or sign off any snag\./u);
+  assert.doesNotMatch(html, /Newer version available/u);
+  assert.doesNotMatch(html, /£|pence/u);
+  const ack = await g3.acknowledge(first.result.token);
+  assert.equal(ack.replayed, false);
+  // The builder checks the snag, saves version 2 without it and releases it.
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  assert.equal(second.captured.length, 1, "one more delivery");
+  const old = await (await g3.open(first.result.token)).text();
+  assert.match(old, /Newer version available/u);
+  assert.match(old, /Refit the hall door stop/u, "version 1 still shows unchanged");
+  const corrected = await (await g3.open(second.result.token)).text();
+  assert.doesNotMatch(corrected, /Refit the hall door stop|Newer version available/u);
+  const { releases, siteComplete } = await g3.releases(f);
+  assert.equal(siteComplete, true);
+  assert.deepEqual(releases.map(row => [row.version, row.acknowledgedAt !== null, row.superseded]), [[1, true, true], [2, false, false]]);
+  assert.equal(JSON.stringify(releases).includes(first.result.token), false, "the history never carries a token");
+  // A replay returns the release without the link, and delivers nothing.
+  const replay = await g3.direct(f, { ...g3.release(1), commandId: (await admin.query("SELECT command_id FROM app.v2_handover_release WHERE id=$1",
+    [first.result.release.releaseId])).rows[0].command_id });
+  assert.deepEqual([replay.result.replayed, replay.result.token, replay.captured.length], [true, null, 0]);
+  const events = (await admin.query(`SELECT event_type, actor_ref, payload FROM app.audit_event WHERE subject_ref=$1
+    AND event_type IN ('v2.handover.released', 'v2.handover.acknowledged') ORDER BY sequence`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type), ["v2.handover.released", "v2.handover.acknowledged", "v2.handover.released"]);
+  assert.equal(events[1].actor_ref, `handover_link:${first.result.release.releaseId}`);
+  assert.doesNotMatch(JSON.stringify(events), /door stop|customer@|jobguard-v2\.invalid/u);
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G3 release is refused while a scope item is still in progress, with no delivery and no row", async () => {
+  const f = await g2.job();
+  const saved = (await f.post(g2.save({ sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] }))).saved;
+  assert.equal((await g3.releases(f)).siteComplete, false);
+  const refused = await g3.direct(f, g3.release(saved.version));
+  assert.equal(refused.result.code, "HANDOVER_SITE_NOT_COMPLETE");
+  assert.deepEqual(refused.captured, []);
+  assert.equal((await g3.post(f, g3.release(saved.version), 409)).code, "HANDOVER_SITE_NOT_COMPLETE");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  // Never the financial lock: completing the site work alone is enough.
+  await g3.complete(f.job);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.final_account_lock WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  assert.ok((await g3.post(f, g3.release(saved.version))).token);
+});
+
+test("G3 link refusals: a made-up token, an expired link and an altered link with the second firm signed in are one refusal", async () => {
+  const f = await g3.ready();
+  const expired = await g3.direct(f, { ...g3.release(1), expiresInDays: 30 }, () => Date.now() - 31 * 86_400_000);
+  const live = await g3.direct(f, g3.release(1));
+  const second = await signIn("second-builder");
+  const altered = live.result.token.slice(0, -1) + (live.result.token.endsWith("A") ? "B" : "A");
+  const bodies = [];
+  for (const [token, cookies] of [["x".repeat(43), undefined], [expired.result.token, undefined], [altered, second.cookies]]) {
+    bodies.push(await g3.acknowledge(token, 404, cookies));
+    const page = await (await g3.open(token)).text();
+    assert.match(page, /This link can’t be opened|This link can&#x27;t be opened|This link can’t/u);
+    assert.doesNotMatch(page, /Refit the hall door stop|£|pence/u);
+  }
+  assert.deepEqual(bodies, Array(3).fill({ code: "HANDOVER_LINK_REFUSED" }));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  // The second firm's builder cannot read or release the first firm's handover.
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g3.release(1) }), 404);
+});
+
+test("G3 acknowledging twice is one row, and both tables refuse UPDATE and DELETE", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const first = await g3.acknowledge(result.token), again = await g3.acknowledge(result.token);
+  assert.deepEqual([again.replayed, again.acknowledgedAt], [true, first.acknowledgedAt]);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 1);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.acknowledged'`, [f.job])).rows[0].n, 1);
+  for (const sql of ["UPDATE app.v2_handover_release SET firm_name=firm_name WHERE job_id=$1", "DELETE FROM app.v2_handover_release WHERE job_id=$1",
+    "UPDATE app.v2_handover_acknowledgement SET acknowledged_at=acknowledged_at WHERE job_id=$1", "DELETE FROM app.v2_handover_acknowledgement WHERE job_id=$1",
+    "INSERT INTO app.v2_handover_acknowledgement (tenant_id, job_id, release_id) SELECT tenant_id, job_id, id FROM app.v2_handover_release WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+  for (const sql of ["UPDATE app.v2_handover_release SET firm_name=firm_name WHERE job_id=$1", "DELETE FROM app.v2_handover_acknowledgement WHERE job_id=$1"])
+    await assert.rejects(admin.query(sql, [f.job]));
+  const { rows } = await admin.query(`SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+    WHERE oid IN ('app.v2_handover_release'::regclass, 'app.v2_handover_acknowledgement'::regclass) ORDER BY relname`);
+  assert.deepEqual(rows.map(row => [row.relrowsecurity, row.relforcerowsecurity]), [[true, true], [true, true]]);
+});
+
+test("G3 acknowledgement changes nothing else: snag, variation, lock, invoice and handover rows are identical", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const before = await linkSnapshot(f.job);
+  await g3.acknowledge(result.token);
+  assert.deepEqual(await linkSnapshot(f.job), before);
+  const { rows: [{ triggers }] } = await admin.query(`SELECT coalesce(string_agg(tgname, ',' ORDER BY tgname), '') AS triggers FROM pg_trigger
+    WHERE tgrelid='app.v2_handover_acknowledgement'::regclass AND NOT tgisinternal`);
+  assert.equal(triggers, "v2_handover_acknowledgement_immutable", "no watchdog or other trigger on the receipt table");
+  const reloaded = await (await g3.open(result.token)).text();
+  assert.match(reloaded, /Receipt acknowledged/u);
+  assert.match(reloaded, /Refit the hall door stop/u, "the snag is still outstanding: receipt signs nothing off");
+});
+
+test("G3 firm A/B read check, and migration 2058 reruns without changing policies, triggers or rows", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  await g3.acknowledge(result.token);
+  const second = await signIn("second-builder");
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_handover_release", "app.v2_handover_acknowledgement"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0, `${table} hidden`);
+  });
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY 1) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_handover_release'::regclass,
+      'app.v2_handover_acknowledgement'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(relacl::text, ',' ORDER BY relname) FROM pg_class WHERE oid IN ('app.v2_handover_release'::regclass,
+      'app.v2_handover_acknowledgement'::regclass)) AS acl,
+    (SELECT count(*)::int FROM app.v2_handover_release) + (SELECT count(*)::int FROM app.v2_handover_acknowledgement) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2058_v2_handover_release.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
