@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-mac-runner": {
+      "branches": ["claude/ci-mac-runner"],
+      "note": "CI-MAC-RUNNER (T2): optional self-hosted runner for short CI jobs via the CI_MAC_RUNNER repo variable; checks and their commands unchanged. Own lane file is implicitly permitted.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/cloudflare-build.yml",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}
