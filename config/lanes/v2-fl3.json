@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl3": {
+      "branches": [
+        "codex/sandbox/v2-fl3"
+      ],
+      "note": "RED tenancy. Q37 / V2-FL-3: V2-only migration 2049 and seed-suite firm isolation checks. Base codex/sandbox/v2-fl1.",
+      "allow": [
+        "packages/db/migration-notes/2049_v2_firm_lock_orders_site.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/firm-lock/FL-3.checks.mjs",
+        "tools/v2/firm-lock/FL-3.fixtures.mjs",
+        "tools/v2/firm-lock/pending/FL-3.json",
+        "tools/v2/migrations/2049_v2_firm_lock_orders_site.sql",
+        "tools/v2/migrations/2049_v2_firm_lock_orders_site.proof.json"
+      ]
+    }
+  }
+}
