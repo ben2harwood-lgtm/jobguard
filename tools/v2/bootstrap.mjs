@@ -68,6 +68,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
   // V2-K3: append-only weekly snapshots and local inbox.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2021_v2_friday_update.sql", import.meta.url), "utf8"));
+  // V2-DV1 diary notes the customer can see (2036).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2036_v2_diary_share.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

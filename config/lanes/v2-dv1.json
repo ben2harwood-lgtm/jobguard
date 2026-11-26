@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-dv1": {
+      "branches": [
+        "claude/project-thread-trp08u-dv1"
+      ],
+      "note": "RED. Q54 V2-DV1 + K3-D: diary notes the builder marks for the customer are offered in the Friday update. DV1 mount, owned by K3 #935: v2-friday-update.ts (diaryLinesForWeek helper and the line 3 comment), v2-friday-update-repository.ts (diary lines in planContent), friday-update.application.ts (diary and share), v2-friday-update-server.ts (diary part), screen.tsx (one card), friday-update.browser.ts (one case), index.ts exports, bootstrap.mjs (one line), seed.integration.test.mjs (tests appended), purchase-order-audit.integration.test.ts (the _v2_diary_share.sql stem and one table-absent check). DV1 mount, owned by main: watchdog.ts (the diary line, plus K3's own unclassified friday-update line).",
+      "allow": [
+        "apps/api/src/workspace/friday-update.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/friday-update/screen.tsx",
+        "apps/web/app/api/jobs/[id]/friday-update/diary/route.ts",
+        "apps/web/app/lib/v2-friday-diary-server.test.ts",
+        "apps/web/app/lib/v2-friday-update-server.ts",
+        "apps/web/app/ui/v2-friday-diary.test.tsx",
+        "apps/web/app/ui/v2-friday-diary.tsx",
+        "apps/web/v2-browser/friday-update.browser.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2036_v2_diary_share.md",
+        "packages/db/migrations/2036_v2_diary_share.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-diary-share-repository.ts",
+        "packages/db/src/v2-friday-update-repository.ts",
+        "packages/db/src/v2-friday-update.ts",
+        "packages/db/test/migration-proofs/2036_v2_diary_share.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/v2-diary-share.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

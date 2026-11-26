@@ -4,7 +4,9 @@ import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 import { WorkPlanRepository } from "./v2-work-plan-repository.js";
-import { fridayCommandV1, fridayContentFromPlan, fridayContentV1, fridayMessage, fridayWeekDates,
+import { JobSourceRepository } from "./job-source-repository.js";
+import { DiaryShareRepository } from "./v2-diary-share-repository.js";
+import { diaryLinesForWeek, fridayCommandV1, fridayContentFromPlan, fridayContentV1, fridayMessage, fridayWeekDates,
   type FridayCommand, type FridaySnapshot } from "./v2-friday-update.js";
 
 export class FridayUpdateError extends Error {
@@ -26,12 +28,14 @@ export class FridayUpdateRepository {
       return this.latest(db, context.tenantId, jobId, week);
     });
   }
-  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: FridayCommand) {
+  /** `digest` is the practice session digest from the application's PracticeAccess; it is never derived here.
+   * With it, "prepare" also offers the week's diary notes the builder marked for the customer. */
+  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: FridayCommand, digest?: string) {
     this.mode();
     const command = fridayCommandV1.parse(raw);
     fridayWeekDates(command.week);
     // Read only: never call c3's open/generate path, which creates plans.
-    const prepared = command.action === "prepare" ? await this.planContent(context, jobId, command.week) : null;
+    const prepared = command.action === "prepare" ? await this.planContent(context, jobId, command.week, digest) : null;
     const result = await withTenant(this.pool, context, async db => {
       const client = db.$client;
       const actor = (await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id",
@@ -89,12 +93,20 @@ export class FridayUpdateRepository {
     return (await db.$client.query<FridaySnapshot>(`SELECT ${columns} FROM app.v2_friday_update
       WHERE (tenant_id,job_id,week)=($1,$2,$3::date) ORDER BY sequence DESC LIMIT 1`, [tenantId, jobId, week])).rows[0] ?? null;
   }
-  private async planContent(context: VerifiedTenantContext, jobId: string, week: string) {
+  /** The week's diary notes with their marks: the builder's own notes, which the builder already sees. */
+  async diaryLines(context: VerifiedTenantContext, jobId: string, week: string, digest: string) {
+    fridayWeekDates(week);
+    const [diary, shares] = await Promise.all([new JobSourceRepository(this.pool).read(context, jobId, digest, "diary"),
+      new DiaryShareRepository(this.pool).read(context, jobId)]);
+    return { entries: diary.entries, shares, ...diaryLinesForWeek(week, diary.entries, shares) };
+  }
+  private async planContent(context: VerifiedTenantContext, jobId: string, week: string, digest?: string) {
     const quoteRevisionId = await withTenant(this.pool, context, async db => (await db.$client.query<{ id: string }>(`
       SELECT quote_revision_id AS id FROM app.v2_work_plan WHERE (tenant_id,job_id)=($1,$2)
       ORDER BY created_at DESC,quote_revision_id LIMIT 1`, [context.tenantId, jobId])).rows[0]?.id);
     const plan = quoteRevisionId ? await new WorkPlanRepository(this.pool).read(context,
       { version: "work-plan-source.v1", jobId, quoteRevisionId }) : null;
-    return fridayContentFromPlan(week, plan?.tasks ?? []);
+    const diary = digest ? await this.diaryLines(context, jobId, week, digest) : null;
+    return fridayContentFromPlan(week, plan?.tasks ?? [], diary?.lines ?? []);
   }
 }

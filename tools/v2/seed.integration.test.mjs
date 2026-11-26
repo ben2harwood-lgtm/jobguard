@@ -1208,3 +1208,121 @@ test("K3 leak pair: a hidden finding changes neither the saved content nor the s
   assert.equal(messages[1], messages[0]);
   assert.doesNotMatch(messages[1], /hidden marker|98765|£|GBP/u);
 });
+
+// V2-DV1 (Q54) · diary notes the builder marked "Customer can see this" are offered in that week's Friday update.
+// Diary receive times are server-owned and FK-chained to evidence, so these tests use the real receive week;
+// the exact Sunday 23:30 and Monday 00:10 London edges (BST and GMT) are proven in packages/db/test/v2-diary-share.test.ts.
+const diaryWeekOf = instant => {
+  const day = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(instant)) + "T00:00:00Z");
+  day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7);
+  return day.toISOString().slice(0, 10);
+};
+const diaryShareEvents = async commandId => (await admin.query(`SELECT payload FROM app.audit_event
+  WHERE event_type='v2.diary_share.set' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
+const shareBody = (diaryEntryId, shared, commandId = randomUUID()) => ({ version: "v2-diary-share-command.v1", commandId, diaryEntryId, shared });
+// An earlier test closes the practice job; new diary notes need it open again, so reopen it once here.
+async function diaryNote(sessionId, text) {
+  const { jobSources, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const state = await workState.get(jobId);
+  const closed = state.events.findLast(event => event.kind === "closed");
+  if (closed && !state.events.some(event => event.kind === "reopened" && event.predecessorId === closed.id))
+    await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
+      expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length, action: "reopen", closeEventId: closed.id });
+  return (await jobSources.intake(jobId, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: true, text })).record;
+}
+
+test("DV1 a marked diary note reaches the Friday draft; an amount is refused; an unmarked note never appears", async () => {
+  const { cookies, sessionId, csrfToken } = await signIn("builder");
+  const { FridayUpdateRepository, fridayContentFromPlan } = await import("../../packages/db/dist/index.js");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const tiles = await diaryNote(sessionId, "Tiles delivered and stacked in the hall");
+  const socket = await diaryNote(sessionId, "Extra socket quoted at 85.00");
+  const unmarked = await diaryNote(sessionId, "Private note never marked");
+  const week = diaryWeekOf(tiles.evidence.serverReceivedAt);
+  const diaryPath = `/api/jobs/${jobId}/friday-update/diary`;
+  const path = `/api/jobs/${jobId}/friday-update`;
+  const share = body => request(diaryPath, { cookies, csrf: csrfToken, body }).then(response => json(response));
+  for (const entry of [tiles, socket]) assert.equal((await share(shareBody(entry.id, true))).share.shared, true);
+  const listed = (await json(await request(diaryPath + `?week=${week}`, { cookies }))).entries;
+  const byId = new Map(listed.map(entry => [entry.id, entry]));
+  assert.deepEqual([byId.get(tiles.id).shared, byId.get(tiles.id).refused], [true, null]);
+  assert.deepEqual([byId.get(socket.id).shared, byId.get(socket.id).refused], [true, "amount"]);
+  assert.deepEqual([byId.get(unmarked.id).shared, byId.get(unmarked.id).refused], [false, null]);
+  assert.equal((await json(await request(diaryPath + `?week=${diaryWeekOf(new Date(Date.parse(week + "T12:00:00Z") - 7 * 86400000).toISOString())}`, { cookies }))).entries
+    .some(entry => [tiles.id, socket.id, unmarked.id].includes(entry.id)), false, "the previous week offers none of these notes");
+  const updates = new FridayUpdateRepository(runtime);
+  const planTasks = (await createWorkspaceApplication({ pool: runtime, sessionId }).workPlan.read(jobId, planQuery)).tasks;
+  const planLines = fridayContentFromPlan(week, planTasks).thisWeek;
+  const prepare = async () => {
+    const prior = await updates.read(context, jobId, week);
+    return (await json(await request(path, { cookies, csrf: csrfToken, body: fridayCommand("prepare", prior?.sequence ?? 0, { week }) }))).snapshot;
+  };
+  const marked = await prepare();
+  assert.deepEqual(marked.content.thisWeek, [...planLines, "Tiles delivered and stacked in the hall"].slice(0, 30));
+  assert.doesNotMatch(JSON.stringify(marked.content), /socket|85\.00|Private note/u);
+  await share(shareBody(tiles.id, false));
+  const unmarkedDraft = await prepare();
+  assert.deepEqual(unmarkedDraft.content.thisWeek, planLines);
+  await share(shareBody(tiles.id, true));
+  const draft = await prepare();
+  const sent = (await json(await request(path, { cookies, csrf: csrfToken,
+    body: fridayCommand("send", draft.sequence, { week, contentHash: draft.contentHash }) }))).snapshot;
+  const { rows: inbox } = await admin.query(`SELECT content,catcher_message FROM app.v2_friday_update
+    WHERE job_id=$1 AND week=$2 AND action='send' AND command_id=$3`, [jobId, week, sent.commandId]);
+  assert.equal(inbox.length, 1);
+  assert.deepEqual(inbox[0].content, draft.content, "the sent message is the reviewed draft");
+  assert.equal(inbox[0].catcher_message.match(/Tiles delivered and stacked in the hall/gu).length, 1);
+  assert.doesNotMatch(inbox[0].catcher_message, /socket|85\.00|Private note|£/u);
+});
+
+test("DV1 share replay, conflict, foreign entry, second firm and append-only; the audit holds no diary text", async () => {
+  const { cookies, sessionId, csrfToken } = await signIn("builder");
+  const { DiaryShareRepository } = await import("../../packages/db/dist/index.js");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const note = await diaryNote(sessionId, "Skirting primed behind the radiator");
+  const shares = new DiaryShareRepository(runtime);
+  const body = shareBody(note.id, true);
+  const first = await shares.set(context, jobId, sessionId, body);
+  assert.deepEqual(await shares.set(context, jobId, sessionId, body), first);
+  assert.equal((await diaryShareEvents(body.commandId)).length, 1);
+  await assert.rejects(shares.set(context, jobId, sessionId, { ...body, shared: false }), { code: "DIARY_SHARE_COMMAND_CONFLICT" });
+  await json(await request(`/api/jobs/${jobId}/friday-update/diary`, { cookies, csrf: csrfToken, body: { ...body, shared: false } }), 409);
+  // Another job's note, or no note at all: the composite FK refuses it.
+  const { draftJob } = await draftForPlan();
+  await assert.rejects(shares.set(context, draftJob, sessionId, shareBody(note.id, true)), { code: "NOT_FOUND" });
+  await assert.rejects(shares.set(context, jobId, sessionId, shareBody(randomUUID(), true)), { code: "NOT_FOUND" });
+  const [event] = await diaryShareEvents(body.commandId);
+  assert.equal(event.payload.references.diaryEntryId, note.id);
+  assert.doesNotMatch(JSON.stringify(event.payload), /Skirting|primed|radiator/u);
+  // Rule 29 / rule 30: no session, a bad session and the second firm all see nothing.
+  const diaryPath = `/api/jobs/${jobId}/friday-update/diary?week=${diaryWeekOf(note.evidence.serverReceivedAt)}`;
+  await json(await request(diaryPath), 404);
+  await json(await request(diaryPath, { cookies: "jg_session=" + "x".repeat(43) }), 404);
+  const second = await signIn("second-builder");
+  await json(await request(diaryPath, { cookies: second.cookies }), 404);
+  await json(await request(`/api/jobs/${jobId}/friday-update/diary`, { cookies: second.cookies, csrf: second.csrfToken, body: shareBody(note.id, false) }), 404);
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_diary_share WHERE job_id=$1", [jobId])).rowCount, 0);
+  });
+  for (const sql of ["UPDATE app.v2_diary_share SET shared=NOT shared WHERE job_id=$1", "DELETE FROM app.v2_diary_share WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, context, db => db.$client.query(sql, [jobId])), { code: "42501" });
+  const { rows: [catalog] } = await admin.query(`SELECT c.relrowsecurity,c.relforcerowsecurity FROM pg_class c WHERE c.oid='app.v2_diary_share'::regclass`);
+  assert.deepEqual(catalog, { relrowsecurity: true, relforcerowsecurity: true });
+  await verifyTenantChain(context.tenantId);
+});
+
+test("DV1 leaves main's diary routines and tables unchanged, and a second 2036 run changes nothing", async () => {
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(pg_get_functiondef(p.oid), E'\\n' ORDER BY p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='app' AND p.proname IN ('read_job_sources','sv7a_intake_job_source')) AS routines,
+    (SELECT string_agg(attname||':'||format_type(atttypid,atttypmod), ',' ORDER BY attnum) FROM pg_attribute
+      WHERE attrelid='app.job_diary_entry'::regclass AND attnum>0 AND NOT attisdropped) AS diary,
+    (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid='app.v2_diary_share'::regclass) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_diary_share'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT count(*)::int FROM app.v2_diary_share) AS rows`)).rows[0];
+  const before = await catalog();
+  assert.ok(before.routines.includes("read_job_sources"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2036_v2_diary_share.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});

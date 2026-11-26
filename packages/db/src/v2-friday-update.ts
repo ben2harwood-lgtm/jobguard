@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-// Customer text is explicitly reviewed; never copy diary, financial or evidence payloads.
+// Customer text is explicitly reviewed. Only diary notes the builder marked for the customer, then reviewed in the
+// draft, may reach it; never copy financial or evidence payloads.
 const line = z.string().trim().min(1).max(400).refine(value =>
   !/[£$€]|\b(?:GBP|USD|EUR)\b|\d+[.,]\d{2}\b|\b\d+\s*(?:pence|pounds?)\b/iu.test(value), "Leave amounts out of the customer update");
 export const fridayContentV1 = z.strictObject({
@@ -31,11 +32,40 @@ export function fridayWeekDates(week: string) {
   if (start.getUTCDay() !== 1) throw new Error("FRIDAY_WEEK_MUST_START_MONDAY");
   return [0, 7, 14].map(days => new Date(start.getTime() + days * 86400000).toISOString().slice(0, 10));
 }
-export function fridayContentFromPlan(week: string, tasks: readonly { title: string; scheduledDate?: string | null }[]): FridayContent {
+export function fridayContentFromPlan(week: string, tasks: readonly { title: string; scheduledDate?: string | null }[],
+  diaryLines: readonly string[] = []): FridayContent {
   const [start, next, end] = fridayWeekDates(week) as [string, string, string];
   const titles = (from: string, until: string) => tasks.filter(task => task.scheduledDate && task.scheduledDate >= from && task.scheduledDate < until)
     .flatMap(task => line.safeParse(task.title).success ? [task.title] : []).slice(0, 30);
-  return fridayContentV1.parse({ schema: "friday-content.v1", thisWeek: titles(start, next), nextWeek: titles(next, end), photos: [] });
+  // Plan lines first; marked diary lines fill what is left of the 30-line cap.
+  const thisWeek = [...titles(start, next), ...diaryLines.flatMap(text => line.safeParse(text).success ? [text.trim()] : [])].slice(0, 30);
+  return fridayContentV1.parse({ schema: "friday-content.v1", thisWeek, nextWeek: titles(next, end), photos: [] });
+}
+export type DiaryShareState = { diaryEntryId: string; shared: boolean };
+export type DiaryRefusal = { entryId: string; reason: "amount" | "too_long" | "empty" };
+const londonDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+/** The Europe/London calendar date of an instant, as YYYY-MM-DD. */
+export function londonDay(instant: string) { return londonDate.format(new Date(instant)); }
+export function diaryRefusal(text: string): DiaryRefusal["reason"] | null {
+  const value = text.trim();
+  if (!value) return "empty";
+  if (value.length > 400) return "too_long";
+  return line.safeParse(value).success ? null : "amount";
+}
+/** Marked notes from the Monday-to-Sunday London week, oldest first. Only text that passes the customer line rule. */
+export function diaryLinesForWeek(week: string, entries: readonly { id: string; text: string; evidence: { serverReceivedAt: string } }[],
+  shares: readonly DiaryShareState[]) {
+  const [start, next] = fridayWeekDates(week) as [string, string, string];
+  const marked = new Set(shares.filter(share => share.shared).map(share => share.diaryEntryId));
+  const inWeek = entries.filter(entry => { const day = londonDay(entry.evidence.serverReceivedAt); return day >= start && day < next; })
+    .filter(entry => marked.has(entry.id))
+    .sort((a, b) => Date.parse(a.evidence.serverReceivedAt) - Date.parse(b.evidence.serverReceivedAt) || a.id.localeCompare(b.id));
+  const lines: string[] = []; const refused: DiaryRefusal[] = [];
+  for (const entry of inWeek) {
+    const reason = diaryRefusal(entry.text);
+    if (reason) refused.push({ entryId: entry.id, reason }); else lines.push(entry.text.trim());
+  }
+  return { lines, refused };
 }
 export function fridayWeekLabel(week: string) {
   fridayQueryV1.parse({ week });
