@@ -72,6 +72,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2015_v2_brief_progress.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-C3C crew records (2027).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
   // V2-F1-P: 2053 precedes the final firm-lock bootstrap (2054 when integrated).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2053_v2_brief_progress_photo.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
