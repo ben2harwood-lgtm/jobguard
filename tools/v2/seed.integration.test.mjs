@@ -121,29 +121,8 @@ async function sxRequest(path, { transport, method, body, cookies, csrf, tenantI
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
 }
-test("SX fixed GET list has working positive controls before checking refusals", async t => {
-  const routes = bindBuilderRoutes({ jobId, tenantId: DEMO_TENANT_ID });
-  sxRoutes = [];
-  // Finish ALL mandatory positives first. In particular 2, 6 and 9 must not
-  // be mistaken for refusals if this seed cannot read them (planner stop).
-  for (const route of routes) {
-    if (await assertBuilderPositive({ request: sxRequest, signIn, route })) sxRoutes.push(route);
-    else t.diagnostic(`SX dropped optional route 10: ${route.path}; no 200 illustration source`);
-  }
-  const second = await signIn("second-builder");
-  assert.notEqual(second.realContext.tenantId, DEMO_TENANT_ID);
-  const { context: practice } = await authenticatePracticeSession(runtime, second.sessionId);
-  assert.equal(practice.tenantId, DEMO_TENANT_ID);
-  for (const context of [second.realContext, practice]) {
-    await withTenant(runtime, context, async db => {
-      assert.equal((await db.$client.query("SELECT id FROM app.job WHERE id=$1", [jobId])).rowCount, 0);
-    });
-  }
-  for (const route of sxRoutes) {
-    const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
-    for (const result of observed) t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} ${result.case}: ${result.status} ${result.code}`);
-  }
-});
+// The SX positive and refusal test runs near the end (below): its V2 backend GETs
+// open the plan and materials, so the generation tests must see them first.
 // End V2-SX positive and refusal block.
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
@@ -2369,10 +2348,35 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   assert.equal(await policyCount(), before);
 });
 
+// V2-SX positive and refusal block. It runs after the plan and materials tests
+// because opening those GET routes generates the plan the earlier tests expect absent.
+test("SX fixed GET list has working positive controls before checking refusals", async t => {
+  const routes = bindBuilderRoutes({ jobId, tenantId: DEMO_TENANT_ID });
+  sxRoutes = [];
+  // Finish ALL mandatory positives first. In particular 2, 6 and 9 must not
+  // be mistaken for refusals if this seed cannot read them (planner stop).
+  for (const route of routes) {
+    if (await assertBuilderPositive({ request: sxRequest, signIn, route })) sxRoutes.push(route);
+    else t.diagnostic(`SX dropped optional route 10: ${route.path}; no 200 illustration source`);
+  }
+  const second = await signIn("second-builder");
+  assert.notEqual(second.realContext.tenantId, DEMO_TENANT_ID);
+  const { context: practice } = await authenticatePracticeSession(runtime, second.sessionId);
+  assert.equal(practice.tenantId, DEMO_TENANT_ID);
+  for (const context of [second.realContext, practice]) {
+    await withTenant(runtime, context, async db => {
+      assert.equal((await db.$client.query("SELECT id FROM app.job WHERE id=$1", [jobId])).rowCount, 0);
+    });
+  }
+  for (const route of sxRoutes) {
+    const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
+    for (const result of observed) t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} ${result.case}: ${result.status} ${result.code}`);
+  }
+});
 // must stay the last test: it signs the cached builder out
 // Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
 test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
-  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
+  assert.ok(sxRoutes?.length >= 13, "all mandatory positive controls must have passed");
   await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
     record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
   });

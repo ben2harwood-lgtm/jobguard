@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sx-r": {
+      "branches": ["claude/project-thread-trp08u-sxr"],
+      "note": "T1 Q33 V2-SX-R: tests only. Appends the real Next V2 GET routes built before rule 29 (work-plan and quote-prompts from c4 #903, measurements from d5a #914, materials from d5b #925) to SX's builderGetRoutes, so SX's fixed tests prove cases a, b, c and d over HTTP. Base codex/sandbox/v2-d5b (#925) at 1f8c10721. Mount, owned by SX: tools/v2/test/refusals.mjs four route lines; tools/v2/seed.integration.test.mjs the mandatory route count; tools/v2-refusals.test.mjs the bound-list check.",
+      "allow": [
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/refusals.mjs",
+        "tools/v2-refusals.test.mjs"
+      ]
+    }
+  }
+}

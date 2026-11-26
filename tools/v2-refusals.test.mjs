@@ -18,14 +18,17 @@ function requests(refusal = refused, calls = []) {
 }
 const check = request => assertBuilderRouteRefuses({ request, signIn: sessions(), route });
 
-test("SX fixed list binds all ten GETs, retaining direct API transport", () => {
+test("SX fixed list binds all fourteen GETs, retaining direct API transport", () => {
   const routes = bindBuilderRoutes({ jobId: "saved-id", tenantId: "practice-id" });
-  assert.equal(builderGetRoutes.length, 10);
+  assert.equal(builderGetRoutes.length, 14);
   assert.ok(routes.every(route => !route.path.includes("{")));
-  assert.deepEqual(routes.slice(8).map(route => route.transport), ["api", "api"]);
+  assert.deepEqual(routes.slice(8, 10).map(route => route.transport), ["api", "api"]);
+  // V2-SX-R: the four real Next V2 routes go through the web origin and are mandatory.
+  assert.deepEqual(routes.slice(10).map(route => [route.path, route.transport, route.optional]), ["work-plan", "measurements", "materials", "quote-prompts"]
+    .map(name => [`/api/v2-backend/jobs/saved-id/${name}`, undefined, undefined]));
   assert.equal(routes[0].path, "/api/jobs?tenantId=practice-id");
   assert.equal(routes[9].optional, true);
-  for (const route of routes.slice(0, 9)) assert.equal(route.optional, undefined);
+  for (const route of [...routes.slice(0, 9), ...routes.slice(10)]) assert.equal(route.optional, undefined);
 });
 test("SX runs positive first, then missing, two invalid values and both second-firm contexts", async () => {
   const calls = [];
