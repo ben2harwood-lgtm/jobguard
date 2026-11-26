@@ -266,13 +266,21 @@ function mergedMainSide(git, branch, base, target) {
   if (branch === "main" || !base) return null;
   let main;
   try { main = git(["rev-parse", "--verify", "-q", "--end-of-options", "refs/remotes/origin/main^{commit}"]).trim(); } catch { return null; }
-  const mergeBase = (a, b) => { try { return git(["merge-base", "--end-of-options", a, b]).trim(); } catch { return null; } };
-  const side = mergeBase(main, target), fork = mergeBase(base, target);
-  if (!side || !fork || side === fork) return null;
-  try { git(["merge-base", "--is-ancestor", "--end-of-options", side, fork]); return null; }
-  catch (error) { if (error.status !== 1) throw error; }
-  const prior = mergeBase(side, fork);
-  return prior ? { side, prior } : null;
+  // --all: a commit merged into both main and the base after the sync gives main and the head two best common
+  // ancestors (criss-cross). Only one that the base doesn't already hold can be the merged main side; any ambiguity
+  // means nothing is exempt.
+  const mergeBases = (a, b) => { try { return git(["merge-base", "--all", "--end-of-options", a, b]).split("\n").filter(Boolean); } catch { return []; } };
+  const inFork = (commit, fork) => {
+    try { git(["merge-base", "--is-ancestor", "--end-of-options", commit, fork]); return true; }
+    catch (error) { if (error.status !== 1) throw error; return false; }
+  };
+  const forks = mergeBases(base, target);
+  if (forks.length !== 1) return null;
+  const [fork] = forks;
+  const sides = mergeBases(main, target).filter((commit) => !inFork(commit, fork));
+  if (sides.length !== 1) return null;
+  const [side] = sides, priors = mergeBases(side, fork);
+  return priors.length === 1 ? { side, prior: priors[0] } : null;
 }
 
 export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [], config } = {}) {
