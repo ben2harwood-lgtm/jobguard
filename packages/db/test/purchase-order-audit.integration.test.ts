@@ -583,3 +583,8 @@ it("refuses direct manual attestations outside the demo database; dropping the g
   expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
     .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });
+
+// V2-K4 deferral: 2019_automatic_chasing.sql is a checked local-bootstrap migration,
+// outside MIGRATION_URLS and this production-schema PO upgrade harness. Its real
+// PostgreSQL audit/RLS/upgrade coverage is tools/v2/chasing.integration.test.mjs;
+// expected catalogs are tools/v2/proofs/2019_automatic_chasing.proof.json.

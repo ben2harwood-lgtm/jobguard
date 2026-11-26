@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k4": {
+      "branches": [
+        "codex/sandbox/v2-k4"
+      ],
+      "note": "RED. Q13 V2-K4 local-only automatic chasing. Not ready for Ben: waiting for Astra's plan check. Folds in the #944 final repair (shared BH1 helper copy, watchdog registry line, seed suite K4 block).",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/chasing/route.test.ts",
+        "apps/web/app/api/jobs/[id]/chasing/route.ts",
+        "apps/web/app/jobs/[id]/chasing/page.tsx",
+        "apps/web/app/jobs/[id]/chasing/screen.tsx",
+        "apps/web/e2e/v2-chasing.spec.ts",
+        "apps/web/playwright.v2-chasing.config.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2019_automatic_chasing.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-chase-policy.test.ts",
+        "packages/db/src/v2-chase-policy.ts",
+        "packages/db/src/v2-chase-repository.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/chasing.integration.test.mjs",
+        "tools/v2/migrations/2019_automatic_chasing.sql",
+        "tools/v2/proofs/2019_automatic_chasing.proof.json",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/browser-session.d.mts",
+        "tools/v2/test/browser-session.mjs"
+      ]
+    }
+  }
+}

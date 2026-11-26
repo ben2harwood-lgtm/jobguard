@@ -95,7 +95,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, firstSession, secondSession;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   process.env.JOBGUARD_LOCAL_V2 = "1";
@@ -107,7 +107,8 @@ before(async () => {
 after(async () => Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]));
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  firstSession = await signIn("builder");
+  const { cookies } = firstSession;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -157,7 +158,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  secondSession = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = secondSession;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -1368,4 +1370,13 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// Run last: these synthetic cases add jobs after the seed's exact-count and
+// isolation assertions. They use the two sessions already exercised over HTTP.
+test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
+  Object.assign(process.env, settings, { JOBGUARD_LOCAL_V2: "1", JOBGUARD_ENV: "synthetic_demo", AUTH_CODE_SECRET: authSecret });
+  if (embedded) process.env.JOBGUARD_V2_STORAGE_DIR = storageData;
+  const { runChasingProof } = await import("./chasing.integration.test.mjs");
+  await runChasingProof(t, { admin, runtime, firstSession, secondSession });
 });

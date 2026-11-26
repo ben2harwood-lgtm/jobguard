@@ -70,8 +70,13 @@ try {
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
+
+  // V2-K4: local-only chasing tables, after the checked V2 boundary.
+  await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
+  // V2-K4: discover the local reminders view from the rehearsal launcher.
+  console.log(`Practice reminders: ${settings.AUTH_ALLOWED_ORIGIN}/jobs/${jobId}/chasing`);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();
