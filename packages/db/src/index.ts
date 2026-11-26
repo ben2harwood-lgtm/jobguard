@@ -242,3 +242,5 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // V2-K5A: working payment schedules, with no invoice or payment authority.
 export { PaymentScheduleRepository, type PaymentScheduleView } from "./v2-payment-schedule-repository.js";
 export { PaymentScheduleError, paymentScheduleSetV1 } from "./v2-payment-schedule.js";
+// V2-C3C crew records.
+export * from "./v2-crew-contact-repository.js";
