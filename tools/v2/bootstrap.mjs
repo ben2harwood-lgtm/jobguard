@@ -70,6 +70,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2007_v2_crew_brief.sql", import.meta.url), "utf8"));
   // V2-F1: after D4, before seed.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2015_v2_brief_progress.sql", import.meta.url), "utf8"));
+  // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
+  await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
