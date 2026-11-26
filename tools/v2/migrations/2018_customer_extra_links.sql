@@ -240,4 +240,30 @@ CREATE CONSTRAINT TRIGGER v2_f6_require_agree_audit AFTER UPDATE ON app.v2_custo
  WHEN (OLD.agreed_at IS NULL AND NEW.agreed_at IS NOT NULL)
  EXECUTE FUNCTION app.v2_f6_require_agree_audit();
 ALTER TABLE app.v2_customer_extra_link ENABLE ALWAYS TRIGGER v2_f6_require_agree_audit;
+-- A cancellation can only commit with its own audit event too. Runtime may write
+-- the cancel columns (the guard above checks their shape), so the matching
+-- v2.customer_extra_link.cancelled event is required at commit.
+CREATE OR REPLACE FUNCTION app.v2_f6_require_cancel_audit() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF NOT EXISTS(SELECT FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id
+  AND e.event_type='v2.customer_extra_link.cancelled' AND e.subject_type='customer_extra_link'
+  AND e.subject_ref=NEW.id::text AND e.payload->'references'->>'commandId'=NEW.cancel_command_id::text)
+ THEN RAISE EXCEPTION 'LINK_CANCELLATION_UNAUDITED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.v2_f6_require_cancel_audit() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.v2_f6_require_cancel_audit() FROM PUBLIC;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.audit_event'::regclass AND polname='v2_f6_cancel_audit_check') THEN
+ CREATE POLICY v2_f6_cancel_audit_check ON app.audit_event FOR SELECT TO jobguard_migration
+ USING(event_type='v2.customer_extra_link.cancelled' AND subject_type='customer_extra_link');
+ END IF;
+END $$;
+DROP TRIGGER IF EXISTS v2_f6_require_cancel_audit ON app.v2_customer_extra_link;
+CREATE CONSTRAINT TRIGGER v2_f6_require_cancel_audit AFTER UPDATE ON app.v2_customer_extra_link
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+ WHEN (OLD.cancelled_at IS NULL AND NEW.cancelled_at IS NOT NULL)
+ EXECUTE FUNCTION app.v2_f6_require_cancel_audit();
+ALTER TABLE app.v2_customer_extra_link ENABLE ALWAYS TRIGGER v2_f6_require_cancel_audit;
 COMMIT;
