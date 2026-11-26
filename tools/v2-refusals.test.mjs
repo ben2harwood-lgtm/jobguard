@@ -20,9 +20,11 @@ const check = request => assertBuilderRouteRefuses({ request, signIn: sessions()
 
 test("SX fixed list binds all ten GETs, retaining direct API transport", () => {
   const routes = bindBuilderRoutes({ jobId: "saved-id", tenantId: "practice-id" });
-  assert.equal(builderGetRoutes.length, 10);
+  // SX's ten stay first; later packets append their GET routes (rule 29), which are mandatory.
+  assert.ok(builderGetRoutes.length >= 10);
   assert.ok(routes.every(route => !route.path.includes("{")));
-  assert.deepEqual(routes.slice(8).map(route => route.transport), ["api", "api"]);
+  assert.deepEqual(routes.slice(8, 10).map(route => route.transport), ["api", "api"]);
+  for (const route of routes.slice(10)) assert.equal(route.optional, undefined);
   assert.equal(routes[0].path, "/api/jobs?tenantId=practice-id");
   assert.equal(routes[9].optional, true);
   for (const route of routes.slice(0, 9)) assert.equal(route.optional, undefined);
