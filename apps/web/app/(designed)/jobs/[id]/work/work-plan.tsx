@@ -49,10 +49,11 @@ export function editFields(fields: FormData, task: EditableTask): TaskChanges {
 }
 
 // An approved extra's edit names the approved revision it was planned from.
-export function editCommand(plan: PlanView, task: EditableTask, changes: TaskChanges) {
+// The expected version is the one the form opened on, so a later re-read cannot hide another edit.
+export function editCommand(plan: PlanView, task: EditableTask, changes: TaskChanges, expectedVersion = plan.version) {
   const variationRevisionId = plan.variationRevisions?.[task.scopeItemId];
   return { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId,
-    expectedVersion: plan.version, taskKey: task.key, scopeItemId: task.scopeItemId, changes,
+    expectedVersion, taskKey: task.key, scopeItemId: task.scopeItemId, changes,
     ...(variationRevisionId && { variationRevisionId }) } as const;
 }
 
@@ -92,6 +93,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
   const inFlight = useRef(false);
   const editReplay = useRef<{ payload: string; commandId: string }>(null);
   const activationId = useRef<string>(null);
+  const openedVersion = useRef<number>(null);
 
   // Each read takes a number; only the newest read may replace the card.
   const reads = useRef(0);
@@ -142,7 +144,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     setBusy(true);
     setProblem(null);
     setNotice("");
-    const command = editCommand(plan, task, changes);
+    const command = editCommand(plan, task, changes, openedVersion.current ?? plan.version);
     const payload = JSON.stringify(command);
     if (editReplay.current?.payload !== payload) editReplay.current = { payload, commandId: crypto.randomUUID() };
     try {
@@ -196,7 +198,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       ? <TaskForm task={task} positions={(plan?.tasks.length ?? 0) + Number(!existing)} busy={busy}
           save={changes => void save(task, changes)} cancel={() => { setEditing(null); setProblem(null); }}/>
       : <button type="button" className="btn small" aria-label={`${action} ${task.title}`} disabled={busy || problem?.reload}
-          onClick={() => { setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
+          onClick={() => { openedVersion.current = plan?.version ?? null; setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
   }
 
   return <Card title="Plan" id="work-plan">

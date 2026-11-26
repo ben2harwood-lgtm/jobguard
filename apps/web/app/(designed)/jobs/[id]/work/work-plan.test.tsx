@@ -134,6 +134,24 @@ describe("Plan task edits", () => {
     expect("variationRevisionId" in editCommand(quoted, task("fit", "Fit doors"), { trade: "Joinery" })).toBe(false);
   });
 
+  it("saves against the version the form opened on, not a later re-read", async () => {
+    request.mockResolvedValueOnce(Response.json(view("rev-1", "draft", [task("fit", "Fit doors")])));
+    await mount();
+    await vi.waitFor(() => expect(taskKeys()).toEqual([`${scopeItemId}/fit`]));
+    const edit = shown().find(node => node.props["aria-label"] === "Edit task Fit doors")!;
+    (edit.props.onClick as () => void)();
+    request.mockResolvedValueOnce(Response.json({ ...view("rev-1", "draft", [task("fit", "Fit doors")]), version: 2 }));
+    window.dispatchEvent(new CustomEvent("job-saved", { detail: { jobId } }));
+    await vi.waitFor(() => expect(planReads()).toBe(2));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    request.mockResolvedValueOnce(Response.json({ code: "WORK_PLAN_VERSION_CONFLICT" }, { status: 409 }));
+    const form = shown().find(node => typeof node.props.save === "function")!;
+    (form.props.save as (changes: object) => void)({ trade: "Tiling" });
+    await vi.waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    const [, init] = request.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(init!.body)).expectedVersion).toBe(1);
+  });
+
   it("keeps a linked crew member unless the assignee is changed", () => {
     const linked = { ...task("fit", "Fit doors"), assigneeRef: crew };
     const untouched = editFields(form(""), linked);
