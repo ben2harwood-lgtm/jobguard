@@ -72,6 +72,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D12 | Q47 | V2-C3B-1 the plan screen sends an extra's approved revision, so "Add trim" can be planned; lists extras not on the plan | **Opus** | c4 #903 `codex/sandbox/v2-c4` + merge v2/main | none | T1 |
 | D13 | Q48 | V2-C3B-2 the builder marks a no-charge extra "adds work" or "removes work" | **Opus** | Q47's branch | 2055 | RED |
 | D14 | Q49 | V2-F2 a task that needs a proof photo stays open until the photo is verified (derived status, no migration) | **Opus** | F1-P #974 `codex/sandbox/v2-f1p` | none (2028 kept) | RED |
+| D15 | Q50 | V2-B1E "Take photo" on the walk, through the shared upload path unchanged (live jobs only; pre-live is later B1E-2) | **Opus** | B1C #973 `codex/sandbox/v2-b1c` | none | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
