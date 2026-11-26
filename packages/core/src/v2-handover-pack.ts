@@ -12,9 +12,10 @@ export const HANDOVER_SECTIONS = [
 ] as const;
 export type HandoverSectionKey = (typeof HANDOVER_SECTIONS)[number]["key"];
 
-/** K3's customer-text rule, copied: no currency signs or codes, no 0.00-style figures, no pence or pounds. */
+/** K3's customer-text rule, extended: no currency signs or codes (spaced or not), no 0.00-style figures, no pence, pounds or quid. */
 export function noAmounts(line: string) {
-  return !/[£$€]|\b(?:GBP|USD|EUR)\b|\d+[.,]\d{2}\b|\b\d+\s*(?:pence|pounds?)\b/iu.test(line);
+  // Codes and "p" also count when written against the figure ("GBP40", "40GBP", "40p each").
+  return !/[£$€]|(?:GBP|USD|EUR)\s*\d|\d\s*(?:GBP|USD|EUR)|\b(?:GBP|USD|EUR)\b|\d+[.,]\d{2}\b|\d\s*p\b|\b(?:pence|pounds?|quid)\b/iu.test(line);
 }
 
 /** Everything the builder can choose from. Descriptions and references only: there is no money field. */

@@ -45,8 +45,10 @@ describe("V2-G2 handover pack composer", () => {
     expect(unknown).toEqual([id(77)]);
   });
   it("copies K3's no-amounts cases", () => {
-    for (const bad of ["£12", "$5", "€3", "12 GBP", "USD 4", "12.50", "12,50", "40 pence", "3 pounds", "1 pound"]) expect(noAmounts(bad), bad).toBe(false);
-    for (const good of ["Tile the splashback", "due 4 Dec", "2 coats", "Room 12", "07700 900042"]) expect(noAmounts(good), good).toBe(true);
+    for (const bad of ["£12", "$5", "€3", "12 GBP", "USD 4", "12.50", "12,50", "40 pence", "3 pounds", "1 pound",
+      "40p each", "40 p", "GBP40", "gbp 40", "40GBP", "40usd", "EUR12", "forty pounds", "fifty quid", "twenty pence", "12.50p"]) expect(noAmounts(bad), bad).toBe(false);
+    for (const good of ["Tile the splashback", "due 4 Dec", "2 coats", "Room 12", "07700 900042",
+      "+44 7700 900042", "4 tiles", "3 packs", "2.5m of trim", "12 pipes", "Compound filler", "Flat 2B", "Expounded"]) expect(noAmounts(good), good).toBe(true);
   });
   it("has no money field in its input and accepts only the strict choice", () => {
     expect(Object.keys(sources).sort()).toEqual(["contact", "lines", "photos", "quoteRevisionId", "snags", "variations"]);
