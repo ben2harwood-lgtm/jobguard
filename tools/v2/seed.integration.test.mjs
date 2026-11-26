@@ -1551,11 +1551,11 @@ test("K5A-2 frozen rows: second firm can't read or write, runtime can't update o
     (SELECT count(*)::int FROM app.v2_payment_schedule_task_done) AS done`)).rows[0];
   const first = await catalog();
   assert.deepEqual([first.forced, first.owner, first.mutable], [true, "jobguard_migration", false]);
-  assert.equal(first.task_fks, "{app.quote_line,app.v2_payment_schedule}");
+  assert.equal(first.task_fks, "{app.scope_identity,app.v2_payment_schedule}");
   const sql = readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8");
   // Put the task table back in its 2012 shape over the saved K5A rows (NOT VALID keeps rows on custom tasks),
-  // then apply 2046 twice: it drops only that key and adds the quote_line key.
-  await admin.query(`ALTER TABLE app.v2_payment_schedule_task_done DROP CONSTRAINT v2_payment_schedule_task_done_quote_line_fkey;
+  // then apply 2046 twice: it drops only that key and adds the scope identity key.
+  await admin.query(`ALTER TABLE app.v2_payment_schedule_task_done DROP CONSTRAINT v2_payment_schedule_task_done_scope_fkey;
     ALTER TABLE app.v2_payment_schedule_task_done ADD FOREIGN KEY
       (tenant_id, job_id, quote_revision_id, scope_item_id, template_task_key) REFERENCES
       app.v2_work_plan_task(tenant_id, job_id, quote_revision_id, scope_item_id, template_task_key) NOT VALID`);

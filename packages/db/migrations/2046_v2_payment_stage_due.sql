@@ -7,19 +7,20 @@ BEGIN
     SELECT FROM pg_policy WHERE polrelid = 'app.job'::regclass AND polname = 'v2_practice_firm'
   ) THEN RETURN; END IF;
   SET LOCAL ROLE jobguard_migration;
-  -- K5A-2 fix 1: custom-scope-item tasks live only in the effective plan, so a task confirmation binds the
-  -- accepted scope line instead of a stored template task. The command checks the effective plan in its transaction.
+  -- K5A-2 fix 1: custom-scope-item tasks live only in the effective plan, and an approved extra's tasks have their
+  -- own scope identity with no accepted quote line (Codex P2 4711178089). A task confirmation binds the job's scope
+  -- identity, which covers both. The command checks the effective plan in its transaction.
   FOR old_fk IN SELECT conname FROM pg_constraint
     WHERE conrelid = 'app.v2_payment_schedule_task_done'::regclass AND contype = 'f'
-      AND confrelid = 'app.v2_work_plan_task'::regclass
+      AND confrelid IN ('app.v2_work_plan_task'::regclass, 'app.quote_line'::regclass)
   LOOP
     EXECUTE format('ALTER TABLE app.v2_payment_schedule_task_done DROP CONSTRAINT %I', old_fk);
   END LOOP;
   IF NOT EXISTS (SELECT FROM pg_constraint
-    WHERE conrelid = 'app.v2_payment_schedule_task_done'::regclass AND conname = 'v2_payment_schedule_task_done_quote_line_fkey') THEN
-    ALTER TABLE app.v2_payment_schedule_task_done ADD CONSTRAINT v2_payment_schedule_task_done_quote_line_fkey
-      FOREIGN KEY (tenant_id, quote_revision_id, scope_item_id)
-      REFERENCES app.quote_line (tenant_id, quote_revision_id, scope_item_id);
+    WHERE conrelid = 'app.v2_payment_schedule_task_done'::regclass AND conname = 'v2_payment_schedule_task_done_scope_fkey') THEN
+    ALTER TABLE app.v2_payment_schedule_task_done ADD CONSTRAINT v2_payment_schedule_task_done_scope_fkey
+      FOREIGN KEY (tenant_id, job_id, scope_item_id)
+      REFERENCES app.scope_identity (tenant_id, job_id, id);
   END IF;
   -- K5A-2 fix 2: a stage's amount is frozen when it becomes due. Working plan only: no invoice, send or money movement.
   CREATE TABLE IF NOT EXISTS app.v2_payment_stage_due (

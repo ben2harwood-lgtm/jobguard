@@ -6,9 +6,11 @@ invoice or moves money. K5B stays responsible for invoices.
 Fix 1. c2 keeps custom-scope-item tasks only in the effective plan (edits over
 the stored template tasks), so 2012's foreign key from
 `app.v2_payment_schedule_task_done` to `app.v2_work_plan_task` refused them.
-2046 drops that one foreign key and adds a foreign key to the accepted scope line
-`app.quote_line (tenant_id, quote_revision_id, scope_item_id)`, the same target
-as `app.v2_work_plan_edit` in 2003. The set and task-done commands check the
+2046 drops that one foreign key and adds a foreign key to the job's scope
+identity `app.scope_identity (tenant_id, job_id, id)`. That covers accepted
+lines, custom scope items and approved extras, which have their own scope
+identity but no line in the immutable accepted quote. An earlier local draft of
+2046 keyed to `app.quote_line`; a rerun drops that key too. The set and task-done commands check the
 trigger against the effective plan, read in their own transaction after the
 existing per-tenant advisory lock. Grants and policies on the task table are not
 touched.
