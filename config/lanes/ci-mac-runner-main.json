@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-mac-runner-main": {
+      "branches": ["claude/ci-mac-runner-main"],
+      "note": "CI-MAC-RUNNER for main (T2): optional self-hosted runner for the short CI gates and the Cloudflare bundle via the CI_MAC_RUNNER repo variable; checks and their commands unchanged. Own lane file is implicitly permitted.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/cloudflare-build.yml"
+      ]
+    }
+  }
+}

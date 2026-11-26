@@ -20,7 +20,7 @@ export function syntheticPool() {
   // Workers cannot share sockets across requests. maxUses closes on release,
   // including transaction clients; there are no idle sockets/timers to retain.
   if (process.env.JOBGUARD_HOSTING === "cloudflare") return new Pool({ connectionString, max: 3, maxUses: 1, connectionTimeoutMillis: 10_000, application_name: "jobguard-cloudflare-synthetic-demo" });
-  poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-vercel-synthetic-demo" });
+  poolRegistry.__jobguardSyntheticPool ??= new Pool({ connectionString, max: 12, application_name: "jobguard-synthetic-demo" });
   return poolRegistry.__jobguardSyntheticPool;
 }
 

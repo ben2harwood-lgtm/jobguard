@@ -8,7 +8,7 @@ const jobId = "00000000-0000-4000-8000-000000000001";
 const raw = (fields: Record<string, unknown> = {}) => ({ version: "log-sor-site-extra.v1", commandId: crypto.randomUUID(), sorCode: "CLEAR-GUTTER", quantity: "2", note: "Fictional note", ...fields });
 const post = (body: string, origin: string | undefined = "https://app.fictional.invalid", headers: Record<string, string> = {}, query = "") => POST(new Request(`https://app.fictional.invalid/api/contractor/jobs/ignored/site-extras/sor${query}`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}), ...headers }, body }), { params: Promise.resolve({ id: jobId }) });
 const logged = () => ({ version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, extraId: crypto.randomUUID(), state: "logged", priceSource: "server_sor", orderCheck: { outcome: "new", sorCode: "CLEAR-GUTTER", unit: "metre", claimedQuantity: "2", instructedQuantity: null, extraQuantity: "2", orderLineScopeItemId: null } });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); logSor.mockReset(); workspace.mockClear(); logSor.mockResolvedValue(logged()); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid"); logSor.mockReset(); workspace.mockClear(); logSor.mockResolvedValue(logged()); });
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3c thin Next adapter for the priced log", () => {
   it("ENT-3 v2 forwards only the reviewed capture and evidence fields", async () => {

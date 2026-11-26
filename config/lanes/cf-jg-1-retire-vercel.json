@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "cf-jg-1-retire-vercel": {
+      "branches": [
+        "claude/project-thread-hattxr"
+      ],
+      "note": "CF-JG-1 (T2/RED): retire Vercel. Delete vercel.json, stop trusting VERCEL_* hostnames as browser origins (VERCEL=1 still blocks loopback fallback), tests use JOBGUARD_ALLOWED_ORIGINS, DEPLOY.md and Cloudflare runbook point at the Worker only. No deployment, no migration. Needs an independent review before merge; only Ben merges.",
+      "allow": [
+        "DEPLOY.md",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/route-v2.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/sor/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-visits/[visitId]/complete/route.test.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-visits/start/route.test.ts",
+        "apps/web/app/api/contractor/origin.test.ts",
+        "apps/web/app/api/contractor/origin.ts",
+        "apps/web/app/api/contractor/practice/acting-as/end/route.test.ts",
+        "apps/web/app/api/contractor/practice/acting-as/route.test.ts",
+        "apps/web/app/api/contractor/practice/workers/[workerId]/acting-as/route.test.ts",
+        "apps/web/app/api/contractor/route.test.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "docs/operations/cloudflare-hosting.md",
+        "vercel.json"
+      ]
+    }
+  }
+}
