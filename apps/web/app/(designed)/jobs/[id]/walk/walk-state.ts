@@ -28,10 +28,11 @@ export function validMeasurement(quantity: string) {
 }
 
 // Codex P2 4705257589: a refused slot is permanent, so the preserved content goes back into the form to resubmit.
-export function restoreEntry(entry: WalkEntryCommand["entry"]) {
-  return entry.kind === "room" ? { room: entry.room, note: "", quantity: "", unit: "" }
-    : entry.kind === "note" ? { room: "", note: entry.text, quantity: "", unit: "" }
-    : entry.kind === "measurement" ? { room: "", note: "", quantity: entry.quantity, unit: entry.unit }
+// Codex P2 4711069734: only the rejected entry's own fields come back, so other unsent drafts stay.
+export function restoreEntry(entry: WalkEntryCommand["entry"]): { room?: string; note?: string; quantity?: string; unit?: string } | null {
+  return entry.kind === "room" ? { room: entry.room }
+    : entry.kind === "note" ? { note: entry.text }
+    : entry.kind === "measurement" ? { quantity: entry.quantity, unit: entry.unit }
     : null;
 }
 

@@ -24,9 +24,9 @@ describe("B1B device capture order", () => {
 
 describe("Codex P2 repairs", () => {
   it("restores a refused entry's content for resubmission", () => {
-    expect(restoreEntry({ kind: "room", room: "Hall" })).toEqual({ room: "Hall", note: "", quantity: "", unit: "" });
-    expect(restoreEntry({ kind: "note", text: "Damp" })).toEqual({ room: "", note: "Damp", quantity: "", unit: "" });
-    expect(restoreEntry({ kind: "measurement", quantity: "2.5", unit: "m" })).toEqual({ room: "", note: "", quantity: "2.5", unit: "m" });
+    expect(restoreEntry({ kind: "room", room: "Hall" })).toEqual({ room: "Hall" });
+    expect(restoreEntry({ kind: "note", text: "Damp" })).toEqual({ note: "Damp" });
+    expect(restoreEntry({ kind: "measurement", quantity: "2.5", unit: "m" })).toEqual({ quantity: "2.5", unit: "m" });
   });
   it("treats links and section buttons as leaving the walk", () => {
     const at = (match: string | null) => ({ closest: (selector: string) => (match && selector.includes(match) ? {} : null) });

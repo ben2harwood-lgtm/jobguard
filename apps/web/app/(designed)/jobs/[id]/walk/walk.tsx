@@ -70,7 +70,10 @@ export function Walk({ jobId }: { jobId: string }) {
           const refreshed = await fetch(endpoint, { cache: "no-store" });
           if (refreshed.ok) setSessions((await refreshed.json() as { sessions: SessionView[] }).sessions);
           const restored = restoreEntry(command.entry);
-          if (restored) { setRoom(restored.room); setNote(restored.note); setQuantity(restored.quantity); setUnit(restored.unit); }
+          if (restored?.room !== undefined) setRoom(restored.room);
+          if (restored?.note !== undefined) setNote(restored.note);
+          if (restored?.quantity !== undefined) setQuantity(restored.quantity);
+          if (restored?.unit !== undefined) setUnit(restored.unit);
           setPending(null);
           setProblem("Another device saved to this walk first. Check the walk order, then add your entry again.");
           return;
