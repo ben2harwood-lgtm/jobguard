@@ -35,19 +35,20 @@ export async function uploadWalkPhoto(pool: Pool, context: VerifiedTenantContext
     actorRef: `membership:${actorId}`, eventType: `v2.walk_photo.${verb}`, subjectType: "job", subjectRef: jobId,
     payload: { references: { commandId, uploadCommandId: command.commandId, photoId: command.commandId } } });
   // A finalized upload is immutable. Do not replay beginUpload's upsert against it.
-  const prior = await withTenant(pool, context, async db => (await db.$client.query<{
+  const readPrior = () => withTenant(pool, context, async db => (await db.$client.query<{
     expected_sha256: string; state: string; object_version_id: string | null; actor_ref: string | null;
   }>(`SELECT u.expected_sha256,u.state,u.object_version_id,a.actor_ref
     FROM app.evidence_upload u LEFT JOIN app.audit_event a ON a.tenant_id=u.tenant_id
       AND a.subject_ref=u.job_id::text AND a.event_type='v2.walk_photo.attached'
       AND a.payload->'references'->>'commandId'=u.id::text
     WHERE (u.tenant_id,u.job_id,u.id)=($1,$2,$3)`, [context.tenantId,jobId,command.commandId])).rows[0]);
+  let prior = await readPrior();
   if (prior && (prior.expected_sha256.trim() !== digest || prior.actor_ref !== `membership:${actorId}`)) {
     throw new WalkError("WALK_PHOTO_REFUSED");
   }
   let objectVersionId = prior?.object_version_id ?? "";
   // No scope on the upload row, so stage proof (newest upload per scope) never sees a walk photo.
-  if (prior?.state !== "verified") await evidence.beginUpload(context, { id: command.commandId, jobId, scopeItemId: null,
+  if (prior?.state !== "verified") try { await evidence.beginUpload(context, { id: command.commandId, jobId, scopeItemId: null,
     expectedSha256: digest, contentType: "image/png", maximumBytes: bytes.length,
     retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + 3600000) }, async (db, upload) => {
     objectVersionId = filesystem ? await filesystem.put(upload.objectKey, "image/png", bytes) : `synthetic-${digest.slice(0,16)}`;
@@ -63,7 +64,14 @@ export async function uploadWalkPhoto(pool: Pool, context: VerifiedTenantContext
       WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='v2.walk_photo.attached'
         AND payload->'references'->>'commandId'=$3`, [context.tenantId,jobId,command.commandId]);
     if (!bound || bound.actor_ref !== `membership:${actorId}`) throw new WalkError("WALK_PHOTO_REFUSED");
-  });
+  }); } catch (error) {
+    // Codex P2 4711258427: an overlapping first request can verify the upload after the check above, and
+    // beginUpload's upsert is then refused. Reread: the same verified upload by this actor replays.
+    if (error instanceof WalkError) throw error;
+    prior = await readPrior();
+    if (prior?.state !== "verified" || prior.expected_sha256.trim() !== digest || prior.actor_ref !== `membership:${actorId}`) throw error;
+    objectVersionId = prior.object_version_id ?? "";
+  }
   const finalization = { uploadId: command.commandId, objectVersionId, evidenceType: "walk_photo" };
   const finalizeId = commandIdFor("evidence.finalize", jobId, finalization);
   await evidence.finalize(context, { ...finalization, commandId: finalizeId },
