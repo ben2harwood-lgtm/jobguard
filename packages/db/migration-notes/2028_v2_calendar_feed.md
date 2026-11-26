@@ -1,7 +1,7 @@
-# 2021 (reserved as 2017) — V2-K2A builder calendar link (RED)
+# 2028 (reserved as 2017) — V2-K2A builder calendar link (RED)
 
 Local V2 only: the migration is a no-op outside jobguard_v2_local or without
-2001's v2_practice_firm policy. Bootstrap applies it after 2020. Numbered above the base by tools/migration-renumber.mjs; the merge renumbers it again if needed.
+2001's v2_practice_firm policy. Bootstrap applies it after 2020 (before the 2025 and 2027 lines; it depends on neither). Numbered above the base by tools/migration-renumber.mjs; the merge renumbers it again if needed.
 
 One append-only table, `app.v2_calendar_feed_revision`. Version 1 creates a
 link and stores only the SHA-256 of a 256-bit server-made token. Refresh rows
