@@ -1261,6 +1261,9 @@ test("K5A preserves database microseconds for both extra/task orders and both sc
     quoteRevisionId: view.quoteRevisionId, expectedVersion: 1, scopeItemId: task.scopeItemId, taskKey: task.taskKey };
   await app.paymentSchedule.set(draftJob, done);
   const approvalId = await k5ApproveExtra(app, draftJob);
+  // K5A-2: a frozen task stage keeps its stored amount whatever the timestamps say. Remove the frozen task row
+  // (test administrator only) so this test keeps proving microsecond order for stages with no frozen row.
+  await admin.query("DELETE FROM app.v2_payment_stage_due WHERE command_id=$1", [done.commandId]);
   // Only the test administrator adjusts working-plan timestamps. Approval facts, grants and triggers stay intact.
   await admin.query(`UPDATE app.v2_payment_schedule SET recorded_at =
     (SELECT created_at - interval '1 second' FROM app.variation_approval WHERE id=$1) WHERE command_id=$2`, [approvalId, set.commandId]);
@@ -1330,6 +1333,236 @@ test("K5A extras approved before setting the schedule remain visible separately 
   const pence = amount => BigInt(amount.replace(".", ""));
   assert.equal(saved.schedule.stages.reduce((sum, stage) => sum + pence(stage.amount), 0n), pence(saved.acceptedTotal));
   assert.deepEqual((await app.paymentSchedule.read(draftJob)).schedule, saved.schedule);
+});
+
+// V2-K5A-2: stages on custom tasks, and a stage frozen when it becomes due is never re-split.
+const k5Pence = amount => BigInt(amount.replace(".", ""));
+const frozenEvents = async commandId => (await admin.query(`SELECT actor_ref,payload FROM app.audit_event
+  WHERE event_type='v2.billing_stage.due_frozen' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
+const frozenRows = async (jobId, commandId) => (await admin.query(`SELECT stage_index,amount_pence::text AS amount,
+  counted_approval_ids AS counted FROM app.v2_payment_stage_due WHERE job_id=$1 AND command_id=$2 ORDER BY stage_index`,
+[jobId, commandId])).rows;
+// Rule 20 job total, read the way K10 (#931) reads it: accepted net plus each variation's latest approved revision.
+async function k10JobTotal(jobId, acceptedTotal) {
+  const { rows: [row] } = await admin.query(`SELECT coalesce(sum(r.signed_delta_pence),0)::text AS extras
+    FROM app.variation_approval a
+    JOIN app.variation_revision r ON (r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
+    WHERE a.job_id=$1 AND NOT EXISTS (SELECT 1 FROM app.variation_approval newer
+      WHERE (newer.tenant_id,newer.job_id,newer.variation_id)=(a.tenant_id,a.job_id,a.variation_id) AND newer.revision>a.revision)`, [jobId]);
+  return k5Pence(acceptedTotal) + BigInt(row.extras);
+}
+// Frozen + not-yet-due + any line outside the stages = rule 20's job total (plan-check condition 3).
+async function assertScheduleAddsUp(view) {
+  const shown = view.schedule.stages.reduce((sum, stage) => sum + k5Pence(stage.amount), 0n) +
+    k5Pence(view.schedule.extrasBeforeSchedule) + k5Pence(view.schedule.unscheduledExtras);
+  assert.equal(shown, await k10JobTotal(view.jobId, view.acceptedTotal));
+  for (const stage of view.schedule.stages) assert.match(stage.amount, /^-?\d+\.\d{2}$/u);
+}
+async function k5CustomTaskJob() {
+  const job = await k5AcceptedJob();
+  await job.app.quote.activate(job.draftJob, switchLive());
+  const [,, shelf] = job.lines;
+  const plan = await job.read();
+  await job.edit(planEdit(plan, { scopeItemId: shelf.scopeItemId, key: customTaskKey },
+    { position: 1, trade: "joiner", durationMinutes: 45 }));
+  const view = await job.app.paymentSchedule.read(job.draftJob);
+  const custom = { kind: "task", scopeItemId: shelf.scopeItemId, taskKey: customTaskKey };
+  return { ...job, view, custom };
+}
+const k5TaskDone = (view, trigger, expectedVersion = 1) => ({ version: "payment-schedule-task-done.v1", commandId: randomUUID(),
+  jobId: view.jobId, quoteRevisionId: view.quoteRevisionId, expectedVersion, scopeItemId: trigger.scopeItemId, taskKey: trigger.taskKey });
+
+test("K5A-2 a stage on a custom-scope-item task can be set, triggered and frozen; replay and rollback add nothing", async () => {
+  const { app, draftJob, sessionId, view, custom } = await k5CustomTaskJob();
+  assert.ok(view.tasks.some(task => task.scopeItemId === custom.scopeItemId && task.taskKey === customTaskKey),
+    "the effective plan's custom task is offered as a trigger");
+  const set = k5Command(view, [{ kind: "acceptance" }, custom, { kind: "date", date: "2099-01-01" }]);
+  await app.paymentSchedule.set(draftJob, set);
+  assert.deepEqual((await frozenRows(draftJob, set.commandId)).map(row => row.stage_index), [0]);
+  assert.equal((await frozenEvents(set.commandId)).length, 1);
+  const done = k5TaskDone(view, custom);
+  const failing = { async connect() {
+    const client = await runtime.connect(), query = client.query.bind(client), release = client.release.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+    client.release = (...args) => { client.query = query; return release(...args); }; return client;
+  } };
+  const { PaymentScheduleRepository } = await import("../../packages/db/dist/index.js");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  await assert.rejects(new PaymentScheduleRepository(failing).recordTaskDone(context, draftJob, sessionId, done), { code: "FORCED" });
+  assert.deepEqual(await frozenRows(draftJob, done.commandId), [], "rollback leaves no frozen row");
+  assert.equal((await frozenEvents(done.commandId)).length, 0, "rollback leaves no event");
+  const before = await app.paymentSchedule.read(draftJob);
+  const receipt = await app.paymentSchedule.set(draftJob, done);
+  assert.deepEqual(await app.paymentSchedule.set(draftJob, done), receipt, "replay returns the same receipt");
+  const rows = await frozenRows(draftJob, done.commandId);
+  assert.deepEqual(rows.map(row => [row.stage_index, row.amount]), [[1, String(k5Pence(before.schedule.stages[1].amount))]]);
+  const events = await frozenEvents(done.commandId);
+  assert.equal(events.length, 1, "one event per frozen row, none on replay");
+  // References only: the audit layer adds its own actor keys; K5A-2 adds no names, labels or amounts.
+  assert.deepEqual(Object.keys(events[0].payload.references).filter(key => !key.startsWith("audit")).sort(),
+    ["commandId", "countedApprovalsHash", "quoteRevisionId", "stageIndex"]);
+  assert.doesNotMatch(JSON.stringify(events[0].payload), /Fictional|amount|pence/iu);
+  assert.equal(events[0].payload.references.stageIndex, "1");
+  assert.match(events[0].payload.references.countedApprovalsHash, /^[0-9a-f]{64}$/u);
+  const after = await app.paymentSchedule.read(draftJob);
+  assert.deepEqual(after.schedule.stages.map(stage => [stage.status, stage.frozen]), [["due", true], ["due", true], ["planned", false]]);
+  assert.equal(after.schedule.stages[1].amount, before.schedule.stages[1].amount);
+  await assertScheduleAddsUp(after);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("K5A-2 a trigger task removed from the effective plan is refused and stays visible in the total", async () => {
+  const { app, draftJob, view, custom } = await k5CustomTaskJob();
+  const set = k5Command(view, [{ kind: "acceptance" }, custom, { kind: "date", date: "2099-01-01" }]);
+  await app.paymentSchedule.set(draftJob, set);
+  // Only the test administrator removes the custom task's edit, so the task leaves the effective plan.
+  await admin.query(`DELETE FROM app.v2_work_plan_edit WHERE job_id=$1 AND scope_item_id=$2 AND template_task_key=$3`,
+    [draftJob, custom.scopeItemId, customTaskKey]);
+  const shown = await app.paymentSchedule.read(draftJob);
+  assert.equal(shown.tasks.some(task => task.taskKey === customTaskKey), false);
+  assert.deepEqual(shown.schedule.stages.map(stage => stage.triggerRemoved), [false, true, false]);
+  assert.equal(shown.schedule.stages[1].status, "planned");
+  await assertScheduleAddsUp(shown);
+  const done = k5TaskDone(view, custom);
+  await assert.rejects(app.paymentSchedule.set(draftJob, done), { code: "SCHEDULE_INVALID" });
+  assert.deepEqual(await frozenRows(draftJob, done.commandId), []);
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_payment_schedule_task_done WHERE command_id=$1", [done.commandId])).rowCount, 0);
+});
+
+// Hold one approval transaction open at COMMIT, so it starts before a task-done command but commits after it.
+function heldCommitPool() {
+  let gate = null;
+  const pool = { query: (...args) => runtime.query(...args), async connect() {
+    const client = await runtime.connect(), query = client.query.bind(client), release = client.release.bind(client);
+    let approves = false;
+    client.query = async (sql, ...rest) => {
+      const text = typeof sql === "string" ? sql : sql?.text ?? "";
+      if (/INSERT\s+INTO\s+app\.variation_approval\b/iu.test(text)) approves = true;
+      if (text === "COMMIT" && approves && gate) { const held = gate; gate = null; held.reached(); await held.open; }
+      if (text === "COMMIT" || text === "ROLLBACK") approves = false;
+      return query(sql, ...rest);
+    };
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  return { pool, hold() {
+    let reached, release;
+    const atCommit = new Promise(resolve => { reached = resolve; });
+    const open = new Promise(resolve => { release = resolve; });
+    gate = { reached, open };
+    return { atCommit, release };
+  } };
+}
+
+for (const laterStage of [true, false]) {
+  test(`K5A-2 race: an approval committed after a task froze its stage ${laterStage ? "goes to the next stage" : "goes on the final account"}`, async () => {
+    const { app, draftJob, sessionId, view, custom } = await k5CustomTaskJob();
+    const triggers = laterStage ? [{ kind: "acceptance" }, custom, { kind: "date", date: "2099-01-01" }]
+      : [{ kind: "acceptance" }, { kind: "acceptance" }, custom];
+    await app.paymentSchedule.set(draftJob, k5Command(view, triggers));
+    const taskIndex = triggers.indexOf(custom);
+    const before = await app.paymentSchedule.read(draftJob);
+    const proposalId = randomUUID();
+    const proposed = await app.variation.command(draftJob, { version: "variation-command.v1", action: "propose", proposalId,
+      scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null, description: "Fictional race trim",
+      captureText: "Fictional race trim requested", price: { quantity: "1", unit: "item", unitRatePence: 700, direction: "addition" } });
+    const held = heldCommitPool();
+    const slow = createWorkspaceApplication({ pool: held.pool, sessionId });
+    const gate = held.hold();
+    const approvalId = randomUUID();
+    // A: the approval transaction starts first and waits at COMMIT.
+    const approval = slow.variation.command(draftJob, { version: "variation-command.v1", action: "approve", variationId: proposalId,
+      revisionId: proposed.variations.find(item => item.id === proposalId).currentRevisionId, approvalId,
+      attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+    await gate.atCommit;
+    // B: the task-done command reads approvals and freezes its stage while A is still open, so B cannot see A.
+    // B's audit append then waits on the tenant chain row A holds, so A commits first and B straight after.
+    let froze;
+    const frozenWritten = new Promise(resolve => { froze = resolve; });
+    const watched = { query: (...args) => runtime.query(...args), async connect() {
+      const client = await runtime.connect(), query = client.query.bind(client), release = client.release.bind(client);
+      client.query = async (sql, ...rest) => {
+        const result = await query(sql, ...rest);
+        if (typeof sql === "string" && sql.includes("INSERT INTO app.v2_payment_stage_due")) froze();
+        return result;
+      };
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    } };
+    const done = k5TaskDone(view, custom);
+    const taskDone = createWorkspaceApplication({ pool: watched, sessionId }).paymentSchedule.set(draftJob, done);
+    await Promise.race([frozenWritten, taskDone]);
+    gate.release();
+    await Promise.all([approval, taskDone]);
+    const [row] = await frozenRows(draftJob, done.commandId);
+    assert.equal(row.counted.includes(approvalId), false, "B's frozen row does not count A");
+    const { rows: [order] } = await admin.query(`SELECT a.created_at < t.recorded_at AS started_first
+      FROM app.variation_approval a, app.v2_payment_schedule_task_done t WHERE a.id=$1 AND t.command_id=$2`, [approvalId, done.commandId]);
+    assert.equal(order.started_first, true, "A's created_at is before B's due fact");
+    const after = await app.paymentSchedule.read(draftJob);
+    assert.equal(after.schedule.stages[taskIndex].amount, before.schedule.stages[taskIndex].amount, "B's stage keeps its frozen amount");
+    assert.equal(k5Pence(after.schedule.stages[taskIndex].amount), BigInt(row.amount));
+    if (laterStage) {
+      assert.equal(k5Pence(after.schedule.stages[2].amount), k5Pence(before.schedule.stages[2].amount) + 700n);
+      assert.equal(after.schedule.unscheduledExtras, "0.00");
+    } else {
+      assert.deepEqual(after.schedule.stages.map(stage => stage.amount), before.schedule.stages.map(stage => stage.amount));
+      assert.equal(after.schedule.unscheduledExtras, "7.00");
+    }
+    await assertScheduleAddsUp(after);
+    assert.deepEqual((await app.paymentSchedule.read(draftJob)).schedule, after.schedule, "a later read does not re-split");
+  });
+}
+
+test("K5A-2 frozen rows: second firm can't read or write, runtime can't update or delete, 2046 reruns on saved rows", async () => {
+  const { app, draftJob, view } = await k5CustomTaskJob();
+  const set = k5Command(view, Array.from({ length: 3 }, () => ({ kind: "acceptance" })));
+  await app.paymentSchedule.set(draftJob, set);
+  assert.equal((await frozenRows(draftJob, set.commandId)).length, 3);
+  assert.equal((await frozenEvents(set.commandId)).length, 3);
+  const own = await signIn("builder");
+  const { context: ownPractice } = await authenticatePracticeSession(runtime, own.sessionId);
+  const ownQuery = (sql, values) => withTenant(runtime, ownPractice, db => db.$client.query(sql, values));
+  assert.equal((await ownQuery("SELECT 1 FROM app.v2_payment_stage_due WHERE job_id=$1", [draftJob])).rowCount, 3);
+  await assert.rejects(ownQuery("UPDATE app.v2_payment_stage_due SET amount_pence=0 WHERE job_id=$1", [draftJob]), { code: "42501" });
+  await assert.rejects(ownQuery("DELETE FROM app.v2_payment_stage_due WHERE job_id=$1", [draftJob]), { code: "42501" });
+  const outsider = await signIn("second-builder");
+  const { context: otherPractice } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  for (const context of [otherPractice, outsider.realContext]) {
+    const query = (sql, values) => withTenant(runtime, context, db => db.$client.query(sql, values));
+    assert.equal((await query("SELECT * FROM app.v2_payment_stage_due WHERE job_id=$1", [draftJob])).rowCount, 0);
+    await assert.rejects(query(`INSERT INTO app.v2_payment_stage_due
+      (tenant_id,job_id,quote_revision_id,stage_index,command_id,due_at,amount_pence,counted_approval_ids)
+      VALUES($1,$2,$3,5,$4,clock_timestamp(),1,'{}')`, [DEMO_TENANT_ID, draftJob, view.quoteRevisionId, randomUUID()]), { code: "42501" });
+    await assert.rejects(query("UPDATE app.v2_payment_stage_due SET amount_pence=0 WHERE job_id=$1", [draftJob]), { code: "42501" });
+    await assert.rejects(query("DELETE FROM app.v2_payment_stage_due WHERE job_id=$1", [draftJob]), { code: "42501" });
+  }
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='app.v2_payment_stage_due'::regclass) AS forced,
+    (SELECT relowner::regrole::text FROM pg_class WHERE oid='app.v2_payment_stage_due'::regclass) AS owner,
+    has_table_privilege('jobguard_runtime','app.v2_payment_stage_due','UPDATE,DELETE,TRUNCATE') AS mutable,
+    (SELECT relacl::text FROM pg_class WHERE oid='app.v2_payment_schedule_task_done'::regclass) AS task_acl,
+    (SELECT array_agg(polname || ':' || pg_get_expr(polqual, polrelid) ORDER BY polname)::text FROM pg_policy
+      WHERE polrelid='app.v2_payment_schedule_task_done'::regclass) AS task_policies,
+    (SELECT array_agg(confrelid::regclass::text ORDER BY confrelid::regclass::text)::text FROM pg_constraint
+      WHERE conrelid='app.v2_payment_schedule_task_done'::regclass AND contype='f') AS task_fks,
+    (SELECT count(*)::int FROM app.v2_payment_stage_due) AS frozen,
+    (SELECT count(*)::int FROM app.v2_payment_schedule_task_done) AS done`)).rows[0];
+  const first = await catalog();
+  assert.deepEqual([first.forced, first.owner, first.mutable], [true, "jobguard_migration", false]);
+  assert.equal(first.task_fks, "{app.scope_identity,app.v2_payment_schedule}");
+  const sql = readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8");
+  // Put the task table back in its 2012 shape over the saved K5A rows (NOT VALID keeps rows on custom tasks),
+  // then apply 2046 twice: it drops only that key and adds the scope identity key.
+  await admin.query(`ALTER TABLE app.v2_payment_schedule_task_done DROP CONSTRAINT v2_payment_schedule_task_done_scope_fkey;
+    ALTER TABLE app.v2_payment_schedule_task_done ADD FOREIGN KEY
+      (tenant_id, job_id, quote_revision_id, scope_item_id, template_task_key) REFERENCES
+      app.v2_work_plan_task(tenant_id, job_id, quote_revision_id, scope_item_id, template_task_key) NOT VALID`);
+  assert.equal((await catalog()).task_fks, "{app.v2_payment_schedule,app.v2_work_plan_task}");
+  await admin.query(sql);
+  await admin.query(sql);
+  assert.deepEqual(await catalog(), first, "2046 reruns without changing saved rows, grants, policies or keys");
 });
 
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.

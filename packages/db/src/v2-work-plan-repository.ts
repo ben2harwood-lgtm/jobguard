@@ -79,12 +79,16 @@ export class WorkPlanRepository {
 
   async read(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
-    return withTenant(this.pool, context, async ({ $client }) => {
-      const head = await this.planHead($client, context.tenantId, jobId);
-      if (!head) return null;
-      this.checkFrozenRevision(head, quoteRevisionId);
-      return this.readPlan($client, [context.tenantId, jobId, quoteRevisionId], head);
-    });
+    return withTenant(this.pool, context, async ({ $client }) =>
+      this.readEffectivePlan($client, [context.tenantId, jobId, quoteRevisionId]));
+  }
+
+  // K5A-2: the same read inside a caller's tenant transaction. Read only; takes no lock.
+  async readEffectivePlan(client: PoolClient, key: PlanKey) {
+    const head = await this.planHead(client, key[0], key[1]);
+    if (!head) return null;
+    this.checkFrozenRevision(head, key[2]);
+    return this.readPlan(client, key, head);
   }
 
   async open(context: VerifiedTenantContext, jobId: string) {
