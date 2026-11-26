@@ -132,3 +132,9 @@ SELECT policy lets its migration-owned definer read only those events. A direct
 runtime call of `app.v2_f6_agree` without the audit therefore rolls back.
 `app.v2_f6_open` also refuses a link whose saved description differs from its
 revision, so the customer always sees the wording the builder will approve.
+
+Cancellation audit (Codex P2 on 3b5de72): a deferred constraint trigger
+`v2_f6_require_cancel_audit` refuses to commit a pending-to-cancelled update unless the
+matching `v2.customer_extra_link.cancelled` audit event, keyed by `cancel_command_id`,
+exists in the same transaction (`LINK_CANCELLATION_UNAUDITED`, 23514). Runtime may still
+write the cancel columns; the audit is now required at commit, like agreement.

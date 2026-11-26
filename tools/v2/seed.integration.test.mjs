@@ -1192,6 +1192,14 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
     await db.$client.query("SELECT app.v2_f6_agree($1,$2,$3,$4,$5,1)",
       [stored.firm_digest, h, randomUUID(), "f", "Fictional customer"]);
   }), error => error.code === "23514" && error.message === "LINK_AGREEMENT_UNAUDITED");
+  // Codex P2 (3b5de72): a direct runtime cancellation without its audit event cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertCopy(db, { token_hash: h });
+    const updated = await db.$client.query(`UPDATE app.v2_customer_extra_link SET cancelled_at=clock_timestamp(),link_version=2,
+      cancel_command_id=$2,cancel_fingerprint='f' WHERE token_hash=$1`, [h, randomUUID()]);
+    assert.equal(updated.rowCount, 1, "the runtime cancel guard allows the shape; only the audit check refuses it");
+  }), error => error.code === "23514" && error.message === "LINK_CANCELLATION_UNAUDITED");
   assert.deepEqual(await events(), afterAgree);
   assert.deepEqual(await repository.open(first.capability), agreed);
   const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
