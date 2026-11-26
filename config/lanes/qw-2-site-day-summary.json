@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "qw-2-site-day-summary": {
+      "branches": [
+        "claude/qw-2-site-day-summary"
+      ],
+      "note": "QW-2: daily site summary closed at 18:00 UK time (practice mode, read only, no migration). T2: merges on green CI.",
+      "allow": [
+        "apps/api/src/site-day-summary.application.ts",
+        "apps/api/src/site-day-summary.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/day-summary/route.ts",
+        "apps/web/app/api/jobs/[id]/day-summary/route.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/site-day-summary.ts",
+        "packages/core/src/site-day-summary.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/site-day-summary-repository.ts",
+        "packages/db/test/site-day-summary.integration.test.ts"
+      ]
+    }
+  }
+}
