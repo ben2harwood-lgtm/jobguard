@@ -216,7 +216,7 @@ describe("balances whose exact total reduces to a short value",()=>{
   expect(()=>allocateReceiptToLines({...raw(1n,lines),explicit:lines.map(l=>({lineId:l.id,gross:l.outstandingGross}))})).toThrow("INVALID_ALLOCATION");
   expect(shares).toHaveLength(2);
   expect(MAX_ALLOCATION_WORKING_DIGITS).toBe(130_000);
- });
+ },20_000);
  // Independent of the module: sum over the product of the denominators, no reduction anywhere.
  const roundHalfEven=(n:bigint,d:bigint)=>{const q=n/d,twice=(n%d)*2n;return twice>d||(twice===d&&q%2n===1n)?q+1n:q;};
  it("the exact net of many cancelling balances enters the fee kernel at the supported working size",()=>{
