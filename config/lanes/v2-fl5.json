@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl5": {
+      "branches": [
+        "codex/sandbox/v2-fl5"
+      ],
+      "note": "RED tenancy. Q39 V2-FL-5; direct parent codex/sandbox/v2-fl1; reserved V2 migration 2051.",
+      "allow": [
+        "packages/db/migration-notes/2051_v2_firm_lock_supplier_feed_rest.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-5.checks.mjs",
+        "tools/v2/firm-lock/pending/FL-5.json",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/migrations/2051_v2_firm_lock_supplier_feed_rest.proof.json",
+        "tools/v2/migrations/2051_v2_firm_lock_supplier_feed_rest.sql"
+      ]
+    }
+  }
+}

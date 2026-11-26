@@ -1435,6 +1435,17 @@ const firmLockHelpers = {
     };
   })(),
 };
+// V2-FL-5 (Q39): real capture command with the suite's cached second-firm session.
+firmLockHelpers.fl5SecondFirmJob = async () => {
+  const { sessionId } = await signIn("second-builder");
+  const { capture } = createWorkspaceApplication({ pool: runtime, sessionId });
+  return (await capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
+    fixtureId: "v2-c1-typed-joinery",
+    source: { kind: "text", text: "JOB: Fit a shelf\nITEM: Fit a timber shelf | QTY: 1 | UNIT: item | RATE: £95.00" },
+  })).jobId;
+};
+
 for (const file of readdirSync(new URL("./firm-lock/", import.meta.url)).filter(name => /^FL-.*\.checks\.mjs$/u.test(name)).sort()) {
   (await import(`./firm-lock/${file}`)).register(firmLockHelpers);
 }
