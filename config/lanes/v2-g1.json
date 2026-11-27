@@ -22,6 +22,7 @@
         "packages/db/migrations/2042_v2_snag_register.sql",
         "packages/db/src/index.ts",
         "packages/db/src/v2-snag-register-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
         "packages/db/test/migration-proofs/2042_v2_snag_register.proof.json",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
