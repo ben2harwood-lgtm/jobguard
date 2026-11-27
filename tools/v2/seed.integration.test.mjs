@@ -2098,7 +2098,7 @@ test("K5B-1 refusals: a stage not due, the database without a frozen row or with
   }
 });
 
-test("K5B-1 the second firm sees and writes no draft or withdrawal, and 2064 reruns without change", async () => {
+test("K5B-1 the second firm sees and writes no draft or withdrawal, and 2071 reruns without change", async () => {
   const { app, draftJob, view } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
   await app.paymentSchedule.set(draftJob, k5bDraft(0));
   await app.paymentSchedule.set(draftJob, k5bWithdraw(0, 1));
@@ -2122,7 +2122,7 @@ test("K5B-1 the second firm sees and writes no draft or withdrawal, and 2064 rer
   assert.ok(first.every(row => row.forced && !row.mutable));
   const rows = async () => (await admin.query("SELECT count(*)::int AS n FROM app.v2_stage_invoice_draft WHERE job_id=$1", [draftJob])).rows[0].n;
   const count = await rows();
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2064_v2_stage_invoice_draft.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2071_v2_stage_invoice_draft.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), first);
   assert.equal(await rows(), count);
   assert.ok(view);
