@@ -16,6 +16,7 @@
         "apps/web/app/(designed)/v2-mock/fixture.ts",
         "apps/web/app/(designed)/v2-mock/page.tsx",
         "apps/web/app/(designed)/v2-mock/work-mock.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/measurements/route.test.ts",
         "apps/web/app/api/v2-backend/jobs/[id]/measurements/route.ts",
         "apps/web/app/api/v2-backend/jobs/[id]/quotes/activation/route.ts",
         "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts",

@@ -48,6 +48,12 @@ export async function GET(_request: Request, { params }: Route) {
         ? { description: line.description, quantity: line.quantity, unit: line.unit }
         : { description: item.description, quantity: null, unit: null }];
     }));
+    // An approved extra is measurable once approved, though it has no confirmed scope revision yet.
+    for (const item of plan?.scopeItems ?? []) {
+      if (item.variationRevisionId && !quoted.has(item.scopeItemId)) {
+        quoted.set(item.scopeItemId, { description: item.description, quantity: item.quantity, unit: item.unit });
+      }
+    }
     const order = new Map([...quoted.keys()].map((scopeItemId, index) => [scopeItemId, index]));
     const rank = (scopeItemId: string) => order.get(scopeItemId) ?? order.size;
     // Scope still awaiting review has nothing to measure yet, unless d1 already holds a value for it.
