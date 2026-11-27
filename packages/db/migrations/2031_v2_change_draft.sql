@@ -45,7 +45,8 @@ BEGIN
     FOREIGN KEY (tenant_id, job_id, revision_id) REFERENCES app.v2_change_draft (tenant_id, job_id, revision_id)
   );
 
-  -- The draft must describe its revision exactly: |new - accepted| in the line's unit,
+  -- The draft must describe its revision exactly: |new - accepted| in the line's unit, where accepted is the
+  -- line as currently agreed (the latest approved change on the line, else the quote quantity),
   -- on the line's own scope item, for a line of the same job, in the stated direction.
   CREATE OR REPLACE FUNCTION app.v2_change_draft_guard() RETURNS trigger
   LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $guard$
@@ -57,7 +58,11 @@ BEGIN
       WHERE (r.tenant_id, r.job_id, r.id) = (NEW.tenant_id, NEW.job_id, NEW.revision_id)
         AND v.id = NEW.variation_id AND l.job_id = NEW.job_id
         AND v.existing_scope_item_id = l.scope_item_id AND v.scope_item_id = l.scope_item_id
-        AND l.quantity_decimal IS NOT NULL AND l.quantity_decimal::numeric = NEW.accepted_quantity::numeric
+        AND l.quantity_decimal IS NOT NULL AND NEW.accepted_quantity::numeric = coalesce((SELECT d.new_quantity::numeric
+          FROM app.v2_change_draft d JOIN app.variation av ON (av.tenant_id, av.job_id, av.id) = (d.tenant_id, d.job_id, d.variation_id)
+          WHERE (d.tenant_id, d.job_id, d.quote_line_id) = (NEW.tenant_id, NEW.job_id, NEW.quote_line_id)
+            AND av.current_revision_id = d.revision_id AND av.state = 'approved' AND d.variation_id <> NEW.variation_id
+          ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1), l.quantity_decimal::numeric)
         AND r.unit = l.unit
         AND r.quantity_decimal::numeric = abs(NEW.new_quantity::numeric - NEW.accepted_quantity::numeric)
         AND (r.signed_delta_pence = 0 OR (r.signed_delta_pence > 0) = (NEW.direction = 'addition'))

@@ -1394,6 +1394,10 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
 test("F3 revise makes a new revision and draft; the old F6 link is refused; an omission drafts a negative delta and no time", async () => {
   const { jobId, builder, drafts, tile } = await f3.job();
   const first = await drafts.command(jobId, f3.confirm(tile));
+  // "Change the quantity again" previews first: naming the draft it replaces, that draft is not a separate pending change.
+  const previewBody = { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.5" };
+  await assert.rejects(drafts.preview(jobId, previewBody), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  assert.deepEqual((await drafts.preview(jobId, { ...previewBody, variationId: first.variationId })).previewPence, 4750);
   const revised = await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "revise", commandId: randomUUID(),
     variationId: first.variationId, expectedRevisionId: first.revisionId, newQuantity: "1.5", unitRatePence: 9500,
     description: "F3 fictional revised splashback", tasks: [] });

@@ -57,8 +57,9 @@ export function ChangeDrafts({ jobId }: { jobId: string }) {
   async function draft() {
     const asked = { ...inputs.current };
     const unitRatePence = penceFromPounds(rate);
+    // Changing a draft again: that draft is the one being replaced, so it is not a separate pending change.
     const result = await post({ version: "v2-change-draft-preview.v1", quoteLineId: lineId, newQuantity: quantity.trim(),
-      ...(unitRatePence !== null && { unitRatePence }) }) as Preview | null;
+      ...(unitRatePence !== null && { unitRatePence }), ...(revise && { variationId: revise.variationId }) }) as Preview | null;
     if (result && !sameInputs(asked, inputs.current)) return;
     if (result) { setPreview({ ...result, inputs: asked }); setMinutes(Object.fromEntries(result.tasks.map(task => [task.taskKey, String(task.proposedMinutes)]))); }
   }

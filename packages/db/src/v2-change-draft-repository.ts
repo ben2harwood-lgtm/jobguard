@@ -23,7 +23,7 @@ const task = z.strictObject({ taskKey: z.string().min(1).max(200), proposedMinut
 const drafted = { newQuantity: quantity, unitRatePence: rate, description: z.string().trim().min(1).max(500),
   tasks: z.array(task).max(50).refine(rows => new Set(rows.map(row => row.taskKey)).size === rows.length) };
 export const changeDraftPreviewV1 = z.strictObject({ version: z.literal("v2-change-draft-preview.v1"), quoteLineId: uuid,
-  newQuantity: quantity, unitRatePence: rate.optional() });
+  newQuantity: quantity, unitRatePence: rate.optional(), variationId: uuid.optional() });
 export const changeDraftCommandV1 = z.discriminatedUnion("action", [
   z.strictObject({ version: z.literal("v2-change-draft-command.v1"), action: z.literal("confirm"), commandId: uuid,
     quoteLineId: uuid, ...drafted }),
@@ -115,7 +115,8 @@ export class ChangeDraftRepository {
     if (!parsed.success) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_INVALID_COMMAND");
     const line = await withTenant(this.pool, context, async ({ $client }) => {
       const [accepted] = await this.acceptedLines($client, context.tenantId, jobId, parsed.data.quoteLineId);
-      return accepted ? this.agreedLine($client, context.tenantId, jobId, accepted, null) : null;
+      // A preview for "Change the quantity again" names the variation it replaces, as revise does.
+      return accepted ? this.agreedLine($client, context.tenantId, jobId, accepted, parsed.data.variationId ?? null) : null;
     });
     if (!line) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_LINE_NOT_FOUND");
     const { tasks } = await this.planTasks(context, jobId, line);
