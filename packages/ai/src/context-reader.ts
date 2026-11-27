@@ -50,7 +50,7 @@ const ROOM = "en[\\s-]?suite|ensuite|living room|dining room|utility room|utilit
 const QUALIFIER = "upstairs|downstairs|front|back|master|main|spare|small|big|kids|other|top|first|second|third|fourth";
 /** "bedroom two", "bedroom 3": an ordinal only after "bedroom", and never the start of an amount or a count of coats. */
 const ORDINAL = "(?:one|two|three|four|five|[1-5])(?![\\d.,]|\\s*(?:k|grand|pounds|quid|hundred|thousand|coats?|of)\\b)";
-const OUTSIDE = /^(?:.*\s)?(?:garden|roof|back|front|outside)$/iu;
+export const OUTSIDE = /^(?:.*\s)?(?:garden|roof|back|front|outside)$/iu;
 const roomPart = `(?:(?:${QUALIFIER})\\s+)?(?:bedroom\\s+${ORDINAL}|${ROOM})(?:\\s+(?:upstairs|downstairs)(?![\\p{L}]))?`;
 const roomMention = new RegExp(`(?<![\\p{L}])(?:out the (?:back|front)|${roomPart}(?:\\s+and\\s+(?:the\\s+)?${roomPart})?)(?![\\p{L}])(?!\\s+(?:walls?|fences?|gates?|sheds?|paths?|taps?)\\b)`, "iu");
 /** "In the kitchen rip out …", "Upstairs bathroom strip out", "then the hallway paint …": the room words before the work. */
@@ -69,12 +69,12 @@ function trailingRoom(value: string): RegExpExecArray | null {
   return match[1] || !tiedWord.test(value.slice(0, match.index)) ? match : null;
 }
 
-const roomName = (words: string) => {
+export const roomName = (words: string) => {
   const name = words.trim().replace(/\s+/gu, " ").replace(/^out the /iu, "");
   const lower = name.toLowerCase().replace(/\bwc\b/gu, "WC");
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 };
-const keyOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 80) || "area";
+export const keyOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 80) || "area";
 function stripLeadingRoom(value: string): { room: string; rest: string; offset: number } | null {
   const match = leadingRoom.exec(value);
   if (!match) return null;
