@@ -243,6 +243,16 @@ describe("continuous spoken quotes", () => {
       expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
     }
   });
+  it("reads a door like per door, and leaves a day open", () => {
+    expect(rows("fit six doors at fifty pounds a door")).toEqual([["fit six doors", "6", "doors", 5000]]);
+    const text = "fit six doors at fifty pounds a day", result = citations(text);
+    expect(result.lines[0]!.unitPricePence.value).toBeNull();
+    expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+  });
+  it("keeps a leading decorate, render or rehang clause as a line", () => {
+    expect(rows("decorate the bedroom for two hundred pounds fit the door for fifty pounds paint the ceiling for sixty pounds")).toEqual([
+      ["decorate the bedroom", "1", "item", 20000], ["fit the door", "1", "item", 5000], ["paint the ceiling", "1", "item", 6000]]);
+  });
 });
 it.each([["two hundred pounds", 200], ["sixty quid", 60], ["a thousand pounds", 1000], ["one thousand two hundred and fifty pounds", 1250],
   ["twenty five pounds", 25], ["two two pounds", null], ["hundred pounds", null], ["fifteen hundred pounds", 1500], ["two hundred three hundred pounds", null]])("reads spoken pounds: %s", (words, value) => {
