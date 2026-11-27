@@ -42,6 +42,10 @@ BEGIN
   DROP POLICY IF EXISTS v2_calendar_feed_reader ON app.v2_calendar_feed_revision;
   CREATE POLICY v2_calendar_feed_reader ON app.v2_calendar_feed_revision FOR SELECT TO jobguard_migration
     USING (current_database()='jobguard_v2_local');
+  -- V2-FL firm lock (the guard's direct-table shape, as 2047 writes it): a firm sees only its own jobs' links.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_calendar_feed_revision;
+  CREATE POLICY v2_practice_firm ON app.v2_calendar_feed_revision AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_calendar_feed_revision.tenant_id,v2_calendar_feed_revision.job_id)));
   REVOKE ALL ON app.v2_calendar_feed_revision FROM PUBLIC;
   GRANT SELECT,INSERT ON app.v2_calendar_feed_revision TO jobguard_runtime;
 

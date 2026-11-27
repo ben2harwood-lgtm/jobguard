@@ -1,7 +1,7 @@
 # 2028 (reserved as 2017) — V2-K2A builder calendar link (RED)
 
 Local V2 only: the migration is a no-op outside jobguard_v2_local or without
-2001's v2_practice_firm policy. Bootstrap applies it after 2020 (before the 2025 and 2027 lines; it depends on neither). Numbered above the base by tools/migration-renumber.mjs; the merge renumbers it again if needed.
+2001's v2_practice_firm policy. Bootstrap applies it after 2020 (before the 2025, 2027 and 2047 lines; it depends on none of them). Numbered above the base by tools/migration-renumber.mjs; the merge renumbers it again if needed.
 
 One append-only table, `app.v2_calendar_feed_revision`. Version 1 creates a
 link and stores only the SHA-256 of a 256-bit server-made token. Refresh rows
@@ -12,6 +12,9 @@ the job address. No prices, notes, photos or findings are read or stored.
 Runtime: SELECT and INSERT only, FORCE RLS, the 2002 to 2020 tenant and job
 visibility predicate (so the second practice firm sees nothing through 2001's
 restrictive job policy). No UPDATE, DELETE or TRUNCATE.
+The table also carries its own restrictive `v2_practice_firm` policy (FOR ALL,
+jobguard_runtime only, one mandatory join to app.job on (tenant_id, job_id)), so
+the V2-FL guard (2047) counts it as firm-locked.
 
 One owner-run reader, `app.v2_calendar_feed_read(token_hash)`, finds a live link
 by hash before any tenant binding exists (a calendar app has no session). It
