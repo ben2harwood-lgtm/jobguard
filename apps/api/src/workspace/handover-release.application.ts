@@ -6,8 +6,8 @@ import { JobSourceError } from "@jobguard/core";
 import { HandoverReleaseError, HandoverReleaseRepository, PracticeAccessError, practiceMaterialPool } from "@jobguard/db";
 import { PracticeAccess } from "../practice-access.js";
 
-export { HandoverReleaseError, handoverAcknowledgeV1, handoverReleaseCommandV1, type HandoverLinkView, type HandoverRelease,
-  type HandoverReleaseCommand } from "@jobguard/db";
+export { HandoverReleaseError, handoverAcknowledgeV1, handoverReleaseCommandV1, handoverStopCommandV1, type HandoverLinkView,
+  type HandoverRelease, type HandoverReleaseCommand, type HandoverStopCommand } from "@jobguard/db";
 
 function v2Only() {
   try { requireG1ForPilot(process.env.JOBGUARD_ENV, process.env); }
@@ -31,6 +31,8 @@ export class HandoverReleaseApplication {
   async command(jobId: string, raw: unknown) {
     const { auth, releases } = await this.open(jobId);
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
+    // V2-G4: the same route stops a link; the body's version says which command it is.
+    if ((raw as { version?: unknown } | null)?.version === "v2-handover-stop-command.v1") return releases.stop(auth.context, jobId, this.sessionId, raw);
     return releases.release(auth.context, jobId, this.sessionId, raw);
   }
 }
@@ -44,7 +46,8 @@ export class HandoverLinkApplication {
 }
 
 const statuses: Record<HandoverReleaseError["code"], number> = { HANDOVER_RELEASE_INVALID_COMMAND: 400, HANDOVER_RELEASE_NOT_FOUND: 404,
-  HANDOVER_SITE_NOT_COMPLETE: 409, HANDOVER_NO_RECIPIENT: 409, HANDOVER_RELEASE_COMMAND_CONFLICT: 409, HANDOVER_LINK_REFUSED: 404 };
+  HANDOVER_SITE_NOT_COMPLETE: 409, HANDOVER_NO_RECIPIENT: 409, HANDOVER_RELEASE_COMMAND_CONFLICT: 409, HANDOVER_LINK_REFUSED: 404,
+  HANDOVER_LINK_ALREADY_STOPPED: 409 };
 /** This piece's refusals; null falls back to the job-source mapping. */
 export function handoverReleaseFailure(error: unknown): { status: number; body: Record<string, unknown> } | null {
   if (!(error instanceof HandoverReleaseError)) return null;

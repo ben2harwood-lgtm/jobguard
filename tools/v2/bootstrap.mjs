@@ -78,6 +78,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
   // V2-G3 handover release by link and acknowledgement (2058), after 2043.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2058_v2_handover_release.sql", import.meta.url), "utf8"));
+  // V2-G4 stop a handover link, and refuse a link sent to an earlier customer contact (2062), after 2058.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2062_v2_handover_release_stop.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

@@ -15,14 +15,18 @@ export const handoverReleaseCommandV1 = z.strictObject({ version: z.literal("v2-
   handoverVersion: z.number().int().min(1).max(100000), expiresInDays: z.number().int().min(1).max(90).default(30) });
 export const handoverAcknowledgeV1 = z.strictObject({ version: z.literal("v2-handover-acknowledge.v1"), token: z.string().min(1).max(200) });
 export type HandoverReleaseCommand = z.input<typeof handoverReleaseCommandV1>;
+/** V2-G4: stop one release's link. Never undone; to send the pack again, release again. */
+export const handoverStopCommandV1 = z.strictObject({ version: z.literal("v2-handover-stop-command.v1"), commandId: z.guid(),
+  releaseId: z.guid(), reason: z.string().trim().min(1).max(200) });
+export type HandoverStopCommand = z.input<typeof handoverStopCommandV1>;
 
 export class HandoverReleaseError extends Error {
   constructor(readonly code: "HANDOVER_RELEASE_INVALID_COMMAND" | "HANDOVER_RELEASE_NOT_FOUND" | "HANDOVER_SITE_NOT_COMPLETE" |
-    "HANDOVER_NO_RECIPIENT" | "HANDOVER_RELEASE_COMMAND_CONFLICT" | "HANDOVER_LINK_REFUSED") { super(code); }
+    "HANDOVER_NO_RECIPIENT" | "HANDOVER_RELEASE_COMMAND_CONFLICT" | "HANDOVER_LINK_REFUSED" | "HANDOVER_LINK_ALREADY_STOPPED") { super(code); }
 }
 
 export type HandoverRelease = { releaseId: string; version: number; recipient: string; releasedAt: string; expiresAt: string;
-  acknowledgedAt: string | null; superseded: boolean };
+  acknowledgedAt: string | null; superseded: boolean; stoppedAt: string | null; recipientCurrent: boolean };
 export type HandoverLinkView = { status: "open"; version: number; firmName: string; releasedAt: string; expiresAt: string;
   content: HandoverContent; newerAvailable: boolean; acknowledgedAt: string | null };
 
@@ -38,9 +42,18 @@ export class HandoverReleaseRepository {
       SELECT r.id AS "releaseId", r.version, r.recipient_email AS recipient, r.released_at::text AS "releasedAt",
         r.expires_at::text AS "expiresAt", a.acknowledged_at::text AS "acknowledgedAt",
         EXISTS (SELECT FROM app.v2_handover_release n WHERE (n.tenant_id, n.job_id) = (r.tenant_id, r.job_id)
-          AND (n.released_at, n.id) > (r.released_at, r.id)) AS superseded
+          AND (n.released_at, n.id) > (r.released_at, r.id) AND NOT EXISTS (SELECT FROM app.v2_handover_release_stop ns
+            WHERE (ns.tenant_id, ns.job_id, ns.release_id) = (n.tenant_id, n.job_id, n.id))) AS superseded,
+        s.stopped_at::text AS "stoppedAt",
+        -- The same comparison as the 2062 link check: case and surrounding spaces ignored.
+        EXISTS (SELECT FROM app.job_party_current x
+          JOIN app.job_party_binding b ON (b.tenant_id, b.job_id, b.id) = (x.tenant_id, x.job_id, x.binding_id)
+          JOIN app.customer_revision cr ON (cr.tenant_id, cr.id) = (b.tenant_id, b.customer_revision_id)
+          WHERE (x.tenant_id, x.job_id) = (r.tenant_id, r.job_id)
+            AND lower(btrim(cr.payload->>'email')) = lower(btrim(r.recipient_email))) AS "recipientCurrent"
       FROM app.v2_handover_release r
       LEFT JOIN app.v2_handover_acknowledgement a ON (a.tenant_id, a.job_id, a.release_id) = (r.tenant_id, r.job_id, r.id)
+      LEFT JOIN app.v2_handover_release_stop s ON (s.tenant_id, s.job_id, s.release_id) = (r.tenant_id, r.job_id, r.id)
       WHERE (r.tenant_id, r.job_id) = ($1, $2) ORDER BY r.released_at, r.id`, [tenantId, jobId])).rows;
   }
 
@@ -117,7 +130,43 @@ export class HandoverReleaseRepository {
     return { release: result.release, token: result.token, replayed: result.replayed };
   }
 
-  /** Customer page. One refusal for every unknown or expired link. */
+  /** Builder: stop one release's link. A replay returns the stored stop; it never delivers anything. */
+  async stop(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: unknown) {
+    const parsed = handoverStopCommandV1.safeParse(raw);
+    if (!parsed.success) throw new HandoverReleaseError("HANDOVER_RELEASE_INVALID_COMMAND");
+    const command = parsed.data;
+    return withTenant(this.pool, context, async db => {
+      const client = db.$client;
+      const actor = (await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id", [sha256(sessionId)])).rows[0]?.id;
+      if (!actor) throw new HandoverReleaseError("HANDOVER_RELEASE_NOT_FOUND");
+      // G2's lock: a stop, a release and a save of the same job never interleave.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2043))", [`handover:${jobId}`]);
+      const requestHash = sha256(JSON.stringify({ jobId, actor, command }));
+      const stored = async (releaseId: string) => (await this.releases(client, context.tenantId, jobId)).find(row => row.releaseId === releaseId)!;
+      const prior = (await client.query<{ jobId: string; releaseId: string; requestHash: string }>(`SELECT job_id AS "jobId",
+        release_id AS "releaseId", request_hash AS "requestHash" FROM app.v2_handover_release_stop WHERE (tenant_id, command_id) = ($1, $2)`,
+      [context.tenantId, command.commandId])).rows[0];
+      if (prior) {
+        if (prior.jobId !== jobId || prior.requestHash !== requestHash) throw new HandoverReleaseError("HANDOVER_RELEASE_COMMAND_CONFLICT");
+        return { release: await stored(prior.releaseId), replayed: true };
+      }
+      const release = (await client.query<{ version: number; stopped: boolean }>(`SELECT r.version, EXISTS (SELECT FROM app.v2_handover_release_stop s
+        WHERE (s.tenant_id, s.job_id, s.release_id) = (r.tenant_id, r.job_id, r.id)) AS stopped
+        FROM app.v2_handover_release r WHERE (r.tenant_id, r.job_id, r.id) = ($1, $2, $3)`, [context.tenantId, jobId, command.releaseId])).rows[0];
+      if (!release) throw new HandoverReleaseError("HANDOVER_RELEASE_NOT_FOUND");
+      if (release.stopped) throw new HandoverReleaseError("HANDOVER_LINK_ALREADY_STOPPED");
+      await client.query(`INSERT INTO app.v2_handover_release_stop (tenant_id, job_id, release_id, command_id, request_hash, actor_membership_id, reason)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [context.tenantId, jobId, command.releaseId, command.commandId, requestHash, actor, command.reason]);
+      // References only: no reason text and no email.
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`, eventType: "v2.handover.link_stopped",
+        subjectType: "job", subjectRef: jobId, payload: {
+          references: { commandId: command.commandId, releaseId: command.releaseId, handoverVersion: String(release.version) },
+          hashes: { request: requestHash }, classifications: { action: "operational" } } }]);
+      return { release: await stored(command.releaseId), replayed: false };
+    });
+  }
+
+  /** Customer page. One refusal for every unknown, expired, stopped or earlier-customer link. */
   async open(token: string): Promise<HandoverLinkView> {
     const client = await this.pool.connect();
     try {
