@@ -49,6 +49,21 @@ describe("V2-SQ-C job understanding contract and money rule", () => {
     const checked = checkUnderstandingNumbers(job, text, digits);
     expect(checked.lines.map(item => item.quantity.value)).toEqual([null, "6"]);
   });
+  it("clears a room price said in another room's sentence", () => {
+    const text = "In the kitchen paint the walls. The kitchen all in 900. In the bathroom fit a bath. The bathroom all in 1200.";
+    const at = (words: string, from = 0) => ({ kind: "extracted" as const, span: { sourceId: "s", sourceVersion: 1 as const, start: text.indexOf(words, from), end: text.indexOf(words, from) + words.length } });
+    const swapped = jobUnderstandingV1.parse({ version: "job-understanding.v1", title: { value: "Kitchen", provenance: at("kitchen") },
+      areas: [{ key: "kitchen", name: { value: "kitchen", provenance: at("kitchen") }, kind: "room" }, { key: "bathroom", name: { value: "bathroom", provenance: at("bathroom") }, kind: "room" }],
+      lines: [{ description: { value: "paint the walls", provenance: at("paint the walls") }, quantity: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
+        unit: { value: null, provenance: { kind: "defaulted", note: "Not said" } }, unitPricePence: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
+        areaKey: "kitchen", trade: { value: "Decorating", provenance: { kind: "inferred", note: "paint" } }, priceBasis: "none" }],
+      areaPrices: [{ areaKey: "kitchen", pence: 120000, provenance: at("1200") }, { areaKey: "bathroom", pence: 90000, provenance: at("900") }], wholeJobPrice: null, questions: [] });
+    const checked = checkUnderstandingNumbers(swapped, text, digits);
+    expect(checked.areaPrices).toEqual([]);
+    expect(checked.questions).toEqual([{ text: "Price needed for this room.", areaKey: "kitchen" }, { text: "Price needed for this room.", areaKey: "bathroom" }]);
+    const right = { ...swapped, areaPrices: [{ areaKey: "kitchen", pence: 90000, provenance: at("900") }, { areaKey: "bathroom", pence: 120000, provenance: at("1200") }] };
+    expect(checkUnderstandingNumbers(right, text, digits).areaPrices).toEqual(right.areaPrices);
+  });
   it("refuses a room or whole-job price without cited words, and unknown areas", () => {
     expect(() => jobUnderstandingV1.parse({ ...base(), wholeJobPrice: { pence: 100, provenance: { kind: "inferred", note: "x" } } })).toThrow();
     expect(() => jobUnderstandingV1.parse({ ...base(), areaPrices: [{ areaKey: "bathroom", pence: 1, provenance: span("2400") }] })).toThrow();
@@ -57,8 +72,14 @@ describe("V2-SQ-C job understanding contract and money rule", () => {
   });
   it("turns back into today's proposal without spreading a room price onto lines", () => {
     const proposal = toJobRecordProposal(base());
-    expect(proposal.lines).toEqual([{ description: said("fit six units"), quantity: { value: "6", provenance: span("six") }, unit: said("units"), unitPricePence: { value: 240000, provenance: span("2400") } }]);
-    expect(proposal.questions.map(question => question.question.value)).toEqual(["You said £4,500 for Kitchen. It stays on the room, not spread across its lines."]);
+    // "six units for 2400" is a price for the whole line: one priced item, so v1 never reads it as 6 × £2,400.
+    expect(proposal.lines).toEqual([{ description: said("fit six units"), quantity: { value: "1", provenance: { kind: "defaulted", note: "Priced for the whole line; 6 said is in the words" } },
+      unit: { value: "item", provenance: { kind: "defaulted", note: "Priced for the whole line; confirm before quoting" } }, unitPricePence: { value: 240000, provenance: span("2400") } }]);
+    expect(proposal.questions.map(question => question.question.value)).toEqual(["You said £4,500 for Kitchen. It stays on the room, not spread across its lines.",
+      "“fit six units”: the price covers the whole line, not each of the 6. Check before quoting."]);
+    const each = base();
+    each.lines[0]!.priceBasis = "each";
+    expect(toJobRecordProposal(each).lines[0]).toMatchObject({ quantity: { value: "6" }, unit: { value: "units" } });
     const open = base();
     open.lines[0]!.quantity = { value: null, provenance: { kind: "defaulted", note: "Not said" } };
     open.lines[0]!.unit = { value: null, provenance: { kind: "defaulted", note: "Not said" } };

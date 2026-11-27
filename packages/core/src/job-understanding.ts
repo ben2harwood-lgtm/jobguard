@@ -108,8 +108,34 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     }
     return { ...line, quantity, unitPricePence, priceBasis };
   });
+  /** A room's price is said in a sentence that names that room, and no other room is named nearer to it. */
+  const ownsArea = (areaKey: string, said: { start: number; end: number }) => {
+    const marks = /[.;!?\n]/gu, plain = sourceText.replace(/(\d)\.(?=\d)/gu, "$1 ");
+    let from = 0, to = sourceText.length;
+    for (const mark of plain.matchAll(marks)) { if (mark.index! < said.start) from = mark.index! + 1; else if (mark.index! >= said.end) { to = mark.index!; break; } }
+    const sentence = sourceText.slice(from, to).toLowerCase();
+    const nearest = (name: string) => {
+      let best: { distance: number; length: number } | null = null;
+      for (const token of [name.toLowerCase().trim(), name.toLowerCase().trim().split(/\s+/u).at(-1)!]) {
+        if (!token) continue;
+        const word = new RegExp(`(?<![\\p{L}])${token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?![\\p{L}])`, "gu");
+        for (const found of sentence.matchAll(word)) {
+          const start = from + found.index!, end = start + found[0].length;
+          const distance = end <= said.start ? said.start - end : start >= said.end ? start - said.end : 0;
+          if (!best || distance < best.distance || distance === best.distance && token.length > best.length) best = { distance, length: token.length };
+        }
+      }
+      return best;
+    };
+    const own = understanding.areas.find(area => area.key === areaKey);
+    const mine = own ? nearest(own.name.value) : null;
+    if (!mine) return false;
+    return !understanding.areas.some(area => { if (area.key === areaKey || area.kind === "whole_job") return false;
+      const theirs = nearest(area.name.value);
+      return !!theirs && (theirs.distance < mine.distance || theirs.distance === mine.distance && theirs.length >= mine.length); });
+  };
   const areaPrices = understanding.areaPrices.filter(price => {
-    if (cites(price.provenance, price.pence, "money")) return true;
+    if (cites(price.provenance, price.pence, "money") && ownsArea(price.areaKey, spanOf(price.provenance)!)) return true;
     questions.push({ text: "Price needed for this room.", areaKey: price.areaKey });
     return false;
   });
@@ -133,12 +159,20 @@ export function toJobRecordProposal(understanding: JobUnderstanding): JobRecordP
   for (const price of understanding.areaPrices) questions.push({ question: { value:
     `You said ${pounds(price.pence)} for ${areaName.get(price.areaKey) ?? "this room"}. It stays on the room, not spread across its lines.`,
   provenance: { kind: "inferred", note: "Said for the room; check where it belongs" } } });
+  for (const line of understanding.lines) if (line.priceBasis === "line" && line.quantity.value !== null && line.quantity.value !== "1") questions.push({ question: {
+    value: `“${line.description.value.slice(0, 160)}”: the price covers the whole line, not each of the ${line.quantity.value}. Check before quoting.`,
+    provenance: { kind: "inferred", note: "Count said with a whole-line price" } } });
   if (understanding.wholeJobPrice) questions.push({ question: { value:
     `You said ${pounds(understanding.wholeJobPrice.pence)} for the whole job. Add a price to each line, or put it on one line.`,
   provenance: { kind: "inferred", note: "Said for the whole job; never spread across lines" } } });
   return {
     title: understanding.title,
-    lines: understanding.lines.map(line => line.quantity.value === null && line.priceBasis !== "each" && line.priceBasis !== "per_unit"
+    lines: understanding.lines.map(line => line.priceBasis === "line" && line.quantity.value !== null && line.quantity.value !== "1"
+      // A price for the whole line stays one priced item, so a v1 reader never multiplies it by the said count.
+      ? { description: line.description, quantity: { value: "1", provenance: { kind: "defaulted", note: `Priced for the whole line; ${line.quantity.value} said is in the words` } },
+        unit: { value: "item", provenance: { kind: "defaulted", note: "Priced for the whole line; confirm before quoting" } },
+        unitPricePence: line.unitPricePence }
+      : line.quantity.value === null && line.priceBasis !== "each" && line.priceBasis !== "per_unit"
       ? { description: line.description, quantity: { value: "1", provenance: { kind: "defaulted", note: "One item per draft line; confirm before quoting" } },
         unit: line.unit.value === null ? { value: "item", provenance: { kind: "defaulted", note: "Draft work item; confirm before quoting" } } : line.unit,
         unitPricePence: line.unitPricePence }
