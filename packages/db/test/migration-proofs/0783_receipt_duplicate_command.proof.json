@@ -1,0 +1,60 @@
+{
+  "migration": "0783_receipt_duplicate_command.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9e7d0a538a8e1f8c7af5164fc19959728a6a30661d97736f585c6d2dfa2bcf63",
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_payment",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "public.digest"
+        ]
+      },
+      "after": {
+        "identity": "function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "d21e2935dc8d3c42ac407560b06f19e935d4aa05bc8c71a3dc0fca2ebbe1fdf7",
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_payment",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "public.digest"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

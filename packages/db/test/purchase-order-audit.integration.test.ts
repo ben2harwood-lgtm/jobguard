@@ -51,7 +51,7 @@ beforeAll(async () => {
         // 0781 adds an LP-11 bound-tenant policy, so it is deferred with LP-11.
         "_variation_revision_photo.sql",
         // 0782 (QW-4 snag list) uses the LP-11 bound-tenant policy, so it is deferred with LP-11.
-        "_snag_list.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_snag_list.sql", "_receipt_duplicate_command.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
