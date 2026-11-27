@@ -242,3 +242,5 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // V2-K8: builder-only hire records.
 export * from "./v2-hire.js";
 export * from "./v2-hire-repository.js";
+// V2-C3C crew records.
+export * from "./v2-crew-contact-repository.js";
