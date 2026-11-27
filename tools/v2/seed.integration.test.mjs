@@ -1967,7 +1967,7 @@ const f7m = {
       expectedRevision: 0, displayName: "Ria Fictional", trade, phone: "07700 900321", email: "ria@crew.jobguard-v2.invalid" });
     const issue = (fields = {}) => app.crewLinks.command(jobId, { version: "v2-crew-link-command.v1", action: "issue",
       commandId: randomUUID(), crewId: crew.crewId, ...fields });
-    return { owner, app, brief, crew, issue, page: new CrewLinkPageApplication(runtime) };
+    return { owner, app, brief, crew, issue, crewBriefs, command, page: new CrewLinkPageApplication(runtime) };
   },
   press: (token, brief, task, fields = {}) => ({ version: "v2-crew-link-press.v1", token, commandId: randomUUID(),
     briefVersion: brief.version, scopeItemId: task.scopeItemId, taskKey: task.taskKey, kind: "done", note: "", ...fields }),
@@ -2112,6 +2112,27 @@ test("F7M tables are forced, append only and closed to the runtime and the secon
     scope_item_id,task_key,kind,note,seen_head,request_digest) VALUES ($1,$2,$3,$4,'tiler',0,$5,'x','done','',0,$6)`,
   [DEMO_TENANT_ID, jobId, randomUUID(), made.linkId, randomUUID(), "0".repeat(64)]), { code: "42501" });
   await assert.rejects(admin.query("UPDATE app.v2_crew_link SET expires_at = expires_at WHERE id = $1", [made.linkId]));
+});
+
+// Plan check condition 1: a link shows unassigned tasks and the crew member's own, by ownerRef, never by name.
+test("F7M a link hides a task assigned to another crew record, and refuses a press on it", async () => {
+  const { app, crew, issue, crewBriefs, command, page } = await f7m.setup();
+  const other = await app.crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
+    expectedRevision: 0, displayName: "Ria Fictional", trade: "tiler", phone: "07700 900322", email: "ria2@crew.jobguard-v2.invalid" });
+  const plan = await app.workPlan.read(jobId, planQuery);
+  const task = plan.tasks.find(item => item.trade === "tiler");
+  await app.workPlan.edit(jobId, planEdit(plan, task, { assigneeRef: other.crewId }));
+  const latest = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  const brief = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: latest.version, accessWindow: latest.content.accessWindow }));
+  const visible = async crewId => (await page.open((await issue({ crewId })).token)).brief.tasks
+    .some(row => row.scopeItemId === task.scopeItemId && row.taskKey === task.key);
+  // Same display name, different crew record: only the assigned record sees the task.
+  assert.equal(await visible(crew.crewId), false);
+  assert.equal(await visible(other.crewId), true);
+  const mine = await issue({ crewId: crew.crewId });
+  const press = f7m.press(mine.token, brief, { scopeItemId: task.scopeItemId, taskKey: task.key });
+  await assert.rejects(page.receive(press), { code: "CREW_LINK_REFUSED" });
+  assert.equal((await f7m.rows(press.commandId)).length, 0);
 });
 
 // V2-F1 repair (Codex P2 4705000559): progress ids share the tenant-wide watchdog command namespace, both ways.

@@ -295,7 +295,10 @@ BEGIN
           LEFT JOIN LATERAL (SELECT o.kind, o.note, o.recorded_at FROM app.v2_crew_progress o
             WHERE (o.tenant_id, o.job_id, o.crew_link_id, o.scope_item_id, o.task_key)
               = (l.tenant_id, l.job_id, l.id, (t->>'scopeItemId')::uuid, t->>'taskKey')
-            ORDER BY o.recorded_at DESC, o.command_id DESC LIMIT 1) o ON true), '[]'::jsonb))
+            ORDER BY o.recorded_at DESC, o.command_id DESC LIMIT 1) o ON true
+          -- Only tasks this crew member may act on: unassigned ones and their own, by F1's ownerRef (a crew
+          -- record id), never by display name. Receive reads this view, so a hidden task is refused too.
+          WHERE t->>'ownerRef' IS NULL OR t->>'ownerRef' = l.crew_id::text), '[]'::jsonb))
         FROM brief))
   $f$;
   REVOKE ALL ON FUNCTION app.v2_crew_link_view(app.v2_crew_link) FROM PUBLIC;
