@@ -87,6 +87,17 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
     expect(result.understanding.questions.at(-1)).toEqual({ text: `Is this a separate piece of work? “${words}”`, lineIndex: result.understanding.lines.length - 1 });
   });
 
+  it("one missed task returned twice, or as overlapping quotes, becomes one line", () => {
+    const text = "In the kitchen fit new units 2000. Also sort out the extractor fan while we are there.";
+    const a = missing(readA(text));
+    const entry = (description_words: string) => ({ description_words, area_index: 0, trade: "Electrics" as const });
+    for (const pair of [["sort out the extractor fan", "sort out the extractor fan"], ["sort out the extractor fan", "the extractor fan"]]) {
+      const result = combineModelReading(a, text, { ...agreeing(a), missed: pair.map(entry) }, "k");
+      expect(result, pair.join(" / ")).toMatchObject({ used: true, keptMissed: 1 });
+      expect(result.understanding.lines.length).toBe(a.lines.length + 1);
+    }
+  });
+
   it("a missed line that overlaps an A item, has a number, or is said twice is dropped", () => {
     const text = "In the kitchen fit new units 2000 and fit 600mm wall units. Clear the 1930s fireplace. Box in the pipes. Then box in the pipes again.";
     const a = readA(text);

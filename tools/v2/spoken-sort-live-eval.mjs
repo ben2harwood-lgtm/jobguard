@@ -64,14 +64,17 @@ try {
   }
   const readerAReport = evaluateContextReader(cases);
   const combinedReport = evaluateContextReader(cases, (sourceId, text, id) => combinedById.get(id) ?? (({ timeline: _, ...a }) => a)(readSpokenJob(sourceId, text)));
-  const report = { schema: "jobguard-spoken-sort-live-eval/1", model: "claude-sonnet-5-5", cases: cases.length, outcomes,
+  // A clean run needs a model answer for every case: a failed call, a refused reservation or a skipped case is incomplete,
+  // and its Reader A fallback must never pass as a live score.
+  const modelAnswered = combinedById.size;
+  const report = { schema: "jobguard-spoken-sort-live-eval/1", model: "claude-sonnet-5-5", cases: cases.length, modelAnswered, complete: modelAnswered === cases.length, outcomes,
     costPence: settledMicroPence / 1_000_000, numberDifferences, unaskedAddedLines: outcomes.reduce((sum, o) => sum + (o.unaskedAddedLines ?? 0), 0),
     readerA: { roomRight: readerAReport.roomRight, tradeRight: readerAReport.tradeRight, matchedLines: readerAReport.matchedLines, inventedWork: readerAReport.inventedWork, wrongNumbers: readerAReport.wrongNumbers },
     withModelReader: { roomRight: combinedReport.roomRight, tradeRight: combinedReport.tradeRight, matchedLines: combinedReport.matchedLines, inventedWork: combinedReport.inventedWork, wrongNumbers: combinedReport.wrongNumbers },
     misses: formatContextReaderReport(combinedReport).split("\n").filter(line => line.startsWith("  - ")) };
   const text = `${JSON.stringify(report, null, 1)}\n`;
   if (reportPath) writeFileSync(reportPath, text); else process.stdout.write(text);
-  process.exitCode = report.numberDifferences === 0 && report.unaskedAddedLines === 0 ? 0 : 1;
+  process.exitCode = report.complete && report.numberDifferences === 0 && report.unaskedAddedLines === 0 ? 0 : 1;
 } finally {
   await pool.end();
 }

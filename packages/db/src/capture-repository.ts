@@ -67,19 +67,20 @@ export class CaptureRepository {
   }
 
   /** V2-SQ-G step (a): before any model call, the stored capture for this id, if any, under today's owner check.
-   * The same source returns it; a different source is CAPTURE_ID_REUSED. Null when this id is new. */
-  async findForOwner(context: VerifiedTenantContext, input: { practiceSessionDigest: string; captureId: string; text: string }) {
+   * The same source (text, kind and acquisition, as persist() compares them) returns it; a different source is CAPTURE_ID_REUSED. Null when this id is new. */
+  async findForOwner(context: VerifiedTenantContext, input: { practiceSessionDigest: string; captureId: string; text: string; sourceKind?: "text"|"browser_local_transcript"; acquisition?: Record<string,unknown>|null }) {
     const hash = createHash("sha256").update(Buffer.from(input.text, "utf8")).digest("hex");
     return withTenant(this.pool, context, async (db) => {
       const auth = (await db.$client.query("SELECT * FROM app.authenticate_practice_session($1)", [input.practiceSessionDigest])).rows[0];
       if (!auth || auth.tenant_id !== context.tenantId) throw new Error("UNAUTHENTICATED");
-      const existing = (await db.$client.query<{ job_id: string; source_sha256: string; content_text: string }>(`SELECT p.job_id,p.source_sha256,s.content_text
+      const existing = (await db.$client.query<{ job_id: string; source_sha256: string; content_text: string; source_kind: string; acquisition_matches: boolean }>(`SELECT p.job_id,p.source_sha256,s.content_text,
+        s.kind AS source_kind, s.acquisition_metadata IS NOT DISTINCT FROM $3::jsonb AS acquisition_matches
         FROM app.job_record_proposal p JOIN app.capture_source s ON (s.tenant_id,s.id)=(p.tenant_id,p.source_id)
-        WHERE p.tenant_id=$1 AND p.capture_id=$2`, [context.tenantId, input.captureId])).rows[0];
+        WHERE p.tenant_id=$1 AND p.capture_id=$2`, [context.tenantId, input.captureId, input.acquisition ?? null])).rows[0];
       if (!existing) return null;
       const owner = (await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2 AND practice_session_digest=$3", [context.tenantId,existing.job_id,input.practiceSessionDigest])).rows[0];
       if (!owner) throw new Error("NOT_FOUND");
-      if (existing.source_sha256 !== hash || existing.content_text !== input.text) throw new CaptureConflictError("A capture id cannot be reused for different source data");
+      if (existing.source_sha256 !== hash || existing.content_text !== input.text || existing.source_kind !== (input.sourceKind ?? "text") || !existing.acquisition_matches) throw new CaptureConflictError("A capture id cannot be reused for different source data");
       return { job_id: existing.job_id };
     });
   }

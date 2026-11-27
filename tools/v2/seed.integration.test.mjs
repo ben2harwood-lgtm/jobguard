@@ -1482,6 +1482,23 @@ test("SQ-G: the model reader sorts a spoken capture, keeps Reader A's numbers, a
   } finally { fake.restore(); }
 });
 
+test("SQ-G: a stored capture id with the same words but a different source kind or acquisition is refused before any call", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  try {
+    const captureId = randomUUID();
+    const app = sqgApp(sessionId);
+    await app.capture(sqgCapture(captureId));
+    const acquisition = { contractVersion: "browser_local_dictation_v1", language: "en-GB", processLocally: true, audioUploaded: false, audioStored: false, rawFinalText: sqgText, humanEdited: false };
+    const spoken = { ...sqgCapture(captureId), source: { kind: "browser_local_transcript", text: sqgText, acquisition } };
+    await assert.rejects(app.capture(spoken), error => error?.code === "CAPTURE_ID_REUSED");
+    const spokenId = randomUUID();
+    await app.capture({ ...spoken, captureId: spokenId });
+    await assert.rejects(app.capture({ ...spoken, captureId: spokenId, source: { ...spoken.source, acquisition: { ...acquisition, humanEdited: true } } }), error => error?.code === "CAPTURE_ID_REUSED");
+    assert.equal(fake.calls.length, 2, "one call per new capture, none for a refused reuse");
+  } finally { fake.restore(); }
+});
+
 test("SQ-G: a timeout makes one attempt, keeps the reservation in full, saves Reader A's quote, and a replay makes no call", async () => {
   const { sessionId } = await signIn("builder");
   const fake = sqgFakeProvider("hang");

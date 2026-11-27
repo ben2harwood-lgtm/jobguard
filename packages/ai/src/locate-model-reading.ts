@@ -204,14 +204,16 @@ export function combineModelReading(readerA: JobUnderstanding, original: string,
     return { ...line, areaKey, trade };
   });
 
-  // Missed work: a quote said once, of at most twelve words, with no number, clear of A's items and numbers. Always open.
+  // Missed work: a quote said once, of at most twelve words, with no number, clear of A's items, A's numbers and missed work already kept. Always open.
   let keptMissed = 0;
+  const keptSpans: { start: number; end: number }[] = [];
   for (const missed of reading.missed) {
     if (lines.length >= 100 || wordCount(missed.description_words) > 12 || hasNumber(missed.description_words)) continue;
     const found = locateQuote(cleaned.text, missed.description_words);
     if (found.length !== 1) continue;
     const at = toOriginalSpan(cleaned, found[0]!.start, found[0]!.end);
-    if (!at || [...items, ...numbers].some(other => overlaps(at, other))) continue;
+    if (!at || [...items, ...numbers, ...keptSpans].some(other => overlaps(at, other))) continue;
+    keptSpans.push(at);
     const words = original.slice(at.start, at.end);
     let areaKey = areaFor(missed.area_index);
     if (!areaKey) {

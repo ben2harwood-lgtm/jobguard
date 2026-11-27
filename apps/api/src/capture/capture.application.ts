@@ -28,7 +28,7 @@ export class CaptureApplication{ private readonly access: PracticeAccess;
  async capture(raw:unknown,options:{modelReaderNoticeShown?:boolean}={}){const practice = await this.access.session();const parsed=captureRequestV1.safeParse(raw);if(!parsed.success)throw new CaptureApplicationError("INVALID_CAPTURE");if(parsed.data.requested_tenant_id!==DEMO_TENANT_ID)throw new CaptureApplicationError("TENANT_FORBIDDEN");
   const {captureId,source,fixtureId}=parsed.data;
   // V2-SQ-G (a): a capture id already stored for this owner returns its view, before any reading or model call.
-  const prior=await this.captureRepo.findForOwner(practice.context,{practiceSessionDigest:practice.digest,captureId,text:source.text});
+  const prior=await this.captureRepo.findForOwner(practice.context,{practiceSessionDigest:practice.digest,captureId,text:source.text,sourceKind:source.kind,acquisition:source.kind==="browser_local_transcript"?source.acquisition:null});
   if(prior)return this.view(prior.job_id);
   let proposal=await extractCaptureFixture(captureId,source.text,fixtureId);let model:string=PINNED_CAPTURE_MODEL;
   // (b) Reader B only when every switch is on; any failure leaves today's proposal exactly as it was.

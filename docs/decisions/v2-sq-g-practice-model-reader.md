@@ -30,7 +30,8 @@ of the RED pull request that carries this record.
 - **Switches**: a live call needs all three of `JOBGUARD_SPOKEN_JOB_MODEL_KEY` (a Worker secret), a valid cap and
   `JOBGUARD_SPOKEN_JOB_LIVE=1`. All are unset in the repository and on every preview.
 - **Scored run**: `pnpm --filter @jobguard/ai eval:spoken-sort-live`, by hand on Ben's Mac, never in CI. The live flag
-  is set only after it shows zero number differences from Reader A and zero invented work without a question.
+  is set only after it shows a model answer for every case, zero number differences from Reader A and zero invented
+  work without a question. A run with any failed call or refused reservation exits 1 as incomplete.
 
 ## Register fields (AGENTS 5.11)
 | Field | Value |
