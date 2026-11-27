@@ -17,6 +17,9 @@ import { migrationUrl, validateSettings } from "./settings.mjs";
 import { joineryTemplate } from "./fixtures/joinery-template.mjs";
 // V2-PX
 import { uploadPracticePhoto } from "./test/practice-photo.mjs";
+// V2-FL
+import { readdirSync } from "node:fs";
+import { firmLockCatalog, firmLockFailures, lockProblems, pendingTables } from "./firm-lock/guard.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -1409,6 +1412,80 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
+
+test("FL guard: every job-bound table runtime can touch is firm-locked or named in a pending slice", async () => {
+  const failures = await firmLockFailures(admin);
+  assert.deepEqual(failures, [], "not firm-locked:\n" +
+    failures.map(row => `  ${row.relation} (${row.kind}): ${row.problems.join("; ")}`).join("\n"));
+});
+
+test("FL guard: every pending table is still in the catalog and still unlocked", async () => {
+  const catalog = new Map((await firmLockCatalog(admin)).map(row => [row.relation, row]));
+  const stale = [...pendingTables()].filter(([table]) => !catalog.has(table) || catalog.get(table).firm_policy)
+    .map(([table, slice]) => `${slice}: ${table}`);
+  assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
+});
+
+test("FL guard: a lock must be mandatory joins on every job-bound parent's full key", async () => {
+  const catalog = await firmLockCatalog(admin);
+  const locked = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
+  const jobBound = new Set(catalog.map(row => row.relation));
+  const check = (relation, using) => {
+    const row = catalog.find(entry => entry.relation === relation);
+    return lockProblems(using ? { ...row, firm_policy: { ...row.firm_policy, using } } : row, locked, jobBound);
+  };
+  assert.deepEqual(check("app.finding_suppression"), [], "the real 2047 policy passes");
+  assert.deepEqual(check("app.job_link"), [], "the real 2047 policy passes");
+  // Codex r1: a tenant-only EXISTS on the real parent.
+  assert.match(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE (f.tenant_id = finding_suppression.tenant_id)))")
+    .join(), /app\.job_finding\(tenant_id, finding_id\)/u);
+  // Codex r3: a job link must check both bindings; drop each in turn.
+  const binding = side => `(EXISTS ( SELECT\n   FROM app.job_party_binding b\n  WHERE ((b.tenant_id = job_link.tenant_id) AND (b.job_id = job_link.${side}_job_id) AND (b.id = job_link.${side}_binding_id))))`;
+  assert.match(check("app.job_link", binding("predecessor")).join(), /successor_job_id, successor_binding_id/u);
+  assert.match(check("app.job_link", binding("successor")).join(), /predecessor_job_id, predecessor_binding_id/u);
+  // Codex r4: an OR alternative makes the join optional, so it doesn't lock anything.
+  const optional = "v2_practice_firm is not only mandatory EXISTS joins on column equalities (an OR or extra condition)";
+  const diary = check("app.job_diary_entry").length === 0 && catalog.find(entry => entry.relation === "app.job_diary_entry").firm_policy.using;
+  assert.ok(diary, "the real 2047 direct policy passes");
+  assert.ok(check("app.job_diary_entry", `(${diary} OR true)`).includes(optional));
+  assert.ok(check("app.job_link", `(${binding("predecessor")} OR ${binding("successor")})`).includes(optional));
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "((j.id = job_diary_entry.job_id) OR true)")).includes(optional));
+  // Codex r5: a repeated equality in place of the job key must fail.
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "(j.tenant_id = job_diary_entry.tenant_id)"))
+    .includes("v2_practice_firm does not join app.job on (tenant_id, job_id)"));
+  assert.ok(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE ((f.tenant_id = finding_suppression.tenant_id) AND (f.tenant_id = finding_suppression.tenant_id))))")
+    .join().includes("app.job_finding(tenant_id, finding_id)"));
+  assert.notDeepEqual(lockProblems(catalog.find(entry => entry.relation === "app.finding_suppression"), new Set(), jobBound), [],
+    "a parent without its own firm lock doesn't count");
+});
+
+let firmContexts;
+const firmLockHelpers = {
+  test, assert, admin, runtime, withTenant,
+  contexts: () => firmContexts ??= (async () => {
+    await pxLiveJob(); // a fresh live job for firm A, so quote, party and activation rows exist
+    const builder = await signIn("builder");
+    const outsider = await signIn("second-builder");
+    return {
+      firmA: (await authenticatePracticeSession(runtime, builder.sessionId)).context,
+      firmB: (await authenticatePracticeSession(runtime, outsider.sessionId)).context,
+      firmBReal: outsider.realContext,
+    };
+  })(),
+};
+for (const file of readdirSync(new URL("./firm-lock/", import.meta.url)).filter(name => /^FL-.*\.checks\.mjs$/u.test(name)).sort()) {
+  (await import(`./firm-lock/${file}`)).register(firmLockHelpers);
+}
+
+test("FL-1: the core firm lock migration is safe to run twice", async () => {
+  const policies = async () => (await admin.query(
+    "SELECT polrelid::regclass::text AS t, pg_get_expr(polqual, polrelid) AS q FROM pg_policy WHERE polname = 'v2_practice_firm' ORDER BY 1")).rows;
+  const before = await policies();
+  await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await policies(), before);
 });
 
 // must stay the last test: it signs the cached builder out
