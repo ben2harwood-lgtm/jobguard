@@ -1081,6 +1081,135 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal((await generatedEvents(nextId)).length, 0);
 });
 
+// V2-SYNC-1 (Q45, migration 2056): main's snag list, extra photos and pilot final check on V2.
+const snagTables = ["app.snag_command", "app.snag", "app.snag_revision", "app.snag_event", "app.snag_photo", "app.snag_photo_upload"];
+const syncLockedTables = [...snagTables, "app.variation_revision_photo"];
+const visibleRows = async (scope, table) => withTenant(runtime, scope, async db =>
+  (await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [jobId])).rowCount);
+
+test("2056 retargets only the snag fence, keeps its owner and privileges, and locks main's new job tables", async () => {
+  const { rows: [routine] } = await admin.query(`SELECT pg_get_functiondef(p.oid) AS definition, p.proowner::regrole::text AS owner,
+    p.prosecdef AS definer, p.proacl::text[] AS acl FROM pg_proc p WHERE p.oid='app.snag_practice_actor(uuid,uuid)'::regprocedure`);
+  assert.match(routine.definition, /current_database\(\)<>'jobguard_v2_local'/u);
+  assert.doesNotMatch(routine.definition, /jobguard_synthetic_demo/u);
+  assert.equal(routine.owner, "jobguard_migration");
+  assert.equal(routine.definer, true);
+  assert.ok(!routine.acl?.some(item => /^(jobguard_runtime|=)/u.test(item)), "runtime and PUBLIC still cannot call it");
+  // 0775 and 0777 keep main's fences (SX rev 4; 0777 is proven unreachable below).
+  for (const routineName of ["app.lp11_bind_shadow_job(uuid,uuid)"]) {
+    const { rows: [kept] } = await admin.query("SELECT pg_get_functiondef($1::regprocedure) AS d", [routineName]);
+    assert.match(kept.d, /current_database\(\)<>'jobguard_synthetic_demo'/u, routineName);
+  }
+  const { rows } = await admin.query(`SELECT c.oid::regclass::text AS relation, NOT p.polpermissive AS restrictive, p.polcmd::text AS command,
+    (SELECT array_agg(r::regrole::text) FROM unnest(p.polroles) r) AS roles, pg_get_expr(p.polqual, p.polrelid) AS using
+    FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid AND p.polname='v2_practice_firm' WHERE c.oid=ANY($1::regclass[]) ORDER BY 1`,
+  [syncLockedTables]);
+  assert.deepEqual(rows.map(row => row.relation).sort(), [...syncLockedTables].sort());
+  for (const row of rows) {
+    assert.deepEqual([row.restrictive, row.command, row.roles], [true, "*", ["jobguard_runtime"]], row.relation);
+    assert.match(row.using, /SELECT\s+FROM app\.job j\s+WHERE \(\(j\.tenant_id = \w+\.tenant_id\) AND \(j\.id = \w+\.job_id\)\)/u, row.relation);
+  }
+  // 0776's terms approvals are per tenant (no job_id); runtime has no way in.
+  const { rows: [terms] } = await admin.query(`SELECT has_table_privilege('jobguard_runtime','app.pilot_final_check_terms_approval',
+    'SELECT,INSERT,UPDATE,DELETE') AS runtime`);
+  assert.equal(terms.runtime, false);
+});
+
+test("a snag is recorded, revised and marked fixed on the V2 practice job, and the second firm sees none of them", async () => {
+  const owner = await signIn("builder");
+  const snagId = randomUUID();
+  const path = `/api/jobs/${jobId}/snags`;
+  const added = await json(await request(path, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title: "Fictional loose hall skirting" } }));
+  assert.equal(added.jobId, jobId);
+  assert.ok(added.snags.some(snag => snag.id === snagId && snag.state === "open"));
+  // Snag photos need open work, and the Switch live test above has closed this job's work (reopening is
+  // refused by capacity admission in practice), so this proof covers the snag, its revision and its events.
+  await json(await request(path, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag.v1", action: "revise", commandId: randomUUID(), snagId, expectedRevision: 1,
+      title: "Fictional loose hall skirting by the door", location: null, assigneeLabel: null, dueOn: null } }));
+  await json(await request(`${path}/${snagId}/events`, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag-event.v1", commandId: randomUUID(), action: "mark_fixed" } }));
+  const listed = await json(await request(path, { cookies: owner.cookies }));
+  assert.equal(listed.snags.find(snag => snag.id === snagId).state, "fixed");
+
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  for (const table of ["app.snag_command", "app.snag", "app.snag_revision", "app.snag_event"]) {
+    assert.ok(await visibleRows(ownerContext, table) > 0, `${table}: the owning firm reads its rows`);
+  }
+
+  const second = await signIn("second-builder");
+  assert.equal((await json(await request(path, { cookies: second.cookies }), 404)).code, "NOT_FOUND");
+  const refused = await request(path, { cookies: second.cookies, csrf: second.csrfToken,
+    body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId: randomUUID(), title: "Fictional intruding snag" } });
+  assert.equal((await json(refused, 404)).code, "NOT_FOUND");
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) {
+    for (const table of snagTables) assert.equal(await visibleRows(scope, table), 0, `${table}: hidden from the second firm`);
+  }
+});
+
+test("a variation revision photo on the V2 practice job is hidden from the second firm", async () => {
+  // Extra photos are written only by main's pilot route (QW-1), never in practice mode, so the proof
+  // row is placed directly with triggers off and removed afterwards. Only visibility is under test.
+  const { rows: [revision] } = await admin.query(`SELECT tenant_id, job_id, variation_id, id, scope_item_id FROM app.variation_revision
+    WHERE job_id=$1 AND scope_item_id IS NOT NULL LIMIT 1`, [jobId]);
+  assert.ok(revision, "the seed suite has recorded a variation revision on the practice job");
+  const evidenceId = randomUUID();
+  const fixture = await admin.connect();
+  const placed = async sql => {
+    try { await fixture.query(`BEGIN; SET LOCAL session_replication_role=replica; ${sql}; COMMIT`); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+  };
+  try {
+    await placed(`INSERT INTO app.evidence_object(id, tenant_id, job_id, scope_item_id, upload_id, kind, evidence_type, object_key, object_version_id,
+        sha256, byte_length, content_type, retention_class, server_received_at, server_verified_at)
+      VALUES ('${evidenceId}', '${revision.tenant_id}', '${revision.job_id}', '${revision.scope_item_id}', '${randomUUID()}', 'original', 'variation_photo',
+        'v2-sync1-proof/${evidenceId}', 'v2-sync1-proof', '${"a".repeat(64)}', 1, 'image/png', 'standard_evidence', now(), now());
+      INSERT INTO app.variation_revision_photo(tenant_id, job_id, variation_id, revision_id, scope_item_id, evidence_id, position, sha256, received_at)
+      VALUES ('${revision.tenant_id}', '${revision.job_id}', '${revision.variation_id}', '${revision.id}', '${revision.scope_item_id}',
+        '${evidenceId}', 6, '${"a".repeat(64)}', now())`);
+    const owner = await signIn("builder");
+    const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+    assert.equal(await visibleRows(ownerContext, "app.variation_revision_photo"), 1, "the owning firm reads the photo link");
+    const second = await signIn("second-builder");
+    const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+    for (const scope of [second.realContext, secondContext]) {
+      assert.equal(await visibleRows(scope, "app.variation_revision_photo"), 0);
+    }
+  } finally {
+    try {
+      await placed(`DELETE FROM app.variation_revision_photo WHERE evidence_id='${evidenceId}';
+        DELETE FROM app.evidence_object WHERE id='${evidenceId}'`);
+    } finally { fixture.release(); }
+  }
+});
+
+test("0777's pilot final-check branch cannot be reached from the V2 practice job", async () => {
+  // On jobguard_v2_local, lp11_bind_shadow_job takes 0777's pilot branch, which needs the pilot shadow login.
+  // That login exists only on jobguard_pilot* databases, so the branch refuses before any pilot side effect.
+  const { rows: [state] } = await admin.query(`SELECT app.pilot_final_check_login() AS login,
+    (SELECT count(*)::int FROM control_plane.pilot_final_check_binding) AS bindings,
+    (SELECT count(*)::int FROM app.pilot_final_check_terms_approval) AS approvals,
+    (SELECT count(*)::int FROM infrastructure.final_check_request) AS requests,
+    (SELECT tenant_id FROM app.job WHERE id=$1) AS tenant`, [jobId]);
+  assert.deepEqual({ ...state, tenant: undefined }, { login: false, bindings: 0, approvals: 0, requests: 0, tenant: undefined });
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await assert.rejects(client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [state.tenant, jobId]), /FINAL_CHECK_FORBIDDEN/u);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+  const { rows: [after] } = await admin.query(`SELECT (SELECT count(*)::int FROM control_plane.lp11_shadow_scope) AS scopes,
+    (SELECT count(*)::int FROM control_plane.pilot_final_check_binding) AS bindings`);
+  assert.deepEqual(after, { scopes: 0, bindings: 0 });
+  // The job is a practice job, which the pilot branch's job query also excludes (practice_session_digest IS NULL).
+  const { rows: [job] } = await admin.query("SELECT practice_session_digest IS NOT NULL AS practice FROM app.job WHERE id=$1", [jobId]);
+  assert.equal(job.practice, true);
+});
+
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
 const crewTable = "app.v2_crew_contact";
 const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),

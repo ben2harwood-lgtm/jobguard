@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src",
+    "test": "vitest run src --maxWorkers=2",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

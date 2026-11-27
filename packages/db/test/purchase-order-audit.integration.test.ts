@@ -46,6 +46,13 @@ beforeAll(async () => {
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql",
+        // 0772 replaces an invitation routine introduced by the deferred LP-11 migration.
+        "_pilot_identity_invitations.sql", "_pilot_customer_portal.sql", "_pilot_final_account.sql", "_pilot_final_check.sql",
+        "_pilot_commercial_email.sql", "_pilot_final_check_reveal.sql", "_receipt_deduplication.sql",
+        // 0781 adds an LP-11 bound-tenant policy, so it is deferred with LP-11.
+        "_variation_revision_photo.sql",
+        // 0782 (QW-4 snag list) uses the LP-11 bound-tenant policy, so it is deferred with LP-11.
+        "_snag_list.sql",
         // V2-C3C
         "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);

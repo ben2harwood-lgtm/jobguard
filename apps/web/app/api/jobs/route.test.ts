@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({ workspace: vi.fn(), list: vi.fn(), batch: vi.fn(), failure: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "practice-token" }) }) }));
 vi.mock("../../lib/synthetic-server", () => ({ practiceFailure: (error: unknown) => mocks.failure(error), hasSyntheticSession: () => true, syntheticWorkspace: mocks.workspace }));
+vi.mock("../../lib/pilot-workspace-server", () => ({ pilotJobList: vi.fn() }));
 vi.mock("../../lib/workspace-server", () => ({ workspaceApplication: async () => ({ parties: { list: mocks.list }, customerInvoice: { listForJobs: mocks.batch } }) }));
 import { GET } from "./route";
 const a = "10000000-0000-4000-8000-000000000001", b = "20000000-0000-4000-8000-000000000001";

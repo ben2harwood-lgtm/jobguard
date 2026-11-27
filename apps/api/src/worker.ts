@@ -1,3 +1,5 @@
+import { refusePilotResourcesOutsidePilot, requireG1ForPilot } from "@jobguard/config";
+import { executePracticeDispatch } from "./effects/provider-dispatch.js";
 import { registerOutboxDiscoveryTask } from "./outbox-discovery-task.js";
 import { RetentionRecordRepository } from "@jobguard/db";
 import { registerRetentionReviewTasks } from "./retention-review-task.js";
@@ -10,7 +12,7 @@ import { readLateSourceObservations } from "@jobguard/db";
 import { detectShadowObservations } from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, decodePracticePhoto, practiceFinalCheckPorts } from "@jobguard/db";
+import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, decodePracticePhoto, practiceFinalCheckPorts, pilotFixtureFinalCheckPorts } from "@jobguard/db";
 import { FinalCheckError } from "@jobguard/core";
 import { FinalCheckWorker } from "./final-check.worker.js";
 import { generatePracticePng } from "./proof/proof.application.js";
@@ -27,7 +29,11 @@ import { requireOutboxSettlementEligibility } from "./production-settlement-guar
 import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
 const logger = new RedactingLogger();
+// Queued identifiers enter business repositories only through this constructor.
+function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
+
 async function startWorker() {
+requireG1ForPilot(process.env.JOBGUARD_ENV, process.env);
 const environmentSchema=z.object({WORKER_DATABASE_URL:z.string().url(),GRAPHILE_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),RUNTIME_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),SHADOW_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url")}).strict();
 const environment=environmentSchema.parse({WORKER_DATABASE_URL:process.env.WORKER_DATABASE_URL,GRAPHILE_DATABASE_URL:process.env.GRAPHILE_DATABASE_URL,RUNTIME_DATABASE_URL:process.env.RUNTIME_DATABASE_URL,SHADOW_DATABASE_URL:process.env.SHADOW_DATABASE_URL});
 const runtimePool=new Pool({connectionString:environment.RUNTIME_DATABASE_URL,application_name:"jobguard-business-worker"});
@@ -43,8 +49,6 @@ const detectionRepository=new ShadowDetectionRepository(shadowPool);
 const fixtureProposer=new ShadowFixtureProposer(Object.assign({},...corpus.cases.map(c=>c.responses)));
 const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>observationReader.hasAcceptedTerms(context,jobId),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
 await detectionWorker.start();
-// Queued identifiers enter business repositories only through this constructor.
-function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
 const fakeAdapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,async deliver(action){return {kind:"succeeded",providerReference:`synthetic:${action.providerEffectKey}`};},async reconcile(){return "unknown";}};
 const telemetry:SafeTelemetry={emit(name,fields){logger.log({event:name,...fields});}};
 const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
@@ -52,7 +56,9 @@ const tasks:TaskList={};
 registerOutboxDiscoveryTask(tasks);
 Object.assign(tasks,{
  // Gate money operations from the persisted action type; ordinary delivery keeps its existing behavior.
- async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));},
+ async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executePracticeDispatch(process.env.JOBGUARD_ENV,async()=>{
+  await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));
+ });},
  async detect_shadow_evidence(payload){const parsed=z.object({version:z.literal("shadow-detection-task.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await detectionWorker.execute(queueContext({tenantId:parsed.tenantId}),parsed);},
 } satisfies TaskList);
 // SV-5 practice run: the checked lock trigger or owner request queues identifiers; this worker alone
@@ -152,5 +158,20 @@ for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});
 });
 }
-try { await startWorker(); }
+try {
+  refusePilotResourcesOutsidePilot(process.env);
+  if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { startPilotWorker, pilotFinalCheckExecutor } = await import("./pilot-worker.js");
+    const fixtureHash = createHash("sha256").update(generatePracticePng()).digest("hex");
+    await startPilotWorker(process.env, redactingWorkerLogger(logger), (shadow, gate) => {
+      const execute = pilotFinalCheckExecutor(shadow, gate, pool => {
+        const completion = new FinalCheckCompletionRepository(pool);
+        return { worker: pilotFixtureFinalCheckPorts(pool, fixtureHash), publish: completion.publish.bind(completion) };
+      });
+      return task => execute(queueContext({ tenantId: task.tenantId }), task);
+    });
+  } else {
+    await startWorker();
+  }
+}
 catch (error) { logger.error("WORKER_START_FAILED"); throw redactedWorkerError(error, "WORKER_START_FAILED"); }

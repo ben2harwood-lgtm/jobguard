@@ -1,5 +1,5 @@
 import { CustomerVariationApplication, customerVariationHttp } from "@jobguard/api/identity";
-import { identityApplication } from "../../../lib/identity-server";
+import { customerPortalRequest } from "../../../lib/customer-portal-server";
 export async function POST(request: Request) {
-  return customerVariationHttp(() => new CustomerVariationApplication(identityApplication(), process.env.JOBGUARD_ENV), "variation-approvals", request);
+  return customerPortalRequest(request, identityApplication => customerVariationHttp(() => new CustomerVariationApplication(identityApplication(), process.env.JOBGUARD_ENV), "variation-approvals", request));
 }

@@ -1,0 +1,8 @@
+FROM node:24.15.0-bookworm-slim
+WORKDIR /jobguard
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node . .
+RUN corepack enable && pnpm install --frozen-lockfile \
+  && pnpm exec turbo run build --filter=@jobguard/web...
+RUN install -d -o node -g node /fixture-objects /fixture-checkpoints
+USER node

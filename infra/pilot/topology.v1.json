@@ -1,0 +1,39 @@
+{
+  "version": "pilot-topology.v1",
+  "mode": "pilot_no_charge",
+  "commercialOutbound": "paused",
+  "primaryRegion": "UK",
+  "bindings": {
+    "webHost": "<uk-web-host-binding>",
+    "apiHost": "<uk-api-host-binding>",
+    "workerHost": "<uk-always-on-worker-host-binding>",
+    "privateNetwork": "<private-network-binding>",
+    "businessDatabase": "<business-database-account-and-binding>",
+    "queueDatabase": "<separate-queue-database-binding>",
+    "objectStorage": "<private-versioned-object-account-and-binding>",
+    "monitoring": "<restricted-uk-monitoring-account-and-binding>",
+    "backup": "<restricted-uk-backup-account-and-binding>",
+    "restore": "<isolated-uk-restore-account-and-binding>",
+    "checkpoint": "<independent-restricted-uk-checkpoint-account-and-binding>",
+    "secretStore": "<runtime-secret-store-binding>"
+  },
+  "allowedPaths": {
+    "ingress": ["edge -> web", "web -> api"],
+    "database": ["web -> business/runtime", "web -> business/identity", "api -> business/runtime", "api -> business/identity", "worker -> business/worker", "worker -> queue/queue"],
+    "startupPosture": ["worker -> business/runtime", "worker -> business/identity"],
+    "evidence": ["api -> objects/evidence", "approved evidence transfer -> exact object version"],
+    "monitoring": ["monitor -> worker/healthz", "monitor -> api/healthz", "monitor -> web health"],
+    "recovery": ["backup operator -> business backup", "backup operator -> queue backup", "backup operator -> object versions backup", "restore operator -> isolated restore target", "audit checkpoint operator -> independent checkpoint target"]
+  },
+  "defaults": {
+    "network": "deny-by-default; private backend, data and health endpoints; provider egress blocked",
+    "transport": "TLS with peer verification for ingress, private service traffic, data and recovery",
+    "storage": "encrypted databases, private versioned evidence, encrypted logs and backups",
+    "secrets": "per-principal references injected at runtime; exclude database owner and checkpoint/backup/restore credentials from app services",
+    "checkpoint": "separate account and target from primary database; no grant to web, API, worker, queue or backup runtime",
+    "monitoring": "closed event codes and aggregate health flags only; no credentials, payloads, identifiers or raw errors",
+    "recovery": "isolated target with egress blocked; restore exact versions, check independent checkpoint and reconcile before resume"
+  },
+  "workerSupervisor": "infra/pilot/jobguard-pilot-worker.service",
+  "monitorCommand": ["node", "tools/pilot-monitor.mjs"]
+}

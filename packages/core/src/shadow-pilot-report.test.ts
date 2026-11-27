@@ -140,3 +140,16 @@ it("keeps financial identifiers only in offline structured error fields", () => 
   expect(error.stack).not.toContain("private-fee-row");
   expect(error.financialSources).toEqual(sources);
 });
+
+it("reports observed denominators separately from missing inventories and locks the randomised arm", () => {
+  const input = fixture();
+  const result = report({ ...input, measurement: { ...input.measurement, signals: null }, fairness: null, harm: [] });
+  expect(result.denominators).toMatchObject({
+    jobs: 1, lockSnapshots: 1, signals: null, falsePositiveAssessments: null, settledReceipts: 0,
+    mustSurfaceEvents: 0, fairnessResponses: null, withholdingObservations: 0, subscriptionScenarios: null,
+  });
+  expect(result.subscriptionEffects).toBeNull();
+  expect(result.missing).toContain("subscriptionEffects");
+  expect(result.notCollected).toContain("randomised hidden-versus-shown trial (requires approved D13 scope and human observations)");
+  expect(() => report({ ...input, randomisedArm: "shown" })).toThrow("INVALID_PILOT_REPORT");
+});

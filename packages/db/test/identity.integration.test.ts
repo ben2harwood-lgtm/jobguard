@@ -4,12 +4,14 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { IdentityRepository, MIGRATION_URLS, migrate, withTenant, listAccounts, UserCommandDispatcher } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
-import { FixtureIdentityEmail } from "../../../apps/api/src/auth/identity-email.js";
+import { FixtureIdentityEmail, type IdentityChallengeDelivery } from "../../../apps/api/src/auth/identity-email.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
+import { identityCookieOptions, identitySessionCookieName } from "../../../apps/api/src/auth/identity-http.js";
+import { pilotApprovalFixture } from "../../config/src/policy-gates.pilot-test-fixture.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool, identity:Pool, runtime:Pool, directory:string;
 let now=Date.now();
@@ -338,4 +340,191 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   expect((await admin.query("SELECT count(*)::int n FROM identity.membership_locator WHERE user_id=$1 AND tenant_id=$2",[principal.identityUserId,tenantId])).rows[0].n).toBe(1);
   expect(await fixture().memberships(principal)).toEqual([expect.objectContaining({tenantId,role:"finance"})]);
  });
+});
+
+describe("PILOT-02 restricted PostgreSQL identity", () => {
+  let pilotAdmin: Pool, pilotIdentity: Pool, pilotRuntime: Pool;
+  beforeAll(async () => {
+    const database = "jobguard_pilot_identity";
+    await postgres.createDatabase(database);
+    const connection = { host: "127.0.0.1", port: admin.options.port, database };
+    pilotAdmin = new Pool({ ...connection, user: "postgres", password: "fixture-only" });
+    await pilotAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
+    const migration = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0772_pilot_identity_invitations.sql"));
+    expect(MIGRATION_URLS[migration - 1]?.pathname).toMatch(/\/0771_pilot_identity_session\.sql$/u);
+    for (const url of MIGRATION_URLS.slice(0, migration)) {
+      await pilotAdmin.query(await readFile(url, "utf8"));
+      await pilotAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
+    }
+    pilotIdentity = new Pool({ ...connection, user: "jobguard_identity", password: "identity-fixture" });
+    pilotRuntime = new Pool({ ...connection, user: "jobguard_runtime", password: "runtime-fixture", max: 1 });
+  }, 60_000);
+  afterAll(async () => closeTestPools(pilotRuntime, pilotIdentity, pilotAdmin));
+  const fakeDelivery = {
+    assertRecipient(address: string, environment: string) {
+      if (environment !== "pilot_no_charge" || !address.endsWith(".invalid")) throw new Error("FICTIONAL_RECIPIENT_REQUIRED");
+    },
+    deliver: vi.fn<IdentityChallengeDelivery["deliver"]>().mockResolvedValue(undefined),
+  };
+  const providerFor = (firstOwners: string[] = [], makeCode?: () => string) => new PersistedAuthProvider(
+    new IdentityRepository(pilotIdentity), secret, fakeDelivery, "pilot_no_charge", () => now, makeCode, new Set(firstOwners),
+  );
+  async function requestCode(app: IdentityApplication, address: string, purpose: "signup" | "signin" | "invitation", invitationId?: string) {
+    const response = await app.request({ version: "identity-request.v1", email: address, purpose, ...(invitationId ? { invitationId } : {}) }, randomUUID(), origin);
+    expect(response).toEqual({ version: "identity-request-response.v1", accepted: true, environment: "pilot_no_charge" });
+    return fakeDelivery.deliver.mock.lastCall?.[0];
+  }
+  const verification = (address: string, purpose: "signup" | "signin" | "invitation", code: string, invitationId?: string) =>
+    ({ version: "identity-verify.v1", email: address, purpose, code, ...(invitationId ? { invitationId } : {}) });
+  async function pilotOwner(address: string, app: IdentityApplication) {
+    const delivery = (await requestCode(app, address, "signup"))!;
+    const result = await app.verify(verification(address, "signup", delivery.code), origin);
+    const session = await app.session(result.sessionToken);
+    return { ...result, tenantId: session.memberships[0]!.tenantId };
+  }
+  beforeEach(() => {
+    now += 600_001;
+    fakeDelivery.deliver.mockClear();
+    for (const [key, value] of Object.entries(pilotApprovalFixture().env)) vi.stubEnv(key, value);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("uses closed enrollment and provisions one owner after concurrent use of a keyed eight-digit challenge", async () => {
+    const address = email(), outsider = email();
+    const app = new IdentityApplication(providerFor([address]), origin);
+    const replica = new IdentityApplication(providerFor([address]), origin);
+    await requestCode(app, outsider, "signup");
+    expect(fakeDelivery.deliver).not.toHaveBeenCalled();
+    await expect(app.verify(verification(outsider, "signup", "12345678"), origin)).rejects.toMatchObject({ code: "INVALID_CODE" });
+    const delivery = (await requestCode(app, address, "signup"))!;
+    expect(delivery).toMatchObject({ email: address, code: expect.stringMatching(/^\d{8}$/u), environment: "pilot_no_charge" });
+    const challenge = (await pilotAdmin.query("SELECT digest, requested_at, expires_at FROM identity.challenge WHERE id=$1", [delivery.challengeId])).rows[0];
+    expect(challenge.digest).toBe(app.provider.digest(`${delivery.challengeId}:${delivery.code}`));
+    expect(challenge.expires_at.getTime() - challenge.requested_at.getTime()).toBe(600_000);
+    const before = (await pilotAdmin.query("SELECT count(*)::int n FROM control_plane.tenant")).rows[0].n;
+    const input = verification(address, "signup", delivery.code);
+    const results = await Promise.allSettled([app.verify(input, origin), replica.verify(input, origin)]);
+    const success = results.find(result => result.status === "fulfilled");
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find(result => result.status === "rejected")).toMatchObject({ reason: { code: "INVALID_CODE" } });
+    const token = success!.value.sessionToken;
+    const session = await replica.session(token);
+    expect(session).toMatchObject({ environment: "pilot_no_charge", memberships: [{ role: "owner" }] });
+    expect((await pilotAdmin.query("SELECT count(*)::int n FROM control_plane.tenant")).rows[0].n).toBe(before + 1);
+    expect((await pilotAdmin.query("SELECT token_digest FROM identity.session WHERE id=$1", [session.principal.sessionId])).rows[0].token_digest)
+      .toBe(app.provider.digest(`session:${token}`));
+    const practice = new PersistedAuthProvider(new IdentityRepository(pilotIdentity), secret);
+    expect(await practice.authenticate(token)).toBeUndefined();
+    await requestCode(app, address, "signin");
+    await requestCode(app, outsider, "signin");
+  });
+
+  it("enforces attempts, resend and expiry on the pilot verification path", async () => {
+    const address = email();
+    let nextCode = "00001234";
+    const app = new IdentityApplication(providerFor([address], () => nextCode), origin);
+    const first = (await requestCode(app, address, "signup"))!;
+    const error = { code: "INVALID_CODE" };
+    now += 59_999;
+    await expect(requestCode(app, address, "signup")).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    const wrong = first.code === "00000000" ? "00000001" : "00000000";
+    for (let n = 0; n < 5; n++) await expect(app.verify(verification(address, "signup", wrong), origin)).rejects.toMatchObject(error);
+    await expect(app.verify(verification(address, "signup", first.code), origin)).rejects.toMatchObject(error);
+    expect((await pilotAdmin.query("SELECT attempts FROM identity.challenge WHERE id=$1", [first.challengeId])).rows[0].attempts).toBe(5);
+    now += 1;
+    nextCode = "00005678";
+    const latest = (await requestCode(app, address, "signup"))!;
+    expect(latest.challengeId).not.toBe(first.challengeId);
+    await expect(app.verify(verification(address, "signup", first.code), origin)).rejects.toMatchObject(error);
+    expect((await pilotAdmin.query("SELECT attempts FROM identity.challenge WHERE id=$1", [latest.challengeId])).rows[0].attempts).toBe(1);
+    now += 600_000;
+    await expect(app.verify(verification(address, "signup", latest.code), origin)).rejects.toMatchObject(error);
+  });
+
+  it("shares pilot request limits across replicas by normalized destination and client", async () => {
+    const provider = providerFor(), replica = providerFor();
+    const client = "192.0.2.42", destination = email();
+    for (let n = 0; n < 10; n++) {
+      await provider.requestCode({ email: email(), ip: client, purpose: "signin" });
+    }
+    await expect(replica.requestCode({ email: email(), ip: client, purpose: "signin" })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    for (let n = 0; n < 10; n++) {
+      const address = n % 2 ? destination.toUpperCase() : destination;
+      await provider.requestCode({ email: address, ip: randomUUID(), purpose: "signin" });
+      if (n < 9) now += 60_000;
+    }
+    await expect(replica.requestCode({ email: destination, ip: randomUUID(), purpose: "invitation" })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(fakeDelivery.deliver).toHaveBeenCalledTimes(20);
+  });
+
+  it("binds invite authority, switches verified tenant on a reused connection and signs out durably", async () => {
+    const addressA = email(), addressB = email(), invitee = email();
+    const app = new IdentityApplication(providerFor([addressA, addressB]), origin);
+    const ownerA = await pilotOwner(addressA, app);
+    const ownerB = await pilotOwner(addressB, app);
+    const grant = (tenant: string, role = "foreman", recipient = invitee) =>
+      ({ version: "identity-invitation.v1", requested_tenant_id: tenant, email: recipient, role });
+    const creds = (actor: { sessionToken: string; csrfToken: string }) =>
+      ({ sessionToken: actor.sessionToken, csrfToken: actor.csrfToken, origin });
+    const { IdentityController } = await import("../../../apps/api/src/auth/identity.controller.js");
+    const controller = new IdentityController(() => app);
+    await expect(controller.invite(grant(ownerA.tenantId), { headers: { origin } })).rejects.toMatchObject({ status: 401 });
+    await expect(controller.session({ headers: { cookie: `jobguard_session=${ownerA.sessionToken}` } })).rejects.toMatchObject({ status: 401 });
+    await expect(app.invite(grant(ownerB.tenantId), creds(ownerA))).rejects.toMatchObject({ code: "TENANT_FORBIDDEN" });
+    await expect(app.invite(grant(ownerA.tenantId, "owner"), creds(ownerA))).rejects.toThrow();
+    await expect(app.invite(grant(ownerA.tenantId), creds(ownerA))).rejects.toMatchObject({ code: "42501" });
+    await migrate(pilotAdmin);
+    await migrate(pilotAdmin);
+    const ownerSession = await app.session(ownerA.sessionToken);
+    const practiceDigest = "a".repeat(64);
+    await pilotAdmin.query(`INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment)
+      VALUES($1,$2,$3,$4,clock_timestamp()+interval '1 hour','synthetic_demo')`,
+      [randomUUID(), ownerSession.principal.id, practiceDigest, ownerA.csrfToken]);
+    const directInvite = "SELECT * FROM identity.sso_invite_member($1,$2,$3,$4)";
+    await expect(pilotIdentity.query(directInvite, [practiceDigest, ownerA.tenantId, invitee, "foreman"]))
+      .rejects.toMatchObject({ code: "42501" });
+    await expect(pilotRuntime.query(directInvite, [app.provider.digest(`session:${ownerA.sessionToken}`), ownerA.tenantId, invitee, "foreman"]))
+      .rejects.toMatchObject({ code: "42501" });
+    const invitationA = await app.invite(grant(ownerA.tenantId), creds(ownerA));
+    const invitationB = await app.invite(grant(ownerB.tenantId, "finance"), creds(ownerB));
+    const wrongEmail = email();
+    const wrong = (await requestCode(app, wrongEmail, "invitation", invitationA.id))!;
+    await expect(app.verify(verification(wrongEmail, "invitation", wrong.code, invitationA.id), origin)).rejects.toMatchObject({ code: "INVALID_CODE" });
+    const first = (await requestCode(app, invitee, "invitation", invitationA.id))!;
+    const input = verification(invitee, "invitation", first.code, invitationA.id);
+    await expect(app.verify({ ...input, invitationId: invitationB.id }, origin)).rejects.toMatchObject({ code: "INVALID_CODE" });
+    await expect(app.verify(input, "https://untrusted.invalid")).rejects.toMatchObject({ code: "ORIGIN_FORBIDDEN" });
+    await expect(app.verify(input, origin, { sessionToken: ownerA.sessionToken })).rejects.toMatchObject({ code: "ORIGIN_FORBIDDEN" });
+    const memberA = await app.verify(input, origin, creds(ownerA));
+    await expect(app.session(ownerA.sessionToken)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(app.invite(grant(ownerA.tenantId, "admin", email()), creds(memberA))).rejects.toMatchObject({ code: "42501" });
+    now += 60_000;
+    const second = (await requestCode(app, invitee, "invitation", invitationB.id))!;
+    const member = await app.verify(verification(invitee, "invitation", second.code, invitationB.id), origin, creds(memberA));
+    const session = await app.session(member.sessionToken);
+    expect(session.memberships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tenantId: ownerA.tenantId, role: "foreman" }),
+      expect.objectContaining({ tenantId: ownerB.tenantId, role: "finance" }),
+    ]));
+    expect(session.memberships).toHaveLength(2);
+    await expect(app.context({ ...creds(member), requestedTenantId: ownerA.tenantId, tenantHeader: ownerB.tenantId }))
+      .rejects.toMatchObject({ code: "TENANT_FORBIDDEN" });
+    const list = async (tenantId: string) => withTenant(pilotRuntime, await app.context({ ...creds(member), requestedTenantId: tenantId }), listAccounts);
+    for (const tenantId of [ownerA.tenantId, ownerB.tenantId, ownerA.tenantId]) {
+      expect(await list(tenantId)).toEqual([expect.objectContaining({ tenantId })]);
+    }
+    expect(pilotRuntime.totalCount).toBe(1);
+    const membership = session.memberships.find(item => item.tenantId === ownerA.tenantId)!;
+    await pilotAdmin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [membership.tenantId, membership.id]);
+    await expect(list(ownerA.tenantId)).rejects.toMatchObject({ code: "TENANT_FORBIDDEN" });
+    expect(await list(ownerB.tenantId)).toHaveLength(1);
+    const headers = { cookie: `${identitySessionCookieName("pilot_no_charge")}=${member.sessionToken}`, origin };
+    const cookie = vi.fn();
+    await expect(controller.signout({ headers }, { cookie })).rejects.toMatchObject({ status: 403 });
+    expect(cookie).not.toHaveBeenCalled();
+    await expect(controller.signout({ headers: { ...headers, "x-csrf-token": member.csrfToken } }, { cookie }))
+      .resolves.toMatchObject({ environment: "pilot_no_charge" });
+    expect(cookie).toHaveBeenCalledWith(identitySessionCookieName("pilot_no_charge"), "", { ...identityCookieOptions, maxAge: 0 });
+    await expect(controller.session({ headers })).rejects.toMatchObject({ status: 401 });
+  });
 });

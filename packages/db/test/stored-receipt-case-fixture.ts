@@ -136,7 +136,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const line=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='variation' AND commercial_revision_id IN(SELECT id FROM app.variation_revision WHERE tenant_id=$1 AND variation_id=$4)",[DEMO_TENANT_ID,jobId,drafted.id,variationId])).rows[0].id as string;
  const invoices=new PracticeInvoiceRepository(scoped);
  const receipt=async(amountPence:number,movement:"receipt-12000"|"receipt-14640"|"receipt-960"|"receipt-384"|"receipt-3000"|"receipt-480-a"|"receipt-480-b",alreadySettled=false)=>{
-  const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:"Fictional matched receipt"});
+  const payment=await invoices.recordReceipt(context,{jobId,invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence,method:"bank_transfer",reference:`Fictional matched receipt ${movement}`});
   if(!alreadySettled)await advance(movement);
   await feedCommand("match_receipt",movement,payment.paymentId);return payment.paymentId;
  };

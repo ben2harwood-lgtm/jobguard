@@ -1,4 +1,67 @@
-# M1-15S stored financial check (synthetic, dark)
+# M1-15S stored financial check and pilot measurement
+
+## PILOT-10 operator procedure
+
+Use `ShadowPilotFinancialReader.pilotReport(context, jobId)` offline with the
+existing restricted connection and a verified context for the tenant. Run it for
+each job in the approved cohort inventory. It reads the lock and books in a
+single PostgreSQL statement, requires a stored pilot lock for a no-charge
+small-builder capture job, and refuses pre-lock, foreign and practice jobs. A
+refusal is an incomplete run. Keep `evidence` in the restricted workpapers with
+the cohort inventory. The `report` projection contains the count, method,
+denominator, missing metric names and financial check totals. It omits identifiers,
+digests, timestamps, source text, actor details and contact information.
+
+The stored lock provides one verified denominator per job and the count of
+distinct entries in its frozen capture register, including withdrawn captures.
+The restricted evidence identifies that immutable lock snapshot and capture
+register by their stored hashes, alongside the digest of the financial read.
+Repeat the read when preparing the report so intervening financial activity can
+invalidate the no-charge finding. No observation of signals, attribution,
+recovery, reveal, fairness, withholding harm, must-surface coverage, source
+usefulness or hypothetical fees is inferred from the lock or its existence.
+Those metrics remain missing on this pilot base. A customer receipt on its own
+cannot establish a recovery attributable to the Final Check.
+
+Use `report(context, jobIds, observations, access)` for isolated fictional
+rehearsals of the full report. It attributes measurements to immutable fixture
+sources and distinguishes a missing inventory from an observed empty one.
+Denominators identify the jobs, lock snapshots, signals, assessments, settled
+receipts and allocations, audited must-surface events, post-reveal ratings,
+withholding observations and subscription scenarios available for the respective
+metrics. Fairness requires an explicit response strictly after the recorded
+reveal and is separate from usage. The hidden-versus-shown arm stays disabled.
+The hypothetical fee methods require the corresponding fixture observations.
+Nothing in the rehearsal counts as a collected human response or a release approval.
+
+The no-charge check counts tenant-wide subscription agreement revisions and gross
+mandate activations, including activations later revoked. It also checks plan
+changes, trial sources with conversion, periods, statements and simulated work,
+attempts and results, even if the selected job has empty fee books. A row in
+either inventory refuses the report. Older fixture records without a subscription
+inventory are marked missing. The tenant scope deliberately covers all stored
+subscription history, so this procedure assumes a dedicated no-charge pilot tenant.
+Use `read(context, jobIds)` for the cohort-wide check, including jobs that have
+yet to lock. Confirm both financial inventories are present and empty. Keep
+the digest and job inventory with the restricted evidence.
+
+### Export and telemetry review
+
+- The pilot report is offline. There is no builder response, download route,
+  client import, cache entry or telemetry event for it. The reader does not query
+  hidden signal tables. Retain the evidence and offline diagnostic errors in
+  restricted workpapers and export only the report projection. Report refusal
+  before lock returns a generic code and no measurement payload.
+- The existing signed audit export and privacy rehearsal API are practice-gated.
+  Their artifacts are not M1-15S report inputs. The operator privacy rehearsal
+  has a separate scoped disclosure receipt path for subject access and export.
+- The pilot health route projects heartbeat, queue availability, backlog and
+  failure booleans. The monitor logs fixed alert codes, owner roles and state.
+  Neither receives the report reader, a lock snapshot, identifiers or contact data.
+  This was a source review with fictional boundary fixtures. It supplies no live
+  telemetry or subject-access approval.
+
+## Existing fixture report and financial reader
 
 `ShadowPilotFinancialReader.report(context, jobIds, observations, access)` is the
 DB-backed report entry point. Tenant identity comes from `VerifiedTenantContext`.
@@ -22,7 +85,7 @@ including compensations, credit documents, pending, failed and refunded attempts
 there is no netting away earlier activity. Any source row makes report generation
 refuse with its table, job and row ID. Missing/invisible requested jobs fail closed.
 Customer invoices/payments and hypothetical illustrations are not platform fees.
-Tenant-level subscriptions and contractor books are outside this SME job check.
+Contractor books are outside this SME check.
 
 The returned snapshot is cloned and frozen. Hashes bind reproducibility at read
 time, not authenticity or absence of later writes. The pure core remains a
@@ -36,10 +99,7 @@ The real pilot, G1, approved D12/D13 scope, fairness responses from people and
 report review before G4-S remain OPEN. G0–G5 remain closed for this dark slice.
 No human, legal or provider result or approval is supplied by this change.
 
-Validation evidence belongs in the commit receipt. PostgreSQL integration tests
-are written for CI; this sandbox cannot start PostgreSQL or bind localhost.
-
-Landing preparation, 4 November 2026 (RED, NOPR): inspected the clean merge at
+The original fixture slice was inspected on 4 November 2026 at clean merge
 `a2876841b` against its merged `origin/main` base `155a3eb06`. No compatibility
 code changes or migrations were needed. The lane contains exactly this slice's
 eight non-lane paths; no other piece's lane is added relative to that base.

@@ -13,12 +13,16 @@ export {
   type VerifiedTenantContext,
 } from "./tenant-context.js";
 export * from "./evidence.js";
+export * from "./quote-line-pack-repository.js";
+export * from "./variation-photo.js";
 
 export * from "./job-repository.js";
 
 export * from "./ledger.js";
 export * from "./commands.js";
 export * from "./outbox.js";
+export { CommercialEmailOutbox } from "./commercial-email-outbox.js";
+export { InvoiceEmailRepository } from "./invoice-email-repository.js";
 export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
@@ -46,6 +50,7 @@ export * from "./job-import-repository.js";
 export * from "./sandbox-repository.js";
 
 export * from "./quote-delivery-repository.js";
+export * from "./pilot-quote-delivery-repository.js";
 export * from "./recovery-demo-repository.js";
 export * from "./fee-illustration-repository.js";
 export * from "./practice-scope.js";
@@ -238,6 +243,11 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+export { assertPilotConnection } from "./pilot-connection.js";
+
+export { PilotJobRepository } from "./pilot-job-repository.js";
+export * from "./snag-repository.js";
 
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";

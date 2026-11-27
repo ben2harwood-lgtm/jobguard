@@ -1,8 +1,10 @@
+import { PilotG1DeniedError, pilotCustomerCookie, requireG1ForPilot } from "@jobguard/config";
 import { customerSigninLink } from "@jobguard/db";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { IdentityApplication } from "./identity.application.js";
 import { cookieToken, type IdentityHttpRequest } from "./identity-http.js";
+import { hasPracticeCookie } from "../pilot-ingress.js";
 
 export const CUSTOMER_APPLICATION = "CUSTOMER_APPLICATION";
 export const customerCookieName = "jobguard_customer";
@@ -18,8 +20,12 @@ const read = z.object({ version: z.literal("customer-read.v1"), jobId: uuid }).s
 const signout = z.object({ version: z.literal("customer-signout.v1") }).strict();
 const credential = z.tuple([uuid, uuid, uuid, z.string().regex(/^[A-Za-z0-9_-]{43}$/u)]);
 export class CustomerRefused extends Error { readonly code = "CUSTOMER_REFUSED"; }
-export function customerToken(request: IdentityHttpRequest): string | undefined {
-  return request.headers.cookie?.split(";").map(x => x.trim()).find(x => x.startsWith(`${customerCookieName}=`))?.slice(customerCookieName.length + 1);
+export function customerSessionCookie(mode = process.env.JOBGUARD_ENV) {
+  return mode === "pilot_no_charge" ? pilotCustomerCookie : customerCookieName;
+}
+export function customerToken(request: IdentityHttpRequest, mode = process.env.JOBGUARD_ENV): string | undefined {
+  const prefix = `${customerSessionCookie(mode)}=`;
+  return request.headers.cookie?.split(";").map(x => x.trim()).find(x => x.startsWith(prefix))?.slice(prefix.length);
 }
 /** One application boundary shared by direct Nest and Next. Customer credentials never mint a member principal. */
 export class CustomerSigninApplication {
@@ -29,11 +35,16 @@ export class CustomerSigninApplication {
   }
   async run(action: CustomerAction, raw: unknown, request: IdentityHttpRequest): Promise<{ body: unknown; cookie?: string; clearCookie?: true }> {
     try {
-      if (this.environment !== "synthetic_demo" || request.headers.origin !== this.identity.allowedOrigin || request.headers["x-tenant-id"]) throw new CustomerRefused();
+      requireG1ForPilot(this.environment, process.env);
+      const pilot = this.environment === "pilot_no_charge";
+      if ((!pilot && this.environment !== "synthetic_demo") || request.headers.origin !== this.identity.allowedOrigin ||
+          request.headers["x-tenant-id"] !== undefined || (pilot && (
+            hasPracticeCookie(request.headers.cookie) || request.headers["stripe-signature"] !== undefined ||
+            request.headers["webhook-signature"] !== undefined))) throw new CustomerRefused();
       if (action === "issue" || action === "revoke") {
-        if (customerToken(request) !== undefined) throw new CustomerRefused();
+        if (customerToken(request, this.environment) !== undefined) throw new CustomerRefused();
         const input = action === "issue" ? issue.parse(raw) : revoke.parse(raw);
-        const token = cookieToken(request);
+        const token = cookieToken(request, this.environment);
         await this.identity.context({ sessionToken: token, requestedTenantId: input.tenantId, origin: request.headers.origin, csrfToken: request.headers["x-csrf-token"] });
         const builderDigest = this.identity.provider.digest(`session:${token}`);
         if ("customerId" in input) {
@@ -49,19 +60,23 @@ export class CustomerSigninApplication {
       if (action === "signin") {
         const input = signin.parse(raw);
         const token = `${input.tenantId}.${input.jobId}.${input.customerId}.${randomBytes(32).toString("base64url")}`;
-        await this.query("SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,$5,'redeem'),identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')) result", [input.tenantId, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${input.token}`), this.identity.provider.digest(`customer-session:${token}`)]);
+        const sql = pilot ? "SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem') result" :
+          "SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,$5,'redeem'),identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')) result";
+        await this.query(sql, [input.tenantId, input.jobId, input.customerId, this.identity.provider.digest(`customer-link:${input.token}`), this.identity.provider.digest(`customer-session:${token}`)]);
         return { body: { version: "customer-signed-in.v1" }, cookie: token };
       }
       const input = action === "read" ? read.parse(raw) : signout.parse(raw);
-      const token = customerToken(request);
+      const token = customerToken(request, this.environment);
       const [tenantId, jobId, customerId] = credential.parse(token?.split("."));
       // Do not look up the requested job at all when it differs from the cookie's bound job.
       if ("jobId" in input && input.jobId !== jobId) throw new CustomerRefused();
-      const body = await this.query("SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,NULL,$5),identity.customer_portal_use($1,$2,$3,$4,NULL,$5)) result", [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`), action === "read" ? "resolve" : "signout"]);
+      const sql = pilot ? "SELECT identity.customer_portal_use($1,$2,$3,$4,NULL,$5) result" :
+        "SELECT coalesce(identity.extra_customer_use($1,$2,$3,$4,NULL,$5),identity.customer_portal_use($1,$2,$3,$4,NULL,$5)) result";
+      const body = await this.query(sql, [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`), action === "read" ? "resolve" : "signout"]);
       return action === "signout" ? { body: { version: "customer-signed-out.v1" }, clearCookie: true } : { body };
     } catch (error) {
       // Credential state, foreign scope, schema failures and unknown resources have one public refusal.
-      if (error instanceof CustomerRefused || error instanceof z.ZodError || (error as { code?: string })?.code === "42501" || (error as { code?: string })?.code === "UNAUTHENTICATED" || (error as { code?: string })?.code === "TENANT_FORBIDDEN" || (error as { code?: string })?.code === "ORIGIN_FORBIDDEN") throw new CustomerRefused();
+      if (error instanceof CustomerRefused || error instanceof PilotG1DeniedError || error instanceof z.ZodError || (error as { code?: string })?.code === "42501" || (error as { code?: string })?.code === "UNAUTHENTICATED" || (error as { code?: string })?.code === "TENANT_FORBIDDEN" || (error as { code?: string })?.code === "ORIGIN_FORBIDDEN") throw new CustomerRefused();
       throw error;
     }
   }
@@ -69,13 +84,14 @@ export class CustomerSigninApplication {
 export const customerRefusal = (error: unknown) => ({ status: error instanceof CustomerRefused || error instanceof SyntaxError ? 401 : 503, body: { code: error instanceof CustomerRefused || error instanceof SyntaxError ? "CUSTOMER_REFUSED" : "CUSTOMER_UNAVAILABLE" } });
 export async function customerHttp(application: CustomerSigninApplication | (() => CustomerSigninApplication), action: CustomerAction, request: Request): Promise<Response> {
   const headers: Record<string, string> = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+  const cookie = customerSessionCookie();
   // Browser cleanup is independent of whether server-side revocation succeeds.
-  if (action === "signout") headers["Set-Cookie"] = `${customerCookieName}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+  if (action === "signout") headers["Set-Cookie"] = `${cookie}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
   try {
     const service = typeof application === "function" ? application() : application;
     const result = await service.run(action, await request.json(), { headers: Object.fromEntries(request.headers.entries()) });
     const response = Response.json(result.body, { headers });
-    if (result.cookie) response.headers.set("Set-Cookie", `${customerCookieName}=${result.cookie}; Path=/; HttpOnly; Secure; SameSite=Strict`);
+    if (result.cookie) response.headers.set("Set-Cookie", `${cookie}=${result.cookie}; Path=/; HttpOnly; Secure; SameSite=Strict`);
     return response;
   } catch (error) { const failure = customerRefusal(error); return Response.json(failure.body, { status: failure.status, headers }); }
 }

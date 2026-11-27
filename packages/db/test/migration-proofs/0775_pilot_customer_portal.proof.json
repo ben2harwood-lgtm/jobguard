@@ -1,0 +1,477 @@
+{
+  "migration": "0775_pilot_customer_portal.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-customer-portal",
+        "title": "G1 customer portal authority",
+        "description": "G1-gated customer routes reuse the existing identity EXECUTE grants and private customer lookup scope for exact invitations and actions on a single pilot job.",
+        "cards": [
+          "LP-6c",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6c": "Delegate only a verified customer session to the scoped customer-message command.",
+          "LP-11": "Bind each pilot grant to the exact job, customer revision and issued document on the pilot capture track.",
+          "LP-12": "Retain the existing routine owners and ACLs. No new table or routine grants."
+        },
+        "sources": [
+          "packages/db/migrations/0775_pilot_customer_portal.sql",
+          "apps/api/src/auth/customer-signin.ts"
+        ],
+        "tests": [
+          "packages/db/test/pilot-customer-portal.integration.test.ts",
+          "apps/api/src/pilot-ingress.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-pilot-customer-portal",
+        "title": "G1 customer portal authority",
+        "cards": [
+          "LP-6c",
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6c": "Delegate only a verified customer session to the scoped customer-message command.",
+          "LP-11": "Bind each pilot grant to the exact job, customer revision and issued document on the pilot capture track.",
+          "LP-12": "Retain the existing routine owners and ACLs. No new table or routine grants."
+        },
+        "sources": [
+          "packages/db/migrations/0775_pilot_customer_portal.sql",
+          "apps/api/src/auth/customer-signin.ts"
+        ],
+        "tests": [
+          "packages/db/test/pilot-customer-portal.integration.test.ts",
+          "apps/api/src/pilot-ingress.test.ts"
+        ],
+        "gaps": [],
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep issue and use EXECUTE limited to jobguard_identity."
+        },
+        "path": "ap-pilot-customer-portal",
+        "downstream": "G1-gated customer routes reuse the existing identity EXECUTE grants and private customer lookup scope for exact invitations and actions on a single pilot job."
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp11_open_customer_scope(uuid,uuid,uuid,text,text,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_migration"
+        ],
+        "definitionSha256": "fb0e6da0a36e9c1501d5da9d0b46ed77395042fea5a28ab942d156db88410e12",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp11_open_customer_scope(uuid,uuid,uuid,text,text,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_migration"
+        ],
+        "definitionSha256": "fb0e6da0a36e9c1501d5da9d0b46ed77395042fea5a28ab942d156db88410e12",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.customer_portal_issuer(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "c143029409f71e099d9272be19b0916888619f0295cee5144869a6c4ef67025e",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bind_request",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp11_request_binding_present",
+          "identity.sso_session_memberships"
+        ]
+      },
+      "after": {
+        "identity": "function:app.customer_portal_issuer(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "c143029409f71e099d9272be19b0916888619f0295cee5144869a6c4ef67025e",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bind_request",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp11_request_binding_present",
+          "identity.sso_session_memberships"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.customer_portal_current(app.customer_portal_grant)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.customer_portal_current(app.customer_portal_grant)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.action_outbox",
+          "app.customer_portal_grant",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_portal_current",
+          "app.customer_portal_issuer"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.action_outbox",
+          "app.customer_portal_grant",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_portal_current",
+          "app.customer_portal_issuer"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_portal_use(uuid,uuid,uuid,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_identity"
+        ],
+        "definitionSha256": "b2b103ed71b8999c1c43d1940c1988330e22eecec8546b1a8d545ba9bdb6884f",
+        "staticWrites": [
+          "app.customer_portal_grant",
+          "app.customer_portal_session"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_portal_current",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_sponsor",
+          "app.lp11_open_customer_scope"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_portal_use(uuid,uuid,uuid,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_binding_owner",
+          "jobguard_identity"
+        ],
+        "definitionSha256": "b2b103ed71b8999c1c43d1940c1988330e22eecec8546b1a8d545ba9bdb6884f",
+        "staticWrites": [
+          "app.customer_portal_grant",
+          "app.customer_portal_session"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_portal_current",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_sponsor",
+          "app.lp11_open_customer_scope"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_portal_quote(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "d88e58ad59b236cb82776663c5d9a86d2c2b968ac8877fc698807d1b0a7d2658",
+        "staticWrites": [
+          "app.acceptance_event",
+          "app.customer_quote_approval",
+          "app.job",
+          "app.quote_acceptance",
+          "app.quote_acceptance_sequence",
+          "app.quote_version"
+        ],
+        "staticCalls": [
+          "app.lp11_close_customer_scope",
+          "app.lp11_open_customer_scope",
+          "app.lp4_seal_audit",
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_portal_quote(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "d88e58ad59b236cb82776663c5d9a86d2c2b968ac8877fc698807d1b0a7d2658",
+        "staticWrites": [
+          "app.acceptance_event",
+          "app.customer_quote_approval",
+          "app.job",
+          "app.quote_acceptance",
+          "app.quote_acceptance_sequence",
+          "app.quote_version"
+        ],
+        "staticCalls": [
+          "app.lp11_close_customer_scope",
+          "app.lp11_open_customer_scope",
+          "app.lp4_seal_audit",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-customer-signin"
+      },
+      "after": {
+        "key": "acl|routine|function:identity.customer_portal_issue(uuid,text,uuid,uuid,text,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-pilot-customer-portal"
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:identity.customer_portal_use(uuid,uuid,uuid,text,text,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-customer-signin"
+      },
+      "after": {
+        "key": "acl|routine|function:identity.customer_portal_use(uuid,uuid,uuid,text,text,text)|jobguard_identity|EXECUTE|-",
+        "group": "a-pilot-customer-portal"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.job_source_insert_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "1ab6a2957a33f5cf9e9345a2f5f4b750b9a83d0311e9953a9ca4f6331994f9a8",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_open",
+          "app.lp11_watchdog_live_maintenance",
+          "app.lp6d_maintenance_login",
+          "app.require_watchdog_live"
+        ]
+      },
+      "after": {
+        "identity": "function:app.job_source_insert_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "1ab6a2957a33f5cf9e9345a2f5f4b750b9a83d0311e9953a9ca4f6331994f9a8",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.ch4_require_open",
+          "app.lp11_delegated_job_tenant",
+          "app.lp11_watchdog_live_maintenance",
+          "app.lp6d_maintenance_login",
+          "app.require_watchdog_live"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp11_customer_operation(text)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "e663ebb47a335631772a604d9a7d38918c3438af669cf74704037c8a94a3ac2d",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.lp11_customer_operation(text)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "e663ebb47a335631772a604d9a7d38918c3438af669cf74704037c8a94a3ac2d",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

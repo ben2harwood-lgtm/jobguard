@@ -72,8 +72,8 @@ async function invoice(jobId: string) {
   const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });
   return { invoices, invoiceId: issued.id };
 }
-async function receipt(f: { jobId: string }, inv: Awaited<ReturnType<typeof invoice>>, amountPence: number) {
-  return (await inv.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: inv.invoiceId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), paidOn: "2026-09-18", amountPence, method: "bank_transfer", reference: "Fictional receipt" })).paymentId;
+async function receipt(f: { jobId: string }, inv: Awaited<ReturnType<typeof invoice>>, amountPence: number, reference = "Fictional receipt") {
+  return (await inv.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: inv.invoiceId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), paidOn: "2026-09-18", amountPence, method: "bank_transfer", reference })).paymentId;
 }
 // Tenant-wide row counts of every table a settled movement must never reach.
 const moneyTables = async () => Object.fromEntries(await Promise.all(["landing_allocation", "landing_reversal", "recovery_fee_journal", "recovery_fee_derivation", "synthetic_recovery_receipt", "simulated_settlement_event", "journal", "journal_line"]
@@ -244,7 +244,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
       .toEqual({ builder_attested: true, qualifying_recovery_proof: false, platform_fee_settlement: false });
     expect(await count("SELECT count(*) n FROM app.landing_allocation WHERE job_id=$1", [f.jobId])).toBe(0);
     // One movement verifies one receipt only; a second receipt of the same amount cannot also qualify.
-    const second = await receipt(f, inv, 38_400);
+    const second = await receipt(f, inv, 38_400, "Fictional second receipt");
     await expect(cmd(repo(), f, command(state.revision, { action: "match_receipt", movement: "receipt-384", paymentId: second }))).rejects.toMatchObject({ code: "PRACTICE_FEED_RECEIPT_ALREADY_MATCHED" });
     expect((await view(f)).receipts.find((r) => r.paymentId === second)!.assessment).toMatchObject({ status: "attested_only", reason: "movement_already_matched" });
     // Reversing the builder's receipt withdraws qualification; the saved match stays as history.
@@ -417,7 +417,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     });
     it("refuses a raw receipt match for a pending movement, a wrong amount, a reversed or foreign receipt and a duplicate", async () => {
       const f = await connected(), inv = await invoice(f.jobId), other = await fixture(), otherInv = await invoice(other.jobId);
-      const good = await receipt(f, inv, 38_400), wrong = await receipt(f, inv, 38_500), reversed = await receipt(f, inv, 38_400), foreign = await receipt(other, otherInv, 38_400);
+      const good = await receipt(f, inv, 38_400), wrong = await receipt(f, inv, 38_500), reversed = await receipt(f, inv, 38_400, "Fictional reversed receipt"), foreign = await receipt(other, otherInv, 38_400);
       await inv.invoices.reverseReceipt(context, { jobId: f.jobId, invoiceId: inv.invoiceId, paymentId: reversed, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), reason: "Fictional receipt corrected" });
       let state = await cmd(repo(), f, advance(1, "receipt-384", "pending"));
       const accountId = state.accountId!;
