@@ -27,7 +27,9 @@ export async function requireLiveJob(database: TenantTransaction, jobId: string)
 export type WatchdogCommandType =
   | "readiness.record" | "readiness.advance" | "things_to_check.evaluate" | "things_to_check.review" | "things_to_check.supersede"
   | "supplier_match.create" | "supplier_match.correct" | "inbox.seed" | "inbox.dismiss" | "purchase_order.revise" | "purchase_order.place"
-  | "purchase_order.attest_manual" | "supplier_document.intake" | "supplier_document.receipt" | "supplier_document.confirm" | "evidence.begin_upload" | "evidence.finalize" | "proof.complete";
+  | "purchase_order.attest_manual" | "supplier_document.intake" | "supplier_document.receipt" | "supplier_document.confirm" | "evidence.begin_upload" | "evidence.finalize" | "proof.complete"
+  // V2-F1 brief progress (V2 database only, migration 2015).
+  | "v2.brief_progress.record";
 
 export function requestHashFor(kind: WatchdogCommandType, jobId: string, request: unknown): string {
   return createHash("sha256").update(JSON.stringify({ jobId, kind, request })).digest("hex");

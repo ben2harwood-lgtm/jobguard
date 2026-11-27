@@ -42,6 +42,21 @@ BEGIN
   DROP TRIGGER IF EXISTS v2_brief_progress_live ON app.v2_brief_progress;
   CREATE TRIGGER v2_brief_progress_live BEFORE INSERT ON app.v2_brief_progress
     FOR EACH ROW EXECUTE FUNCTION app.guard_watchdog_input();
+  -- Codex P2 4705000559: progress command ids share the tenant-wide watchdog namespace. record() claims
+  -- 'v2.brief_progress.record' before inserting, so no other watchdog command can reuse the id, and back.
+  -- Extend the existing check as 0734 does; rerunning leaves it unchanged.
+  IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid = 'app.watchdog_command_identity'::regclass
+    AND conname = 'watchdog_command_identity_command_type_check'
+    AND pg_get_constraintdef(oid) LIKE '%v2.brief_progress.record%') THEN
+    DECLARE definition text; BEGIN
+      SELECT pg_get_constraintdef(oid) INTO definition FROM pg_constraint
+      WHERE conrelid = 'app.watchdog_command_identity'::regclass AND conname = 'watchdog_command_identity_command_type_check';
+      IF definition IS NULL OR left(definition, 7) <> 'CHECK (' THEN RAISE EXCEPTION 'unexpected watchdog command identity constraint'; END IF;
+      ALTER TABLE app.watchdog_command_identity DROP CONSTRAINT watchdog_command_identity_command_type_check;
+      EXECUTE 'ALTER TABLE app.watchdog_command_identity ADD CONSTRAINT watchdog_command_identity_command_type_check CHECK ('
+        || substring(definition FROM 8 FOR length(definition) - 8) || ' OR command_type = ''v2.brief_progress.record'')';
+    END;
+  END IF;
 END
 $v2$;
 COMMIT;

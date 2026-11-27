@@ -43,6 +43,8 @@ export type CrewBriefContent = {
     durationMinutes: number;
     visit: string | null;
     owner: string | null;
+    // C3C's linked crew record, only when the task is assigned to one (older briefs stay byte-identical).
+    ownerRef?: string;
     proofNeeded: string[];
   }[];
   photos: { evidenceId: string; scopeItemId: string | null; contentType: string }[];
@@ -286,6 +288,8 @@ export class CrewBriefRepository {
         return { position: index + 1, scopeItemId: task.scopeItemId, taskKey: task.key, title: task.title,
           scope: { description: source.description, quantity: source.quantity, unit: source.unit },
           durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: task.assignee ?? null,
+          // Codex P2 4707355984: a reassignment between crew records changes the brief, so it reads outdated.
+          ...(task.assigneeRef && { ownerRef: task.assigneeRef }),
           proofNeeded: [...task.proofPoints] };
       }),
       photos: photos as CrewBriefContent["photos"],

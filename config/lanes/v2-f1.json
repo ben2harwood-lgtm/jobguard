@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/v2-f1"
       ],
-      "note": "RED. V2-F1 builder-recorded brief progress. work/page.tsx: mount only, owned by main (live Work tab). Base origin/v2/main; D4 inherited as directed.",
+      "note": "RED. V2-F1 builder-recorded brief progress. work/page.tsx: mount only, owned by main (live Work tab). Base origin/v2/main; D4 inherited as directed. F1 repair mount, owned by main: packages/db/src/watchdog.ts adds the V2-only 'v2.brief_progress.record' kind to WatchdogCommandType only (Codex P2 4705000559). F1 repair mount, owned by D4 #916: packages/db/src/v2-crew-brief-repository.ts ownerRef in composed content only (Codex P2 4707355984).",
       "allow": [
         "packages/db/src/v2-brief-progress-repository.ts",
         "packages/db/src/v2-crew-brief-repository.ts",
@@ -31,7 +31,8 @@
         "tools/v2/bootstrap.mjs",
         "tools/v2/seed.integration.test.mjs",
         "tools/v2/brief-progress.browser.test.mjs",
-        "apps/web/next.config.mjs"
+        "apps/web/next.config.mjs",
+        "packages/db/src/watchdog.ts"
       ]
     }
   }
