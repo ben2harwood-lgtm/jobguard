@@ -1,5 +1,5 @@
 {
-  "migration": "2029_v2_open_fact.sql",
+  "migration": "2031_v2_open_fact.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
