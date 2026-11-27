@@ -2,6 +2,7 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HandoverPack, handoverProblemText, handoverRefusalText, handoverTitle, handoverVersionLine } from "./v2-handover-label";
+import { reconcileChoice } from "./v2-handover";
 
 describe("V2-G2 handover wording", () => {
   it("renders the stored pack exactly, section by section", () => {
@@ -19,5 +20,11 @@ describe("V2-G2 handover wording", () => {
     expect(handoverRefusalText({ section: "photos", line: "Photos", reason: "empty" })).toBe("Photos is ticked but has nothing in it. Tick an item or untick the section.");
     expect(handoverProblemText("HANDOVER_VERSION_CONFLICT")).toMatch(/newer version/u);
     expect(handoverProblemText(undefined)).toBe("Not saved. Try again.");
+  });
+  it("drops chosen ids the refreshed sources no longer offer, and keeps the rest of the draft", () => {
+    const choice = { sections: ["done", "snags", "photos"] as const, lineIds: ["l1"], variationIds: ["v1"], photoIds: ["p1", "p2"], snagIds: ["s1"],
+      certificates: [{ text: "Fictional boiler certificate", status: "included" as const }] };
+    const sources = { lines: [{ id: "l1" }], variations: [{ variationId: "v1" }], photos: [{ id: "p2" }], snags: [] } as never;
+    expect(reconcileChoice({ ...choice, sections: [...choice.sections] }, sources)).toEqual({ ...choice, sections: [...choice.sections], photoIds: ["p2"], snagIds: [] });
   });
 });
