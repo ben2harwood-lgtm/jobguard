@@ -15,6 +15,13 @@ const blank: HandoverChoice = { sections: ["contacts"], lineIds: [], variationId
 const tick = { display: "flex", flexDirection: "row", gap: 12, alignItems: "center", minHeight: 44 } as const;
 const box = { width: 44, height: 44, flex: "0 0 44px" } as const;
 const toggle = (rows: string[], id: string, on: boolean) => on ? [...rows, id] : rows.filter(row => row !== id);
+/** Keep only the chosen ids that the refreshed sources still offer. */
+export function reconcileChoice(choice: HandoverChoice, sources: HandoverSources): HandoverChoice {
+  const keep = (rows: string[], offered: string[]) => rows.filter(id => offered.includes(id));
+  return { ...choice, lineIds: keep(choice.lineIds, sources.lines.map(row => row.id)),
+    variationIds: keep(choice.variationIds, sources.variations.map(row => row.variationId)),
+    photoIds: keep(choice.photoIds, sources.photos.map(row => row.id)), snagIds: keep(choice.snagIds, sources.snags.map(row => row.id)) };
+}
 
 export function HandoverScreen({ jobId }: { jobId: string }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover`;
@@ -27,7 +34,11 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
     if (!response.ok) throw new Error();
-    setView(await response.json() as View); setProblem(false);
+    const next = await response.json() as View;
+    setView(next); setProblem(false);
+    // A snag checked or a photo invalidated elsewhere drops out of the sources: drop it from the choice too,
+    // so its hidden tick can't keep refusing every preview.
+    setChoice(current => reconcileChoice(current, next.sources));
   }, [endpoint]);
   useEffect(() => { void load().catch(() => setProblem(true)); }, [load]);
   const change = (next: HandoverChoice) => { setChoice(next); setPreview(null); setRefused([]); setStatus(""); };
