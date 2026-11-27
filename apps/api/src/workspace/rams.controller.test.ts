@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-const { read, command, identitySession, authenticate, findMembership } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), identitySession: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn() }));
+const { read, command, identitySession, authenticate, findMembership, query } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), identitySession: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn(), query: vi.fn() }));
 vi.mock("./rams.application.js", () => ({ RamsApplication: class { read = read; command = command; },
   RamsError: class extends Error { constructor(readonly code: string) { super(code); } } }));
 vi.mock("@jobguard/db", () => ({ WorkPlanError: class extends Error { constructor(readonly code: string) { super(code); } }, verifiedTenantContextFromMembership: (m: {tenantId: string}) => ({tenantId: m.tenantId}) }));
@@ -16,7 +16,7 @@ const membership = { id: "11111111-1111-4111-8111-111111111112", tenantId: "1111
 const request = { headers: { cookie: `jobguard_session=${"s".repeat(32)}; jg_session=fictional-session`, origin: "https://fictional.invalid", "x-csrf-token": csrfToken } };
 let controller: RamsController;
 beforeEach(() => {
-  vi.clearAllMocks(); controller = new RamsController({} as Pool, () => ({ allowedOrigin: process.env.AUTH_ALLOWED_ORIGIN,
+  vi.clearAllMocks(); controller = new RamsController({ query } as unknown as Pool, () => ({ allowedOrigin: process.env.AUTH_ALLOWED_ORIGIN,
     session: identitySession, provider: { authenticate, findMembership },
   }) as unknown as IdentityApplication);
   vi.stubEnv("JOBGUARD_LOCAL_V2", "1"); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
@@ -24,6 +24,7 @@ beforeEach(() => {
   identitySession.mockResolvedValue({ memberships: [membership] });
   authenticate.mockResolvedValue({ csrfToken, sessionCredential: "a".repeat(64) });
   findMembership.mockResolvedValue(membership);
+  query.mockResolvedValue({ rows: [{ linked: false }] });
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("Q06 standalone RAMS adapter uses the shared application", () => {
@@ -61,5 +62,15 @@ describe("Q06 standalone RAMS adapter uses the shared application", () => {
   it("maps the shared stale-revision refusal to HTTP 409", async () => {
     command.mockRejectedValue(new RamsError("RAMS_VERSION_CONFLICT"));
     await expect(controller.command(request, "job", {})).rejects.toMatchObject({ status: 409 });
+  });
+  it("refuses a linked practice session, whose browser pairing only the web route can check", async () => {
+    query.mockResolvedValue({ rows: [{ linked: true }] });
+    await expect(controller.read(request, "job")).rejects.toMatchObject({ status: 403 });
+    await expect(controller.command(request, "job", { action: "generate" })).rejects.toMatchObject({ status: 403 });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("app.is_linked_practice_session"),
+      [expect.stringMatching(/^[a-f0-9]{64}$/u)]);
+    query.mockResolvedValue({ rows: [] });
+    await expect(controller.read(request, "job")).rejects.toMatchObject({ status: 403 });
+    expect(read).not.toHaveBeenCalled(); expect(command).not.toHaveBeenCalled();
   });
 });

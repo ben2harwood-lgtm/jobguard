@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ZodError } from "zod";
 import { Body, Controller, Get, HttpException, Inject, Param, Post, Req } from "@nestjs/common";
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from "@nestjs/swagger";
@@ -16,7 +17,15 @@ export class RamsController {
     if (process.env.JOBGUARD_LOCAL_V2 !== "1" || process.env.JOBGUARD_ENV !== "synthetic_demo") {
       throw new HttpException({ code: "NOT_FOUND" }, 404);
     }
-    const application = new RamsApplication(this.pool, practiceCookie(request.headers.cookie));
+    const practice = practiceCookie(request.headers.cookie);
+    // This endpoint can't check the web's exact browser pairing for a linked practice session, so it
+    // refuses those outright; they use the Next route, which does (enforcePracticePair).
+    if (practice) {
+      const { rows: [row] } = await this.pool.query<{ linked: boolean | null }>("SELECT app.is_linked_practice_session($1) AS linked",
+        [createHash("sha256").update(practice).digest("hex")]);
+      if (row?.linked !== false) throw new HttpException({ code: "FORBIDDEN" }, 403);
+    }
+    const application = new RamsApplication(this.pool, practice);
     try { return await (write ? application.command(jobId, body) : application.read(jobId)); }
     catch (error) {
       if (error instanceof RamsError || error instanceof WorkPlanError) {
