@@ -87,6 +87,19 @@ BEGIN
       WHERE (j.tenant_id, j.id) = (v2_material_enquiry_command.tenant_id, v2_material_enquiry_command.job_id)
     ));
 
+  -- V2's linked practice firms share one backing tenant, so the tenant rule above doesn't separate them.
+  -- 2001's restrictive firm rule through app.job does, as 2047 and 2059 add it for the other V2 tables.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_material_line;
+  CREATE POLICY v2_practice_firm ON app.v2_material_line AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_material_line.tenant_id,v2_material_line.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_material_enquiry;
+  CREATE POLICY v2_practice_firm ON app.v2_material_enquiry AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_material_enquiry.tenant_id,v2_material_enquiry.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_material_enquiry_command;
+  CREATE POLICY v2_practice_firm ON app.v2_material_enquiry_command AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j
+      WHERE (j.tenant_id,j.id)=(v2_material_enquiry_command.tenant_id,v2_material_enquiry_command.job_id)));
+
   REVOKE ALL ON app.v2_material_line, app.v2_material_enquiry, app.v2_material_enquiry_command FROM PUBLIC;
   GRANT SELECT, INSERT ON app.v2_material_line, app.v2_material_enquiry, app.v2_material_enquiry_command
     TO jobguard_runtime;

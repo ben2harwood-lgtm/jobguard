@@ -34,3 +34,10 @@ job.
 
 Correct the schema with a later V2 migration if needed. To rehearse the
 previous branch, keep its database in a separate checkout with separate state.
+
+## Firm lock
+
+V2's linked practice firms share one backing tenant, so the tenant rule alone does not separate them. Each of the three
+tables also carries 2001's restrictive `v2_practice_firm` rule through `app.job` on `(tenant_id, job_id)`, the same rule
+2047 and 2059 add for the other V2 tables. `tools/v2/firm-lock/FL-D3.checks.mjs` proves firm B and firm B's real company
+read none of firm A's rows.
