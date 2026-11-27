@@ -2251,6 +2251,25 @@ test("V2-E2: applying waits on the same fact lock as a new request, so no newer 
   } finally { holder.release(); }
 });
 
+test("V2-E2: applying also waits on the recipient correction lock, so no correction slips in between", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Bins out on the day?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "Yes" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${DEMO_TENANT_ID}:recipient:${jobId}`]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the lock that recordRecipient() holds");
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
 test("V2-E2: a link transaction may seal exactly one received event, carrying the stored reply's own content", async () => {
   const { fact, request } = await replySetup();
   const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Parking on the drive?" } }));

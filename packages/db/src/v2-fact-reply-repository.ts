@@ -464,8 +464,10 @@ export class FactReplyRepository {
       fact_id AS "factId" FROM app.v2_fact_reply WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [tenantId, jobId, input.replyId]);
     if (!found) throw new PracticeAccessError("NOT_FOUND");
     // The fact lock first, as request() and paste() take it: no newer request can commit
-    // between the currentness check below and the answer write.
+    // between the currentness check below and the answer write. Then recordRecipient()'s lock,
+    // so no recipient correction can commit there either (a correction doesn't move the fact version).
     await this.lock($client, tenantId, `fact:${found.factId}`);
+    await this.lock($client, tenantId, `recipient:${jobId}`);
     await this.lock($client, tenantId, found.requestId ?? input.replyId);
     const { rows: [reply] } = await $client.query<ReplyRow>(`SELECT ${replyColumns}
       FROM app.v2_fact_reply a LEFT JOIN app.v2_fact_reply_applied p ON (p.tenant_id, p.job_id, p.reply_id) = (a.tenant_id, a.job_id, a.id)
