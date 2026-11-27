@@ -93,7 +93,7 @@ export class CrewLinkRepository {
       WHERE tenant_id = $1 ORDER BY crew_id, revision DESC`, [context.tenantId])).rows);
   }
 
-  /** Builder: every crew press on the job, with "confirmed" derived from a later matching F1 press. */
+  /** Builder: every crew press on the job, with "confirmed" derived from a later F1 press of the same task, kind and note. */
   crewPresses(context: VerifiedTenantContext, jobId: string) {
     return withTenant(this.pool, context, async ({ $client }) => {
       await this.requireJob($client, context.tenantId, jobId);
@@ -103,7 +103,7 @@ export class CrewLinkRepository {
           p.seen_head AS "seenHead", p.recorded_at AS "recordedAt",
           EXISTS (SELECT FROM app.v2_brief_progress b
             WHERE (b.tenant_id, b.job_id, b.trade, b.scope_item_id, b.task_key) = (p.tenant_id, p.job_id, p.trade, p.scope_item_id, p.task_key)
-              AND b.kind = p.kind AND b.recorded_at > p.recorded_at) AS confirmed
+              AND b.kind = p.kind AND b.note = p.note AND b.recorded_at > p.recorded_at) AS confirmed
         FROM app.v2_crew_progress p
         JOIN app.v2_crew_link l ON (l.tenant_id, l.job_id, l.id) = (p.tenant_id, p.job_id, p.crew_link_id)
         JOIN app.v2_crew_contact c ON (c.tenant_id, c.firm_key, c.crew_id, c.revision) = (l.tenant_id, l.firm_key, l.crew_id, l.crew_revision)

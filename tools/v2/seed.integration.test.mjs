@@ -2013,15 +2013,17 @@ test("F7M a link shows only its trade's unpriced brief; presses record once, rep
     f1Before, "a crew press is an observation, never a builder progress record");
   const reopened = (await page.open(made.token)).brief.tasks.find(row => row.taskKey === task.taskKey && row.scopeItemId === task.scopeItemId);
   assert.deepEqual([reopened.reported.kind, reopened.reported.note], ["changed", "F7M fictional changed"], "a reopened link shows what the crew sent");
+  // A second, different "changed" report on the same task: confirming the first must not confirm this one.
+  await page.receive(f7m.press(made.token, brief, task, { kind: "changed", note: "F7M fictional changed differently" }));
   const presses = (await app.crewLinks.read(jobId)).presses.filter(row => row.linkId === made.linkId);
-  assert.deepEqual(presses.map(row => [row.kind, row.confirmed]), [["done", false], ["blocked", false], ["changed", false]]);
+  assert.deepEqual(presses.map(row => [row.kind, row.confirmed]), [["done", false], ["blocked", false], ["changed", false], ["changed", false]]);
   // Confirm is an ordinary builder F1 press.
   const head = Math.max(0, ...(await app.briefProgress.read(jobId)).progress.filter(row => row.trade === "tiler"
     && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
-  const changed = presses.at(-1);
+  const changed = presses[2];
   await app.briefProgress.record(jobId, progressCommand(brief, task, { kind: "changed", note: changed.note, expectedVersion: head }));
   assert.deepEqual((await app.crewLinks.read(jobId)).presses.filter(row => row.linkId === made.linkId).map(row => row.confirmed),
-    [false, false, true]);
+    [false, false, true, false]);
   const listed = (await app.crewLinks.read(jobId)).links.find(row => row.linkId === made.linkId);
   assert.deepEqual([listed.cancelled, listed.replaced], [false, false]);
 });
