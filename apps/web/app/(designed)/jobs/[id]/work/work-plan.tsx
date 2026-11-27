@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
 
+// Sent after a task edit is saved, so other cards on the Work tab (the crew briefs) reread the plan.
+export const PLAN_SAVED_EVENT = "v2-plan-saved";
+
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
   key: string; scopeItemId: string; title: string; trade: string; durationMinutes: number; position: number;
@@ -152,6 +155,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       editReplay.current = null;
       setEditing(null);
       setNotice("Task saved.");
+      window.dispatchEvent(new CustomEvent(PLAN_SAVED_EVENT, { detail: { jobId } }));
       try {
         const { view, current } = await readPlan();
         if (current) setPlan(view);

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { CrewBrief, CrewBriefCommand } from "./brief-types";
 import { Card, Empty, Note, Tag } from "../../../designed-ui";
+import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
+import { PLAN_SAVED_EVENT } from "./work-plan";
 
 type Brief = CrewBrief & { current?: boolean };
 type View = { trades: string[]; briefs: Brief[]; code?: "QUOTE_REVISION_NOT_FOUND" };
@@ -103,6 +105,20 @@ export function Briefs({ jobId }: { jobId: string }) {
     read<View>(path).then(data => { if (current) setView(data); }).catch(() => { if (current) setProblem(true); });
     return () => { current = false; };
   }, [path, reload]);
+  // A plan edit, quote save or lifecycle change on this page can add, drop or outdate a trade's brief.
+  // Reread in place, keeping the cards (and any half-filled form) mounted.
+  useEffect(() => {
+    let current = true;
+    const changed = (event: Event) => {
+      const detail: unknown = (event as CustomEvent).detail;
+      const id = typeof detail === "string" ? detail : (detail as { jobId?: unknown } | null)?.jobId;
+      if (id !== jobId) return;
+      read<View>(path).then(data => { if (current) { setView(data); setProblem(false); } }).catch(() => { if (current) setProblem(true); });
+    };
+    const names = [PLAN_SAVED_EVENT, JOB_SAVED_EVENT, "job-lifecycle-changed"];
+    names.forEach(name => window.addEventListener(name, changed));
+    return () => { current = false; names.forEach(name => window.removeEventListener(name, changed)); };
+  }, [jobId, path]);
   const trades = [...new Set([...(view?.trades ?? []), ...(view?.briefs.map(brief => brief.trade) ?? [])])];
   return <section aria-label="Crew briefs" id="work-briefs">
     <Card title="Briefs" sub="One brief per trade" action={<Tag tone="blue">Internal · Unsent</Tag>}>
