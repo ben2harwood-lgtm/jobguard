@@ -268,6 +268,27 @@ BEGIN
   REVOKE ALL ON FUNCTION app.v2_fact_reply_current(app.v2_fact_reply_request) FROM PUBLIC;
   GRANT EXECUTE ON FUNCTION app.v2_fact_reply_current(app.v2_fact_reply_request) TO jobguard_runtime;
 
+  -- Applying a reply holds the job row, which app.bind_job_parties() takes FOR UPDATE, and
+  -- then checks the request again: a customer rebinding moves the job revision, not the fact
+  -- version, so it can't commit between apply()'s first check and this answer write unseen.
+  CREATE OR REPLACE FUNCTION app.v2_fact_reply_applied_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $f$
+  DECLARE r app.v2_fact_reply_request;
+  BEGIN
+    PERFORM 1 FROM app.job j WHERE (j.tenant_id, j.id) = (NEW.tenant_id, NEW.job_id) FOR SHARE;
+    SELECT q.* INTO r FROM app.v2_fact_reply a JOIN app.v2_fact_reply_request q
+      ON (q.tenant_id, q.job_id, q.id) = (a.tenant_id, a.job_id, a.request_id)
+      WHERE (a.tenant_id, a.job_id, a.id) = (NEW.tenant_id, NEW.job_id, NEW.reply_id);
+    IF FOUND AND NOT app.v2_fact_reply_current(r) THEN
+      RAISE EXCEPTION 'REPLY_OUT_OF_DATE' USING ERRCODE = '40001';
+    END IF;
+    RETURN NEW;
+  END $f$;
+  REVOKE ALL ON FUNCTION app.v2_fact_reply_applied_guard() FROM PUBLIC;
+  DROP TRIGGER IF EXISTS v2_fact_reply_applied_guard ON app.v2_fact_reply_applied;
+  CREATE TRIGGER v2_fact_reply_applied_guard BEFORE INSERT ON app.v2_fact_reply_applied
+    FOR EACH ROW EXECUTE FUNCTION app.v2_fact_reply_applied_guard();
+
   -- Open the scope for one token in this transaction and return the request, or
   -- record a failed attempt. A transaction opens at most one scope.
   CREATE OR REPLACE FUNCTION app.v2_fact_reply_scope_open(h text) RETURNS app.v2_fact_reply_request

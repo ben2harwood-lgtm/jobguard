@@ -2270,6 +2270,26 @@ test("V2-E2: applying also waits on the recipient correction lock, so no correct
   } finally { holder.release(); }
 });
 
+test("V2-E2: applying also waits on a customer rebinding, which holds the job row", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Alarm code needed?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "No" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    // app.bind_job_parties() takes this row lock first.
+    await holder.query("SELECT 1 FROM app.job WHERE (tenant_id, id) = ($1, $2) FOR UPDATE", [DEMO_TENANT_ID, jobId]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the job row a rebinding holds");
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
 test("V2-E2: a link transaction may seal exactly one received event, carrying the stored reply's own content", async () => {
   const { fact, request } = await replySetup();
   const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Parking on the drive?" } }));
