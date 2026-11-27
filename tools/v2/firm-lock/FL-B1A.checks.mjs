@@ -1,4 +1,4 @@
-// B1A (migration 2028): firm A/B proof for the walk session record.
+// B1A (migration 2062): firm A/B proof for the walk session record.
 import { registerFirmChecks } from "./checks-lib.mjs";
 
 export const families = {

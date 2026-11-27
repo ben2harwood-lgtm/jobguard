@@ -60,3 +60,5 @@ policy for jobguard_runtime, so a walk row is visible or writable only while its
 job (tenant_id, job_id) is visible to the firm. The V2 bootstrap loads this
 migration after 2047_v2_firm_lock_core, and `tools/v2/firm-lock/FL-B1A.checks.mjs`
 proves firm B can't see firm A's walk rows.
+
+Renumbered 2028 -> 2062 above v2/main (2047 FL-1) and the open V2 slices (2048-2061).
