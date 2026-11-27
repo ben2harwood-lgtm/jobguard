@@ -76,6 +76,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-D1 measurement firm lock (2059).
   await client.query(readFileSync(new URL("./migrations/2059_v2_measurement_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-D4 crew brief firm lock (2060).
+  await client.query(readFileSync(new URL("./migrations/2060_v2_crew_brief_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
