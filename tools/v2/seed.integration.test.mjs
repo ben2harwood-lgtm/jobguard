@@ -8,6 +8,7 @@ import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { FactReplyRepository, openFactAnswerFor, openFactCommandV1 } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
@@ -1878,6 +1879,748 @@ test("forced open fact policies hide facts and reject changes from the second fi
     [DEMO_TENANT_ID, jobId, command.commandId, randomUUID(), "0".repeat(64), owner.membershipId]),
     { code: "42501", message: /row-level security policy/u });
   }
+});
+
+// V2-E2 replies. Added as its own block; earlier pieces' tests stay as they are.
+const replyCommand = fields => ({ version: "v2-fact-reply-command.v1", ...fields });
+const linkAnswer = (answer, commandId = randomUUID()) => ({ version: "v2-fact-reply-link.v1", commandId, answer });
+// The sealer adds its own audit actor fields; compare only the command's references.
+const ownReferences = event => Object.fromEntries(Object.entries(event.payload.references).filter(([key]) => !key.startsWith("audit")));
+const tokenOf = receipt => receipt.replyPath.slice("/reply/".length);
+
+async function replySetup() {
+  const owner = await signIn("builder");
+  const { openFacts, factReplies } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const fact = async (fields) => {
+    const command = logFact({ neededBy: "2026-12-10", ...fields });
+    await openFacts.command(jobId, command);
+    return command.commandId;
+  };
+  const request = (factId, fields = {}) => factReplies.command(jobId, replyCommand({ action: "request", commandId: randomUUID(),
+    factId, expectedFactVersion: 1, recipient: { kind: "customer" }, options: null, allowOther: false, expiresInDays: 14, ...fields }));
+  return { owner, context, openFacts, factReplies, fact, request };
+}
+
+async function replyEvents(type) {
+  return (await admin.query(`SELECT event_type AS "eventType", actor_ref AS "actorRef", payload FROM app.audit_event
+    WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = $2 ORDER BY sequence`, [jobId, type])).rows;
+}
+
+async function replyChain(tenantId) {
+  const { rows } = await admin.query(`SELECT id, version, tenant_id AS "tenantId", sequence::int, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt",
+    payload, payload_hash AS "payloadHash", previous_hash AS "previousHash", event_hash AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
+  verifyAuditChain(rows);
+}
+
+// Counts the local catcher's metadata lines while a call runs.
+async function caught(run) {
+  const lines = [];
+  const info = console.info;
+  console.info = (line, ...rest) => {
+    if (typeof line === "string" && line.includes("v2.delivery.captured")) lines.push(JSON.parse(line));
+    else info(line, ...rest);
+  };
+  try { return { result: await run(), lines }; }
+  finally { console.info = info; }
+}
+
+// Fails the first query that matches, inside whatever transaction is open.
+function failingPool(match) {
+  return {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && match(sql)
+        ? Promise.reject(Object.assign(new Error("forced failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+}
+const auditFails = sql => sql.includes("app.append_audit(");
+
+test("V2-E2: a customer request uses the party record, the link records one answer and the builder applies it once", async () => {
+  const { owner, context, openFacts, factReplies, fact, request } = await replySetup();
+  const before = await effectCounts();
+  const factId = await fact({ owner: { kind: "customer" },
+    detail: { kind: "customer_choice", question: "Which grout colour for the hall floor?", mayChangePrice: true } });
+  // Options belong to a customer choice only; a non-choice gets none.
+  await assert.rejects(request(factId), { code: "REPLY_OPTIONS_INVALID" });
+  await assert.rejects(request(factId, { options: ["Same", "Same"] }), { code: "REPLY_INVALID_COMMAND" });
+  await assert.rejects(request(factId, { options: ["Grey"] }), { code: "REPLY_INVALID_COMMAND" });
+  await assert.rejects(request(factId, { options: ["Charcoal grout", "White grout"], expectedFactVersion: 2 }),
+    { code: "REPLY_FACT_VERSION_CONFLICT" });
+
+  const command = replyCommand({ action: "request", commandId: randomUUID(), factId, expectedFactVersion: 1,
+    recipient: { kind: "customer" }, options: ["Charcoal grout", "White grout"], allowOther: false, expiresInDays: 14 });
+  const { result: made, lines } = await caught(() => factReplies.command(jobId, command));
+  assert.deepEqual(lines, [{ event: "v2.delivery.captured", kind: "v2_fact_reply_request" }]);
+  assert.match(made.replyPath, /^\/reply\/[A-Za-z0-9_-]{43}$/u);
+  const token = tokenOf(made);
+  const { result: again, lines: none } = await caught(() => factReplies.command(jobId, command));
+  assert.deepEqual([again, none], [{ action: "request", id: command.commandId, replayed: true }, []]);
+  await assert.rejects(factReplies.command(jobId, { ...command, allowOther: true }), { code: "REPLY_COMMAND_CONFLICT" });
+
+  // The request binds the job's current party record and the email of that customer revision.
+  const { rows: [stored] } = await admin.query(`SELECT r.contact_email, r.party_binding_id, r.customer_revision_id, r.token_hash,
+      p.binding_id AS current_binding, b.customer_revision_id AS current_revision
+    FROM app.v2_fact_reply_request r JOIN app.job_party_current p ON (p.tenant_id, p.job_id) = (r.tenant_id, r.job_id)
+    JOIN app.job_party_binding b ON (b.tenant_id, b.id) = (p.tenant_id, p.binding_id) WHERE r.id = $1`, [command.commandId]);
+  assert.equal(stored.contact_email, "customer@jobguard-v2.invalid");
+  assert.equal(stored.party_binding_id, stored.current_binding);
+  assert.equal(stored.customer_revision_id, stored.current_revision);
+  assert.equal(stored.token_hash, createHash("sha256").update(token).digest("hex"));
+
+  // The page shows the one question and its stored options, nothing about the job or firm.
+  const view = await factReplies.open(token);
+  assert.deepEqual(Object.keys(view).sort(), ["allowOther", "answer", "answeredAt", "current", "expiresAt", "kind", "options",
+    "question", "recipient", "status"]);
+  assert.deepEqual([view.status, view.kind, view.question, view.options, view.allowOther, view.current, view.answer],
+    ["open", "customer_choice", "Which grout colour for the hall floor?", ["Charcoal grout", "White grout"], false, true, null]);
+  for (const words of [jobId, DEMO_TENANT_ID, "customer@", "Patchwork"]) assert.ok(!JSON.stringify(view).includes(words), words);
+
+  // An option not in the stored list, or "something else" when not allowed, is refused.
+  await assert.rejects(factReplies.receive(token, linkAnswer({ choice: "Black grout" })), { code: "REPLY_ANSWER_INVALID" });
+  await assert.rejects(factReplies.receive(token, linkAnswer({ other: "Black grout" })), { code: "REPLY_ANSWER_INVALID" });
+  await assert.rejects(factReplies.receive(token, linkAnswer({ deliveryDate: "2026-12-01" })), { code: "REPLY_ANSWER_INVALID" });
+
+  const answer = linkAnswer({ choice: "White grout" });
+  const both = await Promise.all([factReplies.receive(token, answer), factReplies.receive(token, answer)]);
+  assert.deepEqual(both.map(entry => entry.replayed).sort(), [false, true]);
+  assert.ok(both.every(entry => entry.id === answer.commandId && entry.current === true));
+  await assert.rejects(factReplies.receive(token, linkAnswer({ choice: "Charcoal grout" })), { code: "REPLY_ALREADY_ANSWERED" });
+  await assert.rejects(factReplies.receive(token, { ...answer, answer: { choice: "Charcoal grout" } }), { code: "REPLY_ALREADY_ANSWERED" });
+  assert.equal((await factReplies.open(token)).status, "answered");
+  assert.deepEqual((await factReplies.open(token)).answer, { choice: "White grout", other: false });
+
+  // Recorded, not applied: the fact is still open until the builder presses apply.
+  let replies = await factReplies.read(jobId);
+  const reply = replies.replies.find(entry => entry.id === answer.commandId);
+  assert.deepEqual([reply.status, reply.source, reply.answer], ["ready", "reply_link", { choice: "White grout" }]);
+  assert.equal(replies.requests.find(entry => entry.id === command.commandId).status, "answered");
+  assert.equal((await openFacts.read(jobId, { ...factQuery, factId }))[0].status, "open");
+
+  const apply = replyCommand({ action: "apply", replyId: answer.commandId, expectedFactVersion: 1 });
+  await assert.rejects(factReplies.command(jobId, { ...apply, expectedFactVersion: 2 }), { code: "REPLY_OUT_OF_DATE" });
+  const applied = await Promise.allSettled([factReplies.command(jobId, apply), factReplies.command(jobId, apply)]);
+  assert.ok(applied.every(entry => entry.status === "fulfilled"), JSON.stringify(applied.map(entry => entry.reason?.code)));
+  assert.deepEqual(applied.map(entry => entry.value.replayed).sort(), [false, true]);
+  assert.deepEqual(await factReplies.command(jobId, apply), { action: "apply", id: answer.commandId, replayed: true, factVersion: 2 });
+  const [answered] = await openFacts.read(jobId, { ...factQuery, factId });
+  assert.deepEqual([answered.status, answered.version, answered.answer], ["answered", 2,
+    { kind: "customer_choice", choice: "White grout", mayChangePrice: true }]);
+  assert.deepEqual(answered.history.map(change => [change.action, change.commandId, change.actorMembershipId]),
+    [["log", factId, owner.membershipId], ["answer", answer.commandId, owner.membershipId]]);
+  replies = await factReplies.read(jobId);
+  assert.equal(replies.replies.find(entry => entry.id === answer.commandId).status, "applied");
+
+  // One event each, references and hashes only: no email, option, question or token.
+  const requested = (await replyEvents("v2.fact_reply.requested")).filter(event => event.payload.references.requestId === command.commandId);
+  const received = (await replyEvents("v2.fact_reply.received")).filter(event => event.payload.references.replyId === answer.commandId);
+  const appliedEvents = (await replyEvents("v2.fact_reply.applied_by_builder")).filter(event => event.payload.references.replyId === answer.commandId);
+  assert.deepEqual([requested.length, received.length, appliedEvents.length], [1, 1, 1]);
+  assert.equal(requested[0].actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(ownReferences(requested[0]), { commandId: command.commandId, requestId: command.commandId, factId,
+    factVersion: "1", recipientKind: "customer", partyBindingId: stored.party_binding_id, customerRevisionId: stored.customer_revision_id });
+  assert.equal(received[0].actorRef, `reply_link:${command.commandId}`);
+  assert.deepEqual(ownReferences(received[0]), { commandId: answer.commandId, replyId: answer.commandId,
+    requestId: command.commandId, factId, factVersion: "1", source: "reply_link", current: "true" });
+  assert.equal(appliedEvents[0].actorRef, `membership:${owner.membershipId}`);
+  assert.equal(appliedEvents[0].payload.references.factVersion, "2");
+  const payloads = JSON.stringify([requested, received, appliedEvents]);
+  for (const words of ["customer@", "grout", "Charcoal", token, stored.token_hash]) assert.ok(!payloads.includes(words), words);
+  assert.ok(!JSON.stringify(await replyEvents("v2_open_fact.answer")).includes("White"));
+  await replyChain(context.tenantId);
+  assert.deepEqual(await effectCounts(), before);
+});
+
+test("V2-E2: replies to a changed question, options or customer are kept as out of date and never applied", async () => {
+  const { openFacts, factReplies, fact, request } = await replySetup();
+  const options = { options: ["Keep the radiator", "Take it off"], allowOther: true };
+
+  // The fact moves on after the link went out: the reply is kept, marked not current, and refused at apply.
+  const moved = await fact({ owner: { kind: "customer" },
+    detail: { kind: "customer_choice", question: "Paint behind the hall radiator?", mayChangePrice: false } });
+  const first = await request(moved, options);
+  await openFacts.command(jobId, factCommand({ action: "mark_out_of_date", factId: moved, expectedVersion: 1 }));
+  assert.equal((await factReplies.open(tokenOf(first))).current, false);
+  const late = linkAnswer({ other: "Only if it is easy" });
+  assert.equal((await factReplies.receive(tokenOf(first), late)).current, false);
+  let view = await factReplies.read(jobId);
+  assert.equal(view.replies.find(entry => entry.id === late.commandId).status, "out_of_date");
+  await assert.rejects(factReplies.command(jobId, replyCommand({ action: "apply", replyId: late.commandId, expectedFactVersion: 1 })),
+    { code: "REPLY_OUT_OF_DATE" });
+  await assert.rejects(factReplies.command(jobId, replyCommand({ action: "apply", replyId: late.commandId, expectedFactVersion: 2 })),
+    { code: "REPLY_OUT_OF_DATE" });
+  assert.equal((await openFacts.read(jobId, { ...factQuery, factId: moved }))[0].status, "out_of_date");
+
+  // Changing the options makes a new request; the old token's reply is out of date, the new one applies.
+  const choice = await fact({ owner: { kind: "customer" },
+    detail: { kind: "customer_choice", question: "Gloss or satin for the hall skirting?", mayChangePrice: false } });
+  const old = await request(choice, { options: ["Gloss", "Satin"], allowOther: false });
+  const fresh = await request(choice, { options: ["Gloss", "Satin", "Eggshell"], allowOther: false });
+  assert.equal((await factReplies.open(tokenOf(old))).current, false);
+  const oldReply = linkAnswer({ choice: "Gloss" });
+  assert.equal((await factReplies.receive(tokenOf(old), oldReply)).current, false);
+  await assert.rejects(factReplies.command(jobId, replyCommand({ action: "apply", replyId: oldReply.commandId, expectedFactVersion: 1 })),
+    { code: "REPLY_OUT_OF_DATE" });
+  const newReply = linkAnswer({ choice: "Eggshell" });
+  assert.equal((await factReplies.receive(tokenOf(fresh), newReply)).current, true);
+  assert.equal((await factReplies.command(jobId, replyCommand({ action: "apply", replyId: newReply.commandId,
+    expectedFactVersion: 1 }))).factVersion, 2);
+
+  // A new customer revision on the job makes an open customer request out of date.
+  const access = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Where should the skip go?" } });
+  const pending = await request(access);
+  const answered = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Key safe code?" } }));
+  const answeredReply = linkAnswer({ arrangement: "Under the mat" });
+  await factReplies.receive(tokenOf(answered), answeredReply);
+  const { rows: [party] } = await admin.query(`SELECT b.*, r.customer_id AS rev_customer, r.revision AS rev_number, r.payload
+    FROM app.job_party_current p JOIN app.job_party_binding b ON (b.tenant_id, b.id) = (p.tenant_id, p.binding_id)
+    JOIN app.customer_revision r ON (r.tenant_id, r.id) = (b.tenant_id, b.customer_revision_id) WHERE p.job_id = $1`, [jobId]);
+  const revisionId = randomUUID();
+  const bindingId = randomUUID();
+  await admin.query(`INSERT INTO app.customer_revision (tenant_id, id, customer_id, revision, payload) VALUES ($1,$2,$3,$4,$5)`,
+    [party.tenant_id, revisionId, party.customer_id, (await admin.query(`SELECT max(revision)::int + 1 AS n FROM app.customer_revision
+      WHERE customer_id = $1`, [party.customer_id])).rows[0].n, { ...party.payload, phone: "+447700900042" }]);
+  await admin.query(`INSERT INTO app.job_party_binding (tenant_id, id, job_id, revision, customer_id, customer_revision_id,
+    paying_party_id, paying_party_revision_id, site_id, site_revision_id, provenance)
+    SELECT tenant_id, $2, job_id, revision + 1, customer_id, $3, paying_party_id, paying_party_revision_id, site_id,
+      site_revision_id, 'entered' FROM app.job_party_binding WHERE id = $1`, [party.id, bindingId, revisionId]);
+  await admin.query("UPDATE app.job_party_current SET binding_id = $1 WHERE job_id = $2", [bindingId, jobId]);
+  assert.equal((await factReplies.open(tokenOf(pending))).current, false);
+  view = await factReplies.read(jobId);
+  assert.equal(view.requests.find(entry => entry.id === pending.id).current, false);
+  assert.equal(view.replies.find(entry => entry.id === answeredReply.commandId).status, "out_of_date");
+  await assert.rejects(factReplies.command(jobId, replyCommand({ action: "apply", replyId: answeredReply.commandId,
+    expectedFactVersion: 1 })), { code: "REPLY_OUT_OF_DATE" });
+  // A new request binds the new revision and applies.
+  const rebound = await request(access);
+  const { rows: [bound] } = await admin.query("SELECT party_binding_id, customer_revision_id FROM app.v2_fact_reply_request WHERE id = $1",
+    [rebound.id]);
+  assert.deepEqual(bound, { party_binding_id: bindingId, customer_revision_id: revisionId });
+  const reboundReply = linkAnswer({ arrangement: "On the drive" });
+  assert.equal((await factReplies.receive(tokenOf(rebound), reboundReply)).current, true);
+  assert.equal((await factReplies.command(jobId, replyCommand({ action: "apply", replyId: reboundReply.commandId,
+    expectedFactVersion: 1 }))).factVersion, 2);
+});
+
+test("V2-E2: merchant and crew replies go only to the recorded recipient named on the fact", async () => {
+  const { context, owner, openFacts, factReplies, fact, request } = await replySetup();
+  const { rows: [merchant] } = await admin.query("SELECT id, name FROM app.merchant WHERE tenant_id = $1", [DEMO_TENANT_ID]);
+  const delivery = await fact({ owner: { kind: "merchant", name: merchant.name },
+    detail: { kind: "merchant_delivery_date", item: "Hall floor tiles, 4 packs" } });
+  const crew = await fact({ owner: { kind: "crew_member", name: "Fictional Tiler" },
+    detail: { kind: "crew_availability", need: "Grout the hall on Thursday" } });
+  const record = fields => factReplies.command(jobId, replyCommand({ action: "record_recipient", commandId: randomUUID(),
+    merchantId: null, displayName: null, correctsId: null, ...fields }));
+
+  // Practice addresses only, both in the contract and in the database.
+  for (const contactEmail of ["orders@teacup.example", "Merchant@jobguard-v2.invalid", "merchant@jobguard-v2.invalid.com"]) {
+    await assert.rejects(record({ role: "merchant", merchantId: merchant.id, contactEmail }), { code: "REPLY_INVALID_COMMAND" });
+  }
+  await assert.rejects(record({ role: "merchant", merchantId: merchant.id, displayName: merchant.name, contactEmail: "nobody@jobguard-v2.invalid" }),
+    { code: "REPLY_RECIPIENT_INVALID" });
+  await assert.rejects(record({ role: "crew_member", merchantId: merchant.id, contactEmail: "tiler@jobguard-v2.invalid" }),
+    { code: "REPLY_INVALID_COMMAND" });
+  const insert = (fields) => withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.v2_reply_recipient
+    (tenant_id, job_id, id, role, display_name, merchant_id, contact_email, request_digest, recorded_by)
+    VALUES ($1,$2,$3,'merchant',$4,$5,$6,$7,$8)`, [DEMO_TENANT_ID, jobId, randomUUID(), fields.name, fields.merchantId ?? null,
+    fields.email ?? "merchant@jobguard-v2.invalid", "0".repeat(64), owner.membershipId]));
+  await assert.rejects(insert({ name: merchant.name, email: "orders@teacup.example" }), { code: "23514" });
+  // A known merchant's name must be the merchant record's name.
+  await assert.rejects(insert({ name: "Another Merchant", merchantId: merchant.id }), { code: "23503" });
+
+  await assert.rejects(record({ role: "merchant", merchantId: merchant.id, displayName: "Another Merchant",
+    contactEmail: "merchant@jobguard-v2.invalid" }), { code: "REPLY_RECIPIENT_INVALID" });
+  const merchantRow = await record({ role: "merchant", merchantId: merchant.id, displayName: merchant.name,
+    contactEmail: "merchant@jobguard-v2.invalid" });
+  const wrongName = await record({ role: "merchant", displayName: "Fictional Other Merchant", contactEmail: "merchant@jobguard-v2.invalid" });
+  const tiler = await record({ role: "crew_member", displayName: "Fictional Tiler", contactEmail: "tiler@jobguard-v2.invalid" });
+  const { rows: [copied] } = await admin.query("SELECT display_name, merchant_id FROM app.v2_reply_recipient WHERE id = $1", [merchantRow.id]);
+  assert.deepEqual(copied, { display_name: merchant.name, merchant_id: merchant.id });
+  const recorded = (await replyEvents("v2.reply_recipient.recorded")).find(event => event.payload.references.recipientId === merchantRow.id);
+  assert.deepEqual(ownReferences(recorded), { commandId: merchantRow.id, recipientId: merchantRow.id, role: "merchant",
+    merchantId: merchant.id });
+  assert.equal(recorded.payload.hashes.contact, createHash("sha256").update("merchant@jobguard-v2.invalid").digest("hex"));
+  assert.ok(!JSON.stringify(recorded).includes("merchant@"));
+
+  // The recipient must match the fact's owner role and name, and a customer only answers customer facts.
+  const to = recipientId => ({ recipient: { kind: "recorded", recipientId } });
+  await assert.rejects(request(delivery, to(wrongName.id)), { code: "REPLY_RECIPIENT_MISMATCH" });
+  await assert.rejects(request(delivery, to(tiler.id)), { code: "REPLY_RECIPIENT_MISMATCH" });
+  await assert.rejects(request(crew, to(merchantRow.id)), { code: "REPLY_RECIPIENT_MISMATCH" });
+  await assert.rejects(request(crew), { code: "REPLY_RECIPIENT_MISMATCH" });
+  await assert.rejects(request(delivery), { code: "REPLY_RECIPIENT_MISMATCH" });
+  const choice = await fact({ owner: { kind: "merchant", name: merchant.name },
+    detail: { kind: "customer_choice", question: "Which tile finish?", mayChangePrice: false } });
+  await assert.rejects(request(choice, { ...to(merchantRow.id), options: ["Gloss", "Matt"] }), { code: "REPLY_RECIPIENT_MISMATCH" });
+
+  const { result: sent, lines } = await caught(() => request(delivery, to(merchantRow.id)));
+  assert.deepEqual(lines, [{ event: "v2.delivery.captured", kind: "v2_fact_reply_request" }]);
+  const { rows: [pinned] } = await admin.query("SELECT recipient_kind, recipient_id, contact_email FROM app.v2_fact_reply_request WHERE id = $1",
+    [sent.id]);
+  assert.deepEqual(pinned, { recipient_kind: "merchant", recipient_id: merchantRow.id, contact_email: "merchant@jobguard-v2.invalid" });
+  const date = linkAnswer({ deliveryDate: "2026-12-04" });
+  await assert.rejects(factReplies.receive(tokenOf(sent), linkAnswer({ deliveryDate: "2026-02-30" })), { code: "REPLY_ANSWER_INVALID" });
+  await factReplies.receive(tokenOf(sent), date);
+  await factReplies.command(jobId, replyCommand({ action: "apply", replyId: date.commandId, expectedFactVersion: 1 }));
+  assert.deepEqual((await openFacts.read(jobId, { ...factQuery, factId: delivery }))[0].answer,
+    { kind: "merchant_delivery_date", deliveryDate: "2026-12-04" });
+
+  // A corrected recipient never re-points an open request: the old one goes out of date, a new one is needed.
+  const crewRequest = await request(crew, to(tiler.id));
+  await assert.rejects(record({ role: "merchant", displayName: "Fictional Tiler", contactEmail: "decorator@jobguard-v2.invalid",
+    correctsId: tiler.id }), { code: "REPLY_RECIPIENT_INVALID" });
+  const corrected = await record({ role: "crew_member", displayName: "Fictional Tiler", contactEmail: "decorator@jobguard-v2.invalid",
+    correctsId: tiler.id });
+  await assert.rejects(record({ role: "crew_member", displayName: "Fictional Tiler", contactEmail: "tiler@jobguard-v2.invalid",
+    correctsId: tiler.id }), { code: "REPLY_RECIPIENT_INVALID" });
+  await assert.rejects(request(crew, to(tiler.id)), { code: "REPLY_RECIPIENT_INVALID" });
+  const stale = linkAnswer({ available: true });
+  assert.equal((await factReplies.receive(tokenOf(crewRequest), stale)).current, false);
+  await assert.rejects(factReplies.command(jobId, replyCommand({ action: "apply", replyId: stale.commandId, expectedFactVersion: 1 })),
+    { code: "REPLY_OUT_OF_DATE" });
+  const view = await factReplies.read(jobId);
+  assert.deepEqual(view.recipients.filter(entry => [tiler.id, corrected.id].includes(entry.id)).map(entry => [entry.id, entry.current]),
+    [[tiler.id, false], [corrected.id, true]]);
+  const correctedRequest = await request(crew, to(corrected.id));
+  const yes = linkAnswer({ available: false });
+  assert.equal((await factReplies.receive(tokenOf(correctedRequest), yes)).current, true);
+  await factReplies.command(jobId, replyCommand({ action: "apply", replyId: yes.commandId, expectedFactVersion: 1 }));
+  assert.deepEqual((await openFacts.read(jobId, { ...factQuery, factId: crew }))[0].answer, { kind: "crew_availability", available: false });
+});
+
+test("V2-E2: a reply pasted from a call answers the fact on screen, and each kind maps to E1's own answer", async () => {
+  const { owner, openFacts, factReplies, fact } = await replySetup();
+  const access = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Can we park on the drive?" } });
+  const paste = fields => replyCommand({ action: "paste", commandId: randomUUID(), expectedFactVersion: 1, ...fields });
+  await assert.rejects(factReplies.command(jobId, paste({ factId: access, answer: { available: true } })), { code: "REPLY_ANSWER_INVALID" });
+  await assert.rejects(factReplies.command(jobId, paste({ factId: access, answer: { choice: "Yes" } })), { code: "REPLY_INVALID_COMMAND" });
+  const pasted = paste({ factId: access, answer: { arrangement: "Yes, after 9am" } });
+  await assert.rejects(factReplies.command(jobId, { ...pasted, expectedFactVersion: 2 }), { code: "REPLY_FACT_VERSION_CONFLICT" });
+  assert.deepEqual(await factReplies.command(jobId, pasted), { action: "paste", id: pasted.commandId, replayed: false });
+  assert.deepEqual(await factReplies.command(jobId, pasted), { action: "paste", id: pasted.commandId, replayed: true });
+  await assert.rejects(factReplies.command(jobId, { ...pasted, answer: { arrangement: "No" } }), { code: "REPLY_COMMAND_CONFLICT" });
+  const event = (await replyEvents("v2.fact_reply.received")).find(entry => entry.payload.references.replyId === pasted.commandId);
+  assert.equal(event.actorRef, `membership:${owner.membershipId}`);
+  assert.equal(event.payload.references.source, "pasted_by_builder");
+  assert.ok(!JSON.stringify(event).includes("9am"));
+  await factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }));
+  assert.deepEqual((await openFacts.read(jobId, { ...factQuery, factId: access }))[0].answer,
+    { kind: "access", arrangement: "Yes, after 9am" });
+  // Applying a closed fact again is refused, and a pasted reply to an answered fact is refused.
+  await assert.rejects(factReplies.command(jobId, paste({ factId: access, expectedFactVersion: 2, answer: { arrangement: "No" } })),
+    { code: "REPLY_FACT_CLOSED" });
+
+  // Every kind's reply becomes an answer E1's own parser accepts.
+  const facts = { customer_choice: { question: "Q", mayChangePrice: true }, merchant_delivery_date: { item: "I" },
+    crew_availability: { need: "N" }, access: { need: "N" } };
+  const answers = { customer_choice: [{ choice: "A" }, { other: "B" }], merchant_delivery_date: [{ deliveryDate: "2026-12-04" }],
+    crew_availability: [{ available: true }], access: [{ arrangement: "Keys" }] };
+  for (const kind of Object.keys(facts)) {
+    for (const reply of answers[kind]) {
+      const mapped = openFactAnswerFor({ kind, mayChangePrice: kind === "customer_choice" ? facts[kind].mayChangePrice : null }, reply);
+      openFactCommandV1.parse({ version: "v2-open-fact-command.v1", action: "answer", commandId: randomUUID(), factId: randomUUID(),
+        expectedVersion: 1, answer: mapped });
+      if (kind === "customer_choice") assert.deepEqual(mapped, { kind, choice: reply.choice ?? reply.other, mayChangePrice: true });
+    }
+  }
+});
+
+test("V2-E2: applying waits on the same fact lock as a new request, so no newer request slips in between", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Key under the mat?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "Yes" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${DEMO_TENANT_ID}:fact:${factId}`]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the fact lock that request() holds");
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
+test("V2-E2: applying also waits on the recipient correction lock, so no correction slips in between", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Bins out on the day?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "Yes" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${DEMO_TENANT_ID}:recipient:${jobId}`]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the lock that recordRecipient() holds");
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
+test("V2-E2: applying also waits on a customer rebinding, which holds the job row", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Alarm code needed?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "No" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    // app.bind_job_parties() takes this row lock first.
+    await holder.query("SELECT 1 FROM app.job WHERE (tenant_id, id) = ($1, $2) FOR UPDATE", [DEMO_TENANT_ID, jobId]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the job row a rebinding holds");
+    // A rebinding then appends its audit batch. Apply must not hold the audit head while it
+    // waits for the job row, or the two would deadlock.
+    await holder.query("SET LOCAL lock_timeout = '5s'");
+    await holder.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id = $1 FOR UPDATE", [DEMO_TENANT_ID]);
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
+test("V2-E2: a customer rebinding that commits while apply waits leaves the reply out of date", async () => {
+  const { factReplies, fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Water off at the stopcock?" } }));
+  const answer = linkAnswer({ arrangement: "Yes, under the sink" });
+  assert.equal((await factReplies.receive(tokenOf(sent), answer)).current, true);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SET LOCAL lock_timeout = '5s'");
+    // app.bind_job_parties() order: the job row, the binding change, then the audit head.
+    await holder.query("SELECT 1 FROM app.job WHERE (tenant_id, id) = ($1, $2) FOR UPDATE", [DEMO_TENANT_ID, jobId]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: answer.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the job row a rebinding holds");
+    const { rows: [party] } = await holder.query(`SELECT b.*, r.revision AS rev_number, r.payload
+      FROM app.job_party_current p JOIN app.job_party_binding b ON (b.tenant_id, b.id) = (p.tenant_id, p.binding_id)
+      JOIN app.customer_revision r ON (r.tenant_id, r.id) = (b.tenant_id, b.customer_revision_id) WHERE p.job_id = $1`, [jobId]);
+    const revisionId = randomUUID();
+    const bindingId = randomUUID();
+    await holder.query(`INSERT INTO app.customer_revision (tenant_id, id, customer_id, revision, payload) VALUES ($1,$2,$3,$4,$5)`,
+      [party.tenant_id, revisionId, party.customer_id, (await holder.query(`SELECT max(revision)::int + 1 AS n FROM app.customer_revision
+        WHERE customer_id = $1`, [party.customer_id])).rows[0].n, { ...party.payload, phone: "+447700900043" }]);
+    await holder.query(`INSERT INTO app.job_party_binding (tenant_id, id, job_id, revision, customer_id, customer_revision_id,
+      paying_party_id, paying_party_revision_id, site_id, site_revision_id, provenance)
+      SELECT tenant_id, $2, job_id, revision + 1, customer_id, $3, paying_party_id, paying_party_revision_id, site_id,
+        site_revision_id, 'entered' FROM app.job_party_binding WHERE id = $1`, [party.id, bindingId, revisionId]);
+    await holder.query("UPDATE app.job_party_current SET binding_id = $1 WHERE job_id = $2", [bindingId, jobId]);
+    await holder.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id = $1 FOR UPDATE", [DEMO_TENANT_ID]);
+    await holder.query("COMMIT");
+    await assert.rejects(applying, { code: "REPLY_OUT_OF_DATE" });
+  } finally { holder.release(); }
+  const view = await factReplies.read(jobId);
+  assert.equal(view.replies.find(entry => entry.id === answer.commandId).status, "out_of_date");
+});
+
+test("V2-E2: a link transaction may seal exactly one received event, carrying the stored reply's own content", async () => {
+  const { fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Parking on the drive?" } }));
+  const hash = createHash("sha256").update(tokenOf(sent)).digest("hex");
+  const replyId = randomUUID();
+  const digest = "a".repeat(64);
+  const client = await runtime.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: [{ saved }] } = await client.query("SELECT app.v2_fact_reply_receive($1, $2, $3, $4::jsonb) AS saved",
+      [hash, replyId, digest, JSON.stringify({ arrangement: "Yes, on the left" })]);
+    assert.equal(saved.status, "recorded");
+    const event = (hashes, extra = {}) => JSON.stringify([{ id: randomUUID(), version: "audit.v1", actorRef: `reply_link:${saved.requestId}`,
+      eventType: "v2.fact_reply.received", subjectType: "job", subjectRef: saved.jobId, payload: { references: {
+        commandId: replyId, replyId, requestId: saved.requestId, factId: saved.factId, factVersion: String(saved.factVersion),
+        source: "reply_link", current: String(saved.current), ...extra }, hashes, classifications: { action: "operational" } } }]);
+    const append = async body => {
+      await client.query("SAVEPOINT attempt");
+      try { await client.query("SELECT id FROM app.append_audit($1::jsonb)", [body]); await client.query("RELEASE SAVEPOINT attempt"); return true; }
+      catch (error) { await client.query("ROLLBACK TO SAVEPOINT attempt"); assert.equal(error.code, "42501", error.message); return false; }
+    };
+    // Other content for the same reply is refused, then the true event seals once and only once.
+    assert.equal(await append(event({ request: "b".repeat(64) })), false);
+    assert.equal(await append(event({ request: digest }, { factVersion: "9" })), false);
+    assert.equal(await append(event({ request: digest })), true);
+    assert.equal(await append(event({ request: digest })), false);
+    await client.query("SELECT app.v2_fact_reply_close()");
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
+  const sealed = (await replyEvents("v2.fact_reply.received")).filter(entry => entry.payload.references.replyId === replyId);
+  assert.equal(sealed.length, 1);
+  await replyChain(DEMO_TENANT_ID);
+});
+
+test("V2-E2: expired and cancelled links are refused plainly, and failed token attempts are limited", async () => {
+  const { factReplies, fact, request } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Is the side gate unlocked?" } });
+  const cancelled = await request(factId);
+  const cancel = replyCommand({ action: "cancel", commandId: randomUUID(), requestId: cancelled.id });
+  assert.deepEqual(await factReplies.command(jobId, cancel), { action: "cancel", id: cancelled.id, replayed: false });
+  assert.deepEqual(await factReplies.command(jobId, cancel), { action: "cancel", id: cancelled.id, replayed: true });
+  await assert.rejects(factReplies.command(jobId, { ...cancel, commandId: randomUUID() }), { code: "REPLY_CLOSED" });
+  await assert.rejects(factReplies.open(tokenOf(cancelled)), { code: "REPLY_LINK_REFUSED" });
+  // The token never appears in an error: the refusal carries the code only.
+  const refusal = await factReplies.open(tokenOf(cancelled)).catch(error => error);
+  for (const text of [refusal.message, refusal.stack ?? "", JSON.stringify(refusal)]) assert.ok(!text.includes(tokenOf(cancelled)));
+  await assert.rejects(factReplies.receive(tokenOf(cancelled), linkAnswer({ arrangement: "Yes" })), { code: "REPLY_LINK_REFUSED" });
+
+  const expired = await request(factId);
+  await admin.query(`UPDATE app.v2_fact_reply_request SET requested_at = now() - interval '20 days',
+    expires_at = now() - interval '1 day' WHERE id = $1`, [expired.id]);
+  await assert.rejects(factReplies.open(tokenOf(expired)), { code: "REPLY_LINK_REFUSED" });
+  await assert.rejects(factReplies.receive(tokenOf(expired), linkAnswer({ arrangement: "Yes" })), { code: "REPLY_LINK_REFUSED" });
+  await assert.rejects(factReplies.open("A".repeat(43)), { code: "REPLY_LINK_REFUSED" });
+  await assert.rejects(factReplies.open("not-a-token"), { code: "REPLY_LINK_REFUSED" });
+  const { rows: [{ replies }] } = await admin.query("SELECT count(*)::int AS replies FROM app.v2_fact_reply WHERE request_id = ANY($1)",
+    [[cancelled.id, expired.id]]);
+  assert.equal(replies, 0);
+  const view = await factReplies.read(jobId);
+  assert.deepEqual([cancelled.id, expired.id].map(id => view.requests.find(entry => entry.id === id).status), ["cancelled", "expired"]);
+
+  // After 20 failed attempts in ten minutes, even a good token is refused until the window passes.
+  const good = await request(factId);
+  assert.equal((await factReplies.open(tokenOf(good))).status, "open");
+  const { rows: [{ failures }] } = await admin.query(`SELECT count(*)::int AS failures FROM control_plane.v2_fact_reply_failure
+    WHERE failed_at > clock_timestamp() - interval '10 minutes'`);
+  assert.ok(failures >= 4, String(failures));
+  await admin.query(`INSERT INTO control_plane.v2_fact_reply_failure SELECT clock_timestamp() FROM generate_series(1, 20)`);
+  try {
+    await assert.rejects(factReplies.open(tokenOf(good)), { code: "REPLY_LINK_REFUSED" });
+    await assert.rejects(factReplies.receive(tokenOf(good), linkAnswer({ arrangement: "Yes" })), { code: "REPLY_LINK_REFUSED" });
+  } finally {
+    await admin.query("DELETE FROM control_plane.v2_fact_reply_failure");
+  }
+  assert.equal((await factReplies.open(tokenOf(good))).status, "open");
+  // The scope table never keeps a row after a transaction.
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM control_plane.v2_fact_reply_scope")).rows[0].n, 0);
+});
+
+test("V2-E2: forced reply policies hide every row from the second firm, and recorded rows are immutable", async () => {
+  const { owner, context, factReplies, fact, request } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Bin day for the skip?" } });
+  const sent = await request(factId);
+  const reply = linkAnswer({ arrangement: "Tuesday" });
+  await factReplies.receive(tokenOf(sent), reply);
+  const cancelledRequest = await request(factId);
+  await factReplies.command(jobId, replyCommand({ action: "cancel", commandId: randomUUID(), requestId: cancelledRequest.id }));
+  const recipient = await factReplies.command(jobId, replyCommand({ action: "record_recipient", commandId: randomUUID(),
+    role: "crew_member", merchantId: null, displayName: "Fictional Decorator", contactEmail: "decorator@jobguard-v2.invalid", correctsId: null }));
+  const applyFact = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Alarm code?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId: applyFact, expectedFactVersion: 1,
+    answer: { arrangement: "Customer will be in" } });
+  await factReplies.command(jobId, pasted);
+  await factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }));
+
+  const outsider = await signIn("second-builder");
+  const { factReplies: theirs } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(theirs.read(jobId), { code: "NOT_FOUND" });
+  await assert.rejects(theirs.command(jobId, replyCommand({ action: "request", commandId: randomUUID(), factId, expectedFactVersion: 1,
+    recipient: { kind: "customer" }, options: null, allowOther: false, expiresInDays: 14 })), { code: "NOT_FOUND" });
+  await assert.rejects(theirs.command(jobId, replyCommand({ action: "apply", replyId: reply.commandId, expectedFactVersion: 1 })),
+    { code: "NOT_FOUND" });
+
+  const { context: theirContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const rows = { "app.v2_reply_recipient": ["id", recipient.id], "app.v2_fact_reply_request": ["id", sent.id],
+    "app.v2_fact_reply_cancel": ["request_id", cancelledRequest.id], "app.v2_fact_reply": ["id", reply.commandId],
+    "app.v2_fact_reply_applied": ["reply_id", pasted.commandId] };
+  for (const [table, [column, id]] of Object.entries(rows)) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read, has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false }, table);
+    const filter = `WHERE (tenant_id, job_id, ${column}) = ($1, $2, $3)`;
+    const key = [DEMO_TENANT_ID, jobId, id];
+    assert.equal((await query(context, `SELECT * FROM ${table} ${filter}`, key)).rowCount, 1, table);
+    // Immutable to the app role, even in its own firm.
+    await assert.rejects(query(context, `UPDATE ${table} SET tenant_id = tenant_id ${filter}`, key), { code: "42501" }, table);
+    await assert.rejects(query(context, `DELETE FROM ${table} ${filter}`, key), { code: "42501" }, table);
+    for (const scope of [outsider.realContext, theirContext]) {
+      assert.equal((await query(scope, `SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET tenant_id = tenant_id ${filter}`, key), { code: "42501" });
+      await assert.rejects(query(scope, `DELETE FROM ${table} ${filter}`, key), { code: "42501" });
+    }
+    assert.equal((await runtime.query(`SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+  }
+  for (const scope of [outsider.realContext, theirContext]) {
+    await assert.rejects(query(scope, `INSERT INTO app.v2_reply_recipient (tenant_id, job_id, id, role, display_name, contact_email,
+      request_digest, recorded_by) VALUES ($1,$2,$3,'crew_member','X','tiler@jobguard-v2.invalid',$4,$5)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), "0".repeat(64), owner.membershipId]), { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_fact_reply (tenant_id, job_id, id, fact_id, fact_version, source,
+      arrangement, request_digest, recorded_by) VALUES ($1,$2,$3,$4,1,'pasted_by_builder','X',$5,$6)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), factId, "0".repeat(64), owner.membershipId]), { code: "42501", message: /row-level security policy/u });
+  }
+  // Runtime cannot call the link's private helpers or open its scope directly.
+  for (const sql of ["SELECT app.v2_fact_reply_scope_open($1)", "SELECT app.v2_fact_reply_scoped($1::uuid, $1::uuid)"]) {
+    await assert.rejects(runtime.query(sql, [randomUUID()]), { code: "42501" });
+  }
+  await assert.rejects(runtime.query("SELECT * FROM control_plane.v2_fact_reply_scope"), { code: "42501" });
+});
+
+test("V2-E2: replies stay disabled outside local V2", async () => {
+  const { factReplies, fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Doorbell works?" } }));
+  const previous = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try {
+    await assert.rejects(factReplies.read(jobId), { code: "SYNTHETIC_MODE_REQUIRED" });
+    await assert.rejects(factReplies.open(tokenOf(sent)), { code: "SYNTHETIC_MODE_REQUIRED" });
+    await assert.rejects(factReplies.receive(tokenOf(sent), linkAnswer({ arrangement: "Yes" })), { code: "SYNTHETIC_MODE_REQUIRED" });
+  } finally { process.env.JOBGUARD_LOCAL_V2 = previous; }
+});
+
+// Audit-chain evidence, one case per command (V2-CI2 guard): one event, an exact replay adds none,
+// and a forced failure rolls back the command's rows and event together.
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.recordRecipient", async () => {
+  const { owner, context, factReplies } = await replySetup();
+  const command = replyCommand({ action: "record_recipient", commandId: randomUUID(), role: "crew_member", merchantId: null,
+    displayName: "Fictional Plasterer", contactEmail: "decorator@jobguard-v2.invalid", correctsId: null });
+  const before = await replyEvents("v2.reply_recipient.recorded");
+  await assert.rejects(new FactReplyRepository(failingPool(auditFails)).command(context, jobId, owner.sessionId, command), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_reply_recipient WHERE id = $1", [command.commandId])).rows[0].n, 0,
+    "audit-chain: rollback");
+  assert.deepEqual(await replyEvents("v2.reply_recipient.recorded"), before);
+  await factReplies.command(jobId, command);
+  const recorded = await replyEvents("v2.reply_recipient.recorded");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).payload.references.commandId, command.commandId);
+  await factReplies.command(jobId, command);
+  assert.deepEqual(await replyEvents("v2.reply_recipient.recorded"), recorded, "audit-chain: replay");
+  await replyChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.request", async () => {
+  const { owner, context, factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Water stopcock location?" } });
+  const command = replyCommand({ action: "request", commandId: randomUUID(), factId, expectedFactVersion: 1,
+    recipient: { kind: "customer" }, options: null, allowOther: false, expiresInDays: 7 });
+  const before = await replyEvents("v2.fact_reply.requested");
+  const { lines } = await caught(() => assert.rejects(new FactReplyRepository(failingPool(auditFails)).command(context, jobId,
+    owner.sessionId, command), { code: "FORCED" }));
+  assert.deepEqual(lines, [], "nothing reaches the catcher when the request rolls back");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reply_request WHERE id = $1", [command.commandId])).rows[0].n,
+    0, "audit-chain: rollback");
+  assert.deepEqual(await replyEvents("v2.fact_reply.requested"), before);
+  await factReplies.command(jobId, command);
+  const recorded = await replyEvents("v2.fact_reply.requested");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  await factReplies.command(jobId, command);
+  assert.deepEqual(await replyEvents("v2.fact_reply.requested"), recorded, "audit-chain: replay");
+  await replyChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.cancel", async () => {
+  const { owner, context, factReplies, fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Dog in the garden?" } }));
+  const command = replyCommand({ action: "cancel", commandId: randomUUID(), requestId: sent.id });
+  const before = await replyEvents("v2.fact_reply.cancelled");
+  await assert.rejects(new FactReplyRepository(failingPool(auditFails)).command(context, jobId, owner.sessionId, command), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reply_cancel WHERE request_id = $1", [sent.id])).rows[0].n, 0,
+    "audit-chain: rollback");
+  assert.equal((await factReplies.open(tokenOf(sent))).status, "open");
+  await factReplies.command(jobId, command);
+  const recorded = await replyEvents("v2.fact_reply.cancelled");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  await factReplies.command(jobId, command);
+  assert.deepEqual(await replyEvents("v2.fact_reply.cancelled"), recorded, "audit-chain: replay");
+  await replyChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.receive", async () => {
+  const { context, factReplies, fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Wi-Fi for the crew?" } }));
+  const answer = linkAnswer({ arrangement: "No, use your own" });
+  const before = await replyEvents("v2.fact_reply.received");
+  await assert.rejects(new FactReplyRepository(failingPool(auditFails)).receive(tokenOf(sent), answer), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reply WHERE id = $1", [answer.commandId])).rows[0].n, 0,
+    "audit-chain: rollback");
+  assert.deepEqual(await replyEvents("v2.fact_reply.received"), before);
+  assert.equal((await factReplies.open(tokenOf(sent))).status, "open");
+  await factReplies.receive(tokenOf(sent), answer);
+  const recorded = await replyEvents("v2.fact_reply.received");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).payload.references.commandId, answer.commandId);
+  assert.equal((await factReplies.receive(tokenOf(sent), answer)).replayed, true);
+  assert.deepEqual(await replyEvents("v2.fact_reply.received"), recorded, "audit-chain: replay");
+  await replyChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.paste", async () => {
+  const { owner, context, factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Shoes off indoors?" } });
+  const command = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "Yes" } });
+  const before = await replyEvents("v2.fact_reply.received");
+  await assert.rejects(new FactReplyRepository(failingPool(auditFails)).command(context, jobId, owner.sessionId, command), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reply WHERE id = $1", [command.commandId])).rows[0].n, 0,
+    "audit-chain: rollback");
+  await factReplies.command(jobId, command);
+  const recorded = await replyEvents("v2.fact_reply.received");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  await factReplies.command(jobId, command);
+  assert.deepEqual(await replyEvents("v2.fact_reply.received"), recorded, "audit-chain: replay");
+  await replyChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyRepository.apply", async () => {
+  const { owner, context, openFacts, factReplies, fact, request } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Which loo can the crew use?" } });
+  const sent = await request(factId);
+  const answer = linkAnswer({ arrangement: "Downstairs" });
+  await factReplies.receive(tokenOf(sent), answer);
+  const apply = replyCommand({ action: "apply", replyId: answer.commandId, expectedFactVersion: 1 });
+  const before = { applied: await replyEvents("v2.fact_reply.applied_by_builder"), answers: await replyEvents("v2_open_fact.answer") };
+  const unchanged = async () => {
+    const [current] = await openFacts.read(jobId, { ...factQuery, factId });
+    assert.deepEqual([current.status, current.version], ["open", 1]);
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reply_applied WHERE reply_id = $1",
+      [answer.commandId])).rows[0].n, 0, "audit-chain: rollback");
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_open_fact_change WHERE command_id = $1",
+      [answer.commandId])).rows[0].n, 0);
+    assert.deepEqual(await replyEvents("v2.fact_reply.applied_by_builder"), before.applied);
+    assert.deepEqual(await replyEvents("v2_open_fact.answer"), before.answers);
+  };
+  // After E1's answer and before E2's record: both roll back together.
+  await assert.rejects(new FactReplyRepository(failingPool(sql => sql.includes("INSERT INTO app.v2_fact_reply_applied")))
+    .command(context, jobId, owner.sessionId, apply), { code: "FORCED" });
+  await unchanged();
+  // The applied event's append fails: E1's answer and its event roll back too.
+  let appends = 0;
+  await assert.rejects(new FactReplyRepository(failingPool(sql => auditFails(sql) && ++appends === 2))
+    .command(context, jobId, owner.sessionId, apply), { code: "FORCED" });
+  assert.equal(appends, 2);
+  await unchanged();
+  // A stale fact version refuses both writes.
+  await assert.rejects(factReplies.command(jobId, { ...apply, expectedFactVersion: 2 }), { code: "REPLY_OUT_OF_DATE" });
+  await unchanged();
+
+  await factReplies.command(jobId, apply);
+  const recorded = await replyEvents("v2.fact_reply.applied_by_builder");
+  assert.equal(recorded.length, before.applied.length + 1, "audit-chain: event");
+  assert.equal((await replyEvents("v2_open_fact.answer")).length, before.answers.length + 1);
+  await factReplies.command(jobId, apply);
+  assert.deepEqual(await replyEvents("v2.fact_reply.applied_by_builder"), recorded, "audit-chain: replay");
+  assert.equal((await replyEvents("v2_open_fact.answer")).length, before.answers.length + 1);
+  await replyChain(context.tenantId);
 });
 
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
