@@ -95,3 +95,63 @@ for (const width of [360, 1280]) {
     } finally { await owner.close(); await customer.close(); }
   });
 }
+
+// V2-F3 (Q55): at 360px, draft the splashback change, confirm it, send it for approval, agree as the customer,
+// approve, and add the extra time to the plan.
+test("V2-F3 change draft at 360px: price, time and materials together, agreed by link, then time on the plan", { timeout: 120000 }, async () => {
+  const { Pool } = await import("../../packages/db/node_modules/pg/esm/index.mjs");
+  const { validateSettings } = await import("./settings.mjs");
+  const { createWorkspaceApplication } = await import("../../apps/api/dist/workspace/index.js");
+  const pool = new Pool({ connectionString: validateSettings({}).settings.DATABASE_URL, max: 1 });
+  const owner = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
+  const customer = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true });
+  try {
+    const jobId = (await (await owner.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")).json()).jobs[0].id;
+    await post(owner, `/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
+    const sessionId = ownerState.cookies.find(cookie => cookie.name === "jg_session").value;
+    // The plan screen is not on this base; open the plan the way it does.
+    const plan = await createWorkspaceApplication({ pool, sessionId }).workPlan.read(jobId, { version: "work-plan-query.v1" });
+    const grout = plan.tasks.find(task => task.key === "tile-splashback");
+    const page = await owner.newPage();
+    await page.goto(`${origin}/v2/jobs/${jobId}/extra-links`);
+    await page.getByRole("link", { name: "Change a quantity" }).click();
+    const main = page.getByTestId("change-drafts");
+    await main.getByLabel("Quote line").selectOption({ label: "Fit and grout kitchen splashback tiles · 6 m2" });
+    await main.getByLabel("New total quantity").fill("7.5");
+    await expect(main.getByLabel("Rate per m2 (£)")).toHaveValue("95.00");
+    await main.getByRole("button", { name: "Draft the change" }).click();
+    const drafted = main.getByRole("region", { name: "Drafted change" });
+    await expect(drafted).toContainText("Extra 1.5 m2 at £95.00 per m2 = £142.50 (you confirm the rate)");
+    await expect(drafted).toContainText("Extra time: Fit and grout the splashback +60 min");
+    await expect(drafted).toContainText("Will need more:");
+    await expect(drafted).toContainText("Tiles, Adhesive, Grout");
+    await drafted.getByRole("button", { name: "Confirm the price" }).click();
+    const pending = main.getByRole("region", { name: "Pending changes" }).getByRole("article").last();
+    await expect(pending.getByTestId("change-state")).toHaveText("Waiting to send for approval");
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    if (process.env.V2_TEST_SCREENSHOTS) {
+      await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
+      await page.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, "f3-change-draft-360.png"), fullPage: true });
+    }
+    await pending.getByRole("link", { name: "Send for approval" }).click();
+    const section = page.getByRole("heading", { name: "Change Fit and grout kitchen splashback tiles to 7.5 m2" }).last().locator("..");
+    await section.getByRole("button", { name: "Make customer link for version 1" }).click();
+    const link = await page.getByRole("region", { name: "Local test inbox" }).getByRole("link", { name: "Open customer link" }).last().getAttribute("href");
+    const customerPage = await customer.newPage();
+    await customerPage.goto(origin + link);
+    await expect(customerPage.getByText("£142.50", { exact: true })).toBeVisible();
+    await customerPage.getByLabel("Your name").fill("Fictional customer");
+    await customerPage.getByRole("button", { name: "I agree", exact: true }).click();
+    await expect(customerPage.getByRole("status")).toContainText("Agreement recorded");
+    await page.reload();
+    await section.getByRole("button", { name: /Customer agreed by link at .*: approve/u }).click();
+    await expect(section.getByRole("button", { name: /Customer agreed by link at .*: approve/u })).toHaveCount(0);
+    await page.goto(`${origin}/v2/jobs/${jobId}/changes`);
+    const agreed = page.getByTestId("change-drafts").getByRole("region", { name: "Pending changes" }).getByRole("article").last();
+    await expect(agreed.getByTestId("change-state")).toHaveText("Agreed. Extra time not on the plan yet");
+    await agreed.getByRole("button", { name: "Add the extra time to the plan" }).click();
+    await expect(agreed.getByTestId("change-state")).toHaveText("Agreed. Extra time is on the plan");
+    const after = await createWorkspaceApplication({ pool, sessionId }).workPlan.read(jobId, { version: "work-plan-query.v1" });
+    assert.equal(after.tasks.find(task => task.key === "tile-splashback").durationMinutes, grout.durationMinutes + 60);
+  } finally { await owner.close(); await customer.close(); await pool.end(); }
+});

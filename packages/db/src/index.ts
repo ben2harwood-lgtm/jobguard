@@ -241,5 +241,6 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 
 // V2-F6: local customer agreement capabilities.
 export * from "./v2-customer-extra-link-repository.js";
+export * from "./v2-change-draft-repository.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";

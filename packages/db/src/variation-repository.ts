@@ -99,7 +99,7 @@ const withdrawalV1 = z.object({
 export class BuilderCaptureError extends Error {
  constructor(readonly code: "INVALID_BUILDER_CAPTURE" | "FORBIDDEN" | "COMMAND_CONFLICT") { super(code); }
 }
-function captureCommandFailure(error: unknown): never {
+export function captureCommandFailure(error: unknown): never {
  // Existing controlled final-review routines expose their PostgreSQL refusal.
  // Do not turn those into a different application-level code.
  if((error as {code?:string})?.code==="42501")throw error;
@@ -109,6 +109,55 @@ function captureCommandFailure(error: unknown): never {
 const captureCanonical = (value: unknown): string => value === null || typeof value !== "object" ? JSON.stringify(value) : Array.isArray(value)
  ? `[${value.map(captureCanonical).join(",")}]`
  : `{${Object.entries(value as Record<string, unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>`${JSON.stringify(key)}:${captureCanonical(child)}`).join(",")}}`;
+/** Parses a builder capture; refusals are thrown before any transaction opens. */
+function parseBuilderCapture(raw: unknown) {
+  const parsed=builderCaptureV1.safeParse(raw);
+  if(!parsed.success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
+  const proposalResult=variationProposalV1.safeParse(parsed.data.proposal);
+  const priceResult=confirmedVariationPriceV1.nullable().safeParse(parsed.data.price);
+  if(!proposalResult.success || !priceResult.success || !instantV1.nullable().safeParse(parsed.data.deviceCapturedAt).success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
+  const input={...parsed.data,proposal:proposalResult.data,price:priceResult.data},p=input.proposal;
+  if(input.price && input.price.confirmedByMembershipId!==input.actorMembershipId)throw new BuilderCaptureError("FORBIDDEN");
+  const legacyJson=captureCanonical(input);
+  return {input,p,legacyJson};
+}
+/** V2-F3 mount: the LogBuilderExtra body inside a caller's open transaction, so a change draft commits or rolls back with it.
+ * Callers apply rethrowJobWorkState and captureCommandFailure as logBuilderExtra does. */
+export async function logBuilderExtraIn(db: TenantTransaction, context: VerifiedTenantContext, raw: unknown): Promise<{variationId:string}> {
+  const {input,p,legacyJson}=parseBuilderCapture(raw);
+   const membershipSql=`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`;
+   let member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
+   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
+   // Final locking uses this same command gate before its job lock. A shared ID
+   // cannot claim a receipt while its rival holds the job and waits for it.
+   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`final-review-command:${context.tenantId.toLowerCase()}:${p.id.toLowerCase()}`]);
+   member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
+   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
+   const claimed=await beginRepositoryCommand<{variationId:string}>(db,{tenantId:context.tenantId,actorMembershipId:input.actorMembershipId,
+    commandId:p.id,commandType:"LogBuilderExtra",semanticKey:`extra-origin:${p.jobId}:${p.id}`,jobId:p.jobId,legacyJson});
+   if(claimed.kind==="replay")return claimed.result;
+   // No direct row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
+   // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
+   // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
+   // The existing source trigger takes the job SHARE lock before site capture
+   // joins capacity 184 and source 144. Never hold capacity while waiting for job.
+   // The variation insert's foreign keys take KEY SHARE locks on this job's track and scope rows.
+   // Every synthetic practice environment is accepted (the track column admits only these two);
+   // any other value, such as a production one, is refused by default.
+   await checkPostLockSourceLifecycle(db,p.jobId,input.actorMembershipId);
+   const job=await db.$client.query(`SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND t.job_track='small_builder' AND t.environment IN ('synthetic_demo','pilot_no_charge')`,[context.tenantId,p.jobId]);
+   if(!job.rowCount)throw new BuilderCaptureError("FORBIDDEN");
+   await insertVariationProposal(db,context.tenantId,p);
+   await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,device_id,device_captured_at,provenance)
+    VALUES($1,$2,$3,'small_builder','builder_logged',$3,$4,$5,$6,$7,'command')`,[context.tenantId,p.jobId,p.id,input.actorMembershipId,member.role,input.deviceId,input.deviceCapturedAt]);
+   if(input.price){
+    const revision=priceVariation({id:randomUUID(),variationId:p.id,previous:null,proposal:p,description:p.description,
+     contentHash:createHash("sha256").update(captureCanonical({description:p.description,price:input.price})).digest("hex"),confirmed:input.price});
+    await writePricedRevision(db,context.tenantId,revision,false);
+   }
+   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"variation.builder_logged",subjectType:"variation",subjectRef:p.id,payload:{references:{jobId:p.jobId,commandId:p.id,origin:"builder_logged"},hashes:{capture:createHash("sha256").update(p.captureText).digest("hex")}}}]);
+   return completeRepositoryCommand<{variationId:string}>(db,p.id);
+}
 export class VariationRepository{
  constructor(private readonly pool:Pool){}
 
@@ -144,48 +193,8 @@ export class VariationRepository{
 
  /** Non-commercial capture: same receipt/origin contract as SH-1, without send or fee authority. */
  async logBuilderExtra(context: VerifiedTenantContext, raw: unknown): Promise<{variationId:string}> {
-  const parsed=builderCaptureV1.safeParse(raw);
-  if(!parsed.success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
-  const proposalResult=variationProposalV1.safeParse(parsed.data.proposal);
-  const priceResult=confirmedVariationPriceV1.nullable().safeParse(parsed.data.price);
-  if(!proposalResult.success || !priceResult.success || !instantV1.nullable().safeParse(parsed.data.deviceCapturedAt).success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
-  const input={...parsed.data,proposal:proposalResult.data,price:priceResult.data},p=input.proposal;
-  if(input.price && input.price.confirmedByMembershipId!==input.actorMembershipId)throw new BuilderCaptureError("FORBIDDEN");
-  const legacyJson=captureCanonical(input);
-  return withTenant(this.pool,context,async db=>{
-   const membershipSql=`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`;
-   let member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
-   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
-   // Final locking uses this same command gate before its job lock. A shared ID
-   // cannot claim a receipt while its rival holds the job and waits for it.
-   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`final-review-command:${context.tenantId.toLowerCase()}:${p.id.toLowerCase()}`]);
-   member=(await db.$client.query<{role:string}>(membershipSql,[context.tenantId,input.actorMembershipId])).rows[0];
-   if(!member || member.role!=="owner")throw new BuilderCaptureError("FORBIDDEN");
-   const claimed=await beginRepositoryCommand<{variationId:string}>(db,{tenantId:context.tenantId,actorMembershipId:input.actorMembershipId,
-    commandId:p.id,commandType:"LogBuilderExtra",semanticKey:`extra-origin:${p.jobId}:${p.id}`,jobId:p.jobId,legacyJson});
-   if(claimed.kind==="replay")return claimed.result;
-   // No direct row lock on app.job: PostgreSQL demands UPDATE privilege for every FOR [NO KEY] UPDATE/SHARE
-   // strength and jobguard_runtime has none on app.job. Exactly-once comes from the receipt claim above
-   // (its unique key makes a concurrent twin wait for this transaction) and the variation/origin keys.
-   // The existing source trigger takes the job SHARE lock before site capture
-   // joins capacity 184 and source 144. Never hold capacity while waiting for job.
-   // The variation insert's foreign keys take KEY SHARE locks on this job's track and scope rows.
-   // Every synthetic practice environment is accepted (the track column admits only these two);
-   // any other value, such as a production one, is refused by default.
-   await checkPostLockSourceLifecycle(db,p.jobId,input.actorMembershipId);
-   const job=await db.$client.query(`SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON(t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND t.job_track='small_builder' AND t.environment IN ('synthetic_demo','pilot_no_charge')`,[context.tenantId,p.jobId]);
-   if(!job.rowCount)throw new BuilderCaptureError("FORBIDDEN");
-   await insertVariationProposal(db,context.tenantId,p);
-   await db.$client.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,device_id,device_captured_at,provenance)
-    VALUES($1,$2,$3,'small_builder','builder_logged',$3,$4,$5,$6,$7,'command')`,[context.tenantId,p.jobId,p.id,input.actorMembershipId,member.role,input.deviceId,input.deviceCapturedAt]);
-   if(input.price){
-    const revision=priceVariation({id:randomUUID(),variationId:p.id,previous:null,proposal:p,description:p.description,
-     contentHash:createHash("sha256").update(captureCanonical({description:p.description,price:input.price})).digest("hex"),confirmed:input.price});
-    await writePricedRevision(db,context.tenantId,revision,false);
-   }
-   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${input.actorMembershipId}`,eventType:"variation.builder_logged",subjectType:"variation",subjectRef:p.id,payload:{references:{jobId:p.jobId,commandId:p.id,origin:"builder_logged"},hashes:{capture:createHash("sha256").update(p.captureText).digest("hex")}}}]);
-   return completeRepositoryCommand<{variationId:string}>(db,p.id);
-  }).catch(rethrowJobWorkState).catch(captureCommandFailure);
+  parseBuilderCapture(raw);
+  return withTenant(this.pool,context,db=>logBuilderExtraIn(db,context,raw)).catch(rethrowJobWorkState).catch(captureCommandFailure);
  }
  /** Persistence seam only; SV-2 adds no Withdraw command, route or screen. */
  async recordWithdrawal(context: VerifiedTenantContext, raw: unknown): Promise<void> {

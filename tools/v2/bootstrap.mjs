@@ -75,6 +75,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-F6 customer extra links (2048), after FL-1 so its firm lock follows the same rule.
   await client.query(readFileSync(new URL("./migrations/2048_customer_extra_links.sql", import.meta.url), "utf8"));
+  // V2-F3 change drafts (2031).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2031_v2_change_draft.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
