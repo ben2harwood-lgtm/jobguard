@@ -38,6 +38,7 @@ import { MeasurementApplication } from "./measurement.application.js";
 import { OpenFactApplication } from "./open-fact.application.js";
 import { ChoiceAllowanceApplication } from "./choice-allowance.application.js";
 import { CrewContactApplication } from "./crew-contact.application.js";
+import { SiteAttendanceApplication } from "./site-attendance.application.js";
 import { VariationApplication } from "../variation/variation.application.js";
 import { RecoveryApplication } from "./recovery.application.js";
 import { DecisionsApplication } from "../decisions/decisions.application.js";
@@ -113,9 +114,11 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   const attribution = new RecoveryAttributionApplication(dependencies.pool,dependencies.sessionId);
   // V2-C3C crew records.
   const crewContacts = new CrewContactApplication(dependencies.pool, dependencies.sessionId);
+  // V2-F8 who was on site today.
+  const siteAttendance = new SiteAttendanceApplication(dependencies.pool, dependencies.sessionId);
   return Object.freeze({ measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId),
     openFacts: new OpenFactApplication(dependencies.pool, dependencies.sessionId),
-    choiceAllowances: new ChoiceAllowanceApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, commercialIntegrityV3: Object.freeze({
+    choiceAllowances: new ChoiceAllowanceApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, siteAttendance, commercialIntegrityV3: Object.freeze({
     family: (jobId:string) => commercialIntegrityV3.family(dependencies.sessionId,jobId),
     view: (jobId:string,query:unknown) => commercialIntegrityV3.view(dependencies.sessionId,jobId,query),
     review: (jobId:string,body:unknown) => commercialIntegrityV3.review(dependencies.sessionId,jobId,body),
