@@ -27,6 +27,13 @@ export function countsTowardTotal(line: Pick<Priced, "disposition">): boolean {
   return line.disposition === "accepted" || line.disposition === "proposed";
 }
 
+/** The rows a combine may take: two or more, every one still proposed or accepted. A dismissed, split-away or
+ * merged-away row is refused, so no row's money is counted twice (for example a split parent and its parts). */
+export function mergeableRows<T extends { id: string; disposition: string }>(lines: readonly T[], selectedIds: readonly string[]): T[] | null {
+  const chosen = lines.filter(line => selectedIds.includes(line.id));
+  return chosen.length >= 2 && chosen.every(countsTowardTotal) ? chosen : null;
+}
+
 export function runningTotal(lines: readonly Priced[]) {
   const counted = lines.filter(countsTowardTotal), totals = counted.map(lineTotalPence);
   const unpriced = totals.filter(total => total === null).length;
