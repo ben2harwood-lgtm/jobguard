@@ -5,6 +5,7 @@ export * from "./materials.application.js";
 export * from "./crew-contact.application.js";
 export * from "./crew-brief.application.js";
 export * from "./open-fact.application.js";
+export * from "./site-attendance.application.js";
 export * from "./contracts.js";
 export * from "./workspace.service.js";
 export * from "./workspace-session.js";
