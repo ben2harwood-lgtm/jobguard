@@ -11,6 +11,8 @@ import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verify
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
+// V2-F8
+import { SiteAttendanceRepository } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -1806,6 +1808,207 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
+const attendanceTable = "app.v2_site_attendance";
+const attendanceApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).siteAttendance;
+const attendanceQuery = { version: "v2-site-attendance-query.v1" };
+const londonToday = async () => (await admin.query(
+  "SELECT (clock_timestamp() AT TIME ZONE 'Europe/London')::date::text AS today")).rows[0].today;
+const tapCommand = (day, changes = {}) => ({ version: "v2-site-attendance-command.v1", commandId: randomUUID(), day,
+  person: { kind: "builder" }, expectedVersion: 0, onSite: true, note: null, ...changes });
+const attendanceEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, subject_type, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2.site_attendance.recorded' ORDER BY sequence`, [jobRef])).rows;
+
+test("F8: the attendance table stores no location, IP, device or user agent, and the runtime can only read and insert", async () => {
+  const { rows } = await admin.query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'app' AND table_name = 'v2_site_attendance' ORDER BY ordinal_position`);
+  const names = rows.map(row => row.column_name);
+  assert.deepEqual(names, ["tenant_id", "job_id", "day", "person_kind", "crew_id", "builder_membership_id", "person_ref",
+    "revision", "expected_version", "previous_revision", "command_id", "on_site", "note", "tapped_by_membership_id", "recorded_at"]);
+  assert.equal(names.flatMap(name => name.split("_"))
+    .filter(part => /^(lat|latitude|lon|lng|longitude|geo|location|coords?|ip|address|device|agent|gps|position)$/u.test(part)).length, 0);
+  const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read, has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid=$1::regclass`, [attendanceTable]);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  // A request that carries a location (or any other extra field) is refused before anything is read or written.
+  const { sessionId } = await signIn("builder");
+  const today = await londonToday();
+  for (const extra of [{ latitude: 51.5 }, { location: { lat: 51.5, lon: -0.1 } }, { userAgent: "phone" }, { ip: "192.0.2.1" }]) {
+    await assert.rejects(attendanceApp(sessionId).record(jobId, tapCommand(today, extra)), { code: "SITE_ATTENDANCE_INVALID" });
+  }
+  await assert.rejects(attendanceApp(sessionId).record(jobId, tapCommand(today, { person: { kind: "builder", lat: 1 } })),
+    { code: "SITE_ATTENDANCE_INVALID" });
+});
+
+test("F8: a replayed tap counts once, an edit is the next revision, and the day window is today and six days back", async () => {
+  const { sessionId } = await signIn("builder");
+  const attendance = attendanceApp(sessionId);
+  const sam = await crewApp(sessionId).record(crewCommand({ displayName: "Sam Attendance" }));
+  const today = await londonToday();
+  const first = tapCommand(today, { person: { kind: "crew", crewId: sam.crewId } });
+  const saved = await attendance.record(jobId, first);
+  assert.equal(saved.revision, 1);
+  assert.deepEqual(await attendance.record(jobId, first), saved, "an exact replay returns the first receipt");
+  await Promise.all([attendance.record(jobId, first), attendance.record(jobId, first)]);
+  const count = async () => (await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable}
+    WHERE job_id = $1 AND crew_id = $2 AND day = $3::date`, [jobId, sam.crewId, today])).rows[0].count;
+  assert.equal(await count(), 1, "a replayed tap counts once");
+  await assert.rejects(attendance.record(jobId, { ...first, onSite: false }), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  // One command id names one tap: reused on another of the firm's jobs, even concurrently, only one saves.
+  const { draftJob } = await draftForPlan();
+  await assert.rejects(attendance.record(draftJob, first), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  const shared = tapCommand(today);
+  const raced = await Promise.allSettled([attendance.record(jobId, shared), attendance.record(draftJob, shared),
+    attendance.record(draftJob, { ...shared, note: "Changed" })]);
+  assert.equal(raced.filter(result => result.status === "fulfilled").length, 1);
+  for (const result of raced.filter(result => result.status === "rejected")) {
+    assert.equal(result.reason.code, "SITE_ATTENDANCE_COMMAND_CONFLICT");
+  }
+  assert.equal((await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable} WHERE command_id = $1`,
+    [shared.commandId])).rows[0].count, 1);
+  const savedOn = raced.find(result => result.status === "fulfilled").value;
+  // A second, different tap at the same version is stale; an edit names the current revision.
+  await assert.rejects(attendance.record(jobId, tapCommand(today, { person: first.person })),
+    { code: "SITE_ATTENDANCE_VERSION_CONFLICT" });
+  const undo = await attendance.record(jobId, tapCommand(today, { person: first.person, expectedVersion: 1, onSite: false,
+    note: "Went to another job" }));
+  assert.equal(undo.revision, 2);
+  assert.equal(await count(), 2, "the first revision is kept unchanged");
+  const me = (await attendance.list(jobId, attendanceQuery)).records.some(entry => entry.personKind === "builder" &&
+    entry.day === today) ? savedOn : await attendance.record(jobId, tapCommand(today));
+  const view = await attendance.list(jobId, attendanceQuery);
+  assert.equal(view.today, today);
+  assert.equal(view.days.length, 7);
+  assert.equal(view.days[0], today);
+  const mine = view.records.filter(entry => entry.day === today);
+  // Astra's conditions: one row per person per job and London day, from the latest revision, which keeps the undo.
+  assert.equal(mine.filter(entry => entry.crewId === sam.crewId).length, 1);
+  assert.deepEqual(mine.find(entry => entry.crewId === sam.crewId), { ...undo, recordedAt: undo.recordedAt });
+  assert.equal(mine.find(entry => entry.crewId === sam.crewId).onSite, false);
+  assert.equal(mine.find(entry => entry.personKind === "builder").personRef, view.me);
+  assert.equal(me.personRef, view.me);
+  assert.ok(view.crew.some(crew => crew.crewId === sam.crewId && crew.displayName === "Sam Attendance"));
+  assert.equal(JSON.stringify(view.crew).includes("07700"), false, "crew phone numbers stay off the screen");
+  // Six days back is allowed; a week back, tomorrow and a non-date are refused, also past the app check.
+  const back = (await admin.query("SELECT ($1::date - 6)::text AS d, ($1::date - 7)::text AS w, ($1::date + 1)::text AS t",
+    [today])).rows[0];
+  assert.equal((await attendance.record(jobId, tapCommand(back.d))).revision, 1);
+  for (const day of [back.w, back.t]) {
+    await assert.rejects(attendance.record(jobId, tapCommand(day)), { code: "SITE_ATTENDANCE_DAY_OUT_OF_RANGE" });
+  }
+  await assert.rejects(attendance.record(jobId, tapCommand("2026-02-30")), { code: "SITE_ATTENDANCE_INVALID" });
+});
+
+test("F8: the second firm sees none of the builder's taps and can't tap on the job, and another firm's crew id is refused", async () => {
+  const owner = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const today = await londonToday();
+  await attendanceApp(owner.sessionId).record(jobId, tapCommand(today, { expectedVersion:
+    (await attendanceApp(owner.sessionId).list(jobId, attendanceQuery)).records
+      .find(entry => entry.personKind === "builder" && entry.day === today)?.revision ?? 0 }));
+  const { rows: [row] } = await admin.query(`SELECT * FROM ${attendanceTable} WHERE job_id = $1 ORDER BY recorded_at DESC LIMIT 1`, [jobId]);
+  // Firm A/B read check (rule 30) in the shared practice tenant and the second firm's real tenant.
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(shared.tenantId, DEMO_TENANT_ID);
+  for (const scope of [shared, outsider.realContext]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    assert.equal((await query(`SELECT * FROM ${attendanceTable} WHERE job_id = $1`, [jobId])).rowCount, 0);
+    assert.equal((await query(`SELECT * FROM ${attendanceTable}`)).rows.filter(r => r.job_id === jobId).length, 0);
+    await assert.rejects(query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, builder_membership_id,
+      revision, expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'builder', $4, 1, 0, $5, true, $4)`,
+    [row.tenant_id, jobId, today, randomUUID(), randomUUID()]), { code: "42501" });
+    await assert.rejects(query(`UPDATE ${attendanceTable} SET note = 'x' WHERE job_id = $1`, [jobId]), { code: "42501" });
+    await assert.rejects(query(`DELETE FROM ${attendanceTable} WHERE job_id = $1`, [jobId]), { code: "42501" });
+  }
+  await assert.rejects(attendanceApp(outsider.sessionId).list(jobId, attendanceQuery), { code: "NOT_FOUND" });
+  await assert.rejects(attendanceApp(outsider.sessionId).record(jobId, tapCommand(today)), { code: "NOT_FOUND" });
+  // The owner's own firm cannot change a saved row either.
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await assert.rejects(withTenant(runtime, context, db => db.$client.query(
+    `UPDATE ${attendanceTable} SET on_site = false WHERE job_id = $1`, [jobId])), { code: "42501" });
+
+  // Another firm's crew record, or an unknown id, can't be tapped on this job, even past the app check.
+  const theirs = await crewApp(outsider.sessionId).record(crewCommand({ displayName: "Their crew" }));
+  for (const crewId of [theirs.crewId, randomUUID()]) {
+    await assert.rejects(attendanceApp(owner.sessionId).record(jobId, tapCommand(today, { person: { kind: "crew", crewId } })),
+      { code: "CREW_CONTACT_UNAVAILABLE" });
+  }
+  await assert.rejects(admin.query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, crew_id, revision,
+    expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'crew', $4, 1, 0, $5, true, $6)`,
+  [row.tenant_id, jobId, today, theirs.crewId, randomUUID(), row.tapped_by_membership_id]),
+  { code: "23503", message: /CREW_CONTACT_UNAVAILABLE/u });
+  // "Me" is always the person who tapped it.
+  await assert.rejects(admin.query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, builder_membership_id,
+    revision, expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'builder', $4, 1, 0, $5, true, $6)`,
+  [row.tenant_id, jobId, today, randomUUID(), randomUUID(), row.tapped_by_membership_id]), { code: "23514" });
+});
+
+test("audit-chain: packages/db/src/v2-site-attendance-repository.ts#SiteAttendanceRepository.record", async () => {
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const attendance = attendanceApp(sessionId);
+  const sam = await crewApp(sessionId).record(crewCommand({ displayName: "Sam Audit" }));
+  const today = await londonToday();
+  const before = (await attendanceEvents(jobId)).length;
+  const command = tapCommand(today, { person: { kind: "crew", crewId: sam.crewId }, note: "Tiling the splashback" });
+  const saved = await attendance.record(jobId, command);
+  const events = (await attendanceEvents(jobId)).slice(before);
+  assert.equal(events.length, 1, "audit-chain: event");
+  const [event] = events;
+  assert.equal(event.tenant_id, DEMO_TENANT_ID);
+  assert.equal(event.actor_ref, `membership:${saved.tappedByMembershipId}`);
+  assert.deepEqual(event.payload.references, { ...event.payload.references, commandId: command.commandId, jobId, day: today, personKind: "crew",
+    personRef: sam.crewId, expectedVersion: "0", revision: "1", onSite: "true" });
+  assert.equal("version" in event.payload.references, false);
+  assert.match(event.payload.hashes.note, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /Tiling|Sam|07700/u, "references only: no note or crew details");
+
+  assert.deepEqual(await attendance.record(jobId, command), saved);
+  await Promise.all([attendance.record(jobId, command), attendance.record(jobId, command)]);
+  assert.equal((await attendanceEvents(jobId)).length, before + 1, "audit-chain: replay");
+
+  const next = tapCommand(today, { person: command.person, expectedVersion: 1, onSite: false });
+  await assert.rejects(new SiteAttendanceRepository(failingAuditPool(runtime)).record(context, jobId, sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable} WHERE command_id = $1`,
+    [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.equal((await attendanceEvents(jobId)).length, before + 1, "audit-chain: rollback");
+  assert.equal((await attendance.record(jobId, next)).revision, 2);
+  assert.equal((await attendanceEvents(jobId)).length, before + 2);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("F8: the attendance route answers the signed-in builder and refuses typed codes to everyone else", async () => {
+  const { cookies } = await signIn("builder");
+  const path = `/api/v2-backend/jobs/${jobId}/attendance`;
+  const view = await json(await request(path, { cookies }));
+  assert.equal(view.version, "v2-site-attendance.v1");
+  assert.equal(view.days.length, 7);
+  assert.equal((await json(await request(path), 401)).code, "UNAUTHENTICATED");
+  for (const fake of ["not-a-session", randomUUID()]) {
+    const response = await request(path, { cookies: `jg_session=${fake}` });
+    assert.ok([401, 403].includes(response.status));
+    assert.ok(["UNAUTHENTICATED", "FORBIDDEN", "TENANT_FORBIDDEN"].includes((await response.json()).code));
+  }
+  const outsider = await signIn("second-builder");
+  assert.equal((await json(await request(path, { cookies: outsider.cookies }), 404)).code, "NOT_FOUND");
+  const posted = await json(await request(path, { cookies, body: tapCommand(view.today, {
+    expectedVersion: view.records.find(entry => entry.personKind === "builder" && entry.day === view.today)?.revision ?? 0 }) }), 201);
+  assert.equal(posted.personKind, "builder");
+  assert.equal((await json(await request(path, { cookies, body: { ...tapCommand(view.today), latitude: 51.5 } }), 400)).code,
+    "SITE_ATTENDANCE_INVALID");
+  assert.equal((await json(await request(path, { cookies: outsider.cookies, body: tapCommand(view.today) }), 404)).code,
+    "NOT_FOUND");
+  assert.equal((await request(`/jobs/${jobId}/records`, { cookies })).status, 200);
 });
 
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.

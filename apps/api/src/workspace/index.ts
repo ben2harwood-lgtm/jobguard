@@ -3,6 +3,7 @@ export * from "./work-plan.application.js";
 // V2 b1a walk session record
 export * from "./walk.application.js";
 export * from "./crew-contact.application.js";
+export * from "./site-attendance.application.js";
 export * from "./contracts.js";
 export * from "./workspace.service.js";
 export * from "./workspace-session.js";
