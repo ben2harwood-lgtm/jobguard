@@ -547,3 +547,20 @@ it("V2-SQ-D: undo after editing the one-price row's price shows the restored pri
   p.button(p.render(), "Undo one price for Kitchen").props.onClick();
   expect(priced().map(input => input.props.value)).toEqual(["10.00"]);
 });
+it("V2-SQ-D: renaming a one-price room keeps its undo, which restores the rows under the new name", () => {
+  const make = (id: string, description: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room: "Kitchen", unitPricePence: 1000, disposition: "accepted" });
+  const rows = [make("a", "Strip the units"), make("b", "Fit a sink")];
+  const result = { ...fixture, proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: 1000 }, room: r.room, category: "Work", roomInferred: false })), questions: [] },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  const heads = (tree: React.ReactNode) => all(tree, n => n.type === "section" && n.props["data-testid"] === "room-group").map(n => n.props["aria-label"]);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  all(p.render(), n => n.props["aria-label"] === "Rename Kitchen")[0]!.props.onChange({ target: { value: "Utility" } });
+  p.button(all(p.render(), n => n.type === "section" && n.props["aria-label"] === "Kitchen")[0]!, "Rename").props.onClick();
+  p.button(p.render(), "Undo one price for Utility").props.onClick();
+  expect(heads(p.render())).toEqual(["Utility"]);
+  expect(all(p.render(), n => n.type === "article").map(n => n.key)).toEqual(["a", "b"]);
+});
