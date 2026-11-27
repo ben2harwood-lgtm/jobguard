@@ -1913,9 +1913,10 @@ test("F2 proof holds the task open: missing, pending then verified with no new r
   const { uploadBriefProgressPhoto } = await import("../../apps/api/dist/workspace/brief-progress-photo.application.js");
   const pending = photo();
   await assert.rejects(uploadBriefProgressPhoto(failing, context, jobId, owner.membershipId, pending), /F2_FORCED/u);
-  assert.equal((await admin.query("SELECT state FROM app.evidence_upload WHERE id=$1", [pending.commandId])).rows[0].state, "pending");
+  // The finalize marks the upload quarantined before it stores the object, so the failed attempt leaves it quarantined, not verified.
+  assert.equal((await admin.query("SELECT state FROM app.evidence_upload WHERE id=$1", [pending.commandId])).rows[0].state, "quarantined");
   const pendingDone = await done(pending.commandId);
-  assert.equal(pendingDone.photoState, "pending");
+  assert.equal(pendingDone.photoState, "quarantined");
   assert.equal((await status()).status, "done_proof_pending");
   const rowsBefore = (await app.briefProgress.read(jobId)).progress.length;
   assert.equal((await app.briefProgress.uploadPhoto(jobId, pending)).state, "verified");
