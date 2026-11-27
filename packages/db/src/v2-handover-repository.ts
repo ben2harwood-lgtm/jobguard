@@ -46,10 +46,12 @@ export class HandoverRepository {
       SELECT v.id AS "variationId", r.id AS "revisionId", r.description FROM app.variation v
       JOIN app.variation_revision r ON (r.tenant_id, r.job_id, r.id) = (v.tenant_id, v.job_id, v.current_revision_id)
       WHERE (v.tenant_id, v.job_id) = ($1, $2) AND v.state = 'approved' ORDER BY v.created_at, v.id`, [tenantId, jobId])).rows;
-    // F6's customer-photo query (verified originals, not invalidated), copied, with the sha256.
+    // F6's customer-photo query (verified originals, not invalidated), copied, with the sha256. Only site, completion,
+    // snag and variation photos: never a receipt or record image, whose amounts no text check can see.
     const photos = (await client.query<{ id: string; sha256: string; receivedAt: string }>(`
       SELECT e.id, e.sha256, to_char(e.server_received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "receivedAt"
       FROM app.evidence_object e WHERE e.tenant_id = $1 AND e.job_id = $2 AND e.kind = 'original'
+        AND e.evidence_type IN ('site_photo', 'completion_photo', 'snag_photo', 'variation_photo')
         AND e.content_type IN ('image/png', 'image/jpeg', 'image/webp') AND e.server_verified_at IS NOT NULL
         AND NOT EXISTS (SELECT FROM app.evidence_invalidation i WHERE (i.tenant_id, i.evidence_id) = (e.tenant_id, e.id))
       ORDER BY e.server_received_at, e.id`, [tenantId, jobId])).rows;
