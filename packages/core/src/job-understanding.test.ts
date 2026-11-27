@@ -38,6 +38,17 @@ describe("V2-SQ-C job understanding contract and money rule", () => {
     expect(checked.areaPrices).toEqual([]);
     expect(checked.questions.at(-1)).toEqual({ text: "Price needed for this room.", areaKey: "kitchen" });
   });
+  it("clears a number that sits in another line's words or across a sentence from its own", () => {
+    const text = "Fit the door. Paint six walls for 300.";
+    const at = (words: string) => ({ kind: "extracted" as const, span: { sourceId: "s", sourceVersion: 1 as const, start: text.indexOf(words), end: text.indexOf(words) + words.length } });
+    const line = (words: string, quantity: string | null, quantityWords: string | null) => ({ description: { value: words, provenance: at(words) },
+      quantity: { value: quantity, provenance: quantityWords ? at(quantityWords) : { kind: "defaulted" as const, note: "x" } },
+      unit: { value: null, provenance: { kind: "defaulted" as const, note: "x" } }, unitPricePence: { value: null, provenance: { kind: "defaulted" as const, note: "x" } },
+      areaKey: "kitchen", trade: { value: "Other" as const, provenance: { kind: "inferred" as const, note: "x" } }, priceBasis: "none" as const });
+    const job = jobUnderstandingV1.parse({ ...base(), areaPrices: [], lines: [line("Fit the door", "6", "six"), line("Paint six walls", "6", "six")] });
+    const checked = checkUnderstandingNumbers(job, text, digits);
+    expect(checked.lines.map(item => item.quantity.value)).toEqual([null, "6"]);
+  });
   it("refuses a room or whole-job price without cited words, and unknown areas", () => {
     expect(() => jobUnderstandingV1.parse({ ...base(), wholeJobPrice: { pence: 100, provenance: { kind: "inferred", note: "x" } } })).toThrow();
     expect(() => jobUnderstandingV1.parse({ ...base(), areaPrices: [{ areaKey: "bathroom", pence: 1, provenance: span("2400") }] })).toThrow();

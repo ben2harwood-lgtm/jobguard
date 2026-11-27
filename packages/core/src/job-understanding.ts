@@ -59,7 +59,8 @@ export type SpokenNumberReader = { money(words: string): number | null; count(wo
 /**
  * The money rule (plan 4.2), for both readers. A quantity, unit price, room price or whole-job price is kept only
  * when it is extracted and its cited span of the untouched source reads, by JobGuard's own parser, to exactly that
- * value. Anything else is cleared and asked about. A reader can label and group; it can never introduce a number.
+ * value, as a whole number and not part of a larger one. A line's quantity or price must also sit with that line's
+ * own words: not inside another line's words, and not across a sentence from them. Anything else is cleared and asked about. A reader can label and group; it can never introduce a number.
  */
 export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourceText: string, read: SpokenNumberReader): JobUnderstanding {
   const questions = [...understanding.questions];
@@ -71,14 +72,25 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if (/\d[.,]?$/u.test(sourceText.slice(Math.max(0, start - 2), start)) || /^[.,]?\d/u.test(sourceText.slice(end, end + 2))) return false;
     return read[kind](sourceText.slice(start, end)) === expected;
   };
+  const spanOf = (provenance: z.infer<typeof provenanceV1>) => provenance.kind === "extracted" ? provenance.span : null;
+  /** A line's number is said with its own words: not inside another line's words, nor across a sentence from its own. */
+  const belongs = (lineIndex: number, provenance: z.infer<typeof provenanceV1>) => {
+    const own = spanOf(understanding.lines[lineIndex]!.description.provenance), said = spanOf(provenance);
+    if (!own || !said) return true;
+    if (said.start >= own.start && said.start < own.end) return true;
+    if (understanding.lines.some((other, index) => { const words = spanOf(other.description.provenance);
+      return index !== lineIndex && !!words && said.start >= words.start && said.start < words.end; })) return false;
+    const between = said.start < own.start ? sourceText.slice(said.end, own.start) : sourceText.slice(own.end, said.start);
+    return !/[.;!?\n]/u.test(between.replace(/(\d)\.(?=\d)/gu, "$1"));
+  };
   const lines = understanding.lines.map((line, lineIndex) => {
     const label = line.description.value.slice(0, 160);
     let { quantity, unitPricePence, priceBasis } = line;
-    if (quantity.value !== null && !cites(quantity.provenance, Number(quantity.value), "count")) {
+    if (quantity.value !== null && !(cites(quantity.provenance, Number(quantity.value), "count") && belongs(lineIndex, quantity.provenance))) {
       quantity = { value: null, provenance: { kind: "defaulted", note: "Quantity not said exactly; never invented" } };
       questions.push({ text: `How many for “${label}”?`, lineIndex });
     }
-    if (unitPricePence.value !== null && !cites(unitPricePence.provenance, unitPricePence.value, "money")) {
+    if (unitPricePence.value !== null && !(cites(unitPricePence.provenance, unitPricePence.value, "money") && belongs(lineIndex, unitPricePence.provenance))) {
       unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
       priceBasis = "none";
       questions.push({ text: `Price needed for “${label}”.`, lineIndex });

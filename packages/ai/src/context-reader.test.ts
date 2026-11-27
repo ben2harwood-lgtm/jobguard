@@ -51,12 +51,22 @@ describe("V2-SQ-C Reader A", () => {
 
   it("does not apply a correction or a reference; it asks", () => {
     const fixed = readSpokenJob("c", "In the kitchen fit six base units, no, make that eight, and fit the worktop for 400.");
-    expect(fixed.lines[0]).toMatchObject({ quantity: { value: "6" } });
+    expect(fixed.lines[0]).toMatchObject({ quantity: { value: null }, unitPricePence: { value: null } });
     expect(fixed.questions.some(question => question.lineIndex === 0 && /make that eight/u.test(question.text))).toBe(true);
     const again = readSpokenJob("s", "Back bedroom paint the walls two coats for 300. Same again in the front bedroom.");
     expect(again.lines).toHaveLength(2);
     expect(again.lines[1]).toMatchObject({ unitPricePence: { value: null }, quantity: { value: null } });
     expect(again.questions.some(question => question.lineIndex === 1 && /nothing was copied/u.test(question.text))).toBe(true);
+  });
+
+  it("leaves a number open when it may belong to another item", () => {
+    const corrected = readSpokenJob("n", "kitchen fit three no four wall units and paint it all two coats");
+    expect(corrected.lines[0]).toMatchObject({ quantity: { value: null } });
+    expect(corrected.questions.some(question => question.lineIndex === 0 && /three no four/u.test(question.text))).toBe(true);
+    const runOn = readSpokenJob("r", "en suite new shower tray and enclosure supply and fit 1450 extractor fan 180");
+    expect(runOn.lines.every(line => line.quantity.value === null && line.unitPricePence.value === null)).toBe(true);
+    const twoItems = readSpokenJob("t", "kitchen tile the splashback four hundred and fifty and the sparky needs to add four double sockets");
+    expect(twoItems.lines.every(line => line.quantity.value === null)).toBe(true);
   });
 
   it("labels lines proposed from the same words by where they start", () => {

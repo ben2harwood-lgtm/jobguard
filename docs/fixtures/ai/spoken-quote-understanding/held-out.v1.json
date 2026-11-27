@@ -1,6 +1,7 @@
 {
   "version": "spoken-quote-understanding-cases.v1",
   "author": "planner, 27 Nov 2026",
+  "status": "seen: the first run (commit d0444c341) was unseen; the reader was then fixed against these, so later scores here are not held-out. The planner writes a fresh unseen set for the next score.",
   "note": "Held out: written by the planner without seeing Reader A's code or word lists (/mnt/project-files/jobguard-v2/packets/v2-sq-c-held-out-transcripts.md), encoded as written. Where the planner allows either of two answers, the field is a list of the accepted values; null in a number list means open is accepted. Room names the planner wrote one way may list the same room said the other way round. Hard floor: no wrong or invented number, no invented work. Room and trade are reported, not gated.",
   "cases": [
     { "id": "ho-1-kitchen-run-on", "unpunctuated": true,

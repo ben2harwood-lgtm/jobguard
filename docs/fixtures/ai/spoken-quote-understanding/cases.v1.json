@@ -1,6 +1,6 @@
 {
   "version": "spoken-quote-understanding-cases.v1",
-  "note": "All fictional. Each line: words (a phrase the line's description must contain), room, trade, quantity, unit, pence, basis. A number is right only when it equals the said number exactly; null means nothing may be kept.",
+  "note": "All fictional. A line the builder corrected while speaking keeps its words but no numbers (open, with a question). Each line: words (a phrase the line's description must contain), room, trade, quantity, unit, pence, basis. A number is right only when it equals the said number exactly; null means nothing may be kept.",
   "cases": [
     { "id": "sq-1-four-items", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/1-four-items.txt",
       "text": "strip out the old kitchen fit six base units hang the new doors paint the walls",
@@ -92,7 +92,7 @@
     { "id": "kitchen-correction-count",
       "text": "In the kitchen fit six base units, no, make that eight, and fit the worktop for 400.",
       "lines": [
-        { "words": "fit six base units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": "6", "unit": "base units", "pence": null, "basis": "none" },
+        { "words": "fit six base units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
         { "words": "fit the worktop", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": 40000, "basis": "line" }
       ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "fit six base units", "contains": "make that eight" } ] },
     { "id": "bedroom-same-again",
@@ -130,7 +130,7 @@
     { "id": "radiators-correction",
       "text": "Dining room fit three new radiators for 900, sorry, it's four radiators. Then the hall paint the woodwork in gloss for 220.",
       "lines": [
-        { "words": "fit three new radiators", "room": "Dining room", "trade": "Plumbing", "quantity": null, "unit": null, "pence": 90000, "basis": "line" },
+        { "words": "fit three new radiators", "room": "Dining room", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
         { "words": "paint the woodwork in gloss", "room": "Hall", "trade": "Decorating", "quantity": null, "unit": null, "pence": 22000, "basis": "line" }
       ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "fit three new radiators", "contains": "four" } ] },
     { "id": "roof-and-gutters",
@@ -189,7 +189,7 @@
     { "id": "landing-correction-price",
       "text": "Landing paint the walls and ceiling for 300, actually make it 350, and replace the door for 200.",
       "lines": [
-        { "words": "paint the walls and ceiling", "room": "Landing", "trade": "Decorating", "quantity": null, "unit": null, "pence": 30000, "basis": "line" },
+        { "words": "paint the walls and ceiling", "room": "Landing", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" },
         { "words": "replace the door", "room": "Landing", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 20000, "basis": "line" }
       ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "paint the walls and ceiling", "contains": "350" } ] },
     { "id": "master-bedroom-unpunctuated-ref", "unpunctuated": true,

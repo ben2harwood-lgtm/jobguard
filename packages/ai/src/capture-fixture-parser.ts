@@ -34,7 +34,7 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 }
 
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
-const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
+export const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
 export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
@@ -93,7 +93,8 @@ const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${nu
  * ITEM: records never enter this path. No source text is executed or fetched.
  */
 // `isWork` lets the context reader (SQ-C) also treat "in the kitchen rip out …" as work; the v1 parser passes the default.
-export function plainDraft(text: string, isWork: (value: string) => boolean = workClause): { chunks: Cell[]; notes: string[]; title: Cell | null } {
+export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
+  isTiming: (value: string) => boolean = value => timing.test(value)): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
@@ -129,7 +130,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
       // "supply and fit one door" is one item.
       if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) continue;
-      if (isWork(next) || timing.test(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
+      if (isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
         add(start, i); start = i + separator.length; i = start - 1;
       }
     }
@@ -139,7 +140,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
   const title = first && titleText ? { value: titleText, start: first.start } : null;
   const work = chunks.filter((chunk, index) => {
-    if (timing.test(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
+    if (isTiming(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
     if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
