@@ -1985,7 +1985,11 @@ test("G3 firm A/B read check, and migration 2058 reruns without changing policie
 
 // V2-G4 (Q63, migration 2062): who can read the handover pack. The builder can stop a link, a changed customer
 // stops the old one, "newer version available" ignores stopped releases, and another firm sees nothing.
+// G3's rerun case reapplies 2058, which puts back the pre-G4 link function bodies. Each G4 case reapplies
+// 2062 first (it is idempotent), so these cases always run against the G4 bodies whatever ran before.
+const g4Migration = readFileSync(new URL("../../packages/db/migrations/2062_v2_handover_release_stop.sql", import.meta.url), "utf8");
 const g4 = {
+  async ready() { await admin.query(g4Migration); return g3.ready(); },
   stop: (releaseId, reason = "Sent by mistake", commandId = randomUUID()) => ({ version: "v2-handover-stop-command.v1", commandId, releaseId, reason }),
   // The ordinary customer-and-site path: a correction on a live job, with a reason. A null customerRef is a new customer.
   async customer(f, email, { same = false } = {}) {
@@ -2010,7 +2014,7 @@ const g4 = {
 };
 
 test("G4 stop: a stopped link is refused like an unknown one, history shows it, and a new release opens", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const first = await g3.direct(f, g3.release(1));
   const stopped = await g3.post(f, g4.stop(first.result.release.releaseId));
   assert.equal(stopped.replayed, false);
@@ -2031,7 +2035,7 @@ test("G4 stop: a stopped link is refused like an unknown one, history shows it, 
 });
 
 test("G4 changed customer: the old link is refused, a cosmetic edit keeps it, and a release to the new customer opens", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const first = await g3.direct(f, g3.release(1));
   await g4.customer(f, "CUSTOMER@jobguard-v2.invalid", { same: true });
   assert.equal((await g3.open(first.result.token)).status, 200, "a change of case keeps the link");
@@ -2048,7 +2052,7 @@ test("G4 changed customer: the old link is refused, a cosmetic edit keeps it, an
 });
 
 test("G4 newer-version ignores a stopped release", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const first = await g3.direct(f, g3.release(1));
   const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
   const second = await g3.direct(f, g3.release(v2.version));
@@ -2059,7 +2063,7 @@ test("G4 newer-version ignores a stopped release", async () => {
 });
 
 test("G4 other firm: 404 on read, release and stop; a stopped first-firm token with second-firm cookies is refused; no stop rows", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const { result } = await g3.direct(f, g3.release(1));
   const second = await signIn("second-builder");
   await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
@@ -2074,7 +2078,7 @@ test("G4 other firm: 404 on read, release and stop; a stopped first-firm token w
 });
 
 test("G4 stop replay and conflict; an unknown release; UPDATE and DELETE refused", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const { result } = await g3.direct(f, g3.release(1));
   const body = g4.stop(result.release.releaseId);
   const first = await g3.post(f, body), replay = await g3.post(f, body);
@@ -2094,7 +2098,7 @@ test("G4 stop replay and conflict; an unknown release; UPDATE and DELETE refused
 });
 
 test("G4 migration 2062 reruns without changing policies, triggers, function bodies or rows", async () => {
-  const f = await g3.ready();
+  const f = await g4.ready();
   const { result } = await g3.direct(f, g3.release(1));
   await g3.post(f, g4.stop(result.release.releaseId));
   const catalog = async () => (await admin.query(`SELECT
