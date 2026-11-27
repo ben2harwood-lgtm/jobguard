@@ -1755,6 +1755,23 @@ test("G2 refusals: an amount, a stale version, a snag checked after preview, ano
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, 1);
 });
 
+// Codex review on #998: a snag's note edited in another session after the preview must not be frozen unseen.
+test("G2 saves only the previewed text: a note changed after the preview refuses the save until it is previewed again", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.match(first.contentHash, /^[0-9a-f]{64}$/u);
+  await f.register({ version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId: f.snagId, agreed: true, note: "Visit moved to Friday." });
+  assert.equal((await f.post({ ...g2.save(choice), previewHash: first.contentHash }, 409)).code, "HANDOVER_SOURCE_CHANGED");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  const again = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.notEqual(again.contentHash, first.contentHash);
+  const { saved } = await f.post({ ...g2.save(choice), previewHash: again.contentHash });
+  assert.deepEqual(saved.content, again.content);
+  assert.equal(saved.contentHash, again.contentHash);
+  assert.match(g2Text(saved.content), /Visit moved to Friday\./u);
+});
+
 test("G2 replay and conflict, append-only, firm A/B read check and route refusals", async () => {
   const f = await g2.job();
   const choice = { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] };

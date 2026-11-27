@@ -20,7 +20,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover`;
   const [view, setView] = useState<View | null>(null), [problem, setProblem] = useState(false), [busy, setBusy] = useState(false);
   const [choice, setChoice] = useState<HandoverChoice>(blank), [notice, setNotice] = useState(""), [status, setStatus] = useState("");
-  const [preview, setPreview] = useState<HandoverContent | null>(null), [refused, setRefused] = useState<HandoverRefusal[]>([]);
+  const [preview, setPreview] = useState<{ content: HandoverContent; contentHash: string } | null>(null), [refused, setRefused] = useState<HandoverRefusal[]>([]);
   const [opened, setOpened] = useState<number | null>(null);
   // One command id per chosen content until a response arrives, so a retried save makes one version.
   const pending = useRef<{ key: string; commandId: string } | null>(null);
@@ -40,7 +40,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
       if (!response.ok) {
         if (response.status !== 503) pending.current = null;
         setNotice(handoverProblemText(result.code)); setRefused(result.refused ?? []);
-        if (response.status === 409 && !result.refused) await load().catch(() => undefined);
+        if (response.status === 409 && !result.refused) { setPreview(null); await load().catch(() => undefined); }
         return null;
       }
       pending.current = null;
@@ -49,11 +49,13 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
     finally { setBusy(false); }
   }
   async function showPreview() {
-    const result = await post({ version: "v2-handover-preview.v1", choice }) as { preview: { content: HandoverContent; refused: HandoverRefusal[] } } | null;
-    if (result) { setPreview(result.preview.content); setRefused(result.preview.refused); }
+    const result = await post({ version: "v2-handover-preview.v1", choice }) as { preview: { content: HandoverContent; refused: HandoverRefusal[]; contentHash: string } } | null;
+    if (result) { setPreview({ content: result.preview.content, contentHash: result.preview.contentHash }); setRefused(result.preview.refused); }
   }
   async function save() {
-    const body = { version: "v2-handover-save-command.v1", expectedVersion: view?.versions.at(-1)?.version ?? 0, choice };
+    // The saved version is the one the builder previewed: a source changed since then refuses the save.
+    if (!preview) return;
+    const body = { version: "v2-handover-save-command.v1", expectedVersion: view?.versions.at(-1)?.version ?? 0, choice, previewHash: preview.contentHash };
     const key = JSON.stringify(body);
     if (pending.current?.key !== key) pending.current = { key, commandId: crypto.randomUUID() };
     const result = await post({ ...body, commandId: pending.current.commandId }) as { saved: HandoverVersion } | null;
@@ -102,12 +104,12 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
         <div className="form-actions" style={{ flexWrap: "wrap" }}>
           <button type="button" className="btn" disabled={busy || !choice.sections.length || choice.certificates.some(row => !row.text.trim())}
             onClick={() => preview ? setPreview(null) : void showPreview()}>{preview ? "Close customer preview" : "Preview as the customer sees it"}</button>
-          <button type="button" className="btn primary" disabled={busy || !choice.sections.length || choice.certificates.some(row => !row.text.trim())}
+          <button type="button" className="btn primary" disabled={busy || !preview || !choice.sections.length || choice.certificates.some(row => !row.text.trim())}
             onClick={() => void save()}>Save this version</button>
         </div>
       </div>
     </Card>
-    {preview && <section aria-label="Customer preview" className="form"><h2>Your handover pack</h2><HandoverPack content={preview}/></section>}
+    {preview && <section aria-label="Customer preview" className="form"><h2>Your handover pack</h2><HandoverPack content={preview.content}/></section>}
     <Card title="Version history"><div className="card-body form">
       {versions.length ? versions.map(row => <div key={row.version}>
         <p>{handoverVersionLine(row)}</p>
