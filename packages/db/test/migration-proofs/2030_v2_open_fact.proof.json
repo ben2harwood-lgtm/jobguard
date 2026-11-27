@@ -1,5 +1,5 @@
 {
-  "migration": "2063_v2_materials_enquiry.sql",
+  "migration": "2030_v2_open_fact.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
