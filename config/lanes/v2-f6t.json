@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f6t": {
+      "branches": ["codex/sandbox/v2-f6t"],
+      "allow": ["tools/v2/customer-extra-links.browser.test.mjs", "tools/v2/test/customer-photo.fixture.mjs"],
+      "note": "Q19 V2-F6T test-only browser proof for the RED F6 customer page."
+    }
+  }
+}

@@ -1,96 +1,212 @@
-// Run against the checked V2 seed, using either web or HTTPS phone-mode origin.
+// Run against the checked V2 seed on the launcher's HTTPS phone-mode origin.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
-const origin = process.env.V2_TEST_ORIGIN;
-assert.ok(origin, "Set V2_TEST_ORIGIN to the V2 launcher's web or HTTPS phone origin");
-let browser, ownerState;
+// Copied from V2-BH1 at 3e9fad3b (not merged); only the inline DB import path differs.
+function v2Origin() {
+  const origin = process.env.V2_TEST_ORIGIN;
+  assert.ok(origin, "V2_TEST_ORIGIN must name the launcher's HTTPS phone origin");
+  const url = new URL(origin);
+  assert.equal(url.protocol, "https:", "V2_TEST_ORIGIN must use HTTPS for Secure session cookies");
+  return url.origin;
+}
+
+const origin = v2Origin();
+let browser, ownerState, jobId;
 before(async () => {
   browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
-  const owner = await browser.newContext({ ignoreHTTPSErrors: true });
+  const setup = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
-    await signIn(owner);
-    ownerState = await owner.storageState();
-  } finally { await owner.close(); }
+    // Next's own dev-tools action disables the indicator before any pages open.
+    // This is a dev-launcher proof; do not hide DOM nodes or change app config.
+    const disabled = await setup.request.post(`${origin}/__nextjs_disable_dev_indicator`);
+    assert.equal(disabled.status(), 204, "The test stack must disable the Next.js dev indicator");
+  } finally { await setup.close(); }
+  const session = await signInOnce(browser);
+  ownerState = session.storageState;
+  jobId = session.jobId;
 });
 after(async () => browser?.close());
-async function post(context, path, data, csrf) {
-  const response = await context.request.post(origin + path, { data, headers: { origin, ...(csrf && { "x-csrf-token": csrf }) } });
+// Browser fetch uses the saved Secure session on the HTTPS phone origin.
+const requestPages = new WeakMap();
+async function request(context, path, data) {
+  let page = requestPages.get(context);
+  if (!page) {
+    page = await context.newPage();
+    await page.goto(origin + "/practice-company");
+    requestPages.set(context, page);
+  }
+  const result = await page.evaluate(async ({ path, data }) => {
+    const r = await fetch(path, { cache: "no-store", ...(data && { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }) });
+    return { status: r.status, text: await r.text() };
+  }, { path, data });
+  return { status: () => result.status, ok: () => result.status >= 200 && result.status < 300,
+    text: async () => result.text, json: async () => JSON.parse(result.text) };
+}
+async function post(context, path, data) {
+  const response = await request(context, path, data);
   assert.ok(response.ok(), `${path}: ${response.status()} ${await response.text()}`);
   return response.json();
 }
-async function signIn(context) {
-  // Use the browser's sign-in and practice-entry path, including secure-cookie
-  // handling. APIRequestContext does not send secure cookies over local HTTP.
-  const page = await context.newPage();
+async function get(context, path) {
+  const response = await request(context, path);
+  const body = await response.text();
+  assert.equal(response.status(), 200, `GET ${path}: ${response.status()} ${body}`);
+  return JSON.parse(body);
+}
+async function screenshot(page, state, width) {
+  if (!process.env.V2_TEST_SCREENSHOTS) return;
+  await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
+  await page.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, `f6-${state}-${width}.png`), fullPage: true });
+}
+// K5A #929 at 7560b597: one page sign-in, then enter practice with its CSRF token.
+async function signInOnce(browser, { jobTitle = "Occupied-home kitchen splashback and hall decorating" } = {}) {
+  const origin = v2Origin();
+  let context;
+  let step = "create context";
   try {
-    await page.goto(origin + "/sign-in");
+    context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    step = "open sign-in";
+    await page.goto(`${origin}/sign-in`);
+    step = "request code";
     await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
     await page.getByLabel("What do you want to do?").selectOption("signin");
-    await page.getByRole("button", { name: "Request code", exact: true }).click();
+    await page.getByRole("button", { name: "Request code" }).click();
     const code = page.getByTestId("fixture-code");
     await expect(code).toHaveText(/^[0-9]{8}$/u);
     await page.getByLabel("Eight-digit code").fill(await code.textContent());
-    await page.getByRole("button", { name: "Verify code", exact: true }).click();
-    await expect(page).toHaveURL(origin + "/practice-company");
-    assert.ok((await context.cookies()).some(cookie => cookie.name === "jg_session"));
-  } finally { await page.close(); }
+    step = "verify code";
+    const [verified] = await Promise.all([
+      page.waitForResponse(`${origin}/api/auth/verify`),
+      page.getByRole("button", { name: "Verify code" }).click(),
+    ]);
+    assert.equal(verified.status(), 200, "Code verification must succeed");
+    const { csrfToken } = await verified.json();
+    assert.ok(typeof csrfToken === "string" && csrfToken, "Verification must return a CSRF token");
+    step = "finish sign-in navigation";
+    await page.waitForURL(url => !url.pathname.startsWith("/sign-in"));
+    await page.waitForLoadState("load");
+    step = "enter practice";
+    await page.evaluate(async token => {
+      const response = await fetch("/api/auth/practice", {
+        method: "POST", headers: { "content-type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+      });
+      if (!response.ok) throw new Error(`practice:${response.status}`);
+    }, csrfToken);
+    step = "find seeded job";
+    const { DEMO_TENANT_ID } = await import("../../packages/db/dist/index.js");
+    const jobs = await page.evaluate(async tenantId => {
+      const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
+      if (!response.ok) throw new Error(`jobs:${response.status}`);
+      return (await response.json()).jobs;
+    }, DEMO_TENANT_ID);
+    const jobId = jobs.find(job => job.title.includes(jobTitle))?.id;
+    assert.ok(jobId, `The seeded job must appear in Jobs: ${jobTitle}`);
+    step = "save session";
+    return { origin, storageState: await context.storageState(), csrfToken, jobId };
+  } catch (cause) {
+    const error = new Error(`V2 browser session failed at ${step}`, { cause });
+    error.name = "V2BrowserSessionError";
+    throw error;
+  } finally {
+    await context?.close();
+  }
 }
+
 for (const width of [360, 1280]) {
-  test(`V2-F6 customer agreement at ${width}px, including local catcher and builder approval`, { timeout: 120000 }, async () => {
+  test(`V2-F6 customer agreement without photos at ${width}px, including local catcher and builder approval`, { timeout: 120000 }, async () => {
     const owner = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
     const customer = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true });
     try {
-      const response = await owner.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111");
-      const jobId = (await response.json()).jobs[0].id;
       await post(owner, `/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
       const description = `F6 browser splashback ${width} ${randomUUID()}`;
+      const privateNote = `Builder-only note ${randomUUID()}`;
       const result = await post(owner, `/api/jobs/${jobId}/variations`, { version: "variation-command.v1", action: "propose",
         proposalId: randomUUID(), scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
-        description, captureText: description, price: { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" } });
+        description, captureText: privateNote, price: { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" } });
       const baseline = result.approvedAdditionsPence;
-      const proofView = await (await owner.request.get(`${origin}/api/jobs/${jobId}/proof`)).json();
-      const upload = await post(owner, `/api/jobs/${jobId}/proof`, { version: "practice-proof-command.v1",
-        action: "select_generated", commandId: randomUUID(), scopeItemId: proofView.scopeItemId, fixture: "completion-photo" });
-      await post(owner, `/api/jobs/${jobId}/proof`, { version: "practice-proof-command.v1", action: "finalize",
-        commandId: randomUUID(), uploadId: upload.upload.id, objectVersionId: upload.upload.objectVersionId });
+      // Q19 final repair: use no photos. Photo display waits for V2-PX;
+      // main's practice proof boundary deliberately excludes the V2 database.
       const page = await owner.newPage();
       await page.goto(`${origin}/v2/jobs/${jobId}/extra-links`);
       const section = page.getByRole("heading", { name: description }).locator("..");
-      await page.getByRole("checkbox").last().check();
       await section.getByRole("button", { name: "Make customer link for version 1" }).click();
       const localInbox = page.getByRole("region", { name: "Local test inbox" });
       const link = await localInbox.getByRole("link", { name: "Open customer link" }).getAttribute("href");
       assert.ok(link);
       const customerPage = await customer.newPage(), foreign = [];
       customerPage.on("request", req => { if (new URL(req.url()).origin !== new URL(origin).origin) foreign.push(req.url()); });
+      const main = customerPage.getByRole("main");
       await customerPage.goto(origin + link);
-      await expect(customerPage.getByRole("heading", { name: description })).toBeVisible();
-      await expect(customerPage.getByText("£125.00", { exact: true })).toBeVisible();
-      const photo = customerPage.getByRole("img", { name: "Photo 1 of this extra" });
-      await expect(photo).toBeVisible();
-      await expect.poll(() => photo.evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
-      await expect(customerPage.getByText(/margin|hidden finding|other job/iu)).toHaveCount(0);
-      await customerPage.getByLabel("Your name").fill("Fictional customer");
-      await customerPage.getByRole("button", { name: "I agree", exact: true }).click();
-      await expect(customerPage.getByRole("status")).toContainText("Agreement recorded");
-      await customerPage.reload();
-      await expect(customerPage.getByRole("status")).toContainText("Agreement recorded");
+      await expect(main.getByRole("heading", { name: description })).toBeVisible();
+      await expect(main.getByText("£125.00", { exact: true })).toBeVisible();
+      await expect(main.getByText(/margin|hidden finding|other job/iu)).toHaveCount(0);
+      await expect(main.getByText(privateNote, { exact: false })).toHaveCount(0);
+      await expect(main.locator("strong")).toHaveText(["£125.00"]);
       assert.ok(await customerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-      if (process.env.V2_TEST_SCREENSHOTS) {
-        await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
-        await customerPage.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, `f6-agreed-${width}.png`), fullPage: true });
-      }
-      const pending = await owner.request.get(`${origin}/api/jobs/${jobId}/variations`);
-      assert.equal((await pending.json()).approvedAdditionsPence, baseline);
+      await expect(main.getByRole("heading", { level: 2 })).toHaveCount(1);
+      await expect(main.getByRole("img")).toHaveCount(0);
+      await expect(main.getByText("Variation version 1", { exact: true })).toBeVisible();
+      const customerView = await get(customer, link.replace("/customer/change/", "/api/v2/extra-links/"));
+      assert.deepEqual(customerView.photoIds, []);
+      assert.deepEqual(Object.keys(customerView).sort(), ["version", "environment", "jobId", "revisionId", "variationVersion", "amount", "description", "photoIds", "expectedVersion", "agreedAt"].sort());
+      await screenshot(customerPage, "review", width);
+      await main.getByLabel("Your name").fill("Fictional customer");
+      await main.getByRole("button", { name: "I agree", exact: true }).click();
+      await expect(main.getByRole("status")).toContainText("Agreement recorded");
+      await customerPage.reload();
+      await expect(main.getByRole("status")).toContainText("Agreement recorded");
+      assert.ok(await customerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      await screenshot(customerPage, "agreed", width);
+      const pending = await get(owner, `/api/jobs/${jobId}/variations`);
+      assert.equal(pending.approvedAdditionsPence, baseline);
       await page.reload();
       await section.getByRole("button", { name: /Customer agreed by link at .*: approve/u }).click();
       await expect(section.getByRole("button", { name: /Customer agreed by link at .*: approve/u })).toHaveCount(0);
-      const committed = await owner.request.get(`${origin}/api/jobs/${jobId}/variations`);
-      assert.equal((await committed.json()).approvedAdditionsPence, baseline + 12500);
+      const committed = await get(owner, `/api/jobs/${jobId}/variations`);
+      assert.equal(committed.approvedAdditionsPence, baseline + 12500);
+      // A second extra is superseded while its customer page remains open.
+      const staleId = randomUUID(), staleDescription = `F6 stale ${width} ${randomUUID()}`;
+      const proposed = await post(owner, `/api/jobs/${jobId}/variations`, { version: "variation-command.v1", action: "propose",
+        proposalId: staleId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+        description: staleDescription, captureText: "Fictional customer request",
+        price: { quantity: "1", unit: "item", unitRatePence: 25000, direction: "addition" } });
+      const oldRevision = proposed.variations.find(v => v.id === staleId).currentRevisionId;
+      await page.reload();
+      const staleSection = page.getByRole("heading", { name: staleDescription }).locator("..");
+      await staleSection.getByRole("button", { name: "Make customer link for version 1" }).click();
+      await expect(localInbox.getByRole("link", { name: "Open customer link" })).toHaveCount(1);
+      const staleLink = await localInbox.getByRole("link", { name: "Open customer link" }).getAttribute("href");
+      assert.ok(staleLink);
+      await customerPage.goto(origin + staleLink);
+      await expect(main.getByText("£250.00", { exact: true })).toBeVisible();
+      await main.getByLabel("Your name").fill("Fictional stale customer");
+      const newRevision = randomUUID();
+      await post(owner, `/api/jobs/${jobId}/variations`, { version: "variation-command.v1", action: "revise",
+        variationId: staleId, revisionId: newRevision, expectedRevisionId: oldRevision,
+        description: staleDescription, price: { quantity: "1", unit: "item", unitRatePence: 35000, direction: "addition" } });
+      await main.getByRole("button", { name: "I agree", exact: true }).click();
+      await expect(main.getByRole("alert")).toHaveText("Agreement refused. Ask the builder for a fresh link.");
+      await expect(main.getByRole("status")).toHaveCount(0);
+      await expect(main.getByText("£350.00", { exact: true })).toHaveCount(0);
+      await screenshot(customerPage, "stale-refused", width);
+      const saved = await get(owner, `/api/jobs/${jobId}/extra-links`);
+      const staleLinks = saved.links.filter(l => l.variationId === staleId);
+      assert.equal(staleLinks.length, 1, "Only the expected local link was created");
+      assert.equal(staleLinks[0].agreedAt, null, "Superseded old version was not agreed");
+      assert.equal(staleLinks[0].agreedBy, null);
+      const changed = saved.variations.variations.find(v => v.id === staleId);
+      assert.equal(changed.currentRevisionId, newRevision);
+      assert.ok(changed.revisions.every(r => !r.approved), "Neither price version is approved");
+      assert.equal(saved.variations.approvedAdditionsPence, baseline + 12500);
+      await page.reload();
+      await expect(staleSection.getByRole("button", { name: /Customer agreed by link at .*: approve/u })).toHaveCount(0);
       assert.deepEqual(foreign, []);
     } finally { await owner.close(); await customer.close(); }
   });
