@@ -1,6 +1,6 @@
 # Q12 / V2-F6 · RED · customer agreement links
 
-Migration `tools/v2/migrations/2018_customer_extra_links.sql` is local-only. The
+Migration `tools/v2/migrations/2048_customer_extra_links.sql` is local-only. The
 checked V2 bootstrap installs it after 2001. It has no dependency on 2002–2006,
 does not join the production migration runner, and refuses any other database.
 Rerunning the bootstrap retains rows and creates neither links nor audit events.
@@ -143,3 +143,9 @@ Creation audit (Codex P1 on e44eb6d): `v2_f6_require_create_audit` is a deferred
 AFTER INSERT constraint trigger. A new link commits only with its
 `v2.customer_extra_link.created` event (subject and commandId both equal the link id,
 which is the create command id); otherwise `LINK_CREATION_UNAUDITED` (23514).
+
+Renumbered 2018 -> 2048 (above v2/main's 2047) and firm-locked: after FL-1 (#966) every
+job-bound table needs a restrictive `v2_practice_firm` policy. 2048 adds the same direct
+rule as 2047 (EXISTS on app.job by (tenant_id, job_id)); the capability functions are
+owned by jobguard_migration, so the anonymous link paths are unaffected. Firm A/B proof
+is `tools/v2/firm-lock/FL-F6.checks.mjs`. Bootstrap loads 2048 after 2047.

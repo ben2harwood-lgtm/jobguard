@@ -67,14 +67,14 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
 
-  // V2-F6: reserved local-only migration, independent of unmerged V2 tables.
-  await client.query(readFileSync(new URL("./migrations/2018_customer_extra_links.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-F6 customer extra links (2048), after FL-1 so its firm lock follows the same rule.
+  await client.query(readFileSync(new URL("./migrations/2048_customer_extra_links.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
