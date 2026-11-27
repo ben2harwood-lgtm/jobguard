@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-v2-preview": {
+      "branches": [
+        "codex/tommy-v2-preview"
+      ],
+      "note": "Tommy’s isolated V2 preview on top of SQ3. Fix the New job button size and retain the synthetic Worker bundle for preview testing.",
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        ".github/workflows/cloudflare-build.yml"
+      ]
+    }
+  }
+}

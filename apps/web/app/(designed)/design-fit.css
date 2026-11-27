@@ -29,7 +29,8 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd .designed-capture .btn:focus-visible,.jgd .designed-capture :is(input,select,textarea,summary,a):focus-visible{outline:3px solid #078592;outline-offset:2px}
 .jgd .designed-capture .btn:disabled{opacity:.62;cursor:not-allowed}
 .jgd .designed-capture .dictation{align-items:start;gap:8px;margin:18px 0 0}
-.jgd .designed-capture .dictation button{margin:0;min-height:44px}
+.jgd .designed-capture .btn{min-height:44px}
+.jgd .designed-capture .dictation button{margin:0}
 .jgd .designed-capture .walk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px;margin-top:16px}
 .jgd .designed-capture .walk-grid > .card{margin-top:0}
 .jgd .designed-capture .walk-input{gap:10px}
