@@ -1,5 +1,5 @@
 {
-  "migration": "2028_v2_crew_brief.sql",
+  "migration": "2029_v2_crew_brief.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
