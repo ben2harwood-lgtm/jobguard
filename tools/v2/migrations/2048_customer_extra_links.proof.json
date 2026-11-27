@@ -1,0 +1,45 @@
+{
+  "packet": "Q12 / V2-F6",
+  "migration": "2048_customer_extra_links.sql",
+  "database": "jobguard_v2_local",
+  "status": "written; real PostgreSQL execution pending CI",
+  "table": "app.v2_customer_extra_link",
+  "owner": "jobguard_migration",
+  "rls": {
+    "enabled": true,
+    "forced": true,
+    "runtime": "bound tenant, firm and visible job",
+    "firmLock": "restrictive v2_practice_firm on app.job(tenant_id, job_id), same form as 2047"
+  },
+  "runtimeGrants": [
+    "SELECT",
+    "INSERT",
+    "UPDATE"
+  ],
+  "runtimeDenied": [
+    "DELETE",
+    "TRUNCATE",
+    "REFERENCES",
+    "TRIGGER"
+  ],
+  "capabilityFunctions": [
+    "app.v2_f6_open",
+    "app.v2_f6_agree",
+    "app.v2_f6_photo"
+  ],
+  "privateHelpers": [
+    "app.v2_f6_scope",
+    "app.v2_f6_audit_scope",
+    "app.v2_f6_guard_update"
+  ],
+  "audit": "appendAuditBatch in command transaction; exact replay appends nothing",
+  "agreementEffect": "claim only; existing builder approval command remains unchanged",
+  "tests": [
+    "tools/v2/seed.integration.test.mjs",
+    "tools/v2/customer-extra-links.browser.test.mjs",
+    "packages/db/src/v2-customer-extra-link-repository.test.ts"
+  ],
+  "sharedSchemaDeferral": "packages/db/test/purchase-order-audit.integration.test.ts",
+  "sha256": "563e7fc9ce27c741b574827bef2df55465cb72682843bd637ef2be4910c85e9d",
+  "runtimeUpdate": "trigger permits only pending-to-cancelled transition; agreed rows and saved commercial fields cannot be rewritten"
+}

@@ -98,7 +98,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, owner, other;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   process.env.JOBGUARD_LOCAL_V2 = "1";
@@ -151,7 +151,8 @@ test("SX fixed GET list has working positive controls before checking refusals",
 // End V2-SX positive and refusal block.
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  owner = await signIn("builder");
+  const { cookies } = owner;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -201,7 +202,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  other = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = other;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -906,6 +908,37 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.deepEqual(await workPlan.read(jobId, planQuery), flipped);
 });
 
+// The test above closes the seeded job's work, and the demo practice cannot reopen it.
+// Later pieces that need open work on an accepted quote make their own job here.
+async function acceptedPracticeJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines);
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Accepted Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900043" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["12 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional Accepted Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  return draftJob;
+}
+
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
   const { context: practice } = await authenticatePracticeSession(runtime, sessionId);
@@ -1079,6 +1112,202 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
   await read();
   assert.equal((await generatedEvents(nextId)).length, 0);
+});
+
+
+// V2-F6: independent reserved migration and command/audit/tenant proof block.
+test("V2-F6 exact customer link claims, audit rollback, replay and firm isolation", async () => {
+  const { randomBytes, randomUUID } = await import("node:crypto");
+  const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
+  const { VariationApplication } = await import("../../apps/api/dist/variation/variation.application.js");
+  const { V2CustomerExtraLinkApplication } = await import("../../apps/api/dist/v2-customer-extra-link.application.js");
+  assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
+  const jobId = await acceptedPracticeJob();
+  const auth = await authenticatePracticeSession(runtime, owner.sessionId);
+  const second = await authenticatePracticeSession(runtime, other.sessionId);
+  await json(await request(`/api/jobs/${jobId}/quotes/activation`, { cookies: owner.cookies,
+    body: { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" } }));
+  const variations = new VariationApplication(runtime, owner.sessionId);
+  const repository = new V2CustomerExtraLinkRepository(runtime);
+  const protectedFacts = async () => (await admin.query(`SELECT
+    (SELECT jsonb_agg(to_jsonb(q)) FROM app.quote_acceptance q WHERE job_id=$1) quotes,
+    (SELECT jsonb_agg(to_jsonb(i)) FROM app.customer_invoice i WHERE job_id=$1) invoices`, [jobId])).rows;
+  const untouched = await protectedFacts();
+  const proposalId = randomUUID();
+  const proposed = await variations.command(jobId, { version: "variation-command.v1", action: "propose",
+    proposalId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "F6 fictional splashback extension", captureText: "Customer asks for an extension",
+    price: { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" } });
+  const variation = proposed.variations.find(v => v.id === proposalId), revisionId = variation.currentRevisionId;
+  const baseline = proposed.approvedAdditionsPence;
+  const events = async () => (await admin.query(`SELECT id,event_type,payload FROM app.audit_event
+    WHERE event_type LIKE 'v2.customer_extra_link.%' ORDER BY sequence`)).rows;
+  const create = () => ({ version: "v2-extra-link.v1", action: "create", commandId: randomUUID(),
+    expectedVersion: 1, occurredAt: new Date().toISOString(), variationId: proposalId, revisionId,
+    token: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 86400000).toISOString(), photoIds: [] });
+  const command = create(), first = await repository.create(auth.context, jobId, auth.membershipId, command);
+  const afterCreate = await events();
+  assert.equal(afterCreate.at(-1).event_type, "v2.customer_extra_link.created");
+  assert.equal(afterCreate.at(-1).payload.references.commandId, command.commandId);
+  await repository.create(auth.context, jobId, auth.membershipId, command);
+  assert.deepEqual(await events(), afterCreate);
+  await assert.rejects(repository.create(auth.context, jobId, auth.membershipId, { ...command, photoIds: [randomUUID()] }));
+  assert.equal((await admin.query("SELECT token_hash FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])).rows[0].token_hash === command.token, false);
+  const customer = await repository.open(first.capability);
+  assert.equal(customer.amount, "125.00"); assert.equal(customer.description, "F6 fictional splashback extension");
+  assert.deepEqual(Object.keys(customer).sort(), ["version", "environment", "jobId", "revisionId", "variationVersion", "amount", "description", "photoIds", "expectedVersion", "agreedAt"].sort());
+  await assert.rejects(new V2CustomerExtraLinkApplication(runtime, other.sessionId).open(first.capability));
+  await assert.rejects(repository.open("f".repeat(64) + first.capability.slice(64)));
+  const stored = (await admin.query("SELECT * FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])).rows[0];
+  const forced = (await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.v2_customer_extra_link'::regclass")).rows[0];
+  assert.deepEqual(forced, { relrowsecurity: true, relforcerowsecurity: true });
+  await withTenant(runtime, second.context, async db => {
+    assert.equal((await db.$client.query("SELECT * FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])).rowCount, 0);
+    assert.equal((await db.$client.query("UPDATE app.v2_customer_extra_link SET description=description WHERE id=$1", [first.linkId])).rowCount, 0);
+  });
+  await assert.rejects(withTenant(runtime, second.context, db => db.$client.query(`INSERT INTO app.v2_customer_extra_link
+    SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [JSON.stringify({ ...stored, id: randomUUID(), token_hash: randomBytes(32).toString("hex") })])));
+  await assert.rejects(withTenant(runtime, second.context, db => db.$client.query("DELETE FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])));
+
+  // Force an error AFTER both the business row and audit event are inserted.
+  let fail = true;
+  const failingPool = { connect: async () => {
+    const client = await runtime.connect();
+    return { release: () => client.release(), query: async (sql, values) => {
+      const result = await client.query(sql, values);
+      if (fail && sql.includes("app.append_audit")) { fail = false; throw new Error("F6_FORCED_FAILURE"); }
+      return result;
+    } };
+  } };
+  const failedCreate = create();
+  await assert.rejects(new V2CustomerExtraLinkRepository(failingPool).create(auth.context, jobId, auth.membershipId, failedCreate), /F6_FORCED_FAILURE/u);
+  assert.equal((await admin.query("SELECT * FROM app.v2_customer_extra_link WHERE id=$1", [failedCreate.commandId])).rowCount, 0);
+  assert.deepEqual(await events(), afterCreate);
+  const agree = { version: "v2-extra-link.v1", action: "agree", commandId: randomUUID(), occurredAt: new Date().toISOString(),
+    expectedVersion: 1, jobId, revisionId, amount: "125.00", name: "Fictional customer" };
+  fail = true;
+  await assert.rejects(new V2CustomerExtraLinkRepository(failingPool).agree(first.capability, agree), /F6_FORCED_FAILURE/u);
+  assert.equal((await repository.open(first.capability)).agreedAt, null);
+  assert.deepEqual(await events(), afterCreate);
+  const agreed = await repository.agree(first.capability, agree), afterAgree = await events();
+  // Same-firm runtime cannot rewrite even one field of an agreed claim.
+  for (const assignment of ["amount='999.00'", "description='Rewritten'", "agreed_by='Someone else'",
+    "agreed_at=clock_timestamp()", "token_hash=repeat('a',64)", "expires_at=clock_timestamp()+interval '1 day'"]) {
+    await assert.rejects(withTenant(runtime, auth.context, db => db.$client.query(
+      `UPDATE app.v2_customer_extra_link SET ${assignment} WHERE id=$1`, [first.linkId])),
+    error => error.code === "42501");
+  }
+  // Runtime has no DELETE grant, so an agreed claim cannot be removed either.
+  await assert.rejects(withTenant(runtime, auth.context, db => db.$client.query(
+    "DELETE FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])),
+  error => error.code === "42501");
+  // Codex P1: same-firm runtime cannot insert a link that is already agreed or cancelled; only pending links.
+  const copy = changes => JSON.stringify({ ...stored, id: randomUUID(), token_hash: randomBytes(32).toString("hex"), ...changes });
+  const insertCopy = (db, changes) => db.$client.query(`INSERT INTO app.v2_customer_extra_link
+    SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [copy(changes)]);
+  // A pending copy that also carries its creation audit, so a test reaches the later check it targets.
+  const { appendAuditBatch } = await import("../../packages/db/dist/index.js");
+  const insertAuditedCopy = async (db, changes) => {
+    const row = JSON.parse(copy(changes));
+    await db.$client.query(`INSERT INTO app.v2_customer_extra_link
+      SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [JSON.stringify(row)]);
+    await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${row.actor_membership_id}`,
+      eventType: "v2.customer_extra_link.created", subjectType: "customer_extra_link", subjectRef: row.id,
+      payload: { references: { commandId: row.id, jobId: row.job_id, revisionId: row.revision_id } } }]);
+  };
+  for (const changes of [
+    { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer", agree_command_id: randomUUID(), agree_fingerprint: "f", link_version: 2 },
+    { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer" },
+    { agree_command_id: randomUUID() }, { link_version: 2 },
+    { cancelled_at: new Date().toISOString(), cancel_command_id: randomUUID(), cancel_fingerprint: "f", link_version: 2 },
+    // Codex P1 (209d838): a pending link cannot carry a photo locator that is not this job's own verified evidence.
+    { photos: [{ id: randomUUID(), objectKey: `tenants/${DEMO_TENANT_ID}/uploads/${randomUUID()}/original`,
+      objectVersionId: "v1", sha256: "a".repeat(64), contentType: "image/jpeg" }] },
+    { photos: [{ id: randomUUID() }] }, { photos: {} },
+  ]) {
+    await assert.rejects(withTenant(runtime, auth.context, db => insertCopy(db, changes)),
+      error => error.code === "42501" && error.message === "LINK_UNAVAILABLE");
+  }
+  // A pristine pending link still inserts (rolled back here so the suite's counts stay the same).
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    assert.equal((await insertCopy(db, {})).rowCount, 1);
+    throw new Error("F6_ROLLBACK_PRISTINE");
+  }), /F6_ROLLBACK_PRISTINE/u);
+  // Codex P2 (29ded0c): a pending copy whose description differs from its revision never opens.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertCopy(db, { token_hash: h, description: "Substituted wording" });
+    await db.$client.query("SELECT app.v2_f6_open($1,$2)", [stored.firm_digest, h]);
+  }), error => error.code === "42501" && error.message === "LINK_UNAVAILABLE");
+  // Codex P1 (29ded0c): calling the agree routine directly, without its audit event, cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertAuditedCopy(db, { token_hash: h });
+    await db.$client.query("SELECT app.v2_f6_agree($1,$2,$3,$4,$5,1)",
+      [stored.firm_digest, h, randomUUID(), "f", "Fictional customer"]);
+  }), error => error.code === "23514" && error.message === "LINK_AGREEMENT_UNAUDITED");
+  // Codex P2 (3b5de72): a direct runtime cancellation without its audit event cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertAuditedCopy(db, { token_hash: h });
+    const updated = await db.$client.query(`UPDATE app.v2_customer_extra_link SET cancelled_at=clock_timestamp(),link_version=2,
+      cancel_command_id=$2,cancel_fingerprint='f' WHERE token_hash=$1`, [h, randomUUID()]);
+    assert.equal(updated.rowCount, 1, "the runtime cancel guard allows the shape; only the audit check refuses it");
+  }), error => error.code === "23514" && error.message === "LINK_CANCELLATION_UNAUDITED");
+  // Codex P1 (e44eb6d): a direct runtime insert of a pristine pending link without its creation audit cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    assert.equal((await insertCopy(db, { token_hash: randomBytes(32).toString("hex") })).rowCount, 1);
+  }), error => error.code === "23514" && error.message === "LINK_CREATION_UNAUDITED");
+  assert.deepEqual(await events(), afterAgree);
+  assert.deepEqual(await repository.open(first.capability), agreed);
+  const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
+  assert.equal(savedAgreement.amount, "125.00");
+  assert.equal(savedAgreement.agreedBy, "Fictional customer");
+  assert.ok(agreed.agreedAt); assert.equal(afterAgree.length, afterCreate.length + 1);
+  assert.equal(afterAgree.at(-1).event_type, "v2.customer_extra_link.agreed");
+  assert.doesNotMatch(JSON.stringify(afterAgree), /Fictional customer/u);
+  assert.deepEqual(await repository.agree(first.capability, agree), agreed);
+  assert.deepEqual(await events(), afterAgree);
+  await assert.rejects(repository.agree(first.capability, { ...agree, name: "Changed person" }));
+  assert.equal((await variations.get(jobId)).approvedAdditionsPence, baseline, "agreement alone cannot commit money");
+
+  const cancelled = await repository.create(auth.context, jobId, auth.membershipId, create());
+  const cancel = { version: "v2-extra-link.v1", action: "cancel", commandId: randomUUID(), occurredAt: new Date().toISOString(), expectedVersion: 1, linkId: cancelled.linkId };
+  await repository.cancel(auth.context, jobId, auth.membershipId, cancel);
+  const afterCancel = await events();
+  await repository.cancel(auth.context, jobId, auth.membershipId, cancel);
+  assert.deepEqual(await events(), afterCancel);
+  assert.equal(afterCancel.at(-1).event_type, "v2.customer_extra_link.cancelled");
+  await assert.rejects(repository.open(cancelled.capability));
+  await assert.rejects(repository.agree(cancelled.capability, { ...agree, commandId: randomUUID() }));
+  const expired = await repository.create(auth.context, jobId, auth.membershipId, create());
+  await admin.query("UPDATE app.v2_customer_extra_link SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expired.linkId]);
+  await assert.rejects(repository.open(expired.capability));
+  await assert.rejects(repository.agree(expired.capability, { ...agree, commandId: randomUUID() }));
+  const revisedId = randomUUID();
+  await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId: proposalId,
+    revisionId: revisedId, expectedRevisionId: revisionId, description: "Repriced extension",
+    price: { quantity: "1", unit: "item", unitRatePence: 17500, direction: "addition" } });
+  await assert.rejects(repository.open(first.capability));
+  await assert.rejects(repository.agree(first.capability, { ...agree, commandId: randomUUID() }));
+  const repriced = await repository.create(auth.context, jobId, auth.membershipId, { ...create(), expectedVersion: 2, revisionId: revisedId });
+  assert.equal((await repository.open(repriced.capability)).amount, "175.00");
+  await assert.rejects(repository.agree(repriced.capability, { ...agree, commandId: randomUUID(), revisionId: revisedId }));
+  const thirdId = randomUUID();
+  await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId: proposalId,
+    revisionId: thirdId, expectedRevisionId: revisedId, description: "Third revision extension",
+    price: { quantity: "1", unit: "item", unitRatePence: 22500, direction: "addition" } });
+  const third = await repository.create(auth.context, jobId, auth.membershipId,
+    { ...create(), expectedVersion: 3, revisionId: thirdId });
+  assert.equal((await repository.open(third.capability)).variationVersion, 3);
+  assert.equal((await repository.open(third.capability)).amount, "225.00");
+  await variations.command(jobId, { version: "variation-command.v1", action: "reject", variationId: proposalId,
+    revisionId: thirdId, rejectionId: randomUUID() });
+  await assert.rejects(repository.agree(third.capability,
+    { ...agree, commandId: randomUUID(), revisionId: thirdId, amount: "225.00" }));
+  await assert.rejects(repository.agree(repriced.capability, { ...agree, commandId: randomUUID(), revisionId: revisedId, amount: "175.00" }));
+  assert.equal((await variations.get(jobId)).approvedAdditionsPence, baseline);
+  assert.deepEqual(await protectedFacts(), untouched);
 });
 
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.

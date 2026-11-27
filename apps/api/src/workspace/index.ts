@@ -134,3 +134,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-F6: local customer agreement links; existing approval command unchanged.
+export { V2CustomerExtraLinkApplication } from "../v2-customer-extra-link.application.js";
