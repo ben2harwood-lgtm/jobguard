@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-49qd38"
       ],
-      "note": "RED. V2 replies: ask the customer, merchant or crew one open question by a no-sign-in link (local catcher only), paste a reply heard by phone, and let the builder apply a reply to the E1 fact. Practice only: .invalid contacts recorded by the builder. The validator includes config/lanes/v2-e2.json implicitly. Stacked on v2-e1 (claude/project-thread-vur4ba). packages/db/src/v2-open-fact-repository.ts: extract commandIn only, owned by E1 #919, no behaviour change. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only, owned by main (live Work tab). packages/core/src/watchdog.ts: one registry line classifying /api/jobs/[id]/fact-replies as pre_live_allowed, required by the CH-2 route coverage test.",
+      "note": "RED. V2 replies: ask the customer, merchant or crew one open question by a no-sign-in link (local catcher only), paste a reply heard by phone, and let the builder apply a reply to the E1 fact. Practice only: .invalid contacts recorded by the builder. The validator includes config/lanes/v2-e2.json implicitly. Stacked on v2-e1 (claude/project-thread-vur4ba). packages/db/src/v2-open-fact-repository.ts: extract commandIn only, owned by E1 #919, no behaviour change. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only, owned by main (live Work tab). packages/core/src/watchdog.ts: one registry line classifying /api/jobs/[id]/fact-replies as pre_live_allowed, required by the CH-2 route coverage test. Firm lock (V2 migration 2066) on the five E2 tables, as E1's 2064, required by the FL-1 guard.",
       "allow": [
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/fact-reply.application.ts",
@@ -22,15 +22,19 @@
         "apps/web/app/ui/v2-fact-replies.test.tsx",
         "apps/web/app/ui/v2-fact-replies.tsx",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/2029_v2_fact_reply.md",
-        "packages/db/migrations/2029_v2_fact_reply.sql",
+        "packages/db/migration-notes/2030_v2_fact_reply.md",
+        "packages/db/migration-notes/2066_v2_fact_reply_firm_lock.md",
+        "packages/db/migrations/2030_v2_fact_reply.sql",
         "packages/db/src/index.ts",
         "packages/db/src/v2-fact-reply-repository.ts",
         "packages/db/src/v2-open-fact-repository.ts",
-        "packages/db/test/migration-proofs/2029_v2_fact_reply.proof.json",
+        "packages/db/test/migration-proofs/2030_v2_fact_reply.proof.json",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/fact-replies.browser.test.mjs",
+        "tools/v2/firm-lock/FL-E2.checks.mjs",
+        "tools/v2/migrations/2066_v2_fact_reply_firm_lock.proof.json",
+        "tools/v2/migrations/2066_v2_fact_reply_firm_lock.sql",
         "tools/v2/seed.integration.test.mjs"
       ]
     }

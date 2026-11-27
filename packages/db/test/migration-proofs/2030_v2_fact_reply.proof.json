@@ -1,5 +1,5 @@
 {
-  "migration": "2030_v2_fact_reminder.sql",
+  "migration": "2030_v2_fact_reply.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

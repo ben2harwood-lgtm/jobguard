@@ -1,6 +1,6 @@
-# 2028 · V2 open facts
+# 2029 · V2 open facts
 
-The checked V2 bootstrap applies this migration after the base's V2 migrations (2027 at this restack) and after the D3,
+The checked V2 bootstrap applies this migration after the base's V2 migrations (2028 at this restack) and after the D3,
 D4 and B1A migrations once those pieces merge; it is renumbered above them. The shared runner leaves databases without
 both the V2 name and the firm policy untouched.
 
