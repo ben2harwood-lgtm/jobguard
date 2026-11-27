@@ -323,7 +323,7 @@ export function Shell({ workspace, title, subtitle, active, onSearch, today = fa
   const [panel, setPanel] = useState<"messages" | "settings" | "search" | null>(null);
   // V2-SQ-A: "See it in Sent" links here with ?panel=sent&document=<id>, which opens Messages on that row.
   const [sentFocus, setSentFocus] = useState<string | null>(null);
-  useEffect(() => { const query = new URLSearchParams(window.location.search); if (query.get("panel") === "sent") { setSentFocus(query.get("document")); setPanel("messages"); } }, []);
+  useEffect(() => { const query = new URLSearchParams(window.location?.search ?? ""); if (query.get("panel") === "sent") { setSentFocus(query.get("document")); setPanel("messages"); } }, []);
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
   const name = workspace?.session.principal.displayName ?? "";

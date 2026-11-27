@@ -75,6 +75,6 @@ test("a practice quote send shows in Sent and opens the exact document", async (
 });
 
 test("the Sent list refuses a request with no practice session", async ({ playwright, baseURL }) => {
-  const anonymous = await playwright.request.newContext({ baseURL });
+  const anonymous = await playwright.request.newContext({ baseURL: baseURL! });
   try { expect((await anonymous.get("/api/practice-sent")).status()).toBe(401); } finally { await anonymous.dispose(); }
 });
