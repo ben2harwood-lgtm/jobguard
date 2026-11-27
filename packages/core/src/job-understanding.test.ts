@@ -49,6 +49,36 @@ describe("V2-SQ-C job understanding contract and money rule", () => {
     const checked = checkUnderstandingNumbers(job, text, digits);
     expect(checked.lines.map(item => item.quantity.value)).toEqual([null, "6"]);
   });
+  it("plan-check money rules: per-item words earn each, one span has one home, a priced line needs its own words", () => {
+    const text = "Fit three doors for 600. The landing all in 600 each. Hang two doors at 90 each.";
+    const at = (words: string, from = 0) => ({ kind: "extracted" as const, span: { sourceId: "s", sourceVersion: 1 as const, start: text.indexOf(words, from), end: text.indexOf(words, from) + words.length } });
+    const open = { value: null, provenance: { kind: "defaulted" as const, note: "Not said" } };
+    const line = (description: string, count: string, price: string, priceBasis: "each" | "line", from = 0) => ({
+      description: { value: description, provenance: at(description) }, quantity: { value: count === "three" ? "3" : "2", provenance: at(count) }, unit: open,
+      unitPricePence: { value: Number(price) * 100, provenance: at(price, from) }, areaKey: "landing",
+      trade: { value: "Carpentry" as const, provenance: { kind: "inferred" as const, note: "door" } }, priceBasis });
+    const understanding = (lines: ReturnType<typeof line>[], areaPrices: JobUnderstanding["areaPrices"] = []) => jobUnderstandingV1.parse({ version: "job-understanding.v1",
+      title: { value: "Landing", provenance: at("landing") }, areas: [{ key: "landing", name: { value: "landing", provenance: at("landing") }, kind: "room" }],
+      lines, areaPrices, wholeJobPrice: null, questions: [] });
+    const count: SpokenNumberReader = { money: digits.money, count: words => ({ three: 3, two: 2 } as Record<string, number>)[words] ?? null };
+    // "Fit three doors for 600" claimed as each: no per-item words beside 600, so it is one line price.
+    const doors = checkUnderstandingNumbers(understanding([line("Fit three doors", "three", "600", "each")]), text, count);
+    expect(doors.lines[0]).toMatchObject({ unitPricePence: { value: 60000 }, priceBasis: "line" });
+    expect(toJobRecordProposal(doors).lines[0]).toMatchObject({ quantity: { value: "1" }, unitPricePence: { value: 60000 } });
+    // "at 90 each" keeps each.
+    expect(checkUnderstandingNumbers(understanding([line("Hang two doors", "two", "90", "each")]), text, count).lines[0]!.priceBasis).toBe("each");
+    // The same 600 as a line price and a room price: neither keeps it.
+    const twice = checkUnderstandingNumbers(understanding([line("Fit three doors", "three", "600", "line")],
+      [{ areaKey: "landing", pence: 60000, provenance: at("600") }]), text, count);
+    expect(twice.lines[0]!.unitPricePence.value).toBeNull();
+    expect(twice.areaPrices).toEqual([]);
+    // A priced line whose words are not extracted, or whose words overlap another line, keeps no number.
+    const unsaid = understanding([{ ...line("Fit three doors", "three", "600", "line"), description: { value: "Fit three doors", provenance: { kind: "inferred", note: "guess" } } }]);
+    expect(checkUnderstandingNumbers(unsaid, text, count).lines[0]).toMatchObject({ quantity: { value: null }, unitPricePence: { value: null } });
+    const overlapping = checkUnderstandingNumbers(understanding([line("Fit three doors", "three", "600", "line"),
+      { ...line("three doors", "three", "600", "line"), unitPricePence: open, quantity: open }]), text, count);
+    expect(overlapping.lines[0]).toMatchObject({ quantity: { value: null }, unitPricePence: { value: null } });
+  });
   it("clears a room price said in another room's sentence", () => {
     const text = "In the kitchen paint the walls. The kitchen all in 900. In the bathroom fit a bath. The bathroom all in 1200.";
     const at = (words: string, from = 0) => ({ kind: "extracted" as const, span: { sourceId: "s", sourceVersion: 1 as const, start: text.indexOf(words, from), end: text.indexOf(words, from) + words.length } });

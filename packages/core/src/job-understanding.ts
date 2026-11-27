@@ -82,7 +82,8 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
   /** A line's number is said with its own words: not inside another line's words, nor across a sentence from its own. */
   const belongs = (lineIndex: number, provenance: z.infer<typeof provenanceV1>) => {
     const own = spanOf(understanding.lines[lineIndex]!.description.provenance), said = spanOf(provenance);
-    if (!own || !said) return true;
+    // A counted or priced line needs its own said words (plan-check condition 3).
+    if (!own || !said) return false;
     if (said.start >= own.start && said.start < own.end) return true;
     // Another line's words inside the number, or between the number and this line's words, mean the number is theirs.
     if (understanding.lines.some((other, index) => { const words = spanOf(other.description.provenance);
@@ -94,9 +95,32 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     const between = said.start < own.start ? sourceText.slice(said.end, own.start) : sourceText.slice(own.end, said.start);
     return !/[.;!?\n]/u.test(between.replace(/(\d)\.(?=\d)/gu, "$1"));
   };
+  const overlaps = (a: { start: number; end: number } | null, b: { start: number; end: number } | null) => !!a && !!b && a.start < b.end && b.start < a.end;
+  // Line words must not overlap: two lines on the same words cannot both hold numbers.
+  const sharedWords = new Set(understanding.lines.flatMap((line, index) => understanding.lines.some((other, otherIndex) => otherIndex !== index
+    && overlaps(spanOf(line.description.provenance), spanOf(other.description.provenance))) ? [index] : []));
+  // One money span, one home: a said amount prices at most one line, one room or the whole job.
+  const moneySpans = [...understanding.lines.map(line => line.unitPricePence.value === null ? null : spanOf(line.unitPricePence.provenance)),
+    ...understanding.areaPrices.map(price => spanOf(price.provenance)), understanding.wholeJobPrice ? spanOf(understanding.wholeJobPrice.provenance) : null];
+  const reused = (at: number) => moneySpans.some((other, index) => index !== at && overlaps(moneySpans[at]!, other));
+  /** "each" and "per unit" multiply, so the per-item words must sit beside the cited price. */
+  const perItem = (said: { start: number; end: number } | null) => !!said
+    && (/^\s*(?:pounds?|quid)?\s*(?:each|apiece|a piece|per\s+\p{L}+|an?\s+(?:square\s+|linear\s+)?(?:met(?:re|er)|m2|m²|panel|door|unit|item|hour|day|sheet|roll|length|socket|radiator|window|one))(?![\p{L}])/iu.test(sourceText.slice(said.end, said.end + 40))
+      || /(?:^|[^\p{L}])(?:each|apiece|per\s+\p{L}+)\s+(?:at\s+|for\s+)?£?\s*$/iu.test(sourceText.slice(Math.max(0, said.start - 30), said.start)));
   const lines = understanding.lines.map((line, lineIndex) => {
     const label = line.description.value.slice(0, 160);
     let { quantity, unitPricePence, priceBasis } = line;
+    if ((quantity.value !== null || unitPricePence.value !== null) && sharedWords.has(lineIndex)) {
+      if (quantity.value !== null) quantity = { value: null, provenance: { kind: "defaulted", note: "Line words overlap another line; never invented" } };
+      if (unitPricePence.value !== null) { unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Line words overlap another line; never invented" } }; priceBasis = "none"; }
+      questions.push({ text: `Check “${label}”: its words are shared with another line.`, lineIndex });
+    }
+    if (unitPricePence.value !== null && reused(lineIndex)) {
+      unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Price words already price something else" } };
+      priceBasis = "none";
+      questions.push({ text: `Price needed for “${label}”: that amount was said for something else.`, lineIndex });
+    }
+    if (unitPricePence.value !== null && (priceBasis === "each" || priceBasis === "per_unit") && !perItem(spanOf(unitPricePence.provenance))) priceBasis = "line";
     if (quantity.value !== null && !(cites(quantity.provenance, Number(quantity.value), "count") && belongs(lineIndex, quantity.provenance))) {
       quantity = { value: null, provenance: { kind: "defaulted", note: "Quantity not said exactly; never invented" } };
       questions.push({ text: `How many for “${label}”?`, lineIndex });
@@ -134,13 +158,13 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
       const theirs = nearest(area.name.value);
       return !!theirs && (theirs.distance < mine.distance || theirs.distance === mine.distance && theirs.length >= mine.length); });
   };
-  const areaPrices = understanding.areaPrices.filter(price => {
-    if (cites(price.provenance, price.pence, "money") && ownsArea(price.areaKey, spanOf(price.provenance)!)) return true;
+  const areaPrices = understanding.areaPrices.filter((price, index) => {
+    if (cites(price.provenance, price.pence, "money") && ownsArea(price.areaKey, spanOf(price.provenance)!) && !reused(understanding.lines.length + index)) return true;
     questions.push({ text: "Price needed for this room.", areaKey: price.areaKey });
     return false;
   });
   let wholeJobPrice = understanding.wholeJobPrice;
-  if (wholeJobPrice && !cites(wholeJobPrice.provenance, wholeJobPrice.pence, "money")) {
+  if (wholeJobPrice && (!cites(wholeJobPrice.provenance, wholeJobPrice.pence, "money") || reused(moneySpans.length - 1))) {
     wholeJobPrice = null;
     questions.push({ text: "Check the whole-job price; it was not read exactly." });
   }

@@ -167,7 +167,10 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     const rate = perMetre.exec(value);
     if (rate && !inTotalClause) {
       const pence = spokenNumbers.money(rate[1]!);
-      if (pence !== null) { price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit"; }
+      // A second rate or a correction after this one ("60 a metre, or 80 a metre") leaves the rate open.
+      if (pence !== null && !plainCommaTail.test(`,${value.slice(rate.index + rate[0].length)}`) && value.slice(rate.index + rate[0].length).trim().replace(/^[.,;]$/u, ""))
+        questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
+      else if (pence !== null) { price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit"; }
     }
     // "14 square metres of vinyl at 32 a metre": words after the measure still name the work.
     const between = value.slice(m.index + m[0].length, rate?.index ?? value.length);

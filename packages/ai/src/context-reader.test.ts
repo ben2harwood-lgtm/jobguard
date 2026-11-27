@@ -100,6 +100,19 @@ describe("V2-SQ-C Reader A", () => {
     expect(readSpokenJob("s", "Fit a door for 300, hang it level.").lines[0]!.unitPricePence.value).toBe(30000);
   });
 
+  it("plan-check money rules: a count with a line price is one priced item, and an alternative rate stays open", () => {
+    const doors = readSpokenJob("s", "In the landing fit three doors for 600.");
+    expect(doors.lines[0]).toMatchObject({ unitPricePence: { value: 60000 }, priceBasis: "line" });
+    expect(toJobRecordProposal(doors).lines[0]).toMatchObject({ quantity: { value: "1" }, unitPricePence: { value: 60000 } });
+    const coats = readSpokenJob("s", "Paint the hallway and landing, two coats, 650.");
+    expect(coats.lines[0]).toMatchObject({ unitPricePence: { value: 65000 }, priceBasis: "line" });
+    const each = readSpokenJob("s", "In the landing hang two doors at 90 each.");
+    expect(each.lines[0]).toMatchObject({ quantity: { value: "2" }, unitPricePence: { value: 9000 }, priceBasis: "each" });
+    const rates = readSpokenJob("s", "Tile the floor 12 square metres at 60 a metre, or 80 a metre.");
+    expect(rates.lines[0]!.unitPricePence.value).toBeNull();
+    expect(rates.questions.length).toBeGreaterThan(0);
+  });
+
   it("labels lines proposed from the same words by where they start", () => {
     const labels = understoodLabels("smith", SMITH, [
       { start: SMITH.indexOf("rip out"), description: "rip out the old units" },
