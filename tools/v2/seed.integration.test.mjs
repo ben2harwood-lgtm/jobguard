@@ -2403,6 +2403,273 @@ test("D4: a task assigned to a crew record shows the record's current name in th
   assert.equal((await latest()).current, false, "renaming the crew record makes the brief out of date");
   const renamed = (await generate()).content.tasks.find(item => item.taskKey === task.key);
   assert.deepEqual([renamed.owner, renamed.ownerRef], ["Dee Renamed", crew.crewId]);
+// V2-E1 open facts. Added as its own block; earlier pieces' tests stay as they are.
+const factQuery = { version: "v2-open-fact-query.v1" };
+const factCommand = fields => ({ version: "v2-open-fact-command.v1", commandId: randomUUID(), ...fields });
+const logFact = fields => factCommand({ action: "log", scopeItemId: null, planTask: null, ...fields });
+// Every row a fact answer must leave untouched: plan, stock, scope, price, variation, order and outbox.
+const untouchedTables = ["app.job", "app.v2_work_plan", "app.v2_work_plan_task", "app.v2_work_plan_edit",
+  "app.v2_measurement", "app.material_requirement", "app.material_pack_conversion", "app.scope_identity",
+  "app.scope_revision", "app.scope_lineage", "app.scope_progress", "app.quote_revision", "app.quote_line",
+  "app.quote_document_version", "app.quote_acceptance", "app.job_activation", "app.job_activation_terms",
+  "app.variation", "app.variation_revision", "app.variation_approval", "app.customer_variation_approval",
+  "app.purchase_order_draft", "app.purchase_order_revision", "app.purchase_order_placement", "app.work_order",
+  "app.work_order_revision", "app.work_order_line", "app.action_outbox", "app.scheduled_readiness_plan",
+  "app.site_visit", "app.job_assignment"];
+
+async function rowContents() {
+  const snapshot = {};
+  for (const table of untouchedTables) {
+    const { rows: [{ rows }] } = await admin.query(`SELECT coalesce(array_agg(to_jsonb(t)::text
+      ORDER BY to_jsonb(t)::text), '{}') AS rows FROM ${table} t`);
+    snapshot[table] = rows;
+  }
+  return snapshot;
+}
+
+async function seededFacts() {
+  const owner = await signIn("builder");
+  const { openFacts } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const source = await acceptedPlanSource();
+  const { quoteRevisionId } = source;
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  // Earlier tests generate this plan; generating again is an exact no-op.
+  if ((await planCounts(quoteRevisionId))[1] === 0) await new WorkPlanRepository(runtime).generate(context, source);
+  const { rows: tasks } = await admin.query(`
+    SELECT t.scope_item_id, t.template_task_key, l.category FROM app.v2_work_plan_task t
+    JOIN app.quote_line l ON (l.tenant_id, l.quote_revision_id, l.scope_item_id) = (t.tenant_id, t.quote_revision_id, t.scope_item_id)
+    WHERE (t.tenant_id, t.job_id, t.quote_revision_id) = ($1, $2, $3) ORDER BY t.position
+  `, [DEMO_TENANT_ID, jobId, quoteRevisionId]);
+  const tiling = tasks.find(task => task.category === "Tiling");
+  const decorating = tasks.find(task => task.category === "Decorating");
+  assert.ok(tiling && decorating);
+  return { owner, openFacts, quoteRevisionId, tiling, decorating };
+}
+
+test("the builder logs each kind of open fact, answers and cancels them, and they survive a fresh session", async () => {
+  const { owner, openFacts, quoteRevisionId, tiling, decorating } = await seededFacts();
+  const before = await effectCounts();
+  const choice = logFact({ scopeItemId: tiling.scope_item_id, owner: { kind: "customer" }, neededBy: "2026-12-01",
+    detail: { kind: "customer_choice", question: "Which grout colour for the splashback?", mayChangePrice: true } });
+  const delivery = logFact({ scopeItemId: tiling.scope_item_id,
+    planTask: { quoteRevisionId, taskKey: tiling.template_task_key },
+    owner: { kind: "merchant", name: "Fictional Teacup Tile Merchant" }, neededBy: "2026-12-03",
+    detail: { kind: "merchant_delivery_date", item: "Splashback tiles, 6 packs" } });
+  const crew = logFact({ scopeItemId: decorating.scope_item_id,
+    planTask: { quoteRevisionId, taskKey: decorating.template_task_key },
+    owner: { kind: "crew_member", name: "Fictional Decorator" }, neededBy: "2026-12-05",
+    detail: { kind: "crew_availability", need: "Two days to prepare and paint the hall" } });
+  const access = logFact({ owner: { kind: "customer" }, neededBy: "2026-12-02",
+    detail: { kind: "access", need: "Who lets the crew in on the first morning?" } });
+
+  // The four kinds stay apart, and bad shapes never reach the database.
+  for (const bad of [
+    { ...choice, detail: { ...choice.detail, item: "mixed" } },
+    { ...delivery, detail: { kind: "merchant_delivery_date", item: "Tiles", question: "mixed" } },
+    { ...delivery, owner: { kind: "merchant" } },
+    { ...access, owner: { kind: "customer", name: "Not allowed" } },
+    { ...choice, neededBy: "2026-02-30" },
+    { ...choice, scopeItemId: null, planTask: delivery.planTask },
+    { ...access, detail: { kind: "access", need: " " } },
+  ]) await assert.rejects(openFacts.command(jobId, bad), { code: "OPEN_FACT_INVALID_COMMAND" });
+
+  const [logged, replayed] = await Promise.all([openFacts.command(jobId, choice), openFacts.command(jobId, choice)]);
+  assert.deepEqual(replayed, logged);
+  assert.deepEqual({ ...logged, recordedAt: undefined }, { factId: choice.commandId, commandId: choice.commandId,
+    action: "log", version: 1, status: "open", actorMembershipId: owner.membershipId, recordedAt: undefined });
+  await assert.rejects(openFacts.command(jobId, { ...choice, neededBy: "2026-12-09" }), { code: "OPEN_FACT_COMMAND_CONFLICT" });
+  await assert.rejects(openFacts.command(jobId, { ...choice, detail: { ...choice.detail, mayChangePrice: false } }),
+    { code: "OPEN_FACT_COMMAND_CONFLICT" });
+  for (const command of [delivery, crew, access]) assert.equal((await openFacts.command(jobId, command)).version, 1);
+
+  // Answering the customer choice is a stored answer and a flag for chunk F, nothing else.
+  const contents = await rowContents();
+  const answer = factCommand({ action: "answer", factId: choice.commandId, expectedVersion: 1,
+    answer: { kind: "customer_choice", choice: "Charcoal grout", mayChangePrice: true } });
+  await assert.rejects(openFacts.command(jobId, { ...answer, answer: { kind: "access", arrangement: "Keys" } }),
+    { code: "OPEN_FACT_KIND_MISMATCH" });
+  await assert.rejects(openFacts.command(jobId, { ...answer, expectedVersion: 0 }), { code: "OPEN_FACT_VERSION_CONFLICT" });
+  const racing = await Promise.allSettled([
+    openFacts.command(jobId, answer),
+    openFacts.command(jobId, { ...answer, commandId: randomUUID(), answer: { ...answer.answer, choice: "White grout" } }),
+  ]);
+  assert.equal(racing.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(racing.find(result => result.status === "rejected").reason.code, "OPEN_FACT_VERSION_CONFLICT");
+  const winner = racing.find(result => result.status === "fulfilled").value;
+  const answered = winner.commandId === answer.commandId ? answer
+    : { ...answer, commandId: winner.commandId, answer: { ...answer.answer, choice: "White grout" } };
+  assert.deepEqual(await openFacts.command(jobId, answered), winner);
+  await assert.rejects(openFacts.command(jobId, { ...answered, answer: { ...answered.answer, choice: "Grey grout" } }),
+    { code: "OPEN_FACT_COMMAND_CONFLICT" });
+  await assert.rejects(openFacts.command(jobId, { ...answered, commandId: randomUUID(), expectedVersion: 2 }),
+    { code: "OPEN_FACT_CLOSED" });
+  assert.deepEqual(await rowContents(), contents);
+  assert.deepEqual(await effectCounts(), before);
+
+  // Identical concurrent retries share one receipt, even when one commits between the other's checks.
+  const cancel = factCommand({ action: "cancel", factId: access.commandId, expectedVersion: 1 });
+  const cancels = await Promise.all(Array.from({ length: 4 }, () => openFacts.command(jobId, cancel)));
+  for (const receipt of cancels) assert.deepEqual(receipt, cancels[0]);
+  const [cancelled] = cancels;
+  assert.equal(cancelled.status, "cancelled");
+  await assert.rejects(openFacts.command(jobId, factCommand({ action: "answer", factId: access.commandId, expectedVersion: 2,
+    answer: { kind: "access", arrangement: "Customer is home" } })), { code: "OPEN_FACT_CLOSED" });
+  const late = await openFacts.command(jobId, factCommand({ action: "mark_out_of_date", factId: delivery.commandId, expectedVersion: 1 }));
+  assert.equal(late.status, "out_of_date");
+  const deliveryAnswer = await openFacts.command(jobId, factCommand({ action: "answer", factId: delivery.commandId,
+    expectedVersion: 2, answer: { kind: "merchant_delivery_date", deliveryDate: "2026-12-04" } }));
+  assert.equal(deliveryAnswer.version, 3);
+
+  const facts = await openFacts.read(jobId, factQuery);
+  assert.deepEqual(facts.map(fact => [fact.kind, fact.status, fact.neededBy]), [
+    ["customer_choice", "answered", "2026-12-01"], ["access", "cancelled", "2026-12-02"],
+    ["merchant_delivery_date", "answered", "2026-12-03"], ["crew_availability", "open", "2026-12-05"],
+  ]);
+  const [choiceFact, accessFact, deliveryFact, crewFact] = facts;
+  assert.deepEqual(choiceFact.detail, choice.detail);
+  assert.deepEqual(choiceFact.answer, answered.answer);
+  assert.equal(choiceFact.mayChangePrice, true);
+  assert.equal(choiceFact.scopeItemId, tiling.scope_item_id);
+  assert.equal(choiceFact.planTask, null);
+  assert.equal(choiceFact.source, "builder_logged");
+  assert.deepEqual(choiceFact.history.map(change => [change.version, change.action, change.status, change.actorMembershipId]), [
+    [1, "log", "open", owner.membershipId], [2, "answer", "answered", owner.membershipId],
+  ]);
+  assert.equal(accessFact.answer, null);
+  assert.deepEqual(accessFact.owner, { kind: "customer" });
+  assert.equal(accessFact.mayChangePrice, false);
+  assert.deepEqual(deliveryFact.planTask, delivery.planTask);
+  assert.deepEqual(deliveryFact.owner, delivery.owner);
+  assert.deepEqual(deliveryFact.answer, { kind: "merchant_delivery_date", deliveryDate: "2026-12-04" });
+  assert.deepEqual(deliveryFact.history.map(change => change.status), ["open", "out_of_date", "answered"]);
+  assert.deepEqual(crewFact.owner, crew.owner);
+  assert.deepEqual(crewFact.detail, crew.detail);
+  assert.deepEqual(crewFact.history.length, 1);
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  assert.notEqual(fresh.sessionId, owner.sessionId);
+  const { openFacts: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.read(jobId, factQuery), facts);
+  assert.deepEqual(await reopened.read(jobId, { ...factQuery, factId: crew.commandId }), [crewFact]);
+  assert.deepEqual(await reopened.command(jobId, choice), logged);
+  assert.deepEqual(await reopened.command(jobId, answered), winner);
+  await assert.rejects(reopened.read(jobId, { ...factQuery, factId: randomUUID() }), { code: "NOT_FOUND" });
+  const { rows: [stored] } = await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.v2_open_fact WHERE job_id = $1) AS facts,
+    (SELECT count(*)::int FROM app.v2_open_fact_change WHERE job_id = $1) AS changes`, [jobId]);
+  assert.deepEqual(stored, { facts: 4, changes: 8 });
+  // Each new change appends one audit event in its own transaction; replays and refusals append none.
+  const { rows: events } = await admin.query(`SELECT event_type AS "eventType", actor_ref AS "actorRef", payload
+    FROM app.audit_event WHERE subject_type = 'job' AND subject_ref = $1 AND event_type LIKE 'v2_open_fact.%'
+    ORDER BY sequence`, [jobId]);
+  assert.deepEqual(events.map(event => event.eventType), ["log", "log", "log", "log", "answer", "cancel",
+    "mark_out_of_date", "answer"].map(action => `v2_open_fact.${action}`));
+  assert.ok(events.every(event => event.actorRef === `membership:${owner.membershipId}`));
+  const { rows: changeRows } = await admin.query(`SELECT command_id, fact_id, expected_version, status, request_digest
+    FROM app.v2_open_fact_change WHERE job_id = $1`, [jobId]);
+  for (const event of events) {
+    const row = changeRows.find(change => change.command_id === event.payload.references.commandId);
+    assert.ok(row, event.payload.references.commandId);
+    assert.deepEqual([event.payload.references.factId, event.payload.references.factVersion, event.payload.references.status,
+      event.payload.hashes.request], [row.fact_id, String(row.expected_version + 1), row.status, row.request_digest]);
+  }
+  assert.deepEqual(events.filter(event => event.eventType === "v2_open_fact.log").map(event => event.payload.references.kind),
+    ["customer_choice", "merchant_delivery_date", "crew_availability", "access"]);
+  for (const words of ["grout", "Teacup", "Decorator", "crew in", "Splashback"]) assert.ok(!JSON.stringify(events).includes(words), words);
+  assert.deepEqual(await effectCounts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("an open fact refuses a scope item or plan task from another job in the same firm", async () => {
+  const { owner, openFacts, quoteRevisionId, tiling } = await seededFacts();
+  const { draftJob, read } = await draftForPlan();
+  const otherPlan = await read();
+  const otherTask = otherPlan.tasks.find(task => task.key !== customTaskKey);
+  assert.ok(otherTask);
+  const { rows: [otherRow] } = await admin.query(`SELECT count(*)::int AS count FROM app.v2_work_plan_task
+    WHERE (job_id, quote_revision_id, scope_item_id, template_task_key) = ($1, $2, $3, $4)`,
+  [draftJob, otherPlan.quoteRevisionId, otherTask.scopeItemId, otherTask.key]);
+  assert.equal(otherRow.count, 1);
+  const before = await admin.query("SELECT count(*)::int AS count FROM app.v2_open_fact");
+  const base = { owner: { kind: "builder" }, neededBy: "2026-12-07",
+    detail: { kind: "access", need: "Parking permit for the van" } };
+  for (const reference of [
+    { scopeItemId: otherTask.scopeItemId },
+    { scopeItemId: otherTask.scopeItemId, planTask: { quoteRevisionId: otherPlan.quoteRevisionId, taskKey: otherTask.key } },
+    { scopeItemId: tiling.scope_item_id, planTask: { quoteRevisionId: otherPlan.quoteRevisionId, taskKey: otherTask.key } },
+    { scopeItemId: otherTask.scopeItemId, planTask: { quoteRevisionId, taskKey: tiling.template_task_key } },
+    { scopeItemId: tiling.scope_item_id, planTask: { quoteRevisionId, taskKey: customTaskKey } },
+    { scopeItemId: randomUUID() },
+  ]) await assert.rejects(openFacts.command(jobId, logFact({ ...base, ...reference })), { code: "OPEN_FACT_REFERENCE_INVALID" });
+
+  // The composite foreign keys refuse the same thing below the repository.
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const insert = (scopeItemId, planRevision, taskKey) => withTenant(runtime, context, db => db.$client.query(`
+    INSERT INTO app.v2_open_fact (tenant_id, job_id, id, kind, scope_item_id, plan_quote_revision_id, plan_task_key,
+      owner_kind, needed_by, source, access_need)
+    VALUES ($1,$2,$3,'access',$4,$5,$6,'builder','2026-12-07','builder_logged','Parking')`,
+  [DEMO_TENANT_ID, jobId, randomUUID(), scopeItemId, planRevision, taskKey]));
+  await assert.rejects(insert(otherTask.scopeItemId, null, null), { code: "23503" });
+  await assert.rejects(insert(otherTask.scopeItemId, otherPlan.quoteRevisionId, otherTask.key), { code: "23503" });
+  assert.deepEqual(await admin.query("SELECT count(*)::int AS count FROM app.v2_open_fact").then(r => r.rows[0]), before.rows[0]);
+
+  // A fact on one job cannot be read or changed through another job.
+  const [fact] = await openFacts.read(jobId, factQuery);
+  await assert.rejects(openFacts.read(draftJob, { ...factQuery, factId: fact.id }), { code: "NOT_FOUND" });
+  await assert.rejects(openFacts.command(draftJob, factCommand({ action: "cancel", factId: fact.id,
+    expectedVersion: fact.version })), { code: "NOT_FOUND" });
+});
+
+test("forced open fact policies hide facts and reject changes from the second firm", async () => {
+  const { owner, openFacts } = await seededFacts();
+  const command = logFact({ owner: { kind: "builder" }, neededBy: "2026-12-08",
+    detail: { kind: "access", need: "Skip permit for the drive" } });
+  await openFacts.command(jobId, command);
+  const outsider = await signIn("second-builder");
+  const { openFacts: theirs } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(theirs.read(jobId, factQuery), { code: "NOT_FOUND" });
+  await assert.rejects(theirs.command(jobId, { ...command, commandId: randomUUID() }), { code: "NOT_FOUND" });
+  await assert.rejects(theirs.command(jobId, factCommand({ action: "cancel", factId: command.commandId, expectedVersion: 1 })),
+    { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  for (const table of ["app.v2_open_fact", "app.v2_open_fact_change"]) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false }, table);
+    const idColumn = table === "app.v2_open_fact" ? "id" : "fact_id";
+    const filter = `WHERE (tenant_id, job_id, ${idColumn}) = ($1, $2, $3)`;
+    const key = [DEMO_TENANT_ID, jobId, command.commandId];
+    assert.equal((await query(ownerContext, `SELECT * FROM ${table} ${filter}`, key)).rowCount, 1, table);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, `SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET tenant_id = tenant_id ${filter}`, key), { code: "42501" });
+      await assert.rejects(query(scope, `DELETE FROM ${table} ${filter}`, key), { code: "42501" });
+    }
+    assert.equal((await runtime.query(`SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+  }
+  for (const scope of [outsider.realContext, context]) {
+    await assert.rejects(query(scope, `INSERT INTO app.v2_open_fact (tenant_id, job_id, id, kind, owner_kind, needed_by,
+      source, access_need) VALUES ($1,$2,$3,'access','builder','2026-12-08','builder_logged','Skip')`,
+    [DEMO_TENANT_ID, jobId, randomUUID()]), { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_open_fact_change (tenant_id, job_id, fact_id, expected_version,
+      command_id, request_digest, action, status, actor_membership_id)
+      VALUES ($1,$2,$3,1,$4,$5,'cancel','cancelled',$6)`,
+    [DEMO_TENANT_ID, jobId, command.commandId, randomUUID(), "0".repeat(64), owner.membershipId]),
+    { code: "42501", message: /row-level security policy/u });
+  }
 });
 
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
