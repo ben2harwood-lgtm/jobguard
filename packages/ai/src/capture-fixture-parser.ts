@@ -36,7 +36,8 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
 const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
-const workClause = (value: string) => workWord.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+// The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
+const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
 const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 
@@ -231,12 +232,12 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         const found = plainPrice(chunk);
         const after = found ? chunk.value.slice(found.at + found.value.length) : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
-        // "per door" only when it names the counted thing; "per pair" or "per day" leaves the price open.
-        const per = /^\s+per\s+([\p{L}-]+)$/iu.exec(after);
+        // "per door" or "a door" only when it names the counted thing; "per pair" or "a day" leaves the price open.
+        const per = /^\s+(?:per|an?)\s+([\p{L}-]+)$/iu.exec(after);
         const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
         const each = /^\s+(?:each|apiece|a piece)$/iu.test(after) || (!!per && !!perCount && sameUnit(perCount.unit, per[1]!));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
-        const rate = found && (each || !/\b(?:each|apiece|per)\b/iu.test(chunk.value)) ? found : null;
+        const rate = found && (each || (!per && !/\b(?:each|apiece|per)\b/iu.test(chunk.value))) ? found : null;
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
