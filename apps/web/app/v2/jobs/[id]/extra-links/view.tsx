@@ -5,6 +5,9 @@ type Link = { id: string; variationId: string; revisionId: string; amount: strin
   agreedAt: string | null; agreedBy: string | null; cancelledAt: string | null; expiresAt: string };
 type State = { variations: VariationWorkspaceResponse; links: Link[]; photos: { id: string; receivedAt: string }[] };
 const attestation = "Builder-recorded practice acceptance — not an authenticated customer signature";
+export function photoIdsAfterCreate(ok: boolean, ids: string[]): string[] {
+  return ok ? [] : ids;
+}
 export function BuilderExtraLinks({ jobId }: { jobId: string }) {
   const [state, setState] = useState<State | null>(null), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const [inbox, setInbox] = useState<{ linkId: string; capability: string }[]>([]), [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -15,7 +18,7 @@ export function BuilderExtraLinks({ jobId }: { jobId: string }) {
     setState(await r.json() as State);
   }, [endpoint]);
   useEffect(() => { void load().catch(() => setNotice("Sign in to the correct practice firm to manage links.")); }, [load]);
-  async function command(body: unknown, approval = false) {
+  async function command(body: unknown, approval = false, creating = false) {
     if (busy) return;
     setBusy(true); setNotice("");
     try {
@@ -24,6 +27,7 @@ export function BuilderExtraLinks({ jobId }: { jobId: string }) {
       if (!r.ok) throw new Error();
       const result = await r.json() as { linkId?: string; capability?: string };
       if (result.linkId && result.capability) setInbox(rows => [...rows, { linkId: result.linkId!, capability: result.capability! }]);
+      if (creating) setPhotoIds(ids => photoIdsAfterCreate(true, ids));
       await load();
     } catch { setNotice("Result unknown or refused. Reload the saved links before trying again."); }
     finally { setBusy(false); }
@@ -35,7 +39,7 @@ export function BuilderExtraLinks({ jobId }: { jobId: string }) {
     void command({ version: "v2-extra-link.v1", action: "create", commandId: crypto.randomUUID(),
       occurredAt: new Date().toISOString(), expectedVersion: r.revision, variationId: v.id, revisionId: r.id,
       token, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
-      photoIds });
+      photoIds }, false, true);
   }
   return <main style={{ maxWidth: 760, margin: "0 auto", padding: 20, overflowWrap: "anywhere" }}>
     <h1>Customer agreement links</h1><p>Practice links go only to the local test inbox. A typed agreement still needs your approval below.</p>
