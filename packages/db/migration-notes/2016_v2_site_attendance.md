@@ -12,8 +12,10 @@ foreign key keeps every revision on its predecessor.
 
 The table stores no location, IP address, device or user agent. Forced row
 security limits the runtime to its own tenant and to jobs visible to its firm
-(`app.job` carries the restrictive `v2_practice_firm` policy), and the runtime
-can read and insert only. An `AFTER INSERT` trigger refuses a crew id that is
+(`app.job` carries the restrictive `v2_practice_firm` policy). The table
+also carries its own restrictive `v2_practice_firm` policy, joining `app.job` on
+`(tenant_id, job_id)` as FL-1's guard requires. The runtime can read and insert
+only. An `AFTER INSERT` trigger refuses a crew id that is
 not a crew record of the job's own firm, and a day outside today and the six
 days before it.
 

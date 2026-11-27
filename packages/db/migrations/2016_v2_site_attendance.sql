@@ -54,6 +54,10 @@ BEGIN
     WITH CHECK (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_site_attendance.tenant_id, v2_site_attendance.job_id)
     ));
+  -- FL-1's firm lock: 2001's restrictive rule, so a row is reachable only through a job the firm can see.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_site_attendance;
+  CREATE POLICY v2_practice_firm ON app.v2_site_attendance AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_site_attendance.tenant_id,v2_site_attendance.job_id)));
   REVOKE ALL ON app.v2_site_attendance FROM PUBLIC, jobguard_identity, jobguard_worker, jobguard_shadow, jobguard_infrastructure;
   GRANT SELECT, INSERT ON app.v2_site_attendance TO jobguard_runtime;
 
