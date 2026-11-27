@@ -1556,9 +1556,9 @@ test("K10 exact stored figures, complete hidden-finding pair, no write on repeat
   assert.deepEqual(response, await read(planted.draftJob));
   assert.deepEqual(await read(plain.draftJob), response);
   assert.equal(await auditCount(), before, "reads must not append audit events");
-  assert.equal(response.quoted, "18400.00"); assert.equal(response.approvedExtras, "1250.00");
-  assert.equal(response.jobTotal, "19650.00"); assert.equal(response.recordedCosts, "9100.00");
-  assert.equal(response.leftInBudget, "10550.00"); assert.equal(response.spentPercent, "46.31");
+  assert.deepEqual(response.quoted, { pence: 1840000, currency: "GBP" }); assert.deepEqual(response.approvedExtras, { pence: 125000, currency: "GBP" });
+  assert.deepEqual(response.jobTotal, { pence: 1965000, currency: "GBP" }); assert.deepEqual(response.recordedCosts, { pence: 910000, currency: "GBP" });
+  assert.deepEqual(response.leftInBudget, { pence: 1055000, currency: "GBP" }); assert.equal(response.spentPercent, "46.31");
   assert.equal(response.taxBasis, "ex-VAT"); assert.equal(response.notice, "Costs recorded so far only.");
   assert.doesNotMatch(JSON.stringify(response), /hidden|canary|forecast|99999999/iu);
   const stranger = await signIn("second-builder");
@@ -1577,7 +1577,7 @@ test("K10 exact stored figures, complete hidden-finding pair, no write on repeat
   await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
     documentId: plain.costDocument, documentType: "invoice", quantity: "1", unitPricePence: 900000,
     netPence: 900000, expectedRevision: 1, disposition: "manual_transcription" });
-  assert.equal((await read(plain.draftJob)).recordedCosts, "9000.00");
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 900000, currency: "GBP" });
   const { documentId: replacement } = await plain.app.supplierDocuments.intake(plain.draftJob, {
     version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-revised-invoice",
     channel: "picker", expectedRevision: 2,
@@ -1589,7 +1589,7 @@ test("K10 exact stored figures, complete hidden-finding pair, no write on repeat
   await plain.app.thingsToCheck.supersede(plain.draftJob, { version: "supplier-bill-supersession.v1", commandId: randomUUID(),
     originalFactRevisionId: facts.find(fact => fact.document_id === plain.costDocument).confirmed.id,
     replacementFactRevisionId: facts.find(fact => fact.document_id === replacement).confirmed.id, expectedRevision: 0 });
-  assert.equal((await read(plain.draftJob)).recordedCosts, "160.00", "do not count a replaced invoice twice");
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 16000, currency: "GBP" }, "do not count a replaced invoice twice");
   const { documentId: credit } = await plain.app.supplierDocuments.intake(plain.draftJob, {
     version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "practice-credit-300",
     channel: "picker", expectedRevision: 3,
@@ -1597,7 +1597,7 @@ test("K10 exact stored figures, complete hidden-finding pair, no write on repeat
   await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
     documentId: credit, documentType: "credit", quantity: "1", unitPricePence: 5000,
     netPence: 5000, expectedRevision: 0, disposition: "manual_transcription" });
-  assert.equal((await read(plain.draftJob)).recordedCosts, "110.00", "supplier credits reduce recorded spend");
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 11000, currency: "GBP" }, "supplier credits reduce recorded spend");
 });
 
 test("K10 invalid customer cookie is refused", async () => {
