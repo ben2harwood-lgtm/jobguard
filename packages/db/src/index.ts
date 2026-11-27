@@ -23,6 +23,8 @@ export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
 export * from "./v2-work-plan-repository.js";
+export * from "./v2-measurement-repository.js";
+export * from "./v2-crew-brief-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";
@@ -239,5 +241,7 @@ export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 
+// V2-F1: brief progress.
+export * from "./v2-brief-progress-repository.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";

@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f1": {
+      "branches": [
+        "codex/sandbox/v2-f1"
+      ],
+      "note": "RED. V2-F1 builder-recorded brief progress. work/page.tsx: mount only, owned by main (live Work tab). Base origin/v2/main; D4 inherited as directed. F1 repair mount, owned by main: packages/db/src/watchdog.ts adds the V2-only 'v2.brief_progress.record' kind to WatchdogCommandType only (Codex P2 4705000559). F1 repair mount, owned by D4 #916: packages/db/src/v2-crew-brief-repository.ts ownerRef in composed content only (Codex P2 4707355984).",
+      "allow": [
+        "packages/db/src/v2-brief-progress-repository.ts",
+        "packages/db/src/v2-crew-brief-repository.ts",
+        "packages/db/src/v2-brief-progress.test.ts",
+        "packages/db/migrations/2015_v2_brief_progress.sql",
+        "packages/db/migration-notes/2015_v2_brief_progress.md",
+        "packages/db/test/migration-proofs/2015_v2_brief_progress.proof.json",
+        "packages/db/src/index.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/watchdog-lock-order.integration.test.ts",
+        "apps/api/src/workspace/brief-progress.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "packages/core/src/watchdog.ts",
+        "apps/web/app/api/jobs/[id]/brief-progress/route.ts",
+        "apps/web/app/api/jobs/[id]/brief-progress/route.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/brief-progress/page.tsx",
+        "apps/web/app/ui/brief-progress.tsx",
+        "apps/web/app/ui/brief-progress-link.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/brief-progress.browser.test.mjs",
+        "apps/web/next.config.mjs",
+        "packages/db/src/watchdog.ts"
+      ]
+    }
+  }
+}

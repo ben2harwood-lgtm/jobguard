@@ -14,6 +14,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 /** Exhaustive web mutation registry. Dynamic actions are classified below.
  * New site facts, documents, orders, proof and messages must be live-only. */
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
+  // V2-F1: site observations only; never completion proof.
+  "/api/jobs/[id]/brief-progress": "watchdog_live_only",
   // Practice-only accounting route approval; checked export authority remains mandatory.
   "/api/accounting-exports/[sourceId]/route-change": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",
@@ -369,6 +371,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
 
 /** Business entrypoints used by the registry's live-only commands. */
 export const watchdogCommandGuards = [
+  { file: "v2-brief-progress-repository.ts", method: "record", calls: 1 },
   // Work-state prechecks hold SHARE; SQL uses the event serializer without upgrading.
   { file: "job-work-state-repository.ts", method: "finish", calls: 1 },
   { file: "job-work-state-repository.ts", method: "cancelFinish", calls: 1 },
