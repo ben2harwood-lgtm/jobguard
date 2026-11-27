@@ -36,7 +36,8 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
 const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
-const workClause = (value: string) => workWord.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+// The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
+const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
 const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 
@@ -74,15 +75,17 @@ function amounts(value: string): Amount[] {
     const [poundWords, penceWords] = match[0].split(/(?<=pounds|quid)\s+(?:and\s+)?/iu);
     const pounds = spokenPounds(poundWords!);
     const pence = penceWords === undefined ? 0 : spokenPounds(penceWords.replace(/\s+(?:pence|p)$/iu, ""));
+    // "one point five pounds", "one million two hundred pounds": only part of the amount was read, so it has no price.
+    const partial = /(?:\d|\b(?:point|million|billion|trillion|grand))[\s-]*$/iu.test(value.slice(0, match.index));
     found.push({ text: match[0], index: match.index,
-      pence: pounds === null || pence === null || pence > 99 ? null : pounds * 100 + pence });
+      pence: partial || pounds === null || pence === null || pence > 99 ? null : pounds * 100 + pence });
   }
   return found.sort((a, b) => a.index - b.index);
 }
 // Continuous speech has no punctuation, so a new work item also starts at one of these verbs
 // unless the word before it ties it to the clause (for example "the", "to" or "and").
 const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
-const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them)$/iu;
+const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
@@ -172,7 +175,15 @@ function spokenQuantity(description: string): { count: number; said: string; uni
   if (!match || !spokenVerb.test(description)) return null;
   const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];
   if (!count || match[2]!.length > 40 || /^(?:the|a|an|of|for|and|in|on|out|up|off|down)\b/iu.test(match[2]!)) return null;
+  // "twenty one doors", "one hundred doors": a count of several words is not read, rather than read in part.
+  if (new RegExp(`^(?:${numberWord}|hundred|thousand|and)(?![\\p{L}])`, "iu").test(match[2]!)) return null;
   return { count, said: match[1]!, unit: match[2]!, unitStart: description.length - match[2]!.length };
+}
+
+/** "six doors … per door": the rate's word is the counted thing, singular or plural. */
+function sameUnit(unit: string, perWord: string): boolean {
+  const a = unit.split(/\s+/u).at(-1)!.toLowerCase(), b = perWord.toLowerCase();
+  return [a, `${a}s`, `${a}es`].includes(b) || [`${b}s`, `${b}es`].includes(a);
 }
 
 /** Structured synthetic recipe parser, NOT a live model or natural-language
@@ -221,9 +232,12 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         const found = plainPrice(chunk);
         const after = found ? chunk.value.slice(found.at + found.value.length) : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
-        const each = /^\s+(?:each|apiece|a piece|per\s+[\p{L}-]+)$/iu.test(after);
+        // "per door" or "a door" only when it names the counted thing; "per pair" or "a day" leaves the price open.
+        const per = /^\s+(?:per|an?)\s+([\p{L}-]+)$/iu.exec(after);
+        const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
+        const each = /^\s+(?:each|apiece|a piece)$/iu.test(after) || (!!per && !!perCount && sameUnit(perCount.unit, per[1]!));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
-        const rate = found && (each || !/\b(?:each|apiece|per)\b/iu.test(chunk.value)) ? found : null;
+        const rate = found && (each || (!per && !/\b(?:each|apiece|per)\b/iu.test(chunk.value))) ? found : null;
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
