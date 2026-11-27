@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl6": {
+      "branches": ["codex/sandbox/v2-fl6"],
+      "note": "RED tenancy. Q44 V2-FL-6: catalog-driven firm lock for V2-owned job tables; 2054 stays last in the V2 bootstrap. No web workflow changes.",
+      "allow": [
+        "packages/db/migration-notes/2054_v2_own_tables_firm_lock.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-6.checks.mjs",
+        "tools/v2/migrations/2054_v2_own_tables_firm_lock.proof.json",
+        "tools/v2/migrations/2054_v2_own_tables_firm_lock.sql"
+      ]
+    }
+  }
+}
