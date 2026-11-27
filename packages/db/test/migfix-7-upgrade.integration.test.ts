@@ -424,7 +424,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   }
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
-  const receiptDedupSql = await readFile(new URL("../migrations/0780_receipt_deduplication.sql", import.meta.url), "utf8");
+  const receiptDedupSql = await readFile(new URL("../migrations/0783_receipt_duplicate_command.sql", import.meta.url), "utf8");
   const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   lp6dBodies.set("app.record_practice_customer_receipt(p_tenant,p_job,p_invoice,p_actor,p_command,p_paid_on,p_amount,p_method,p_reference)", receiptDedupBody);

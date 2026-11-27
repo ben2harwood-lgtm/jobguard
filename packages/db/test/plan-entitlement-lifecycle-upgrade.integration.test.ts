@@ -390,7 +390,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ]);
   const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
   const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
-  const receiptDedupSql = await readFile(new URL("../migrations/0780_receipt_deduplication.sql", import.meta.url), "utf8");
+  const receiptDedupSql = await readFile(new URL("../migrations/0783_receipt_duplicate_command.sql", import.meta.url), "utf8");
   const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   const pilotRevealRoutines = new Set([

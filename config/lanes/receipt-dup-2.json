@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "receipt-dup-2": {
+      "branches": [
+        "claude/project-thread-trp08u-rdup"
+      ],
+      "allow": [
+        "packages/db/migrations/0783_receipt_duplicate_command.sql",
+        "packages/db/test/UIWIRE-12.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0783_receipt_duplicate_command.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

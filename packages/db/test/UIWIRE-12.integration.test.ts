@@ -138,7 +138,19 @@ describe("UIWIRE-12 customer receipts",()=>{
   const retry={...c,commandId:randomUUID(),reference:` ${c.reference} `};
   expect(await repo.recordReceipt(context,retry)).toEqual(first);
   expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts.map(r=>r.id)).toEqual([first.paymentId]);
-  expect((await admin.query(`SELECT command_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=ANY($2::uuid[])`,[T,[c.commandId,retry.commandId]])).rows).toEqual([{command_id:c.commandId}]);
+  const receipts=(await admin.query(`SELECT command_id,result->>'paymentId' payment_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=ANY($2::uuid[]) ORDER BY command_id=$3`,[T,[c.commandId,retry.commandId],c.commandId])).rows;
+  expect(receipts).toEqual([{command_id:retry.commandId,payment_id:first.paymentId},{command_id:c.commandId,payment_id:first.paymentId}]);
+ });
+ it("replays a deduplicated command after the original receipt is reversed, never paying twice",async()=>{
+  const f=await freshInvoice(),a=command(f),first=await repo.recordReceipt(context,a);
+  const b={...a,commandId:randomUUID()};
+  expect(await repo.recordReceipt(context,b)).toEqual(first);
+  await repo.reverseReceipt(context,reversal(f,first.paymentId));
+  expect(await repo.recordReceipt(context,b)).toEqual(first);
+  const view=await repo.receiptView(context,f.jobId,f.invoiceId);
+  expect(view.receipts.map(r=>r.id)).toEqual([first.paymentId]);
+  expect(view.invoice.balancePence).toBe(132000);
+  await expect(repo.recordReceipt(context,{...b,amountPence:49000})).rejects.toMatchObject({code:"23505",message:"IDEMPOTENCY_PAYLOAD_CONFLICT"});
  });
  it.each([{reference:"Another fictional receipt"},{amountPence:49000},{paidOn:"2026-09-17"},{method:"cash"}])("records separate receipts for distinct details %j",async details=>{
   const f=await freshInvoice(),c=command(f),first=await repo.recordReceipt(context,c);
