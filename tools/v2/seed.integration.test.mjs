@@ -1176,7 +1176,9 @@ test("K3 prepares from scheduled plan work, edits persisted text and sends one e
   const path = `/api/jobs/${jobId}/friday-update`;
   const post = body => request(path, { cookies, csrf: csrfToken, body }).then(response => json(response));
   const before = await planCounts(plan.quoteRevisionId);
-  const prepare = fridayCommand("prepare", 0);
+  // DV1 (above) may already have sent a Friday update for this week when the suite runs in the week of fridayWeek.
+  const prior = await updates.read(context, jobId, fridayWeek);
+  const prepare = fridayCommand("prepare", prior?.sequence ?? 0);
   const prepared = (await post(prepare)).snapshot;
   assert.ok(prepared.content.thisWeek.includes(thisTask.title));
   assert.ok(prepared.content.nextWeek.includes(nextTask.title));
@@ -1201,8 +1203,10 @@ test("K3 prepares from scheduled plan work, edits persisted text and sends one e
   assert.equal(first.snapshot.contentVersion, edited.contentVersion);
   await json(await request(path, { cookies, csrf: csrfToken, body: { ...send, commandId: randomUUID() } }), 409);
   const { rows: inbox } = await admin.query(`SELECT content,catcher_message,recipient FROM app.v2_friday_update
-    WHERE job_id=$1 AND week=$2 AND action='send'`, [jobId, fridayWeek]);
+    WHERE job_id=$1 AND week=$2 AND action='send' AND command_id=$3`, [jobId, fridayWeek, send.commandId]);
   assert.equal(inbox.length, 1);
+  assert.equal((await admin.query(`SELECT 1 FROM app.v2_friday_update WHERE job_id=$1 AND week=$2 AND action='send'
+    AND sequence > $3`, [jobId, fridayWeek, prior?.sequence ?? 0])).rows.length, 1, "K3 sends once after its own prepare");
   assert.equal(preview.message, inbox[0].catcher_message, "Customer preview equals the stored sent message");
   assert.equal(first.message, inbox[0].catcher_message);
   assert.match(preview.message, /week of Monday 23 November 2026/u);
