@@ -1,4 +1,4 @@
-# 2062 (reserved as 2017, then 2021 and 2028) — V2-K2A builder calendar link (RED)
+# 2074 (reserved as 2017, then 2021, 2028 and 2062; 2062 is G4 in the V2 migration register) — V2-K2A builder calendar link (RED)
 
 Local V2 only: the migration is a no-op outside jobguard_v2_local or without
 2001's v2_practice_firm policy. Bootstrap applies it after 2020 (before the 2025, 2027 and 2047 lines; it depends on none of them). Numbered above the base by tools/migration-renumber.mjs; the merge renumbers it again if needed.

@@ -67,7 +67,7 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
   // V2-K2A: reserved calendar link migration.
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2062_v2_calendar_feed.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2074_v2_calendar_feed.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
