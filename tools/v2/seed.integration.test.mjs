@@ -1778,6 +1778,20 @@ test("G2 saves only the previewed text: a note changed after the preview refuses
   assert.match(g2Text(saved.content), /Visit moved to Friday\./u);
 });
 
+test("G2 the pack reads a snag's latest revision, and a revision after the preview refuses the save", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  await json(await request(`/api/jobs/${f.job}/snags`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken,
+    body: { version: "snag.v1", action: "revise", commandId: randomUUID(), snagId: f.snagId, expectedRevision: 1,
+      title: "Refit the hall door stop and buffer", location: null, assigneeLabel: null, dueOn: null } }));
+  assert.equal((await f.post({ ...g2.save(choice), previewHash: first.contentHash }, 409)).code, "HANDOVER_SOURCE_CHANGED");
+  const again = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.match(g2Text(again.content), /Refit the hall door stop and buffer/u);
+  assert.doesNotMatch(g2Text(again.content), /2026-12-04|4 Dec/u, "the revision cleared the due date");
+  await f.post({ ...g2.save(choice), previewHash: again.contentHash });
+});
+
 test("G2 replay and conflict, append-only, firm A/B read check and route refusals", async () => {
   const f = await g2.job();
   const choice = { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] };

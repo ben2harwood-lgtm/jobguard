@@ -57,10 +57,14 @@ export class HandoverRepository {
       ORDER BY e.server_received_at, e.id`, [tenantId, jobId])).rows;
     // Open and fixed snags by their latest event, with G1's crew owner (or main's label) and agreed note. Checked snags are not outstanding.
     const snags = (await client.query<HandoverSources["snags"][number]>(`
-      SELECT s.id, s.title, COALESCE(c.display_name, CASE WHEN o.snag_id IS NULL OR o.crew_id IS NULL THEN s.assignee_label END) AS owner,
-        s.due_on::text AS "dueOn", CASE WHEN e.kind = 'fixed' THEN 'fixed' ELSE 'open' END AS state,
+      SELECT s.id, COALESCE(r.title, s.title) AS title, COALESCE(c.display_name, CASE WHEN o.snag_id IS NULL OR o.crew_id IS NULL
+          THEN CASE WHEN r.snag_id IS NULL THEN s.assignee_label ELSE r.assignee_label END END) AS owner,
+        (CASE WHEN r.snag_id IS NULL THEN s.due_on ELSE r.due_on END)::text AS "dueOn", CASE WHEN e.kind = 'fixed' THEN 'fixed' ELSE 'open' END AS state,
         COALESCE(e.sequence, 0) AS "lastSequence", CASE WHEN g.agreed THEN g.note END AS "agreedNote"
       FROM app.snag s
+      -- The latest snag.v1 revision, as SnagRepository.read() uses it; its nulls are explicit.
+      LEFT JOIN LATERAL (SELECT x.snag_id, x.title, x.assignee_label, x.due_on FROM app.snag_revision x
+        WHERE (x.tenant_id, x.snag_id) = (s.tenant_id, s.id) ORDER BY x.revision DESC LIMIT 1) r ON true
       LEFT JOIN LATERAL (SELECT x.sequence, x.kind FROM app.snag_event x WHERE (x.tenant_id, x.snag_id) = (s.tenant_id, s.id)
         ORDER BY x.sequence DESC LIMIT 1) e ON true
       LEFT JOIN LATERAL (SELECT x.snag_id, x.crew_id, x.crew_revision, x.firm_key FROM app.v2_snag_owner x
