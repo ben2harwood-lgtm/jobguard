@@ -43,6 +43,11 @@ BEGIN
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_rams_draft.tenant_id,v2_rams_draft.job_id)
     ));
+  -- V2 linked practice firms share one backing tenant: the same restrictive firm rule as 2001/2047.
+  IF NOT EXISTS (SELECT FROM pg_policy WHERE polrelid = 'app.v2_rams_draft'::regclass AND polname = 'v2_practice_firm') THEN
+    CREATE POLICY v2_practice_firm ON app.v2_rams_draft AS RESTRICTIVE FOR ALL TO jobguard_runtime
+      USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_rams_draft.tenant_id,v2_rams_draft.job_id)));
+  END IF;
   REVOKE ALL ON app.v2_rams_draft FROM PUBLIC, jobguard_runtime;
   GRANT SELECT,INSERT ON app.v2_rams_draft TO jobguard_runtime;
 END

@@ -6,6 +6,7 @@ import { AuthError, resolveVerifiedTenantContext } from "@jobguard/api/identity"
 import { identityApplication } from "../../../../lib/identity-server";
 import { WorkPlanError } from "@jobguard/db";
 import { practiceFailure, syntheticPool } from "../../../../lib/synthetic-server";
+import { enforcePracticePair } from "../../../../lib/linked-practice-entry";
 
 async function handle(request: Request, context: { params: Promise<{ id: string }> }, write: boolean) {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1" || process.env.JOBGUARD_ENV !== "synthetic_demo") {
@@ -28,6 +29,8 @@ async function handle(request: Request, context: { params: Promise<{ id: string 
       if (verified.tenantId !== tenantId) throw new AuthError("TENANT_FORBIDDEN");
     }
     const sessionId = (await cookies()).get("jg_session")?.value;
+    // A linked practice session must still carry its exact browser pairing (as the chasing route does).
+    await enforcePracticePair(syntheticPool(), sessionId);
     const app = new RamsApplication(syntheticPool(), sessionId);
     const jobId = (await context.params).id;
     const result = write ? await app.command(jobId, await request.json().catch(() => null)) : await app.read(jobId);

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const { read, command, cookie, pool, denied, identitySession, authenticate, findMembership } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), cookie: vi.fn(), pool: vi.fn(), denied: vi.fn(), identitySession: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn() }));
+const { read, command, cookie, pool, denied, identitySession, authenticate, findMembership, pair } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), cookie: vi.fn(), pool: vi.fn(), denied: vi.fn(), identitySession: vi.fn(), authenticate: vi.fn(), findMembership: vi.fn(), pair: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: cookie }) }));
 vi.mock("../../../../lib/synthetic-server", () => ({ syntheticPool: pool, practiceFailure: denied }));
+vi.mock("../../../../lib/linked-practice-entry", () => ({ enforcePracticePair: pair }));
 vi.mock("@jobguard/api/workspace", () => ({
   RamsApplication: class { read = read; command = command; },
   RamsError: class extends Error { constructor(readonly code: string) { super(code); } },
@@ -28,6 +29,7 @@ beforeEach(() => {
   identitySession.mockResolvedValue({ memberships: [membership] });
   authenticate.mockResolvedValue({ csrfToken, sessionCredential: "a".repeat(64) });
   findMembership.mockResolvedValue(membership);
+  pair.mockResolvedValue(false);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("Q06 RAMS thin Next adapter", () => {
@@ -86,5 +88,18 @@ describe("Q06 RAMS thin Next adapter", () => {
     denied.mockReturnValue(new Response(JSON.stringify({ code: "UNAUTHENTICATED" }), { status: 401 }));
     const response = await GET(new Request(url), context);
     expect(response.status).toBe(401); expect(await response.json()).toEqual({ code: "UNAUTHENTICATED" });
+  });
+  it("checks the linked practice pairing before any read or write reaches the application", async () => {
+    command.mockResolvedValue({ revision: 1 }); read.mockResolvedValue({ version: "rams-screen.v1", drafts: [] });
+    expect((await GET(new Request(url), context)).status).toBe(200);
+    expect((await write()).status).toBe(200);
+    expect(pair).toHaveBeenCalledTimes(2); expect(pair).toHaveBeenCalledWith(undefined, "s".repeat(32));
+    pair.mockClear(); read.mockClear(); command.mockClear();
+    const unpaired = Object.assign(new Error("unpaired"), { code: "UNAUTHENTICATED" });
+    pair.mockRejectedValue(unpaired);
+    denied.mockImplementation((error: unknown) => error === unpaired ? new Response(JSON.stringify({ code: "UNAUTHENTICATED" }), { status: 401 }) : null);
+    expect((await GET(new Request(url), context)).status).toBe(401);
+    expect((await write()).status).toBe(401);
+    expect(read).not.toHaveBeenCalled(); expect(command).not.toHaveBeenCalled();
   });
 });

@@ -95,6 +95,14 @@ export class WorkPlanRepository {
     });
   }
 
+  // Same as open, inside a caller's transaction (it takes the draft lock again first). Lets a caller that
+  // holds the draft lock read the work exactly as it stands under that lock.
+  async openIn(database: TenantTransaction, tenantId: string, jobId: string) {
+    const head = await this.planHead(database.$client, tenantId, jobId, true);
+    this.requireCurrentRevision(head);
+    return this.generatePlan(database, [tenantId, jobId, head.quoteRevisionId], head);
+  }
+
   // Called inside quote save, under the same draft lock and before the audit append.
   async refreshDraft(client: PoolClient, key: PlanKey, previousRevisionId: string) {
     const prior = await this.planRow(client, [key[0], key[1], previousRevisionId]);

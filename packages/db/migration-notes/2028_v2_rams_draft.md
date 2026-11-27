@@ -1,4 +1,4 @@
-# 2011 · Q06 V2-K9 RAMS drafts (RED)
+# 2028 · Q06 V2-K9 RAMS drafts (RED)
 
 Adds only `app.v2_rams_draft`, an append-only snapshot/command history. Each
 snapshot records the job, quote/plan revision, effective plan edit version
@@ -12,7 +12,10 @@ the existing `v2_practice_firm` policy. Shared migration installation outside
 that boundary changes nothing; the empty proof describes that no-op. The
 existing purchase-order-audit upgrade fixture defers it to the V2 suite.
 The table is migration-owned, RLS enabled and forced, with the exact 2003
-job-visibility predicate and runtime SELECT/INSERT only. No new function grants.
+job-visibility predicate, plus the restrictive `v2_practice_firm` firm rule
+(the 2047 shape: a mandatory join to `app.job` on tenant and job) so linked
+practice firms sharing one backing tenant cannot see each other's drafts. Runtime
+has SELECT/INSERT only. No new function grants.
 These are temporary working-data privileges for synthetic builder statements,
 not a checked authority operation or a real safety certification.
 

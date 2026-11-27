@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-import type { WorkPlan } from "./v2-work-plan-repository.js";
+import { WorkPlanRepository, type WorkPlan } from "./v2-work-plan-repository.js";
 import { editRamsSections, RamsError, ramsCommandV1, ramsDraftV1, ramsHash, ramsPlanHash, ramsReadyToSign, ramsSections,
   ramsJobV1, type RamsDraft, type RamsJob } from "./v2-rams-draft.js";
 
@@ -49,6 +49,9 @@ export class RamsRepository {
         if (replay.request_hash !== requestHash) throw new RamsError("RAMS_COMMAND_CONFLICT");
         return ramsDraftV1.parse(replay.snapshot);
       }
+      // Re-read the work under the lock. The caller's plan was read before it, so an extra approved in
+      // between would otherwise be missing from what is generated or signed.
+      const current = await new WorkPlanRepository(this.pool).openIn(database, context.tenantId, jobId);
       const { rows: [last] } = await client.query<{ snapshot: unknown }>(`
         SELECT snapshot FROM app.v2_rams_draft WHERE (tenant_id,job_id)=($1,$2) ORDER BY revision DESC LIMIT 1
       `, [context.tenantId, jobId]);
@@ -71,18 +74,20 @@ export class RamsRepository {
           AND p.quote_revision_id=COALESCE(q.quote_revision_id,d.current_revision_id)
       `, [context.tenantId, jobId, command.quoteRevisionId]);
       if (!source || plan.jobId !== jobId || plan.quoteRevisionId !== source.quote_revision_id ||
-        command.expectedPlanVersion !== source.plan_version || plan.version !== source.plan_version) {
+        command.expectedPlanVersion !== source.plan_version || plan.version !== source.plan_version ||
+        current.quoteRevisionId !== source.quote_revision_id || current.version !== source.plan_version ||
+        ramsPlanHash(plan) !== ramsPlanHash(current)) {
         throw new RamsError("RAMS_PLAN_CHANGED");
       }
       if (command.action !== "generate" && (!previous || previous.quoteRevisionId !== source.quote_revision_id ||
         previous.planVersion !== source.plan_version)) throw new RamsError("RAMS_PLAN_CHANGED");
       // An approved extra or replacement changes the work without a plan edit, so compare the work itself too.
-      const planHash = ramsPlanHash(plan);
+      const planHash = ramsPlanHash(current);
       if (command.action !== "generate" && previous?.planHash !== undefined && previous.planHash !== planHash) {
         throw new RamsError("RAMS_PLAN_CHANGED");
       }
       let sections = previous?.sections ?? [];
-      if (command.action === "generate") sections = ramsSections(plan, previous);
+      if (command.action === "generate") sections = ramsSections(current, previous);
       if (command.action === "edit") sections = editRamsSections(sections, command.sectionKey, command.text);
       if (command.action === "sign") {
         if (previous?.status !== "draft") throw new RamsError("RAMS_DRAFT_REQUIRED");
