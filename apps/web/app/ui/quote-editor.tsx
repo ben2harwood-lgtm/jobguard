@@ -116,6 +116,15 @@ if(jobGeneration.current.jobId!==jobId){
 }
 const generation=jobGeneration.current.token;
 const currentJob=()=>jobGeneration.current.token===generation;
+// A switch live from another card (the V2 Plan) refreshes this job's activation without touching quote edits.
+useEffect(()=>{
+ const changed=(event:Event)=>{if((event as CustomEvent).detail!==jobId)return;void(async()=>{
+  const response=await fetch(`/api/jobs/${jobId}/quotes/activation`,{cache:"no-store"});if(!currentJob()||!response.ok)return;
+  const view=practiceActivationResponseV1.parse(await response.json());if(!currentJob())return;
+  setActivation(view.activation);setActivationTerms(view.terms);setLegacyPricing(view.savedV1Sample||view.activation?.policyVersion==="reference_fee_policy_v1");if(view.activation)setActivationScenario(view.activation.scenario);
+ })().catch(()=>{});};
+ window.addEventListener("job-lifecycle-changed",changed);return()=>window.removeEventListener("job-lifecycle-changed",changed);
+},[jobId]);
 async function refreshDocumentReferences(){
  try{
   const response=await fetch(`/api/jobs/${jobId}/quotes/delivery`,{cache:"no-store"});
