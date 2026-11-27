@@ -113,3 +113,14 @@ SQ-A, SQ-B and SQ-C can start together. Each packet is one build plus up to two 
 2. Is a side table (`v2_quote_section`) the right home for room layout, or should the room ride on the quote line?
 3. Any refusal risk in sending fictional practice transcripts to a model before the D04 route decision, given no audio and no real customer data?
 4. Is the packet order right for getting Tommy a preview he can trust soonest?
+
+## 9. Plan check record
+
+**27 Nov 16:25 UK, Claude stand-in for Astra (no answer after 2 hours; frm-management-layer#3 comment 7223215646).** Plan overall: PASS WITH CONDITIONS. SQ-A, SQ-B, SQ-C, SQ-D: PASS WITH CONDITIONS, appended to each packet file. SQ-G rev 1: STOP; rewritten as rev 2 (model quotes exact words, code locates and parses; called once at capture and stored in `v2_job_understanding`; durable cap in `v2_ai_spend`; separate live provider kind; documents amended together), which needs its own check.
+
+Changes to this plan from the check:
+- Order is now SQ-C, SQ-D, then SQ-G (rebased on SQ-D). This replaces the 15:35 note above.
+- SQ-G is no longer "no migration": one migration, two firm-locked tables.
+- Money rule additions: per-item pricing only when code finds the per-item words beside the price; one money span prices one thing; a priced line needs its own extracted, non-overlapping words; no model free text reaches the builder or the quote.
+- SQ-F must use a template registry keyed by the stored `template_key`, keeping `splashback-decorating.v1` byte-identical. Until SQ-F, spoken Tiling or Decorating lines must not pick up splashback tasks.
+- The practice route exception to AGENTS.md section 3 (UK/EU-only AI routes) is Ben's decision, asked on a card at 16:35 UK.
