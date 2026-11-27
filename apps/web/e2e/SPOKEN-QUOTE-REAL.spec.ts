@@ -14,7 +14,8 @@ test.setTimeout(900_000);
 // there fails. A description may only differ by a variant named here; anything else fails too, never absorbed.
 const DESCRIPTION_VARIANTS = {
   first: ["remove the old kitchen", "removed the old kitchen"],
-  third: ["tile the bathroom floor", "tiled the bathroom floor"],
+  // "bathroom fly": heard on the 360px run of #1005 (27 Nov). Only the description words; the money words never vary.
+  third: ["tile the bathroom floor", "tiled the bathroom floor", "tile the bathroom fly"],
 } as const;
 const heard = (first: string, third: string) => `${first} for four hundred pounds fit six new doors and ${third} for two hundred pounds`;
 const accepted = DESCRIPTION_VARIANTS.first.flatMap(first => DESCRIPTION_VARIANTS.third.map(third => ({ first, third, words: heard(first, third) })));

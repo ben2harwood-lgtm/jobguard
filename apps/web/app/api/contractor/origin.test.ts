@@ -87,4 +87,18 @@ describe("trusted browser origins come from server configuration only", () => {
     expect(local("http://evil.example:3000")).toBe(false);
     expect(isTrustedBrowserOrigin(request("http://127.0.0.1:3000", "http://localhost:3000/api/contractor"), { NODE_ENV, VERCEL: "1" })).toBe(false);
   });
+  // V2-SQ-B: a Worker preview version carries only its own alias origin (tools/worker-preview.mjs).
+  it("a preview version trusts only its own configured address, not the public demo or any other preview", () => {
+    const preview = { JOBGUARD_HOSTING: "cloudflare", JOBGUARD_ALLOWED_ORIGINS: "https://sq-preview-jobguard-demo.fictional.workers.dev" };
+    const url = `${preview.JOBGUARD_ALLOWED_ORIGINS}/api/practice-company`;
+    expect(isTrustedBrowserOrigin(request(preview.JOBGUARD_ALLOWED_ORIGINS, url), preview)).toBe(true);
+    for (const origin of ["https://jobguard-demo.fictional.workers.dev", "https://91ea2a03-jobguard-demo.fictional.workers.dev", "https://other-jobguard-demo.fictional.workers.dev", "https://sq-preview-jobguard-demo.fictional.workers.dev.evil.example"]) {
+      expect(isTrustedBrowserOrigin(request(origin, url, { host: new URL(origin).host, "x-forwarded-host": new URL(origin).host, "x-forwarded-proto": "https" }), preview), origin).toBe(false);
+    }
+  });
+  it("a versioned preview address with no configured origin is refused even when the request names it", () => {
+    const publicOnly = { JOBGUARD_HOSTING: "cloudflare", JOBGUARD_ALLOWED_ORIGINS: "https://jobguard-demo.fictional.workers.dev" };
+    const versioned = "https://91ea2a03-jobguard-demo.fictional.workers.dev";
+    expect(isTrustedBrowserOrigin(request(versioned, `${versioned}/api/practice-company`, { host: new URL(versioned).host, "x-forwarded-host": new URL(versioned).host }), publicOnly)).toBe(false);
+  });
 });

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-b": {
+      "branches": [
+        "claude/project-thread-trp08u-sqb"
+      ],
+      "note": "RED V2-SQ-B a preview that opens. Base codex/tommy-v2-preview (#1005), with SQ3 #1004's named description variants merged forward. The versioned preview address was not a configured origin, so the firm start POST was refused (403). Fix: a preview version is uploaded under a preview alias and carries only that alias origin in JOBGUARD_ALLOWED_ORIGINS (tools/worker-preview.mjs); origin.ts is unchanged and still trusts configuration only. Adds a hosted acceptance run (playwright.hosted.config.ts) that fails if the firm start is refused, and the bathroom fly description variant seen at 360px. No migration. Merged forward from SQ3 #1004 (owned by SQ3): local-speech.ts, review-pricing.ts and tests, walk-it-retry.test.tsx, capture-fixture-parser.ts, capture-plain-words.test.ts, golden-run.v1.json, design-fit.css. SQ-B mount, owned by SQ3: SPOKEN-QUOTE-REAL.spec.ts one variant and the fixtures README line. SQ-B mount, owned by web: apps/web/package.json one test:hosted script.",
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/api/contractor/origin.test.ts",
+        "apps/web/app/ui/local-speech.ts",
+        "apps/web/app/ui/review-pricing.test.ts",
+        "apps/web/app/ui/review-pricing.ts",
+        "apps/web/app/ui/walk-it-retry.test.tsx",
+        "apps/web/e2e/HOSTED-preview-firm-start.spec.ts",
+        "apps/web/e2e/SPOKEN-QUOTE-REAL.spec.ts",
+        "apps/web/e2e/fixtures/spoken-quote/README.md",
+        "apps/web/package.json",
+        "apps/web/playwright.hosted.config.ts",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "tools/worker-preview.mjs",
+        "tools/worker-preview.test.mjs"
+      ]
+    }
+  }
+}
