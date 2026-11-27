@@ -188,7 +188,13 @@ export class SnagRegisterRepository {
             FROM app.snag_event e LEFT JOIN app.v2_snag_event_person p ON (p.tenant_id, p.snag_id, p.event_sequence) = (e.tenant_id, e.snag_id, e.sequence)
             LEFT JOIN app.v2_crew_contact c ON (c.tenant_id, c.firm_key, c.crew_id, c.revision) = (p.tenant_id, p.firm_key, p.crew_id, p.crew_revision)
             WHERE (e.tenant_id, e.snag_id) = (s.tenant_id, s.id)), '[]') AS people,
-          (SELECT CASE WHEN a.agreed THEN jsonb_build_object('note', a.note, 'recordedAt', a.recorded_at) END FROM app.v2_snag_agreed a
+          -- Agreed from the latest mark and the latest event: a checked snag is never agreed outstanding,
+          -- and a mark made before a later reopen does not carry over.
+          (SELECT CASE WHEN a.agreed AND (SELECT x.kind FROM app.snag_event x WHERE (x.tenant_id, x.snag_id) = (a.tenant_id, a.snag_id)
+              ORDER BY x.sequence DESC LIMIT 1) IS DISTINCT FROM 'checked'
+            AND NOT EXISTS (SELECT FROM app.snag_event x WHERE (x.tenant_id, x.snag_id) = (a.tenant_id, a.snag_id)
+              AND x.kind = 'reopened' AND x.recorded_at > a.recorded_at)
+            THEN jsonb_build_object('note', a.note, 'recordedAt', a.recorded_at) END FROM app.v2_snag_agreed a
             WHERE (a.tenant_id, a.snag_id) = (s.tenant_id, s.id) ORDER BY a.sequence DESC LIMIT 1) AS agreed
         FROM app.snag s WHERE (s.tenant_id, s.job_id) = ($1, $2)`, [context.tenantId, jobId]);
       return Object.fromEntries(rows.map(row => {
