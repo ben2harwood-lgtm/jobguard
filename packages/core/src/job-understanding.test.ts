@@ -57,7 +57,7 @@ describe("V2-SQ-C job understanding contract and money rule", () => {
       description: { value: description, provenance: at(description) }, quantity: { value: count === "three" ? "3" : "2", provenance: at(count) }, unit: open,
       unitPricePence: { value: Number(price) * 100, provenance: at(price, from) }, areaKey: "landing",
       trade: { value: "Carpentry" as const, provenance: { kind: "inferred" as const, note: "door" } }, priceBasis });
-    const understanding = (lines: ReturnType<typeof line>[], areaPrices: JobUnderstanding["areaPrices"] = []) => jobUnderstandingV1.parse({ version: "job-understanding.v1",
+    const understanding = (lines: unknown[], areaPrices: JobUnderstanding["areaPrices"] = []) => jobUnderstandingV1.parse({ version: "job-understanding.v1",
       title: { value: "Landing", provenance: at("landing") }, areas: [{ key: "landing", name: { value: "landing", provenance: at("landing") }, kind: "room" }],
       lines, areaPrices, wholeJobPrice: null, questions: [] });
     const count: SpokenNumberReader = { money: digits.money, count: words => ({ three: 3, two: 2 } as Record<string, number>)[words] ?? null };
