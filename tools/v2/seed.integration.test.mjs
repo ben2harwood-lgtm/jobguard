@@ -2747,6 +2747,31 @@ test("V2-E7: a run waits on the request lock that E2's link reply and cancel tak
   } finally { holder.release(); }
 });
 
+test("V2-E7: a direct E1 answer waits on the fact lock a reminder run holds", async () => {
+  const { context, openFacts, fact, request, week, runAt } = await reminderSetup();
+  const factId = await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Is the back gate code still 1234?" } });
+  const sent = await request(factId);
+  const holder = await runtime.connect();
+  try {
+    // Stand in for a run between its re-read and its commit: it holds fact:<id>.
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${context.tenantId}:fact:${factId}`]);
+    let settled = false;
+    const answering = openFacts.command(jobId, factCommand({ action: "answer", factId, expectedVersion: 1,
+      answer: { kind: "access", arrangement: "New code by text" } })).finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "the E1 change waits while the fact is locked");
+    await holder.query("ROLLBACK");
+    await answering;
+  } finally { holder.release(); }
+  // Once the answer is in, a run in the reminder window and on the flag day records nothing for it.
+  for (const clock of [week.at(-2, 12), week.at(-1, 12)]) {
+    const { result } = await runAt(clock);
+    assert.ok(!result.reminded.includes(sent.id) && !result.unconfirmed.includes(sent.id));
+  }
+});
+
 test("V2-E7: the database keeps one reminder per request, ties reason and recipient to the kind, and never changes a row", async () => {
   const { context, fact, request, week, runAt } = await reminderSetup();
   const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
