@@ -82,7 +82,7 @@ test("a practice quote send shows in Sent and opens the exact document", async (
 
 test("in the shared example firm, one session never sees another session's sends", async ({ page, browser }) => {
   test.setTimeout(240_000);
-  const { preview } = await sendPracticeQuote(page, "shared example");
+  const { jobId, preview } = await sendPracticeQuote(page, "shared example");
   const mine = await (await page.request.get("/api/practice-sent")).json() as { items: { documentId: string }[] };
   expect(mine.items.map(item => item.documentId)).toContain(preview.view.documentId);
   const separate = await browser.newContext({ baseURL: new URL(page.url()).origin, viewport: page.viewportSize()! });
@@ -91,6 +91,8 @@ test("in the shared example firm, one session never sees another session's sends
     expect((await other.request.post("/api/session")).ok()).toBe(true);
     const theirs = await (await other.request.get("/api/practice-sent")).json() as { items: { documentId: string }[] };
     expect(theirs.items.map(item => item.documentId)).not.toContain(preview.view.documentId);
+    // Plan-check condition 1: in the same tenant, the link to the exact document is refused for another session.
+    expect((await other.request.get(`/api/jobs/${jobId}/quotes/artifacts/${preview.view.documentId}`)).ok()).toBe(false);
   } finally { await separate.close(); }
 });
 
