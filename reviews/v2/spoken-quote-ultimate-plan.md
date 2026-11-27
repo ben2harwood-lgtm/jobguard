@@ -90,6 +90,8 @@ Order is by usefulness then easiness. Bases follow the open stack: #1001 parser,
 
 SQ-A, SQ-B and SQ-C can start together. Each packet is one build plus up to two repairs, built by Opus 5.5, with a Codex review on every PR.
 
+**Order change, 27 Nov 15:35 UK:** SQ-C's Reader A (#1016) scored rooms 21/40, trades 22/40 and failed the number floor on 10 unseen transcripts, so SQ-G (the Sonnet 5.5 reader) now follows SQ-C directly, ahead of SQ-D. Packet: `packets/v2-sq-g-model-reader.md`. Held-out transcripts: `packets/v2-sq-c-held-out-transcripts.md`.
+
 ## 6. Stop conditions
 
 - Any reader output that would show a number not said in the transcript: stop, it is a defect.
