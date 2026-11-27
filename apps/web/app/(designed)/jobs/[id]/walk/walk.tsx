@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { WalkEntryCommand, WalkPhotoFilingCommand, WalkSessionCommand } from "@jobguard/api/workspace";
 import { Card, Note, Tag } from "../../../designed-ui";
-import { currentRoom, filingLabel, needsRoom, roomSummaryEntries, newEntry, newPhotoEntry, validMeasurement, walkPhotoAction, walkPhotoLabel, type EntryBody, type EntryView, type SessionView } from "./walk-state";
+import { currentRoom, filingLabel, leavesWalk, needsRoom, roomSummaryEntries, newEntry, newPhotoEntry, restoreEntry, validMeasurement, walkPhotoAction, walkPhotoLabel, type EntryBody, type EntryView, type SessionView } from "./walk-state";
 
 type Pending = ({ action: "start" } & WalkSessionCommand) | ({ action: "record" } & WalkEntryCommand) | ({ action: "file" } & WalkPhotoFilingCommand);
 
@@ -60,7 +60,14 @@ export function Walk({ jobId }: { jobId: string }) {
     if (!pending && !unsent) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    // Client-side navigation (job section buttons, links) fires no beforeunload, so ask before it unmounts the walk.
+    const guard = (event: MouseEvent) => {
+      if (!leavesWalk(event.target instanceof Element ? event.target : null)) return;
+      if (window.confirm("This walk entry is not saved yet. Leave and lose it?")) return;
+      event.preventDefault(); event.stopPropagation();
+    };
+    document.addEventListener("click", guard, true);
+    return () => { window.removeEventListener("beforeunload", warn); document.removeEventListener("click", guard, true); };
   }, [pending, unsent]);
 
   async function save(command: Pending) {
@@ -83,6 +90,29 @@ export function Walk({ jobId }: { jobId: string }) {
       }
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(command) });
+      // Version conflicts come back 409; a refused filing comes back 400.
+      if ((response.status === 409 || response.status === 400) && (command.action === "record" || command.action === "file")) {
+        const refused: { code?: string } = await response.json().catch(() => ({}));
+        // A refused filing (room order not in this walk) can never succeed on retry either.
+        if (refused.code === "WALK_VERSION_CONFLICT" || (command.action === "file" && refused.code === "WALK_PHOTO_REFUSED")) {
+          // Another tab or phone got there first. Retrying can never succeed: reload the walk and drop the stale command.
+          const refreshed = await fetch(endpoint, { cache: "no-store" });
+          if (refreshed.ok) setSessions((await refreshed.json() as { sessions: SessionView[] }).sessions);
+          setPending(null);
+          if (command.action === "file") {
+            setProblem(refused.code === "WALK_PHOTO_REFUSED" ? "That room is not in this walk. Choose a room again."
+              : "Another device filed this photo first. Check its room, then file it again if it is wrong.");
+            return;
+          }
+          const restored = restoreEntry(command.entry);
+          if (restored?.room !== undefined) setRoom(restored.room);
+          if (restored?.note !== undefined) setNote(restored.note);
+          if (restored?.quantity !== undefined) setQuantity(restored.quantity);
+          if (restored?.unit !== undefined) setUnit(restored.unit);
+          setProblem("Another device saved to this walk first. Check the walk order, then add your entry again.");
+          return;
+        }
+      }
       if (!response.ok) throw new Error("not saved");
       // Read the authoritative order and room links, including after an unknown outcome retry.
       const refreshed = await fetch(endpoint, { cache: "no-store" });
@@ -125,7 +155,8 @@ export function Walk({ jobId }: { jobId: string }) {
   }
   const rooms = entries.filter(entry => entry.kind === "room");
   const tray = needsRoom(entries);
-  const picker = (entry: EntryView) => <PhotoRoomPicker entry={entry} rooms={rooms} blocked={blocked || unsent}
+  // Keyed by walk too, so a room choice never carries over to another walk's photo with the same order.
+  const picker = (entry: EntryView) => <PhotoRoomPicker key={`${session?.sessionId}:${entry.captureOrder}`} entry={entry} rooms={rooms} blocked={blocked || unsent}
     file={roomCaptureOrder => file(entry, roomCaptureOrder)}/>;
 
   const pendingEntry = pending?.action === "record" ? pending : null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView, newPhotoEntry, walkPhotoAction, walkPhotoLabel } from "./walk-state";
+import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, leavesWalk, newEntry, nextCaptureOrder, restoreEntry, validMeasurement, type EntryView, newPhotoEntry, walkPhotoAction, walkPhotoLabel } from "./walk-state";
 
 const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
   ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
@@ -58,5 +58,20 @@ describe("V2-B1E take photo", () => {
   it("builds a photo entry at the next capture order", () => {
     const command = newPhotoEntry("s", [row(1, "Hall", "2026-11-26T10:00:00.000Z")], "p", "c", "2026-11-26T10:01:00.000Z");
     expect(command).toMatchObject({ captureOrder: 2, expectedVersion: 0, commandId: "c", entry: { kind: "photo", photoId: "p" } });
+  });
+});
+
+describe("Codex P2 repairs", () => {
+  it("restores a refused entry's content for resubmission", () => {
+    expect(restoreEntry({ kind: "room", room: "Hall" })).toEqual({ room: "Hall" });
+    expect(restoreEntry({ kind: "note", text: "Damp" })).toEqual({ note: "Damp" });
+    expect(restoreEntry({ kind: "measurement", quantity: "2.5", unit: "m" })).toEqual({ quantity: "2.5", unit: "m" });
+  });
+  it("treats links and section buttons as leaving the walk", () => {
+    const at = (match: string | null) => ({ closest: (selector: string) => (match && selector.includes(match) ? {} : null) });
+    expect(leavesWalk(at("a[href]"))).toBe(true);
+    expect(leavesWalk(at("nav button"))).toBe(true);
+    expect(leavesWalk(at(null))).toBe(false);
+    expect(leavesWalk(null)).toBe(false);
   });
 });
