@@ -242,6 +242,8 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
 
+// V2-F8 who was on site today.
+export * from "./v2-site-attendance-repository.js";
 // V2-K2A: builder-only calendar link.
 export * from "./v2-calendar-feed.js";
 export * from "./v2-calendar-feed-repository.js";
