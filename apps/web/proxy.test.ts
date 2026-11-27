@@ -33,6 +33,7 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
     "/api/customer-portal/extra-approvals/", "/api/customer-portal/extra-approvals/extra",
     "/api/customer-portal/EXTRA-APPROVALS", "/api/customer-portal/unknown", "/api/customer-portal/READ",
     "/api/customer-portal/variations", "/api/customer-portal/variation-approvals/extra",
+    "/api/v2/brief/", "/api/v2/brief/extra", "/api/v2/BRIEF", "/api/v2", "/api/v2/briefs",
   ])("denies customer access to %s even alongside builder cookies", async path => {
     for (const cookie of ["jobguard_customer=fictional", "jobguard_customer=", "jobguard_customer=fictional; jg_session=legacy; jobguard_session=builder"]) {
       for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
@@ -48,5 +49,11 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
 
   it.each([undefined, "jg_session=legacy", "jobguard_session=builder"])("leaves builder authentication to the route for %s", cookie => {
     expect(proxy(request("/api/jobs", cookie)).headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("lets a crew-link press through with a customer cookie; the route's own token check decides", () => {
+    for (const cookie of ["jobguard_customer=fictional", "jobguard_customer=fictional; jg_session=legacy"]) {
+      expect(proxy(request("/api/v2/brief", cookie, "POST")).headers.get("x-middleware-next")).toBe("1");
+    }
   });
 });

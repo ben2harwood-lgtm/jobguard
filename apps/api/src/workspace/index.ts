@@ -139,3 +139,4 @@ export { ConnectorPromotionApplication } from "../connectors/promotion.applicati
 
 // V2-F1: brief progress.
 export * from "./brief-progress.application.js";
+export * from "./crew-link.application.js";

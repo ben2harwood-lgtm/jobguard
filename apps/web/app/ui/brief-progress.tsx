@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { BriefProgress, BriefProgressCommand, BriefTaskStatus, CrewBrief } from "@jobguard/api/workspace";
 
 import { needsNewProofPhoto, progressPhotoLabel, taskStatusLabel } from "./brief-progress-photo";
+import { CrewLinks } from "./crew-links";
 
 type View = { briefs: (CrewBrief & { current: boolean })[]; progress: BriefProgress[]; tasks: BriefTaskStatus[] };
 const messages: Record<string, string> = {
@@ -48,6 +49,8 @@ export function BriefProgressView({ jobId }: { jobId: string }) {
         task.scopeItemId === row.scopeItemId && task.taskKey === row.taskKey)).map(row =>
         <div key={row.commandId}>Earlier brief revision {row.briefVersion}: {row.kind} · {row.note} · Recorded by you<ProgressPhoto row={row}/></div>)}
     </Card></section>)}
+    {/* V2-F7M: crew links, and crew presses the builder confirms as ordinary presses. */}
+    {view && <CrewLinks jobId={jobId} briefs={view.briefs} progress={view.progress} progressPath={path} onConfirmed={() => setLoads(count => count + 1)}/>}
   </main>;
 }
 function TaskProgress({ brief, task, progress, status, path, onSaved }: {

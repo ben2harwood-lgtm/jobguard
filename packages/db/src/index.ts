@@ -243,6 +243,7 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 
 // V2-F1: brief progress.
 export * from "./v2-brief-progress-repository.js";
+export * from "./v2-crew-link-repository.js";
 // V2-F2: proof holds the task open (derived status only).
 export * from "./v2-proof-status.js";
 // V2-C3C crew records.
