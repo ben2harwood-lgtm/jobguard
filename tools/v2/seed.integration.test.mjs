@@ -675,14 +675,9 @@ const diaryWeekOf = instant => {
 const diaryShareEvents = async commandId => (await admin.query(`SELECT payload FROM app.audit_event
   WHERE event_type='v2.diary_share.set' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
 const shareBody = (diaryEntryId, shared, commandId = randomUUID()) => ({ version: "v2-diary-share-command.v1", commandId, diaryEntryId, shared });
-// An earlier test closes the practice job; new diary notes need it open again, so reopen it once here.
+// The practice job is still open here (the close test runs later), so notes are written directly.
 async function diaryNote(sessionId, text) {
-  const { jobSources, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
-  const state = await workState.get(jobId);
-  const closed = state.events.findLast(event => event.kind === "closed");
-  if (closed && !state.events.some(event => event.kind === "reopened" && event.predecessorId === closed.id))
-    await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
-      expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length, action: "reopen", closeEventId: closed.id });
+  const { jobSources } = createWorkspaceApplication({ pool: runtime, sessionId });
   return (await jobSources.intake(jobId, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: true, text })).record;
 }
 
