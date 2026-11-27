@@ -102,6 +102,9 @@ SQ-A, SQ-B and SQ-C can start together. Each packet is one build plus up to two 
 1. Turn on the live model reader for the practice tenant, with which model and what monthly cap.
 2. Update the public demo link to the new build once SQ-H passes (a deploy).
 
+
+**Ben's decision, 27 Nov 15:05 UK (card):** live model reader on for the practice tenant with Claude Haiku 5.5 (`claude-haiku-5-5`) and a £5 a month cap. Reader B is built for that model; the cap is enforced in server configuration; Ben creates the API key when SQ-G is ready. Opus 5.5 is not used.
+
 ## 8. Questions for Astra
 
 1. Is the money rule in 4.2 strict enough, and is "labels may be inferred, numbers never" the right line?
