@@ -18,11 +18,12 @@ export async function fridayUpdateRequest(request: Request, jobId: string, part:
     const credentials = await identityCredentials(request);
     const session = await identity.session(credentials.sessionToken);
     if (session.memberships.length !== 1 || session.memberships[0]?.role !== "owner") throw new Error("NOT_FOUND");
-    try { await resolveVerifiedTenantContext(identity.provider, {
+    // The verified context is only a gate here: the application below re-derives it from the session.
+    try { const verified = await resolveVerifiedTenantContext(identity.provider, {
       sessionToken: credentials.sessionToken, requestedTenantId: session.memberships[0].tenantId,
       csrfToken: request.method === "GET" ? session.csrfToken : credentials.csrfToken,
       origin: request.method === "GET" ? identity.allowedOrigin : request.headers.get("origin") ?? undefined,
-    }, identity.allowedOrigin); } catch { throw new Error("NOT_FOUND"); }
+    }, identity.allowedOrigin); if (verified.tenantId !== session.memberships[0].tenantId) throw new Error("NOT_FOUND"); } catch { throw new Error("NOT_FOUND"); }
     const application = new FridayUpdateApplication(syntheticPool(), (await cookies()).get("jg_session")?.value);
     if (part === "diary") {
       if (request.method === "GET") {

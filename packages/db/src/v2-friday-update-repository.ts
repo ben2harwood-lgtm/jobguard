@@ -106,7 +106,10 @@ export class FridayUpdateRepository {
       ORDER BY created_at DESC,quote_revision_id LIMIT 1`, [context.tenantId, jobId])).rows[0]?.id);
     const plan = quoteRevisionId ? await new WorkPlanRepository(this.pool).read(context,
       { version: "work-plan-source.v1", jobId, quoteRevisionId }) : null;
-    const diary = digest ? await this.diaryLines(context, jobId, week, digest) : null;
+    // Diary text is offered only through a builder's "Customer can see this" mark, so a job with no marked note
+    // (a draft job, whose diary is not readable yet) reads no diary at all.
+    const marked = digest && (await new DiaryShareRepository(this.pool).read(context, jobId)).some(share => share.shared);
+    const diary = marked ? await this.diaryLines(context, jobId, week, digest) : null;
     return fridayContentFromPlan(week, plan?.tasks ?? [], diary?.lines ?? []);
   }
 }
