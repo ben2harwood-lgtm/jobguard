@@ -55,7 +55,7 @@ export class HandoverRepository {
         AND e.content_type IN ('image/png', 'image/jpeg', 'image/webp') AND e.server_verified_at IS NOT NULL
         AND NOT EXISTS (SELECT FROM app.evidence_invalidation i WHERE (i.tenant_id, i.evidence_id) = (e.tenant_id, e.id))
       ORDER BY e.server_received_at, e.id`, [tenantId, jobId])).rows;
-    // Open and fixed snags, with G1's crew owner (or main's label) and agreed note. Checked snags are not outstanding.
+    // Open and fixed snags by their latest event, with G1's crew owner (or main's label) and agreed note. Checked snags are not outstanding.
     const snags = (await client.query<HandoverSources["snags"][number]>(`
       SELECT s.id, s.title, COALESCE(c.display_name, CASE WHEN o.snag_id IS NULL OR o.crew_id IS NULL THEN s.assignee_label END) AS owner,
         s.due_on::text AS "dueOn", CASE WHEN e.kind = 'fixed' THEN 'fixed' ELSE 'open' END AS state,
@@ -66,7 +66,10 @@ export class HandoverRepository {
       LEFT JOIN LATERAL (SELECT x.snag_id, x.crew_id, x.crew_revision, x.firm_key FROM app.v2_snag_owner x
         WHERE (x.tenant_id, x.snag_id) = (s.tenant_id, s.id) ORDER BY x.sequence DESC LIMIT 1) o ON true
       LEFT JOIN app.v2_crew_contact c ON (c.tenant_id, c.firm_key, c.crew_id, c.revision) = (s.tenant_id, o.firm_key, o.crew_id, o.crew_revision)
-      LEFT JOIN LATERAL (SELECT x.agreed, x.note FROM app.v2_snag_agreed x WHERE (x.tenant_id, x.snag_id) = (s.tenant_id, s.id)
+      -- G1's agreed rule: the latest mark, unless a reopen came after it (checked snags are left out below).
+      LEFT JOIN LATERAL (SELECT x.agreed AND NOT EXISTS (SELECT FROM app.snag_event r WHERE (r.tenant_id, r.snag_id) = (x.tenant_id, x.snag_id)
+          AND r.kind = 'reopened' AND r.recorded_at > x.recorded_at) AS agreed, x.note
+        FROM app.v2_snag_agreed x WHERE (x.tenant_id, x.snag_id) = (s.tenant_id, s.id)
         ORDER BY x.sequence DESC LIMIT 1) g ON true
       WHERE (s.tenant_id, s.job_id) = ($1, $2) AND e.kind IS DISTINCT FROM 'checked' ORDER BY s.created_at, s.id`, [tenantId, jobId])).rows;
     const profile = await readFirmProfile(db);
