@@ -12,10 +12,12 @@ async function invoke(run: () => Promise<unknown>) {
     const denied = practiceFailure(error);
     if (denied) return denied;
     const code = routeErrorCode(error, "DATABASE_UNAVAILABLE");
-    if (!code.startsWith("SCHEDULE_")) {
+    if (!code.startsWith("SCHEDULE_") && !code.startsWith("STAGE_")) {
       return NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 503, headers });
     }
-    return NextResponse.json({ code }, { status: code.includes("STALE") || code.includes("CONFLICT") ? 409 : 400, headers });
+    // K5B-1: a stage not due, a live draft or a missing draft is a state conflict, like a stale schedule.
+    const conflict = /STALE|CONFLICT|NOT_DUE|DRAFT_LIVE|DRAFT_NOT_FOUND/u.test(code);
+    return NextResponse.json({ code }, { status: conflict ? 409 : 400, headers });
   }
 }
 export async function GET(_request: Request, { params }: RouteContext) {

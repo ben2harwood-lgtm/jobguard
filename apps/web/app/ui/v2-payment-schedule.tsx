@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import type { PaymentScheduleView } from "@jobguard/api/workspace";
+import { StageDraftCard } from "./v2-stage-draft";
 
 type StageDraft = { label: string; kind: "percentage" | "fixed"; value: string;
   trigger: "acceptance" | "date" | "task"; date: string; task: string };
@@ -67,10 +68,24 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
     } catch { setError("Could not load the saved task confirmation. Reload to check before trying again."); }
     finally { setBusy(false); }
   };
+  // K5B-1: make or withdraw a stage's draft. A retry of the same press reuses its command id.
+  const draftCommand = async (body: Record<string, unknown>, fingerprint: string) => {
+    if (pending.current?.fingerprint !== fingerprint) pending.current = { fingerprint, commandId: crypto.randomUUID() };
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...body, commandId: pending.current.commandId }) });
+      if (!response.ok) { setError("Could not save the draft. Reload the schedule and check the stage."); return; }
+      const reload = await fetch(path, { cache: "no-store" });
+      if (!reload.ok) throw new Error("reload");
+      setView(await reload.json());
+    } catch { setError("Could not load the saved draft. Reload to check before trying again."); }
+    finally { setBusy(false); }
+  };
   return <section aria-labelledby="payment-schedule-heading" className="card">
     <h2 id="payment-schedule-heading">Payment schedule</h2>
     <p>Practice sandbox — synthetic data; nothing is sent or charged.</p>
-    <p>Plan only. No invoice is drafted or issued. Every amount here is ex-VAT; VAT is added only on an invoice.</p>
+    <p>Plan only. No invoice is issued or sent. A due stage can have a draft to check. Every amount here is ex-VAT; VAT is added only on an invoice.</p>
     {error && <p role="alert">{error}</p>}
     {!view && !error && <p>Loading payment schedule…</p>}
     {view && <p>Accepted quote total: £{view.acceptedTotal} ex-VAT</p>}
@@ -86,6 +101,12 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
           onClick={() => { if (stage.trigger.kind === "task") void confirmTask(stage.trigger.scopeItemId, stage.trigger.taskKey); }}>
           Confirm task done for this schedule
         </button>}
+        {stage.drafts.map(draft => <StageDraftCard key={draft.draftNo} stageLabel={stage.label} draft={draft} busy={busy}
+          onWithdraw={() => void draftCommand({ version: "v2-stage-draft-withdraw-command.v1", stageIndex: index, draftNo: draft.draftNo,
+            reason: "Withdrawn by the builder" }, `withdraw/${index}/${draft.draftNo}`)}/>)}
+        {stage.status === "due" && stage.drafts.every(draft => draft.withdrawnAt) && <button type="button" disabled={busy}
+          onClick={() => void draftCommand({ version: "v2-stage-draft-command.v1", stageIndex: index },
+            `draft/${index}/${stage.drafts.length + 1}`)}>Make draft invoice</button>}
       </li>)}</ol>
       <p>Extras approved before the schedule was set: £{view.schedule.extrasBeforeSchedule} ex-VAT — for a later invoice or the final account.</p>
       <p>Extras since the schedule was set: £{view.schedule.extrasSinceSchedule} ex-VAT</p>

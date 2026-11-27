@@ -74,6 +74,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
   // V2-K5A-2: custom-task triggers and frozen due amounts.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8"));
+  // V2-K5B-1: stage invoice drafts (2064), after their frozen stages.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2064_v2_stage_invoice_draft.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

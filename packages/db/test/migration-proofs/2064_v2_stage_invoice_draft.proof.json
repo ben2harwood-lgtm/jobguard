@@ -1,0 +1,6 @@
+{
+  "migration": "2064_v2_stage_invoice_draft.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

@@ -22,9 +22,11 @@ export class PaymentScheduleApplication {
   async set(jobId: string, raw: unknown) {
     const { context } = await this.authorize(jobId);
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
-    if (raw && typeof raw === "object" && "version" in raw && raw.version === "payment-schedule-task-done.v1") {
-      return this.schedules.recordTaskDone(context, jobId, this.sessionId, raw);
-    }
+    const version = raw && typeof raw === "object" && "version" in raw ? raw.version : undefined;
+    if (version === "payment-schedule-task-done.v1") return this.schedules.recordTaskDone(context, jobId, this.sessionId, raw);
+    // V2-K5B-1: drafts only; nothing here issues, numbers or sends an invoice.
+    if (version === "v2-stage-draft-command.v1") return this.schedules.draftStage(context, jobId, this.sessionId, raw);
+    if (version === "v2-stage-draft-withdraw-command.v1") return this.schedules.withdrawDraft(context, jobId, this.sessionId, raw);
     return this.schedules.set(context, jobId, this.sessionId, raw);
   }
 }
