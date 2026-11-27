@@ -26,6 +26,8 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd .designed-capture{max-width:none;min-width:0;overflow-wrap:anywhere}
 .jgd .designed-capture h1{margin:6px 0;font:500 clamp(25px,4vw,36px)/1.2 Georgia,serif;color:var(--ink)}
 .jgd .designed-capture .back{padding-inline:0;margin-bottom:8px}
+/* Every capture button meets the 44 px phone touch target, the back link included. */
+.jgd .designed-capture .btn:not(.jgd-legacy *){min-height:44px}
 .jgd .designed-capture .btn:focus-visible,.jgd .designed-capture :is(input,select,textarea,summary,a):focus-visible{outline:3px solid #078592;outline-offset:2px}
 .jgd .designed-capture .btn:disabled{opacity:.62;cursor:not-allowed}
 .jgd .designed-capture .dictation{align-items:start;gap:8px;margin:18px 0 0}
