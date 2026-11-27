@@ -241,5 +241,8 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+
+// V2-F8 who was on site today.
+export * from "./v2-site-attendance-repository.js";
 // V2-K6A: local inbound fixture routing only.
 export { V2InboundMailRepository, InboundMailError, requireV2Inbound } from "./v2-inbound-mail.js";
