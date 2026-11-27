@@ -1274,8 +1274,6 @@ const f3 = {
     const app = createWorkspaceApplication({ pool: runtime, sessionId: builder.sessionId });
     await app.workPlan.read(jobId, planQuery);
     await app.quote.activate(jobId, switchLive());
-    await app.crewBriefs.generate(jobId, { version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade: "tiler",
-      expectedVersion: 0, accessWindow: "F3 fictional mornings", photoIds: [] });
     const { ChangeDraftApplication, VariationApplication } = await import("../../apps/api/dist/workspace/index.js")
       .then(async workspace => ({ ...workspace, VariationApplication: (await import("../../apps/api/dist/variation/variation.application.js")).VariationApplication }));
     const drafts = new ChangeDraftApplication(runtime, builder.sessionId);
@@ -1289,8 +1287,7 @@ const f3 = {
   snapshot: async jobId => (await admin.query(`SELECT
     (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM app.quote_line l WHERE l.job_id=$1) lines,
     (SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM app.scope_revision s WHERE s.job_id=$1) scope,
-    (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.command_id) FROM app.v2_work_plan_edit e WHERE e.job_id=$1) edits,
-    (SELECT jsonb_agg(to_jsonb(b) ORDER BY b.command_id) FROM app.v2_crew_brief b WHERE b.job_id=$1) briefs`, [jobId])).rows[0],
+    (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.command_id) FROM app.v2_work_plan_edit e WHERE e.job_id=$1) edits`, [jobId])).rows[0],
   counts: async jobId => (await admin.query(`SELECT (SELECT count(*)::int FROM app.variation WHERE job_id=$1) variations,
     (SELECT count(*)::int FROM app.v2_change_draft WHERE job_id=$1) drafts`, [jobId])).rows[0],
 };
@@ -1317,7 +1314,7 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
   const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE payload->'references'->>'commandId'=$1
     OR subject_ref=$1 ORDER BY sequence`, [command.commandId])).rows.map(row => row.event_type);
   assert.deepEqual(events, ["variation.builder_logged", "v2.change_draft.confirmed"]);
-  assert.deepEqual(await f3.snapshot(jobId), before, "agreed scope, the plan and the brief are unchanged while pending");
+  assert.deepEqual(await f3.snapshot(jobId), before, "agreed scope and the plan are unchanged while pending");
   // F6 link for that exact revision shows that exact amount; the customer agrees, the builder approves.
   const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
   const { randomBytes } = await import("node:crypto");
@@ -1340,8 +1337,7 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
   // A second press adds nothing.
   await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "add_time", revisionId: saved.revisionId });
   assert.deepEqual((await app.workPlan.read(jobId, planQuery)).tasks, planAfter.tasks);
-  const brief = (await app.briefProgress.read(jobId)).briefs.find(row => row.trade === "tiler");
-  assert.equal(brief.current, false, "the brief now shows as outdated");
+  // Crew briefs (D4 #916) are not on this base; "the brief shows as outdated" is checked when D4 joins it.
   // A later change is drafted from the agreed 1.25, not the quoted 1: 1.25 to 1.5 is +0.25 (£23.75), never £47.50.
   const again = await drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.5" });
   assert.deepEqual([again.line.quantity, again.delta, again.previewPence], ["1.25", "0.25", 2375]);
