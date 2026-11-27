@@ -469,8 +469,7 @@ export class FactReplyRepository {
     await this.lock($client, tenantId, `fact:${found.factId}`);
     await this.lock($client, tenantId, `recipient:${jobId}`);
     await this.lock($client, tenantId, found.requestId ?? input.replyId);
-    // A customer rebinding holds the job row instead; 2030's insert trigger on v2_fact_reply_applied
-    // waits for that row and checks the request again before the answer commits.
+    // A customer rebinding holds the job row instead; see the insert into v2_fact_reply_applied below.
     const { rows: [reply] } = await $client.query<ReplyRow>(`SELECT ${replyColumns}
       FROM app.v2_fact_reply a LEFT JOIN app.v2_fact_reply_applied p ON (p.tenant_id, p.job_id, p.reply_id) = (a.tenant_id, a.job_id, a.id)
       WHERE (a.tenant_id, a.job_id, a.id) = ($1, $2, $3)`, [tenantId, jobId, input.replyId]);
@@ -486,17 +485,18 @@ export class FactReplyRepository {
       current = request!.current;
     }
     if (!current) throw new FactReplyError("REPLY_OUT_OF_DATE");
-    // Record the application first: its insert trigger takes the job row share lock and checks the
-    // request again before E1's command appends any audit event, so the lock order stays fact,
-    // recipient, request, job row, audit head, as app.bind_job_parties() takes job row then audit head.
+    // Record the application first: its insert trigger waits for the job row, which a customer
+    // rebinding holds, and takes a share lock before E1's command appends any audit event. The lock
+    // order stays fact, recipient, request, job row, audit head, as app.bind_job_parties() takes job
+    // row then audit head. Then check the request again: this new statement sees any rebinding that
+    // committed while the insert waited.
     const appliedVersion = reply!.factVersion + 1;
-    try {
-      await $client.query(`INSERT INTO app.v2_fact_reply_applied (tenant_id, job_id, reply_id, fact_version, request_digest, applied_by)
-        VALUES ($1,$2,$3,$4,$5,$6)`, [tenantId, jobId, reply!.id, appliedVersion, digest, actorId]);
-    } catch (error) {
-      if ((error as { code?: string; message?: string }).code === "40001"
-        && (error as { message?: string }).message === "REPLY_OUT_OF_DATE") throw new FactReplyError("REPLY_OUT_OF_DATE");
-      throw error;
+    await $client.query(`INSERT INTO app.v2_fact_reply_applied (tenant_id, job_id, reply_id, fact_version, request_digest, applied_by)
+      VALUES ($1,$2,$3,$4,$5,$6)`, [tenantId, jobId, reply!.id, appliedVersion, digest, actorId]);
+    if (reply!.requestId !== null) {
+      const { rows: [again] } = await $client.query<{ current: boolean }>(`SELECT app.v2_fact_reply_current(r) AS current
+        FROM app.v2_fact_reply_request r WHERE (r.tenant_id, r.job_id, r.id) = ($1, $2, $3)`, [tenantId, jobId, reply!.requestId]);
+      if (!again?.current) throw new FactReplyError("REPLY_OUT_OF_DATE");
     }
     const answer = openFactCommandV1.parse({ version: "v2-open-fact-command.v1", action: "answer", commandId: reply!.id,
       factId: reply!.factId, expectedVersion: reply!.factVersion, answer: openFactAnswerFor(fact, answerOf(reply!)) });

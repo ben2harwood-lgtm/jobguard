@@ -268,20 +268,15 @@ BEGIN
   REVOKE ALL ON FUNCTION app.v2_fact_reply_current(app.v2_fact_reply_request) FROM PUBLIC;
   GRANT EXECUTE ON FUNCTION app.v2_fact_reply_current(app.v2_fact_reply_request) TO jobguard_runtime;
 
-  -- Applying a reply holds the job row, which app.bind_job_parties() takes FOR UPDATE, and
-  -- then checks the request again: a customer rebinding moves the job revision, not the fact
-  -- version, so it can't commit between apply()'s first check and this answer write unseen.
+  -- Applying a reply first records it here, and this insert trigger takes a share lock on the
+  -- job row, which app.bind_job_parties() holds FOR UPDATE. Runtime has no UPDATE grant on app.job,
+  -- so it can't take the lock itself. apply() then checks the request again as runtime, in a new
+  -- statement that sees any rebinding that committed while it waited, before E1's audit write.
   CREATE OR REPLACE FUNCTION app.v2_fact_reply_applied_guard() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $f$
-  DECLARE r app.v2_fact_reply_request;
   BEGIN
     PERFORM 1 FROM app.job j WHERE (j.tenant_id, j.id) = (NEW.tenant_id, NEW.job_id) FOR SHARE;
-    SELECT q.* INTO r FROM app.v2_fact_reply a JOIN app.v2_fact_reply_request q
-      ON (q.tenant_id, q.job_id, q.id) = (a.tenant_id, a.job_id, a.request_id)
-      WHERE (a.tenant_id, a.job_id, a.id) = (NEW.tenant_id, NEW.job_id, NEW.reply_id);
-    IF FOUND AND NOT app.v2_fact_reply_current(r) THEN
-      RAISE EXCEPTION 'REPLY_OUT_OF_DATE' USING ERRCODE = '40001';
-    END IF;
+    IF NOT FOUND THEN RAISE EXCEPTION 'REPLY_REFUSED' USING ERRCODE = '42501'; END IF;
     RETURN NEW;
   END $f$;
   REVOKE ALL ON FUNCTION app.v2_fact_reply_applied_guard() FROM PUBLIC;

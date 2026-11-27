@@ -26,9 +26,10 @@ use), or a reply the builder pasted from a call. `app.v2_fact_reply_applied`
 records that the builder applied a reply to the fact through E1's own answer
 command; the reply and the fact are checked again at that moment. Its insert
 trigger `app.v2_fact_reply_applied_guard` (SECURITY DEFINER, no EXECUTE grant)
-takes a share lock on the job row, which `app.bind_job_parties()` holds FOR
-UPDATE, and checks the request once more, so a customer rebinding that commits
-during apply leaves the reply out of date instead of applied.
+only takes a share lock on the job row, which `app.bind_job_parties()` holds FOR
+UPDATE; apply then checks the request again as runtime, so a customer
+rebinding that commits during apply leaves the reply out of date instead of
+applied.
 
 Runtime can only read and insert rows for visible jobs. Nothing is ever
 updated or deleted, and a seed test proves the app role is refused both.

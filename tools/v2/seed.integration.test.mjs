@@ -2294,6 +2294,43 @@ test("V2-E2: applying also waits on a customer rebinding, which holds the job ro
   } finally { holder.release(); }
 });
 
+test("V2-E2: a customer rebinding that commits while apply waits leaves the reply out of date", async () => {
+  const { factReplies, fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Water off at the stopcock?" } }));
+  const answer = linkAnswer({ arrangement: "Yes, under the sink" });
+  assert.equal((await factReplies.receive(tokenOf(sent), answer)).current, true);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SET LOCAL lock_timeout = '5s'");
+    // app.bind_job_parties() order: the job row, the binding change, then the audit head.
+    await holder.query("SELECT 1 FROM app.job WHERE (tenant_id, id) = ($1, $2) FOR UPDATE", [DEMO_TENANT_ID, jobId]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: answer.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the job row a rebinding holds");
+    const { rows: [party] } = await holder.query(`SELECT b.*, r.revision AS rev_number, r.payload
+      FROM app.job_party_current p JOIN app.job_party_binding b ON (b.tenant_id, b.id) = (p.tenant_id, p.binding_id)
+      JOIN app.customer_revision r ON (r.tenant_id, r.id) = (b.tenant_id, b.customer_revision_id) WHERE p.job_id = $1`, [jobId]);
+    const revisionId = randomUUID();
+    const bindingId = randomUUID();
+    await holder.query(`INSERT INTO app.customer_revision (tenant_id, id, customer_id, revision, payload) VALUES ($1,$2,$3,$4,$5)`,
+      [party.tenant_id, revisionId, party.customer_id, (await holder.query(`SELECT max(revision)::int + 1 AS n FROM app.customer_revision
+        WHERE customer_id = $1`, [party.customer_id])).rows[0].n, { ...party.payload, phone: "+447700900043" }]);
+    await holder.query(`INSERT INTO app.job_party_binding (tenant_id, id, job_id, revision, customer_id, customer_revision_id,
+      paying_party_id, paying_party_revision_id, site_id, site_revision_id, provenance)
+      SELECT tenant_id, $2, job_id, revision + 1, customer_id, $3, paying_party_id, paying_party_revision_id, site_id,
+        site_revision_id, 'entered' FROM app.job_party_binding WHERE id = $1`, [party.id, bindingId, revisionId]);
+    await holder.query("UPDATE app.job_party_current SET binding_id = $1 WHERE job_id = $2", [bindingId, jobId]);
+    await holder.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id = $1 FOR UPDATE", [DEMO_TENANT_ID]);
+    await holder.query("COMMIT");
+    await assert.rejects(applying, { code: "REPLY_OUT_OF_DATE" });
+  } finally { holder.release(); }
+  const view = await factReplies.read(jobId);
+  assert.equal(view.replies.find(entry => entry.id === answer.commandId).status, "out_of_date");
+});
+
 test("V2-E2: a link transaction may seal exactly one received event, carrying the stored reply's own content", async () => {
   const { fact, request } = await replySetup();
   const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Parking on the drive?" } }));
