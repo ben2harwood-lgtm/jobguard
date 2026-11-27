@@ -84,6 +84,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2064_v2_open_fact_firm_lock.sql", import.meta.url), "utf8"));
   // V2-K4: local-only chasing tables, after the checked V2 boundary.
   await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
+  // Q06 V2-K9: after the work-plan, photo lock and crew migrations.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2028_v2_rams_draft.sql", import.meta.url), "utf8"));
   // V2-FL-6 (2054): must stay the last migration line; later pieces add theirs above it (rule 30).
   await client.query(readFileSync(new URL("./migrations/2054_v2_own_tables_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
