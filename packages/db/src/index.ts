@@ -241,3 +241,6 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+
+// V2-SQ-A practice Sent list (read only).
+export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";

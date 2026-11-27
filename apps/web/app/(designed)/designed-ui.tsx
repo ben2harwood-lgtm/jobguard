@@ -321,6 +321,9 @@ const ROUTES: Record<string, string> = { today: "/today", jobs: "/jobs", check: 
 export function Shell({ workspace, title, subtitle, active, onSearch, today = false, staticChrome = false, children }: { workspace: Workspace | null; title: string; subtitle: string; active: string; onSearch?: () => void; today?: boolean; staticChrome?: boolean; children: ReactNode }) {
   const router = useRouter();
   const [panel, setPanel] = useState<"messages" | "settings" | "search" | null>(null);
+  // V2-SQ-A: "See it in Sent" links here with ?panel=sent&document=<id>, which opens Messages on that row.
+  const [sentFocus, setSentFocus] = useState<string | null>(null);
+  useEffect(() => { const query = new URLSearchParams(window.location.search); if (query.get("panel") === "sent") { setSentFocus(query.get("document")); setPanel("messages"); } }, []);
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
   const name = workspace?.session.principal.displayName ?? "";
@@ -349,7 +352,7 @@ export function Shell({ workspace, title, subtitle, active, onSearch, today = fa
     </main>
     <nav className="rr-mobile-nav" inert={staticChrome} aria-label="Mobile navigation">{TABS.map(([id, label, icon]) => <button key={id} type="button" className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => go(id)}><RailIcon name={icon}/><span>{label}</span></button>)}</nav>
     {panel === "search" && <SearchPanel tenantId={workspace?.tenantId ?? ""} close={() => setPanel(null)}/>}
-    {panel === "messages" && <Panel title="Your messages" text="No real customer or supplier messages are connected to this practice workspace." close={() => setPanel(null)}><div className="rr-empty-inbox"><RailIcon name="message"/><h3>Nothing has been sent.</h3><p>Each job’s customer messages and diary are in its Records tab.</p></div></Panel>}
+    {panel === "messages" && <MessagesPanel focus={sentFocus} close={() => setPanel(null)}/>}
     {panel === "settings" && workspace && <SettingsPanel workspace={workspace} close={() => setPanel(null)}/>}
   </div>;
 }
@@ -358,6 +361,40 @@ export function Panel({ title, text, close, children }: { title: string; text: s
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; if (dialog && !dialog.open) dialog.showModal(); }, []);
   return <dialog ref={ref} className="rr-assist" aria-label={title} onClose={close}><div className="rr-assist-head"><h2>{title}</h2><button type="button" aria-label="Close" onClick={() => ref.current?.close()}><RailIcon name="close"/></button></div><p>{text}</p>{children}</dialog>;
+}
+
+const practiceSentV1 = z.object({ items: z.array(z.object({ kind: z.literal("quote"), sendId: z.string(), jobId: z.string(), jobTitle: z.string(),
+  documentId: z.string(), reference: z.string(), documentVersion: z.number(), contentHash: z.string(), recipients: z.array(z.string()), sentAt: z.string(),
+  status: z.enum(["queued", "simulated_delivery", "outcome_unknown", "cancelled"]), practice: z.literal(true) })) });
+type PracticeSent = z.infer<typeof practiceSentV1>["items"][number];
+const SENT_STATUS: Record<PracticeSent["status"], string> = { simulated_delivery: "Shown as sent", queued: "Waiting in the practice queue", outcome_unknown: "Outcome unknown, check it", cancelled: "Cancelled" };
+
+/** V2-SQ-A: Messages gains a Sent view of what this practice firm has "sent". Read only; every row says it was practice. */
+function MessagesPanel({ focus, close }: { focus: string | null; close: () => void }) {
+  const [view, setView] = useState<"sent" | "messages">("sent");
+  const [items, setItems] = useState<PracticeSent[] | null | "failed">(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/practice-sent", { cache: "no-store" }).then(async response => { if (!response.ok) throw new Error("unavailable"); const data = practiceSentV1.parse(await response.json()); if (live) setItems(data.items); })
+      .catch(() => { if (live) setItems("failed"); });
+    return () => { live = false; };
+  }, []);
+  useEffect(() => { if (focus && Array.isArray(items)) document.querySelector(`[data-sent-document="${CSS.escape(focus)}"]`)?.scrollIntoView({ block: "nearest" }); }, [focus, items]);
+  return <Panel title="Your messages" text="No real customer or supplier messages are connected to this practice workspace. Practice sends are listed under Sent." close={close}>
+    <div className="rr-sent-tabs" role="tablist" aria-label="Messages views">{(["sent", "messages"] as const).map(id => <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}>{id === "sent" ? "Sent" : "Messages"}</button>)}</div>
+    {view === "messages" ? <div className="rr-empty-inbox"><RailIcon name="message"/><h3>No messages connected.</h3><p>Each job’s customer messages and diary are in its Records tab.</p></div>
+      : items === null ? <p role="status">Loading…</p>
+      : items === "failed" ? <p role="alert">The Sent list could not be loaded. Nothing was changed.</p>
+      : items.length === 0 ? <div className="rr-empty-inbox"><RailIcon name="message"/><h3>Nothing sent yet.</h3><p>When you send a practice quote it appears here.</p></div>
+      : <ul className="rr-sent-list" aria-label="Sent">{items.map(item => <li key={item.sendId} data-sent-document={item.documentId} data-focused={focus === item.documentId ? "true" : undefined}>
+        <strong>Quote {item.reference}, version {item.documentVersion}</strong>
+        <span className="rr-sent-practice">Practice, not really sent</span>
+        <small>To {item.recipients.join(", ")} · {new Date(item.sentAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {SENT_STATUS[item.status]}</small>
+        <small>Job: <a href={`/jobs/${item.jobId}/overview`}>{item.jobTitle}</a></small>
+        <a className="rr-sent-open" href={`/api/jobs/${item.jobId}/quotes/artifacts/${item.documentId}`} data-content-hash={item.contentHash}>Open the exact quote</a>
+        <small className="rr-sent-hash">Fingerprint {item.contentHash.slice(0, 12)}</small>
+      </li>)}</ul>}
+  </Panel>;
 }
 
 function SearchPanel({ tenantId, close }: { tenantId: string; close: () => void }) {
