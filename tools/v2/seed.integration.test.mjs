@@ -1234,13 +1234,17 @@ test("a walk photo from another job in the same firm, or from another firm, is r
   const otherFirm = walkId();
   await outsiderWalk.record(outsiderJob,
     entryCommand(await begin(outsiderWalk, outsiderJob), 2, { kind: "photo", photoId: otherFirm }, now));
-  for (const photoId of [sameFirm, uploadedElsewhere, otherFirm]) {
+  // Uploaded first by the second firm, before any walk files it: the firm lock hides it from this firm.
+  const otherFirmUpload = await walkUpload(DEMO_TENANT_ID, outsiderJob);
+  assert.equal((await withTenant(runtime, ownerContext, db => db.$client.query(
+    "SELECT 1 FROM app.evidence_upload WHERE id = $1", [otherFirmUpload]))).rowCount, 0, "this firm cannot see the upload");
+  for (const photoId of [sameFirm, uploadedElsewhere, otherFirm, otherFirmUpload]) {
     await assert.rejects(walk.record(jobId, entryCommand(sessionId, 2, { kind: "photo", photoId }, now)),
       { code: "WALK_PHOTO_REFUSED" });
   }
   // The table refuses them too, whatever path writes them.
   const { rows: [{ actor }] } = await admin.query("SELECT actor_membership_id AS actor FROM app.v2_walk_session WHERE id = $1", [sessionId]);
-  for (const [photoId, code] of [[sameFirm, "23505"], [uploadedElsewhere, "23514"], [otherFirm, "23505"]]) {
+  for (const [photoId, code] of [[sameFirm, "23505"], [uploadedElsewhere, "23514"], [otherFirm, "23505"], [otherFirmUpload, "23514"]]) {
     await assert.rejects(withTenant(runtime, ownerContext, db => db.$client.query(`INSERT INTO app.v2_walk_entry
       (tenant_id, job_id, session_id, capture_order, expected_version, command_id, kind, photo_id, device_captured_at, actor_membership_id)
       VALUES ($1, $2, $3, 2, 0, $4, 'photo', $5, now(), $6)`, [DEMO_TENANT_ID, jobId, sessionId, walkId(), photoId, actor])),
@@ -1252,7 +1256,7 @@ test("a walk photo from another job in the same firm, or from another firm, is r
     { code: "WALK_PHOTO_ALREADY_FILED" });
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE session_id = $1", [sessionId])).rows[0].n, 2);
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE photo_id = ANY($1)",
-    [[sameFirm, uploadedElsewhere, otherFirm]])).rows[0].n, 2);
+    [[sameFirm, uploadedElsewhere, otherFirm, otherFirmUpload]])).rows[0].n, 2);
 });
 
 // Lane C P2: a photo entry filed before its upload binds the upload to the walk's job, in either order and concurrently.

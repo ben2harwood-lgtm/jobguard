@@ -60,9 +60,8 @@ BEGIN
   CREATE UNIQUE INDEX IF NOT EXISTS v2_walk_entry_photo_once
     ON app.v2_walk_entry (tenant_id, photo_id) WHERE expected_version = 0 AND photo_id IS NOT NULL;
 
-  -- Refuse a photo whose evidence upload belongs to another job, and a
-  -- revision that changes what its entry is. Uploads are tenant-scoped, so
-  -- this runs with the caller's rights.
+  -- Refuse a revision that changes what its entry is. This runs with the
+  -- caller's rights. The cross-job upload check is app.v2_walk_entry_upload_guard.
   CREATE OR REPLACE FUNCTION app.v2_walk_entry_guard()
   RETURNS trigger
   LANGUAGE plpgsql SET search_path = pg_catalog
@@ -70,17 +69,6 @@ BEGIN
   DECLARE
     original record;
   BEGIN
-    -- Serialize with an upload of the same ID (app.v2_walk_photo_upload_guard), so
-    -- whichever commits second sees the first, in either insertion order.
-    IF NEW.photo_id IS NOT NULL THEN
-      PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.photo_id, 0));
-    END IF;
-    IF NEW.photo_id IS NOT NULL AND EXISTS (
-      SELECT FROM app.evidence_upload u
-      WHERE (u.tenant_id, u.id) = (NEW.tenant_id, NEW.photo_id) AND u.job_id <> NEW.job_id
-    ) THEN
-      RAISE EXCEPTION 'V2_WALK_PHOTO_OTHER_JOB' USING ERRCODE = '23514';
-    END IF;
     IF NEW.expected_version > 0 THEN
       SELECT kind, photo_id INTO original FROM app.v2_walk_entry
       WHERE (tenant_id, job_id, session_id, capture_order, expected_version)
@@ -99,6 +87,36 @@ BEGIN
   DROP TRIGGER IF EXISTS v2_walk_entry_guard ON app.v2_walk_entry;
   CREATE TRIGGER v2_walk_entry_guard BEFORE INSERT ON app.v2_walk_entry
     FOR EACH ROW EXECUTE FUNCTION app.v2_walk_entry_guard();
+
+  -- Refuse a photo whose evidence upload belongs to another job, in any firm of
+  -- the tenant. The firm lock hides other firms' uploads from the caller, so the
+  -- check runs as its owner (tenant isolation still applies) and only reads
+  -- evidence_upload. It is enabled ALWAYS so no writer skips it.
+  CREATE OR REPLACE FUNCTION app.v2_walk_entry_upload_guard()
+  RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog
+  AS $guard$
+  BEGIN
+    IF NEW.photo_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+    -- Serialize with an upload of the same ID (app.v2_walk_photo_upload_guard), so
+    -- whichever commits second sees the first, in either insertion order.
+    PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.photo_id, 0));
+    IF EXISTS (
+      SELECT FROM app.evidence_upload u
+      WHERE (u.tenant_id, u.id) = (NEW.tenant_id, NEW.photo_id) AND u.job_id <> NEW.job_id
+    ) THEN
+      RAISE EXCEPTION 'V2_WALK_PHOTO_OTHER_JOB' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+  END
+  $guard$;
+  REVOKE ALL ON FUNCTION app.v2_walk_entry_upload_guard() FROM PUBLIC;
+  DROP TRIGGER IF EXISTS v2_walk_entry_upload_guard ON app.v2_walk_entry;
+  CREATE TRIGGER v2_walk_entry_upload_guard BEFORE INSERT ON app.v2_walk_entry
+    FOR EACH ROW EXECUTE FUNCTION app.v2_walk_entry_upload_guard();
+  ALTER TABLE app.v2_walk_entry ENABLE ALWAYS TRIGGER v2_walk_entry_upload_guard;
 
   -- The other insertion order: a walk photo entry can arrive before its upload.
   -- An upload may then only begin on the job the walk filed the photo on, in
