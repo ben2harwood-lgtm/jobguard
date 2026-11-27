@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateNetLine, parseQuantity } from "./quantity.js";
 import { money } from "./money.js";
-import { ChangeDraftError, draftChange, proposedMinutes } from "./v2-change-draft.js";
+import { ChangeDraftError, draftChange, proposedMinutes, sameQuantity } from "./v2-change-draft.js";
 
 const tasks = [
   { taskKey: "prepare-splashback", durationMinutes: 60, materialNeeds: ["Surface protection", "Primer"] },
@@ -42,7 +42,6 @@ describe("V2-F3 draftChange", () => {
     expect(code(() => draftChange({ line: { ...line, unitRatePence: null }, newQuantity: "3", tasks }))).toBe("CHANGE_DRAFT_LINE_UNPRICED");
     expect(code(() => draftChange({ line: { ...line, quantity: null }, newQuantity: "3", tasks }))).toBe("CHANGE_DRAFT_LINE_UNPRICED");
     expect(code(() => draftChange({ line: { ...line, unit: null }, newQuantity: "3", tasks }))).toBe("CHANGE_DRAFT_LINE_UNPRICED");
-    expect(code(() => draftChange({ line: { ...line, quantity: "0" }, newQuantity: "3", tasks }))).toBe("CHANGE_DRAFT_LINE_UNPRICED");
     expect(draftChange({ line: { ...line, unitRatePence: null }, newQuantity: "3", unitRatePence: 100, tasks }).previewPence).toBe(60);
     expect(code(() => draftChange({ line, newQuantity: "2.400", tasks }))).toBe("CHANGE_DRAFT_NO_CHANGE");
     expect(code(() => draftChange({ line, newQuantity: "-1", tasks }))).toBe("CHANGE_DRAFT_INVALID_QUANTITY");
@@ -54,5 +53,16 @@ describe("V2-F3 draftChange", () => {
     expect(proposedMinutes(1, 1n, 1000n, "addition")).toBe(15);
     expect(proposedMinutes(10_000, 100n, 1n, "addition")).toBe(10_080);
     expect(proposedMinutes(240, 1n, 6n, "omission")).toBe(0);
+  });
+  it("reinstates work after an approved full omission, with the task's full time", () => {
+    const draft = draftChange({ line: { ...line, quantity: "0" }, newQuantity: "3", tasks });
+    expect(draft.direction).toBe("addition");
+    expect(draft.delta).toBe("3");
+    expect(proposedMinutes(100, 3_000_000n, 0n, "addition")).toBe(105);
+    expect(proposedMinutes(20_000, 1n, 0n, "addition")).toBe(10_080);
+  });
+  it("compares quantities ignoring trailing zeros", () => {
+    expect(sameQuantity("1.250", "1.25")).toBe(true);
+    expect(sameQuantity("1", "1.000001")).toBe(false);
   });
 });

@@ -1326,7 +1326,7 @@ const f3 = {
     return { jobId, builder, app, drafts, tile, variations: new VariationApplication(runtime, builder.sessionId) };
   },
   confirm: (tile, fields = {}) => ({ version: "v2-change-draft-command.v1", action: "confirm", commandId: randomUUID(),
-    quoteLineId: tile.quoteLineId, newQuantity: "1.25", unitRatePence: tile.unitRatePence, description: "F3 fictional longer splashback",
+    quoteLineId: tile.quoteLineId, acceptedQuantity: tile.quantity, newQuantity: "1.25", unitRatePence: tile.unitRatePence, description: "F3 fictional longer splashback",
     tasks: [], ...fields }),
   snapshot: async jobId => (await admin.query(`SELECT
     (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM app.quote_line l WHERE l.job_id=$1) lines,
@@ -1385,7 +1385,9 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
   // A later change is drafted from the agreed 1.25, not the quoted 1: 1.25 to 1.5 is +0.25 (£23.75), never £47.50.
   const again = await drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.5" });
   assert.deepEqual([again.line.quantity, again.delta, again.previewPence], ["1.25", "0.25", 2375]);
-  const second = await drafts.command(jobId, f3.confirm(tile, { newQuantity: "1.5" }));
+  // A confirm drafted from the old agreed 1 (a stale preview) is refused: the baseline has moved to 1.25.
+  await assert.rejects(drafts.command(jobId, f3.confirm(tile, { newQuantity: "1.5" })), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  const second = await drafts.command(jobId, f3.confirm(tile, { acceptedQuantity: "1.250", newQuantity: "1.5" }));
   assert.deepEqual([second.acceptedQuantity, second.signedDeltaPence], ["1.25", 2375]);
   // While that one waits for the customer, another independent change on the line is refused.
   await assert.rejects(drafts.command(jobId, f3.confirm(tile, { newQuantity: "2" })), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
@@ -1399,7 +1401,7 @@ test("F3 revise makes a new revision and draft; the old F6 link is refused; an o
   await assert.rejects(drafts.preview(jobId, previewBody), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
   assert.deepEqual((await drafts.preview(jobId, { ...previewBody, variationId: first.variationId })).previewPence, 4750);
   const revised = await drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "revise", commandId: randomUUID(),
-    variationId: first.variationId, expectedRevisionId: first.revisionId, newQuantity: "1.5", unitRatePence: 9500,
+    variationId: first.variationId, expectedRevisionId: first.revisionId, acceptedQuantity: "1", newQuantity: "1.5", unitRatePence: 9500,
     description: "F3 fictional revised splashback", tasks: [] });
   assert.equal(revised.revision, 2);
   assert.equal(revised.signedDeltaPence, 4750);
@@ -1407,7 +1409,7 @@ test("F3 revise makes a new revision and draft; the old F6 link is refused; an o
   const rows = (await drafts.list(jobId)).drafts;
   assert.deepEqual(rows.map(row => [row.revision, row.current]), [[1, false], [2, true]]);
   await assert.rejects(drafts.command(jobId, { version: "v2-change-draft-command.v1", action: "revise", commandId: randomUUID(),
-    variationId: first.variationId, expectedRevisionId: first.revisionId, newQuantity: "1.75", unitRatePence: 9500,
+    variationId: first.variationId, expectedRevisionId: first.revisionId, acceptedQuantity: "1", newQuantity: "1.75", unitRatePence: 9500,
     description: "stale", tasks: [] }), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
   const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
   const { randomBytes } = await import("node:crypto");

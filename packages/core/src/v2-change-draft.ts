@@ -32,10 +32,14 @@ function quantity(input: string) {
   try { return parseQuantity(input); } catch { throw new ChangeDraftError("CHANGE_DRAFT_INVALID_QUANTITY"); }
 }
 
-/** Extra minutes for one task: duration × delta ÷ accepted, rounded up to 15. An omission drafts none. */
+/** True when two quantity strings are the same amount, ignoring trailing zeros. */
+export function sameQuantity(a: string, b: string) { return scaled(quantity(a)) === scaled(quantity(b)); }
+
+/** Extra minutes for one task: duration × delta ÷ accepted, rounded up to 15. An omission drafts none.
+ * From a zero agreed quantity (a full omission was approved) the work comes back whole: the task's full time. */
 export function proposedMinutes(durationMinutes: number, delta: bigint, accepted: bigint, direction: "addition" | "omission") {
   if (direction === "omission") return 0;
-  const numerator = BigInt(durationMinutes) * delta, denominator = accepted * 15n;
+  const numerator = BigInt(durationMinutes) * (accepted === 0n ? 1n : delta), denominator = (accepted === 0n ? 1n : accepted) * 15n;
   const blocks = (numerator + denominator - 1n) / denominator;
   return Math.min(Number(blocks * 15n), MAX_PROPOSED_MINUTES);
 }
@@ -45,7 +49,6 @@ export function draftChange(input: { line: ChangeDraftLine; newQuantity: string;
   const rate = input.unitRatePence ?? line.unitRatePence;
   if (line.quantity === null || line.unit === null || rate === null || rate === undefined) throw new ChangeDraftError("CHANGE_DRAFT_LINE_UNPRICED");
   const accepted = scaled(quantity(line.quantity));
-  if (accepted <= 0n) throw new ChangeDraftError("CHANGE_DRAFT_LINE_UNPRICED");
   const next = scaled(quantity(input.newQuantity));
   if (next === accepted) throw new ChangeDraftError("CHANGE_DRAFT_NO_CHANGE");
   const direction = next > accepted ? "addition" : "omission";

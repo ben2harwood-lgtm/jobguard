@@ -5,7 +5,7 @@ import { changeDescription, changeMaterialsLine, changePendingNote, changePriceL
   changeTimeLine, penceFromPounds, pounds } from "../../../../ui/v2-change-draft-label";
 
 type State = { lines: ChangeDraftLineRow[]; drafts: ChangeDraftRow[] };
-type Preview = { delta: string; direction: "addition" | "omission"; previewPence: number;
+type Preview = { line: { quantity: string | null }; delta: string; direction: "addition" | "omission"; previewPence: number;
   priceProposal: { quantity: string; unit: string; unitRatePence: number };
   tasks: { taskKey: string; title: string; proposedMinutes: number; materialNeeds: string[] }[] };
 type Revise = { variationId: string; expectedRevisionId: string } | null;
@@ -39,7 +39,7 @@ export function ChangeDrafts({ jobId }: { jobId: string }) {
       if (!response.ok) {
         if (response.status !== 503) pending.current = null;
         setNotice(changeProblemText(result.code));
-        if (response.status === 409) await load().catch(() => undefined);
+        if (response.status === 409) { setPreview(null); await load().catch(() => undefined); }
         return null;
       }
       pending.current = null;
@@ -68,7 +68,8 @@ export function ChangeDrafts({ jobId }: { jobId: string }) {
     if (!preview || !line) return;
     // Confirm only the inputs the shown preview was drafted from.
     if (!sameInputs(preview.inputs, inputs.current)) { setPreview(null); return; }
-    const body = { version: "v2-change-draft-command.v1", newQuantity: quantity.trim(), unitRatePence: preview.priceProposal.unitRatePence,
+    // The agreed quantity the preview was drafted from: the server refuses it if that has moved.
+    const body = { version: "v2-change-draft-command.v1", acceptedQuantity: preview.line.quantity ?? "", newQuantity: quantity.trim(), unitRatePence: preview.priceProposal.unitRatePence,
       description: changeDescription(line.description, quantity.trim(), line.unit ?? ""),
       tasks: preview.tasks.map(task => ({ taskKey: task.taskKey, proposedMinutes: Math.max(0, Math.round(Number(minutes[task.taskKey] ?? task.proposedMinutes))) })),
       ...(revise ? { action: "revise", ...revise } : { action: "confirm", quoteLineId: lineId }) };

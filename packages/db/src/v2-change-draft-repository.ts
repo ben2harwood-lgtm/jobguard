@@ -4,7 +4,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { ChangeDraftError, draftChange, priceVariation, type ChangeDraft, type VariationProposal,
+import { ChangeDraftError, draftChange, priceVariation, sameQuantity, type ChangeDraft, type VariationProposal,
   type VariationRevision } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { rethrowJobWorkState } from "./job-work-state-sources.js";
@@ -20,7 +20,8 @@ const uuid = z.guid({ error: "Invalid uuid" });
 const quantity = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u);
 const rate = z.number().int().min(0).max(1_000_000_000_000);
 const task = z.strictObject({ taskKey: z.string().min(1).max(200), proposedMinutes: z.number().int().min(0).max(10_080) });
-const drafted = { newQuantity: quantity, unitRatePence: rate, description: z.string().trim().min(1).max(500),
+// acceptedQuantity is the agreed quantity the preview showed: confirming is refused if the agreed baseline has moved since.
+const drafted = { acceptedQuantity: quantity, newQuantity: quantity, unitRatePence: rate, description: z.string().trim().min(1).max(500),
   tasks: z.array(task).max(50).refine(rows => new Set(rows.map(row => row.taskKey)).size === rows.length) };
 export const changeDraftPreviewV1 = z.strictObject({ version: z.literal("v2-change-draft-preview.v1"), quoteLineId: uuid,
   newQuantity: quantity, unitRatePence: rate.optional(), variationId: uuid.optional() });
@@ -155,6 +156,7 @@ export class ChangeDraftRepository {
       const [accepted] = await this.acceptedLines($client, context.tenantId, jobId, variationLine);
       if (!accepted) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_LINE_NOT_FOUND");
       const line = await this.agreedLine($client, context.tenantId, jobId, accepted, command.action === "revise" ? command.variationId : null);
+      if (line.quantity === null || !sameQuantity(line.quantity, command.acceptedQuantity)) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_VERSION_CONFLICT");
       const draft = this.draft(line, command.newQuantity, command.unitRatePence, planTasks);
       const price = { ...draft.priceProposal, direction: draft.direction, confirmedByMembershipId: actorMembershipId,
         rateProvenance: { kind: "human_entered" as const, sourceRef: "synthetic://builder-entered", sourceHash, rateVersion: "builder-price-v1" } };
