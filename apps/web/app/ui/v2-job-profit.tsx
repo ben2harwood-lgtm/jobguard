@@ -6,6 +6,8 @@ import { JOB_SAVED_EVENT } from "./job-page-fetch";
 export function V2JobProfit({ jobId }: { jobId: string }) {
   const [state, setState] = useState<{ jobId: string; profit: Profit | null; failed: boolean } | null>(null);
   useEffect(() => {
+    // V2 only: outside local V2 the flag is absent, so the job page makes no profit request.
+    if (process.env.NEXT_PUBLIC_JOBGUARD_V2_PROFIT !== "1") return;
     let current = 0, closed = false;
     const load = async () => {
       const generation = ++current;
