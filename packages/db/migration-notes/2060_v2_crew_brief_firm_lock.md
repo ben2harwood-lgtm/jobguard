@@ -5,7 +5,7 @@ The checked V2 bootstrap applies 2060 after 2047 and D1's 2059, and only to the 
 fence. It also stops unless 2001's `v2_practice_firm` policy on `app.job` is
 present.
 
-V2's two linked practice firms share one backing tenant, so 2029's tenant RLS
+V2's two linked practice firms share one backing tenant, so 2063's tenant RLS
 does not separate them, and FL-1's guard rejects the three crew brief tables without a
 firm lock. 2060 adds 2001's restrictive `FOR ALL TO jobguard_runtime` rule,
 joining `app.job` on `(tenant_id, job_id)`, created only when missing, so the

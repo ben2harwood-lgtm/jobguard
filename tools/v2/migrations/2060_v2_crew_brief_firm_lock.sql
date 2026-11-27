@@ -1,5 +1,5 @@
 -- V2-D4 crew brief firm lock (migration 2060). Loaded only by the checked V2 bootstrap, outside the shared migration runner.
--- V2's linked practice firms share one backing tenant, so 2029's tenant RLS doesn't separate them.
+-- V2's linked practice firms share one backing tenant, so 2063's tenant RLS doesn't separate them.
 -- Add 2001's restrictive firm rule to the three crew brief tables, as 2047 does for the V2 core tables.
 -- Policies are created only when missing; no grants, other policies or main migrations change.
 DO $v2$
