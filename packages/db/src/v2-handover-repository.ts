@@ -10,7 +10,9 @@ import { readFirmProfile } from "./firm-profile-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export const handoverSaveCommandV1 = z.strictObject({ version: z.literal("v2-handover-save-command.v1"), commandId: z.guid(),
-  expectedVersion: z.number().int().min(0).max(100000), choice: handoverChoiceV1 });
+  expectedVersion: z.number().int().min(0).max(100000), choice: handoverChoiceV1,
+  // The preview's content hash: when given, the save refuses if any chosen source changed since that preview.
+  previewHash: z.string().regex(/^[0-9a-f]{64}$/u).optional() });
 export const handoverPreviewV1 = z.strictObject({ version: z.literal("v2-handover-preview.v1"), choice: handoverChoiceV1 });
 export type HandoverSaveCommand = z.infer<typeof handoverSaveCommandV1>;
 export type HandoverVersion = { version: number; commandId: string; content: HandoverContent; sources: unknown;
@@ -88,7 +90,7 @@ export class HandoverRepository {
     return withTenant(this.pool, context, async db => {
       const { content, refused, unknown } = composeHandoverPack(await this.read(db.$client, db, context.tenantId, jobId), parsed.data.choice);
       if (unknown.length) throw new HandoverError("HANDOVER_SOURCE_CHANGED");
-      return { content, refused };
+      return { content, refused, contentHash: sha256(JSON.stringify(content)) };
     });
   }
 
@@ -118,6 +120,7 @@ export class HandoverRepository {
       if (composed.unknown.length) throw new HandoverError("HANDOVER_SOURCE_CHANGED");
       if (composed.refused.length) throw new HandoverError("HANDOVER_LINE_REFUSED", composed.refused);
       const contentHash = sha256(JSON.stringify(composed.content));
+      if (command.previewHash && command.previewHash !== contentHash) throw new HandoverError("HANDOVER_SOURCE_CHANGED");
       const saved = (await client.query<HandoverVersion>(`INSERT INTO app.v2_handover_version (tenant_id, job_id, version, command_id,
         content, sources, content_hash, request_hash, actor_membership_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${columns}`,
       [context.tenantId, jobId, latest + 1, command.commandId, JSON.stringify(composed.content), JSON.stringify(composed.sources),

@@ -8,6 +8,8 @@ describe("V2-G2 handover application", () => {
     const body = { version: "v2-handover-save-command.v1", commandId: id, expectedVersion: 0, choice };
     expect(handoverSaveCommandV1.parse(body)).toEqual(body);
     expect(handoverSaveCommandV1.safeParse({ ...body, content: {} }).success).toBe(false);
+    expect(handoverSaveCommandV1.parse({ ...body, previewHash: "a".repeat(64) }).previewHash).toBe("a".repeat(64));
+    expect(handoverSaveCommandV1.safeParse({ ...body, previewHash: "not-a-hash" }).success).toBe(false);
     expect(handoverSaveCommandV1.safeParse({ ...body, choice: { ...choice, sections: ["prices"] } }).success).toBe(false);
   });
   it("maps refusals with their reasons, and leaves other errors to the job-source mapping", () => {
