@@ -85,6 +85,18 @@ export class FactReminderRepository {
       await lock(`reminders:${jobId}`);
       // A recipient correction can't commit between the re-read below and this run's commit.
       await lock(`recipient:${jobId}`);
+      // A customer correction (app.bind_job_parties) holds the job row FOR UPDATE. The runtime can't lock that row
+      // itself, so take main's party check, which reads the row FOR SHARE: the run waits for a correction and holds
+      // the next one off until it commits. A job with no parties yet has no customer to correct, so that refusal is
+      // rolled back to the savepoint and the run goes on.
+      await $client.query("SAVEPOINT reminder_parties");
+      try {
+        await $client.query("SELECT app.require_current_job_parties($1, $2)", [tenantId, jobId]);
+        await $client.query("RELEASE SAVEPOINT reminder_parties");
+      } catch (error) {
+        if ((error as { code?: string }).code !== "22023") throw error;
+        await $client.query("ROLLBACK TO SAVEPOINT reminder_parties");
+      }
       const { rows: [prior] } = await $client.query<{ requestDigest: string; actor: string; result: FactReminderRunResult }>(
         `SELECT request_digest AS "requestDigest", actor_membership_id AS actor, result FROM app.v2_fact_reminder_run
         WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [tenantId, jobId, commandId]);

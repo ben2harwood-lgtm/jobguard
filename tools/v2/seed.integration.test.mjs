@@ -2772,6 +2772,26 @@ test("V2-E7: a direct E1 answer waits on the fact lock a reminder run holds", as
   }
 });
 
+test("V2-E7: a run waits on the job row a customer correction holds", async () => {
+  const { context, owner, fact, request, week } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Is the drive clear for the skip lorry?" } }));
+  const holder = await admin.connect();
+  try {
+    // Stand in for app.bind_job_parties, which takes the job row FOR UPDATE before it changes the binding.
+    await holder.query("BEGIN");
+    await holder.query("SELECT 1 FROM app.job WHERE id = $1 FOR UPDATE", [jobId]);
+    let settled = false;
+    const running = caught(() => new FactReminderRepository(runtime, () => week.at(-2, 12)).run(context, jobId,
+      owner.sessionId, reminderCommand())).finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "the run waits while the job row is locked");
+    await holder.query("ROLLBACK");
+    const { result } = await running;
+    assert.ok(result.reminded.includes(sent.id));
+  } finally { holder.release(); }
+});
+
 test("V2-E7: the database keeps one reminder per request, ties reason and recipient to the kind, and never changes a row", async () => {
   const { context, fact, request, week, runAt } = await reminderSetup();
   const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
