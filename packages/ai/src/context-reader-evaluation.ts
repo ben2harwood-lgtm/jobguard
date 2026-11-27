@@ -8,10 +8,10 @@ import { readSpokenJob } from "./context-reader.js";
 /** A list is the set of accepted answers (held-out cases allow either of two); null in a number list accepts open. */
 type OneOf<T> = T | T[];
 type ExpectedLine = { words: string; room: OneOf<string>; trade: OneOf<string>; quantity: OneOf<string | null>; unit: string | null;
-  pence: OneOf<number | null>; basis: string };
+  pence: OneOf<number | null>; basis: string; optional?: boolean };
 type Case = { id: string; text: string; unpunctuated?: boolean; lines: ExpectedLine[];
   areaPrices: { room: string; pence: number; orOpenWithQuestion?: boolean }[];
-  wholeJobPence: number | null; questions: { line?: string; contains?: string; ifOpen?: boolean }[] };
+  wholeJobPence: number | null; questions: { line?: string; contains?: string; ifOpen?: boolean; ifPresent?: boolean }[] };
 const accepted = <T>(value: OneOf<T>): T[] => Array.isArray(value) ? value : [value];
 export type ContextReaderReport = {
   cases: number; expectedLines: number; missedWork: number; inventedWork: number; wrongNumbers: number; missedNumbers: number;
@@ -36,11 +36,14 @@ export function evaluateContextReader(cases: Case[]): ContextReaderReport {
     const miss = (text: string) => report.misses.push(`${item.id}: ${text}`);
     let after = -1;
     for (const expected of item.lines) {
-      report.expectedLines++;
       const words = expected.words.toLowerCase();
       let index = result.lines.findIndex((line, at) => at > after && !used.has(at) && line.description.value.toLowerCase().includes(words));
       if (index === -1) index = result.lines.findIndex((line, at) => !used.has(at) && line.description.value.toLowerCase().includes(words));
-      if (index === -1) { report.missedWork++; miss(`missed work “${expected.words}”`); continue; }
+      if (index === -1) {
+        if (!expected.optional) { report.expectedLines++; report.missedWork++; miss(`missed work “${expected.words}”`); }
+        continue;
+      }
+      report.expectedLines++;
       used.add(index); after = index; matched.set(expected.words, index); report.matchedLines++;
       const line = result.lines[index]!;
       const room = roomOf.get(line.areaKey) ?? "?";
@@ -70,6 +73,7 @@ export function evaluateContextReader(cases: Case[]): ContextReaderReport {
     else if (whole === null && item.wholeJobPence !== null) { report.missedNumbers++; miss(`whole-job price not kept (said ${item.wholeJobPence})`); }
     for (const question of item.questions) {
       const lineIndex = question.line === undefined ? undefined : matched.get(question.line);
+      if (question.ifPresent && lineIndex === undefined) continue;
       if (question.ifOpen && lineIndex !== undefined && result.lines[lineIndex]!.unitPricePence.value !== null) continue;
       report.questionsExpected++;
       const raised = result.questions.some(asked => (question.line === undefined || asked.lineIndex === lineIndex)

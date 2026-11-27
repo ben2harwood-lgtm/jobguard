@@ -1,0 +1,80 @@
+{
+  "version": "spoken-quote-understanding-cases.v1",
+  "author": "planner, 27 Nov 2026",
+  "status": "unseen until its first run is recorded; seen after.",
+  "note": "Held-out set 2, written by the planner without seeing Reader A's code or word lists (/mnt/project-files/jobguard-v2/packets/v2-sq-held-out-2-transcripts.md), encoded as written. A list is the set of accepted answers; null in a number list accepts open. An optional line may be absent; if present it must meet its expectations. Hard floor: no wrong or invented number, no invented work. Room and trade are reported, not gated.",
+  "cases": [
+    { "id": "h2-1-knock-through", "unpunctuated": true,
+      "text": "ok dining room knock through into the kitchen put a steel in thats three thousand two hundred pounds make good the plaster both sides five hundred pounds and the kitchen side needs two new sockets at eighty five pounds each",
+      "lines": [
+        { "words": "knock through", "room": "Dining room", "trade": ["Brickwork", "Other"], "quantity": null, "unit": null, "pence": 320000, "basis": "line" },
+        { "words": "make good the plaster", "room": "Dining room", "trade": "Plastering", "quantity": null, "unit": null, "pence": 50000, "basis": "line" },
+        { "words": "two new sockets", "room": ["Kitchen", "Dining room"], "trade": "Electrics", "quantity": "2", "unit": null, "pence": 8500, "basis": "each" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "h2-2-master-bedroom-en-suite",
+      "text": "Master bedroom. Fit wardrobes along one wall, 1,900 pounds supplied and fitted. New carpet, 16 square metres at 28 pounds a metre. Paint walls and ceiling for 420 pounds. En suite: replace the shower valve, price needed.",
+      "lines": [
+        { "words": "Fit wardrobes", "room": "Master bedroom", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 190000, "basis": "line" },
+        { "words": "New carpet", "room": "Master bedroom", "trade": "Flooring", "quantity": "16", "unit": "m²", "pence": 2800, "basis": "per_unit" },
+        { "words": "Paint walls and ceiling", "room": "Master bedroom", "trade": "Decorating", "quantity": null, "unit": null, "pence": 42000, "basis": "line" },
+        { "words": "replace the shower valve", "room": "En suite", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "h2-3-garage-roof", "unpunctuated": true,
+      "text": "roof first strip the old felt on the garage roof and re felt it seven hundred and fifty quid replace the fascias and guttering front and back twelve hundred quid then inside the garage nothing",
+      "lines": [
+        { "words": "strip the old felt", "room": ["Garage roof", "Roof"], "trade": "Roofing", "quantity": null, "unit": null, "pence": 75000, "basis": "line" },
+        { "words": "replace the fascias and guttering", "room": ["Garage roof", "Roof"], "trade": "Roofing", "quantity": null, "unit": null, "pence": 120000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "h2-4-three-bedrooms-same",
+      "text": "Three bedrooms all the same: new skirting, new door, and paint. Call it 800 pounds a room.",
+      "lines": [
+        { "words": "new skirting", "room": "Three bedrooms", "trade": "Carpentry", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "new door", "room": "Three bedrooms", "trade": "Carpentry", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint", "room": "Three bedrooms", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Three bedrooms", "pence": 80000, "orOpenWithQuestion": true } ], "wholeJobPence": null,
+      "questions": [ { "contains": "room" } ] },
+    { "id": "h2-5-utility-boiler", "unpunctuated": true,
+      "text": "utility room move the boiler onto the outside wall gas safe lad will do that he reckons eleven hundred pounds box in the pipes and tile the floor six square metres forty five pounds a metre",
+      "lines": [
+        { "words": "move the boiler", "room": "Utility room", "trade": "Plumbing", "quantity": null, "unit": null, "pence": 110000, "basis": "line" },
+        { "words": "box in the pipes", "room": "Utility room", "trade": "Carpentry", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "tile the floor", "room": "Utility room", "trade": "Tiling", "quantity": "6", "unit": "m²", "pence": 4500, "basis": "per_unit" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "h2-6-front-of-house",
+      "text": "Front of the house: repoint the bay, about 9 square metres, 70 pounds a metre. New front door supplied by the customer, we just fit it, 250 pounds. Porch light, 90 pounds.",
+      "lines": [
+        { "words": "repoint the bay", "room": "Front", "trade": "Brickwork", "quantity": "9", "unit": "m²", "pence": 7000, "basis": "per_unit" },
+        { "words": "front door", "room": "Front", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 25000, "basis": "line" },
+        { "words": "Porch light", "room": ["Front", "Porch"], "trade": "Electrics", "quantity": null, "unit": null, "pence": 9000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "repoint the bay", "contains": "about" } ] },
+    { "id": "h2-7-withdrawn-plastering", "unpunctuated": true,
+      "text": "living room chimney breast needs replastering four hundred pounds actually leave the plastering customer's doing that themselves just fit the new fire surround two hundred and fifty pounds",
+      "lines": [
+        { "words": "replastering", "optional": true, "room": "Living room", "trade": ["Plastering", "Other"], "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit the new fire surround", "room": "Living room", "trade": ["Carpentry", "Other"], "quantity": null, "unit": null, "pence": 25000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "replastering", "ifPresent": true } ] },
+    { "id": "h2-8-kitchen-all-in-separate",
+      "text": "Kitchen all in 9,500 pounds, that covers units, worktops, plumbing and electrics. Flooring is separate: 14 square metres of vinyl at 32 pounds a metre. Decorating separate as well, 550 pounds.",
+      "lines": [
+        { "words": "units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "worktops", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "plumbing", "room": "Kitchen", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "electrics", "room": "Kitchen", "trade": "Electrics", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "vinyl", "room": "Kitchen", "trade": "Flooring", "quantity": "14", "unit": "m²", "pence": 3200, "basis": "per_unit" },
+        { "words": "Decorating", "room": "Kitchen", "trade": "Decorating", "quantity": null, "unit": null, "pence": 55000, "basis": "line" }
+      ], "areaPrices": [ { "room": "Kitchen", "pence": 950000 } ], "wholeJobPence": null, "questions": [ { "contains": "separate" } ] },
+    { "id": "h2-9-spindles", "unpunctuated": true,
+      "text": "stairs and landing sand and varnish the handrail and spindles there's forty two spindles two days work say four hundred and eighty pounds",
+      "lines": [
+        { "words": "sand and varnish", "room": "Stairs and landing", "trade": "Decorating", "quantity": null, "unit": null, "pence": 48000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "h2-10-bathroom-ufh-hall",
+      "text": "Bathroom. Customer wants underfloor heating, electric mat, 5 square metres, 600 pounds. Then tile over it same area 5 square metres at 65 pounds a metre. Towel rail 180 pounds fitted. And downstairs, in the hall, replace 3 radiators at 210 pounds each.",
+      "lines": [
+        { "words": "underfloor heating", "room": "Bathroom", "trade": "Electrics", "quantity": "5", "unit": "m²", "pence": 60000, "basis": "line" },
+        { "words": "tile over it", "room": "Bathroom", "trade": "Tiling", "quantity": "5", "unit": "m²", "pence": 6500, "basis": "per_unit" },
+        { "words": "Towel rail", "room": "Bathroom", "trade": "Plumbing", "quantity": null, "unit": null, "pence": 18000, "basis": "line" },
+        { "words": "replace 3 radiators", "room": "Hall", "trade": "Plumbing", "quantity": "3", "unit": null, "pence": 21000, "basis": "each" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] }
+  ]
+}

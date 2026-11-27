@@ -11,6 +11,7 @@
         "docs/fixtures/ai/golden-run.v1.json",
         "docs/fixtures/ai/spoken-quote-understanding/README.md",
         "docs/fixtures/ai/spoken-quote-understanding/cases.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/held-out-2.v1.json",
         "docs/fixtures/ai/spoken-quote-understanding/held-out.v1.json",
         "packages/ai/src/capture-evaluation.test.ts",
         "packages/ai/src/capture-fixture-parser.ts",
