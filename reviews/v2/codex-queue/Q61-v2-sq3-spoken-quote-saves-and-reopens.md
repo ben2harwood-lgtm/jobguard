@@ -60,3 +60,7 @@ The quote saves and reopens through the existing flow. This is proved on desktop
 - One recorded voice goes through the real on-device recogniser to a saved quote, with no injected or filled words. The rows, prices and total are checked before and after reload, at desktop and 360 px.
 - Ben has a five-line checklist for his own phone run.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra): PASS WITH CONDITIONS
+1. **The exact-transcript pin will flake across machines.** A related 360 px shard heard "bathroom fly" for "bathroom floor". Keep the money checks strict: both spoken prices, the row count, the row prices and the totals. For description words, allow only a named list of variants actually seen in CI, recorded in the fixtures README, so new drift still fails. Or re-script without words the small model mishears, and re-pin from CI runs in both projects. Never widen the pin just to get green.
+2. If the real-path spec retries (cancel, then press again when the opening words are cut off), the PR says that one press isn't proven on the real path.

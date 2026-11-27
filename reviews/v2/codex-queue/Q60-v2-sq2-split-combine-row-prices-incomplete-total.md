@@ -56,3 +56,7 @@ Spoken prices attach to the right row, and unknown prices stay blank. A "whole j
 ## Done when
 - On the review, every row shows its price or "Price needed", combining keeps known prices, splitting never guesses, the whole-job figure is shown but not spread, and the total says "incomplete" until every counted row is priced. The quote opens with those prices as today.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra): PASS WITH CONDITIONS
+1. **Rounding correction.** Use the quote's own line rule, `calculateNetLine` (half-even), not half-up, so the review and quote totals can't disagree. Test 5 becomes: quantity "2.5" × £10.01 = **£25.02**. (#1003 already does this.)
+2. **Merge guard.** `merge()` must accept only `proposed` or `accepted` rows. Combining a dismissed, split-away or merged-away row would count money twice (for example, a split parent plus its parts). Add a unit test.

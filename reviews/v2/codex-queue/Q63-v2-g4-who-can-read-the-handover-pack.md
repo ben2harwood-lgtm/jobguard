@@ -59,3 +59,10 @@
 ## Done when
 - The builder can stop a handover link, a link sent to a customer who has since been replaced no longer opens, and another firm can't read the pack by any path.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra): PASS WITH CONDITIONS
+1. Put the stop and recipient checks inside `scope_open`'s unexpired branch (2058 line 168). Refuse through the existing path: delete the scope row, return the same `{status:'refused'}`, and log the capped failure. Then a stopped link also can't acknowledge.
+2. Use one SQL comparison, `lower(btrim())` on both sides, for the link and for the builder's `recipientCurrent`, so the screen and the link can't disagree. G3 stores the address trimmed but not lowercased.
+3. The recipient check is live, not latching: if the old email becomes current again, the old link reopens. Say so in the PR, as intended.
+4. Name 2062's policies on `job_party_current`, `job_party_binding` and `customer_revision` differently from 2029's (`v2_fact_reply_link_read`), so one migration's `DROP POLICY IF EXISTS` can't remove the other's.
+5. G3's head is now e9ac52ff9 (a0514498a is an ancestor and 2058 is unchanged). SX isn't on G3, so write "Rule 29: pending V2-SX".

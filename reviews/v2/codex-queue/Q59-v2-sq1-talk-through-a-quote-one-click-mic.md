@@ -65,3 +65,8 @@
 ## Done when
 - On the walk, one press of "Talk through a quote" starts listening, typing is always there, and a refused microphone says how to allow it and leaves the typed work as it was.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra): PASS WITH CONDITIONS
+1. "Downloads once" isn't proven. A new Worker re-fetches about 44 MB per press, and only the browser's HTTP cache stops that. Either prove that a second press transfers nothing (a CDP cache or 304 check), or change the line to "the first time (again if your browser clears it)".
+2. Add a `model_failed` message for a model download or integrity failure. Today it shows "The microphone stopped…", which gives the wrong reason.
+3. The shipped model is `vosk-model-small-en-us`, while the adapter config says en-GB. Put that in the PR's known limits.

@@ -41,3 +41,8 @@ After the spoken quote works, the checked demo's journeys move onto V2 routes. T
 - The planner has one list of every demo journey step with On V2, On a V2 PR or Missing, and the top five missing steps in order.
 - Every journey that V2 already covers has a passing browser spec at desktop and 360 px.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra): PASS WITH CONDITIONS
+1. **Dry-check correction.** All 36 `real-*` specs, and TOMMY-acceptance-recovery, demo-faults and money-gaps, are already on `v2/main`. Only `TOMMY-DEMO` and the 10 `DUI-*` specs are not. Commit 32decb2c1 has 61 demo specs, not 28. List all of them.
+2. "On V2" needs a V2 route or V2 table. A v1 route that merely exists on `v2/main` is marked "Shared v1", separately.
+3. The new `V2-DEMO-*` specs use the rule 22 sign-in, use no injected adapter or `fill` for any step claimed as real, and don't duplicate `DEMO-*` specs already on `v2/main`.

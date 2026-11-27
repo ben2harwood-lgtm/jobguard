@@ -80,3 +80,8 @@ Issuing a stage invoice needs his choice of VAT treatment and invoice numbering 
 - On the practice job, a due deposit or stage has a "Draft · not an invoice" with the exact frozen amount and the extras it counts. A date stage is frozen in the same transaction as its draft.
 - No draft can exist without a frozen stage, and nothing is issued, posted or sent.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. `freeze()` (v2-payment-schedule-repository.ts lines 256 to 269 on the base) counts every approval visible **now** (`countedApprovalIds: approvalIds`). For a date stage that went due earlier, `draftStage` must freeze at the **due moment** from `facts()` (London midnight, capped at the schedule start), passed as `at`, and count only approvals created before it. Otherwise extras approved after the due date leak into the stage, and the draft differs from what the screen showed.
+2. Seed test 2: an extra counts only if it was created before the due moment **and** committed before the freeze. Add a case that drafts a date stage days after it went due, with an extra approved in between; the draft equals the projection shown before the press.
+3. The same applies to an acceptance stage from before 2046 with no frozen row: it freezes at the schedule start, not at the draft time.
