@@ -2127,3 +2127,20 @@ test("K5B-1 the second firm sees and writes no draft or withdrawal, and 2064 rer
   assert.equal(await rows(), count);
   assert.ok(view);
 });
+
+test("K5B-1 a draft lists only extras approved since the schedule; a draft's command id refuses on the schedule commands", async () => {
+  const fixture = await k5AcceptedJob();
+  await fixture.app.quote.activate(fixture.draftJob, switchLive());
+  // Approved before the schedule exists: replay keeps it out of every stage, so the draft must not claim it.
+  const prior = await k5a1Propose(fixture.app, fixture.draftJob, 900);
+  await k5a1Approve(fixture.app, fixture.draftJob, prior.variationId, prior.revisionId);
+  const view = await fixture.app.paymentSchedule.read(fixture.draftJob);
+  const triggers = [{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }];
+  await fixture.app.paymentSchedule.set(fixture.draftJob, k5Command(view, triggers));
+  const draft = await fixture.app.paymentSchedule.set(fixture.draftJob, k5bDraft(0));
+  assert.deepEqual(draft.extras, [], "an extra approved before the schedule is not in this draft");
+  const used = draft.commandId;
+  await assert.rejects(fixture.app.paymentSchedule.set(fixture.draftJob, { ...k5Command(view, triggers), commandId: used }), { code: "SCHEDULE_REPLAY_CONFLICT" });
+  await assert.rejects(fixture.app.paymentSchedule.set(fixture.draftJob, { ...k5TaskDone(view, { scopeItemId: randomUUID(), taskKey: "fictional-task" }), commandId: used }),
+    { code: "SCHEDULE_REPLAY_CONFLICT" });
+});

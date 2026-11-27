@@ -75,8 +75,8 @@ export class PaymentScheduleRepository {
         if (!matches) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
         return this.receipt(existing);
       }
-      if ((await client.query("SELECT 1 FROM app.v2_payment_schedule_task_done WHERE tenant_id=$1 AND command_id=$2",
-        [context.tenantId,command.commandId])).rowCount) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
+      // A command id is tenant-wide: a task-done, draft or withdrawal command with this id refuses (K5B-1, both directions).
+      if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
       if (command.expectedVersion !== 0 || head.revision !== command.quoteRevisionId ||
         (await client.query(`SELECT 1 FROM app.v2_payment_schedule WHERE (tenant_id,job_id,quote_revision_id)=($1,$2,$3)`,
           [context.tenantId, jobId, head.revision])).rowCount) throw new PaymentScheduleError("SCHEDULE_STALE");
@@ -132,6 +132,7 @@ export class PaymentScheduleRepository {
         if (!replay.matches) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
         return {commandId:command.commandId,version:command.expectedVersion+1,recordedAt:replay.recordedAt.toISOString()};
       }
+      if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
       const schedule = await this.schedule(client, context.tenantId, jobId, command.quoteRevisionId);
       if (!schedule || head.revision !== command.quoteRevisionId ||
         await this.currentVersion(client,context.tenantId,jobId,head.revision) !== command.expectedVersion) {
@@ -265,10 +266,11 @@ export class PaymentScheduleRepository {
 
   /** A command id is tenant-wide across the schedule and draft commands. */
   private async commandUsed(client: PoolClient, tenantId: string, commandId: string) {
+    const drafts = (await client.query<{ ok: boolean }>("SELECT to_regclass('app.v2_stage_invoice_draft') IS NOT NULL AS ok")).rows[0]?.ok;
     return Boolean((await client.query(`SELECT 1 FROM app.v2_payment_schedule WHERE tenant_id=$1 AND command_id=$2
-      UNION ALL SELECT 1 FROM app.v2_payment_schedule_task_done WHERE tenant_id=$1 AND command_id=$2
+      UNION ALL SELECT 1 FROM app.v2_payment_schedule_task_done WHERE tenant_id=$1 AND command_id=$2${drafts ? `
       UNION ALL SELECT 1 FROM app.v2_stage_invoice_draft WHERE tenant_id=$1 AND command_id=$2
-      UNION ALL SELECT 1 FROM app.v2_stage_invoice_draft_withdrawal WHERE tenant_id=$1 AND command_id=$2`,
+      UNION ALL SELECT 1 FROM app.v2_stage_invoice_draft_withdrawal WHERE tenant_id=$1 AND command_id=$2` : ""}`,
     [tenantId, commandId])).rowCount);
   }
 
@@ -409,7 +411,9 @@ const draftSelect = `SELECT d.stage_index AS "stageIndex", d.draft_no AS "draftN
     d.recorded_at AS "recordedAt", w.recorded_at AS "withdrawnAt", w.reason AS "withdrawReason",
     (SELECT array_agg(r.description ORDER BY a.created_at, a.id) FROM app.variation_approval a
       JOIN app.variation_revision r ON (r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
-      WHERE (a.tenant_id,a.job_id)=(d.tenant_id,d.job_id) AND a.id = ANY(d.counted_approval_ids)) AS extras
+      JOIN app.v2_payment_schedule s ON (s.tenant_id,s.job_id,s.quote_revision_id)=(d.tenant_id,d.job_id,d.quote_revision_id)
+      -- Only extras approved since the schedule are shared into its stages; earlier ones belong to a later invoice.
+      WHERE (a.tenant_id,a.job_id)=(d.tenant_id,d.job_id) AND a.id = ANY(d.counted_approval_ids) AND a.created_at >= s.recorded_at) AS extras
   FROM app.v2_stage_invoice_draft d LEFT JOIN app.v2_stage_invoice_draft_withdrawal w
     ON (w.tenant_id,w.job_id,w.quote_revision_id,w.stage_index,w.draft_no)=(d.tenant_id,d.job_id,d.quote_revision_id,d.stage_index,d.draft_no)`;
 const publicDraft = (row: DraftRow) => ({ stageIndex: row.stageIndex, draftNo: row.draftNo, commandId: row.commandId,
