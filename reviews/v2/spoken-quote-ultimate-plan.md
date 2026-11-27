@@ -103,7 +103,7 @@ SQ-A, SQ-B and SQ-C can start together. Each packet is one build plus up to two 
 2. Update the public demo link to the new build once SQ-H passes (a deploy).
 
 
-**Ben's decision, 27 Nov 15:05 UK (card):** live model reader on for the practice tenant with Claude Haiku 5.5 (`claude-haiku-5-5`) and a £5 a month cap. Reader B is built for that model; the cap is enforced in server configuration; Ben creates the API key when SQ-G is ready. Opus 5.5 is not used.
+**Ben's decision, 27 Nov 15:07 UK (card, replaces his 15:05 Haiku choice):** live model reader on for the practice tenant with Claude Sonnet 5.5 (`claude-sonnet-5-5`) and a £10 a month cap. Reader B is built for that model; the cap is enforced in server configuration; Ben creates the API key when SQ-G is ready. Ben, 15:06 UK: the spoken quote goes first, ahead of other JobGuard work.
 
 ## 8. Questions for Astra
 
