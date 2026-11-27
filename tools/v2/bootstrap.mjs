@@ -78,8 +78,8 @@ try {
   // V2-E1 open facts (2029) and their firm lock (2064).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_open_fact.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("./migrations/2064_v2_open_fact_firm_lock.sql", import.meta.url), "utf8"));
-  // V2-E9 choices and allowances (2029) and their firm lock (2065).
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_choice_allowance.sql", import.meta.url), "utf8"));
+  // V2-E9 choices and allowances (2030) and their firm lock (2065).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2030_v2_choice_allowance.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("./migrations/2065_v2_choice_allowance_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
