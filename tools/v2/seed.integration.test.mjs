@@ -1952,6 +1952,69 @@ test("F2 proof holds the task open: missing, pending then verified with no new r
   await verifyTenantChain(context.tenantId);
 });
 
+// V2-F1 repair (Codex P2 4705000559): progress ids share the tenant-wide watchdog command namespace, both ways.
+test("F1 progress command ids conflict with another watchdog command's id in both directions", async () => {
+  const { owner } = await f1Setup();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { claimCommandIdentity } = await import("../../packages/db/dist/index.js");
+  const brief = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  const task = brief.content.tasks[0];
+  const next = async () => Math.max(0, ...(await app.briefProgress.read(jobId)).progress
+    .filter(row => row.trade === brief.trade && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
+  const claimAs = (commandId, kind) => withTenant(runtime, context, database => claimCommandIdentity(database,
+    { tenantId: context.tenantId, commandId, jobId, kind, requestHash: "0".repeat(64) }));
+  // Another command first: the progress press with its id is refused, with no row and no audit.
+  const taken = randomUUID();
+  assert.equal(await claimAs(taken, "readiness.record"), "new");
+  const reused = progressCommand(brief, task, { commandId: taken, expectedVersion: await next() });
+  await assert.rejects(app.briefProgress.record(jobId, reused), { code: "BRIEF_PROGRESS_COMMAND_CONFLICT" });
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [taken])).rowCount, 0);
+  assert.deepEqual(await progressEvents(taken), []);
+  // Progress first: its id is claimed, so another kind of command can't reuse it, and the exact replay still returns the row.
+  const press = progressCommand(brief, task, { expectedVersion: await next() });
+  const saved = await app.briefProgress.record(jobId, press);
+  assert.deepEqual((await admin.query("SELECT job_id, command_type FROM app.watchdog_command_identity WHERE command_id=$1",
+    [press.commandId])).rows, [{ job_id: jobId, command_type: "v2.brief_progress.record" }]);
+  await assert.rejects(claimAs(press.commandId, "readiness.record"), { code: "IDEMPOTENCY_CONFLICT" });
+  assert.deepEqual(await app.briefProgress.record(jobId, press), saved);
+  assert.equal((await progressEvents(press.commandId)).length, 1);
+});
+
+// V2-F1 repair (Codex P2 4707355984): a C3C crew assignment is part of the brief, so reassigning makes it outdated.
+test("F1 briefs carry the linked crew assignment, and a reassignment needs a regenerated brief before progress", async () => {
+  const { owner, crewBriefs, command } = await f1Setup();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const crew = name => app.crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
+    expectedRevision: 0, displayName: name, trade: "tiler", phone: "07700 900123", email: "crew@crew.jobguard-v2.invalid" });
+  const [first, second] = [await crew("F1 Fictional Tiler A"), await crew("F1 Fictional Tiler B")];
+  const assign = async crewId => {
+    const plan = await app.workPlan.read(jobId, planQuery);
+    const task = plan.tasks.find(item => item.trade === "tiler");
+    await app.workPlan.edit(jobId, planEdit(plan, task, { assigneeRef: crewId }));
+    return task;
+  };
+  const latest = async () => (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  const planTask = await assign(first.crewId);
+  const brief = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: (await latest()).version }));
+  const briefTask = brief.content.tasks.find(item => item.scopeItemId === planTask.scopeItemId && item.taskKey === planTask.key);
+  assert.equal(briefTask.ownerRef, first.crewId);
+  assert.equal((await latest()).current, true);
+  await assign(second.crewId);
+  assert.equal((await latest()).current, false, "the reassigned brief reads outdated");
+  const progress = (await app.briefProgress.read(jobId)).progress.filter(row => row.trade === "tiler"
+    && row.scopeItemId === briefTask.scopeItemId && row.taskKey === briefTask.taskKey);
+  const press = progressCommand(brief, briefTask, { expectedVersion: Math.max(0, ...progress.map(row => row.version)) });
+  await assert.rejects(app.briefProgress.record(jobId, press), { code: "BRIEF_PROGRESS_REGENERATE" });
+  assert.deepEqual(await progressEvents(press.commandId), []);
+  const regenerated = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: brief.version }));
+  assert.equal(regenerated.content.tasks.find(item => item.taskKey === briefTask.taskKey && item.scopeItemId === briefTask.scopeItemId).ownerRef, second.crewId);
+  assert.equal((await latest()).current, true);
+  // A task with no linked crew record keeps the older content shape.
+  assert.ok(regenerated.content.tasks.filter(item => item.scopeItemId !== briefTask.scopeItemId || item.taskKey !== briefTask.taskKey)
+    .every(item => !("ownerRef" in item)));
+});
+
 // V2-F1: preserve the existing job-stage boundary and historical reads.
 test("F1 refuses non-live and closed job presses without rows or audit", async () => {
   const owner = await signIn("builder");

@@ -68,7 +68,8 @@ const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry:
 const proofStatementReplayCase = { key: "proof.statement", registry: ["/api/jobs/[id]/proof#answer_statement", "command:proof.statement"] };
 // V2-F1 brief progress needs the V2 schema, which only tools/v2/bootstrap.mjs applies, so this
 // legacy-id harness cannot run it. Its exact replay, changed-request conflict and same-id
-// other-job conflict execute in tools/v2/seed.integration.test.mjs ("F1 Done, Blocked and Changed").
+// other-job conflict execute in tools/v2/seed.integration.test.mjs ("F1 Done, Blocked and Changed"), and its
+// cross-kind conflicts in both directions in "F1 progress command ids conflict with another watchdog command's id".
 const briefProgressReplayCase = { key: "v2-brief-progress-repository.ts#record", registry: ["/api/jobs/[id]/brief-progress"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
 }, 120000);

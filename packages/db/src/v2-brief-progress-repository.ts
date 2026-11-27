@@ -4,7 +4,7 @@ import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-import { requireLiveJob } from "./watchdog.js";
+import { WatchdogError, claimCommandIdentity, requestHashFor, requireLiveJob } from "./watchdog.js";
 import { CrewBriefRepository } from "./v2-crew-brief-repository.js";
 import { taskProofStatus, type TaskProofStatus } from "./v2-proof-status.js";
 
@@ -145,6 +145,11 @@ export class BriefProgressRepository {
       if (!await new CrewBriefRepository(this.pool).isCurrentOn($client, context.tenantId, jobId, command.trade, command.briefVersion)) {
         throw new BriefProgressError("BRIEF_PROGRESS_REGENERATE");
       }
+      // Codex P2 4705000559: claim the id in the shared watchdog namespace, so it can't also be another command's.
+      await claimCommandIdentity(database, { tenantId: context.tenantId, commandId: command.commandId, jobId,
+        kind: "v2.brief_progress.record", requestHash: requestHashFor("v2.brief_progress.record", jobId, command) }).catch(error => {
+        throw error instanceof WatchdogError && error.code === "IDEMPOTENCY_CONFLICT" ? new BriefProgressError("BRIEF_PROGRESS_COMMAND_CONFLICT") : error;
+      });
       const task = [context.tenantId, jobId, command.trade, command.scopeItemId, command.taskKey];
       const { rows: [head] } = await $client.query<{ current: number }>(`SELECT COALESCE(max(expected_version) + 1, 0) AS current
         FROM app.v2_brief_progress WHERE (tenant_id, job_id, trade, scope_item_id, task_key) = ($1, $2, $3, $4, $5)`, task);
