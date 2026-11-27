@@ -1,0 +1,12 @@
+{
+  "packet": "V2-E9 (customer choices and allowances) firm lock, after Q35 / V2-FL-1",
+  "migration": "2065_v2_choice_allowance_firm_lock.sql",
+  "database": "jobguard_v2_local",
+  "tables": [
+    "app.v2_choice_allowance",
+    "app.v2_choice_allowance_step"
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime: a choice allowance version or step row is visible and writable only when its job is visible to the signed-in firm",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs: FL guard cases and tools/v2/firm-lock/FL-E9.checks.mjs"
+}
