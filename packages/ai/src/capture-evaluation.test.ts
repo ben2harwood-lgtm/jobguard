@@ -78,7 +78,7 @@ describe("evaluation CLI and receipts", () => {
     expect(a.status).toBe("PASS");expect(a.cases).toEqual({passed:32,total:32});
     expect(a.totals).toEqual({scopeIntentRecall:{numerator:41,denominator:41},citations:{valid:119,total:119},unsupportedMonetaryFacts:0,ambiguityChecks:{passed:63,total:63}});
     expect(a.hashes).toEqual(b.hashes);expect(a.results).toEqual(b.results);
-    expect(a.versions.parser).toBe("structured-capture-fixture/2");expect(a.costPence).toBe(0);
+    expect(a.versions.parser).toBe("structured-capture-fixture/3");expect(a.costPence).toBe(0);
     expect(a.releaseDecision).toBe("NOT_AUTHORIZED");expect(a.labelStatus).toBe("AUTHOR_PROPOSED_INDEPENDENT_REVIEW_PENDING");
     expect(a.notTested).toContain("Live model or natural-language extraction accuracy");
     console.log("CAPTURE_EVALUATION_RECEIPT",JSON.stringify({schema:a.schema,status:a.status,cases:a.cases,totals:a.totals,versions:a.versions,hashes:a.hashes,labelStatus:a.labelStatus,notTested:a.notTested}));
