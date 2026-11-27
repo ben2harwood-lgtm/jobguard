@@ -1,6 +1,6 @@
 {
   "packet": "Q12 / V2-F6",
-  "migration": "2018_customer_extra_links.sql",
+  "migration": "2048_customer_extra_links.sql",
   "database": "jobguard_v2_local",
   "status": "written; real PostgreSQL execution pending CI",
   "table": "app.v2_customer_extra_link",
@@ -8,7 +8,8 @@
   "rls": {
     "enabled": true,
     "forced": true,
-    "runtime": "bound tenant, firm and visible job"
+    "runtime": "bound tenant, firm and visible job",
+    "firmLock": "restrictive v2_practice_firm on app.job(tenant_id, job_id), same form as 2047"
   },
   "runtimeGrants": [
     "SELECT",
