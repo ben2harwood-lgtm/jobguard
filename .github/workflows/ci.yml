@@ -109,6 +109,9 @@ jobs:
         with: { node-version: 24.15.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Drop the hosted runner's Microsoft apt source (it returns 403 and fails apt update)
+        if: runner.os == 'Linux'
+        run: sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
       - name: Install the browser used by the existing end-to-end suite
         run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
       - name: Exercise the production web build at mobile and desktop sizes
