@@ -1172,6 +1172,14 @@ test("G1 agreed outstanding reads back and clears; a checked snag cannot be agre
   await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: mine.crewId }));
   assert.equal((await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "late" }, 409)).code,
     "V2_SNAG_NOTHING_OUTSTANDING");
+  // Plan check condition 2: a mark made before a later reopen does not carry over.
+  const later = await g1.add(owner, "Fictional loose tile in the hall");
+  register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId: later, agreed: true, note: "agreed at walk-round" });
+  assert.equal(g1.snag(register, later).agreed.note, "agreed at walk-round");
+  await g1.post(owner, g1.event(later, "mark_fixed", { kind: "builder" }));
+  await g1.post(owner, g1.event(later, "reopen", { kind: "builder" }));
+  register = await json(await request(g1.path(), { cookies: owner.cookies }));
+  assert.equal(g1.snag(register, later).agreed, null, "the reopen clears the earlier agreement");
 });
 
 test("G1 replay and conflict; main's own route still works and shows person not recorded", async () => {
