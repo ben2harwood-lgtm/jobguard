@@ -305,3 +305,23 @@ it("keeps the extra-work screen's own button label and uses it in its messages",
   solo.button()!.props.onClick(); await flush();
   expect(text(solo.render())).toContain("then press Talk through the example again");
 });
+
+// Codex review on #1002: Cancel while the voice model loads must settle the install, or every later press is ignored.
+it("cancelling while the on-device model loads settles the install so it can be tried again", async () => {
+  const { cancelLocalSpeech, createLocalSpeechAdapter } = await import("./local-speech");
+  const track = { stop: vi.fn() };
+  class SilentWorker { onmessage: unknown; onerror: unknown; onmessageerror: unknown; postMessage() {} terminate = vi.fn(); }
+  class Context { sampleRate = 16000; resume() { return Promise.resolve(); } close() { return Promise.resolve(); } }
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track] }) } });
+  vi.stubGlobal("window", { AudioContext: Context });
+  vi.stubGlobal("AudioContext", Context);
+  vi.stubGlobal("Worker", SilentWorker);
+  try {
+    const adapter = createLocalSpeechAdapter(() => {})!;
+    const install = adapter.install();
+    await new Promise(resolve => setTimeout(resolve, 0)); // the microphone is granted and the model is loading
+    cancelLocalSpeech(adapter);
+    await expect(install).rejects.toThrow("Local speech cancelled");
+    expect(track.stop).toHaveBeenCalled();
+  } finally { vi.unstubAllGlobals(); }
+});
