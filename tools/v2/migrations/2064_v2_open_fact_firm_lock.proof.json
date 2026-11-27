@@ -1,0 +1,12 @@
+{
+  "packet": "V2-E1 (open facts) firm lock, after Q35 / V2-FL-1",
+  "migration": "2064_v2_open_fact_firm_lock.sql",
+  "database": "jobguard_v2_local",
+  "tables": [
+    "app.v2_open_fact",
+    "app.v2_open_fact_change"
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime: an open fact or change row is visible and writable only when its job is visible to the signed-in firm",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs: FL guard cases and tools/v2/firm-lock/FL-E1.checks.mjs"
+}
