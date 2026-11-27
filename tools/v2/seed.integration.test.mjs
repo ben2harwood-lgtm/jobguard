@@ -1903,6 +1903,16 @@ test("D5B-B with C3C: a brief shows the assigned crew record's name and goes out
     "Alex Corrected");
 });
 
+// Rule 29 for D5B-B's crew-briefs GET. It reads the plan (and opens it on first read), so it runs here, after the
+// plan tests, not in SX's early fixed list; joining sxRoutes puts it in the final signed-out case (c) too.
+test("D5B-B rule 29: the crew-briefs GET has a working positive control, then refuses cases a, b and d", async t => {
+  const route = { path: `/api/v2-backend/jobs/${jobId}/crew-briefs`, tenantId: DEMO_TENANT_ID,
+    expect: body => { assert.ok(Array.isArray(body.trades) && body.trades.length); assert.ok(Array.isArray(body.briefs)); } };
+  const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
+  for (const result of observed) t.diagnostic(`SX web ${route.path} ${result.case}: ${result.status} ${result.code}`);
+  sxRoutes.push(route);
+});
+
 test("C3C: a task can never be assigned to another firm's crew record, even past the app check", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
   const outsider = await signIn("second-builder");
