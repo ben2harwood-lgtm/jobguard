@@ -97,11 +97,13 @@ export class HandoverReleaseRepository {
         WHERE (tenant_id, job_id, version) = ($1, $2, $3)`, [context.tenantId, jobId, command.handoverVersion])).rows[0];
       if (!saved) throw new HandoverReleaseError("HANDOVER_RELEASE_NOT_FOUND");
       // The job's current customer contact, as E2 reads it.
-      const recipient = (await client.query<{ email: string | null }>(`SELECT cr.payload->>'email' AS email
+      const party = (await client.query<{ email: string | null; bindingId: string; revisionId: string }>(`SELECT
+        cr.payload->>'email' AS email, b.id AS "bindingId", b.customer_revision_id AS "revisionId"
         FROM app.job_party_current x JOIN app.job_party_binding b ON (b.tenant_id, b.id) = (x.tenant_id, x.binding_id)
         JOIN app.customer_revision cr ON (cr.tenant_id, cr.id) = (b.tenant_id, b.customer_revision_id)
-        WHERE (x.tenant_id, x.job_id) = ($1, $2)`, [context.tenantId, jobId])).rows[0]?.email?.trim();
-      if (!recipient) throw new HandoverReleaseError("HANDOVER_NO_RECIPIENT");
+        WHERE (x.tenant_id, x.job_id) = ($1, $2)`, [context.tenantId, jobId])).rows[0];
+      const recipient = party?.email?.trim();
+      if (!party || !recipient) throw new HandoverReleaseError("HANDOVER_NO_RECIPIENT");
       assertV2Recipient(recipient);
       const firmName = (await readFirmProfile(db))?.tradingName ?? "Your builder";
       const token = randomBytes(32).toString("base64url");
@@ -109,10 +111,10 @@ export class HandoverReleaseRepository {
       const releasedAt = new Date(this.clock());
       const expiresAt = new Date(releasedAt.getTime() + command.expiresInDays * 86_400_000);
       try {
-        await client.query(`INSERT INTO app.v2_handover_release (tenant_id, job_id, id, version, content_hash, recipient_email, firm_name,
-          token_hash, request_hash, command_id, actor_membership_id, released_at, expires_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [context.tenantId, jobId, releaseId, command.handoverVersion, saved.contentHash, recipient, firmName,
+        await client.query(`INSERT INTO app.v2_handover_release (tenant_id, job_id, id, version, content_hash, recipient_email, party_binding_id,
+          customer_revision_id, firm_name, token_hash, request_hash, command_id, actor_membership_id, released_at, expires_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [context.tenantId, jobId, releaseId, command.handoverVersion, saved.contentHash, recipient, party.bindingId, party.revisionId, firmName,
           handoverLinkTokenHash(token), requestHash, command.commandId, actor, releasedAt, expiresAt]);
       } catch (error) {
         if (/V2_HANDOVER_SITE_NOT_COMPLETE/u.test((error as Error).message)) throw new HandoverReleaseError("HANDOVER_SITE_NOT_COMPLETE");
