@@ -78,3 +78,8 @@
 - On the practice job, the builder makes a link for the tiler, the tiler opens it on a phone with no sign-in and sees only their own tasks with no prices, presses Done, Blocked or Changed, and the builder sees each one on the Brief progress screen, and one Confirm turns it into the F1 record with the right F2 status.
 - An expired, cancelled or replaced link, or a changed plan, records nothing.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. Filter tasks on F1's `ownerRef` (added by 747751f32), not on `owner`. At 11b9abbb7, `owner` is the free-text assignee (v2-crew-brief-repository.ts line 288). Otherwise, show the whole trade's tasks and say so in the PR. Never match on a display name.
+2. Leave the job site line off the link page. `CrewBriefContent` has no site field, and a customer's home address must not sit on a forwardable 30-day link. If it's ever added, name its source and add it to the confinement test.
+3. On refusal, `_scope_open` writes the failure row and then RETURNs NULL, as E2's 2029 does. It doesn't RAISE, because a RAISE rolls the failure back and the limit then never counts.

@@ -81,3 +81,8 @@
 ## Done when
 - On the practice job, changing the splashback from 2.4 to 3.2 m² drafts the price, the extra time and the materials together. Confirm makes one priced variation through the existing path. It stays out of agreed scope and the plan until approved. The F6 link shows that exact version and amount. After approval, one press puts the extra time on the existing tasks.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. **Baseline (wrong-amount risk).** Start from the accepted quantity **plus every approved existing-scope variation on that scope item, whatever its origin**, not only F3's own drafts. Example: 2.4 → 3.2 is approved, and the builder then enters 3.5. The draft must price 0.3, not 1.1. Refuse a new draft while another variation on that item is draft or priced.
+2. The open-transaction overload of `logBuilderExtra` keeps main's lock order: final-review gate, then receipt, then lifecycle check. Take no row lock before it.
+3. Revise lives in `VariationApplication` (variation.application.ts line 5), which reads outside the transaction. F3 rebuilds `previous`, calls `priceVariation` and `insertPricedVariation`, and rechecks the current revision under its lock. "Add the extra time" refuses a revision repriced through main's own screen, since it has no F3 row.

@@ -53,3 +53,5 @@ Roadmap rows E7 (DV1, "diary entries get a 'customer can see this' flag") and E8
 ## Done when
 - On the practice job, a diary note the builder marked appears in that week's Friday update draft. A note with an amount is refused with a reason. An unmarked note never appears. The sent message in the local catcher matches the reviewed draft.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS. Note: K3's amount rule misses bare numbers such as "costs 85". That's acceptable only because the builder reviews the draft before sending, so keep that line in the PR's known limits.

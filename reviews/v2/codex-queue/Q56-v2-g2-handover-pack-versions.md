@@ -74,3 +74,8 @@
 - On the practice job, the builder chooses what goes in, previews the customer's view, and saves version 1. A later change needs version 2, and version 1 stays unchanged.
 - No amount can be saved into a pack.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. **Photos.** Offer only site, completion, snag and variation photo `evidence_type`s. F6's query offers every verified image, which includes receipts and records (`synthetic_bank_receipt`, `writeoff_record`), and `noAmounts` can't read an amount inside an image.
+2. Saved content is composed on the server from the sources re-read under the lock, never from client or preview text.
+3. "Outstanding snags" uses the latest event and Q53 condition 2's `agreed` rule.

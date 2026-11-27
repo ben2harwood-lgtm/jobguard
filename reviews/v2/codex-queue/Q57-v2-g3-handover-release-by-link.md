@@ -83,3 +83,9 @@
 - A customer opens the released version by link, sees an outstanding snag and acknowledges receipt. Later they receive a corrected version. The builder sees both releases and the acknowledgement.
 - Release is refused before site completion and never depends on the financial lock.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. Show only "Newer version available", with no button to the newer link. With hash-only tokens a button can't exist, and it would hand v1's holder v2's link.
+2. Test 3c: a valid link opens whoever is signed in, because the token is the capability. The firm check is that firm A's builder routes can't list or release firm B's versions.
+3. The site-completion guard refuses a job with **no** `scope_progress` rows, where "all complete" is trivially true. It also covers the scope items of approved new-scope variations.
+4. There's no revocation yet, so note it in the PR as a known limit. Store the recipient's party binding and customer revision on the release, as E2's `_current` checks do (2029 lines 252 to 269), so that G4 (Q63) can refuse after a correction.

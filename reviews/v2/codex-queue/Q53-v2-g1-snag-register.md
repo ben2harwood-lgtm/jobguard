@@ -65,3 +65,8 @@
 - On the practice job, a snag has a crew owner and a due date. It is marked fixed by one person and checked by a different person, and the same person is refused. An open snag can be marked "agreed to leave open" with a note. After a reload the Snags screen shows all of it.
 - No main snag table or function changes.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 27 Nov (stands in for Astra under Ben's 13:27 UK rule): PASS WITH CONDITIONS
+1. Take the `snag:<id>` advisory lock **before** calling main's `snag_record_event` (main locks the snag FOR UPDATE inside it, 0782 line 255). The built branch already does this.
+2. Derive `agreed` in `read()` from the latest mark **and** the latest event. A checked snag is never "agreed outstanding", and a mark made before a later reopen doesn't carry over.
+3. Main's routine writes its own `snag.*` audit event, so `v2.snag.event_person` is a second event in the same transaction. Note this in "Rules met" against rule 7. A replay must append neither.
