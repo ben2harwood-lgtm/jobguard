@@ -1,6 +1,7 @@
 import type { LocalSpeechAdapter, LocalSpeechSession } from "./local-dictation";
 
 export const LOCAL_SPEECH_DOWNLOAD_MIB = "42.4";
+// The bundled model is Vosk's small en-US model. "en-GB" below is the page's contract language, not the model's accent.
 type Callbacks = Parameters<LocalSpeechAdapter["start"]>[0];
 
 // Constructed only by a user gesture. Neither native speech nor remote providers are used.
@@ -11,13 +12,15 @@ export function createLocalSpeechAdapter(progress:(percent:number)=>void):LocalS
   let callbacks:Callbacks|undefined, ready=false, cancelled=false, stopping=false, pending=0, sequence=0;
   let timer:ReturnType<typeof setTimeout>|undefined;
   const dispose = () => {
+    // Cancel settles a pending install, so the page is free to try again.
+    const reject=rejectLoad; rejectLoad=undefined; reject?.(new Error("Local speech cancelled"));
     cancelled=true; ready=false; clearTimeout(timer);
     if(processor){processor.onaudioprocess=null;processor.disconnect()}
     source?.disconnect(); stream?.getTracks().forEach(track=>track.stop());
     void context?.close().catch(()=>{});worker?.terminate();worker=undefined;
   };
   let rejectLoad:((reason:Error)=>void)|undefined;
-  const fail = () => { const cb=callbacks;dispose();rejectLoad?.(new Error("Local speech unavailable"));cb?.error("local-unavailable"); };
+  const fail = () => { const cb=callbacks, reject=rejectLoad;rejectLoad=undefined;dispose();reject?.(Object.assign(new Error("Local speech unavailable"),{name:"VoiceModelError"}));cb?.error("local-unavailable"); };
   const finish = () => {const cb=callbacks;dispose();cb?.end()};
   const session:LocalSpeechSession={
     stop(){if(cancelled||stopping)return;stopping=true;if(processor)processor.onaudioprocess=null;stream?.getTracks().forEach(track=>track.stop());
@@ -62,7 +65,7 @@ export function createLocalSpeechAdapter(progress:(percent:number)=>void):LocalS
           worker.postMessage({action:"boot"});
         });
         return true;
-      } catch {dispose();return false}
+      } catch (error) {dispose();throw error} // getUserMedia's DOMException name tells a refusal from a missing microphone
     },
     start(cb){
       if(!ready||!worker||!context||!stream)throw Error("Local speech not ready");

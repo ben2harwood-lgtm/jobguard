@@ -19,43 +19,76 @@ export function browserLocalSpeechAdapter(_discoverNative=true):LocalSpeechAdapt
   return typeof window === "undefined" ? null : window.__JOBGUARD_SPEECH_ADAPTER__ ?? null;
 }
 
-export function LocalDictation({onUse,applyDisabled=false}:{onUse:(text:string,raw:string)=>void;applyDisabled?:boolean}){
-  const[adapter,setAdapter]=useState<LocalSpeechAdapter|null>(null),[availability,setAvailability]=useState<LocalAvailability|"checking">("installed"),[listening,setListening]=useState(false),[interim,setInterim]=useState(""),[finalText,setFinalText]=useState(""),[message,setMessage]=useState("");
+export type DictationFailure = "denied" | "no_microphone" | "no_speech" | "unsupported" | "model_failed" | "failed";
+/** A refused or missing microphone, from the DOMException name; anything else stopped the microphone. */
+export function speechFailure(error: unknown): DictationFailure {
+  const name = (error as { name?: unknown } | null)?.name;
+  if (name === "NotAllowedError" || name === "SecurityError") return "denied";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "no_microphone";
+  if (name === "VoiceModelError") return "model_failed";
+  return "failed";
+}
+/** Recognition error codes reported during listening. */
+export function listeningFailure(code: string): DictationFailure {
+  if (code === "not-allowed" || code === "service-not-allowed") return "denied";
+  if (code === "audio-capture") return "no_microphone";
+  return code === "no-speech" ? "no_speech" : "failed";
+}
+export function dictationMessage(code: DictationFailure, startLabel = "Talk through a quote"): string {
+  switch (code) {
+    case "denied": return `JobGuard can't use your microphone. To allow it, open this site's settings from the address bar, allow Microphone, then press ${startLabel} again. You can type the job below instead.`;
+    case "no_microphone": return "No microphone found. You can type the job below instead.";
+    case "no_speech": return `We didn't hear anything. Press ${startLabel} to try again, or type below.`;
+    case "unsupported": return "Voice doesn't work in this browser. Type the job below. It works the same way.";
+    case "model_failed": return `The voice model didn't load. Check your connection and press ${startLabel} again, or type below.`;
+    case "failed": return "The microphone stopped. Your words so far are kept. You can try again or type.";
+  }
+}
+
+export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk through a quote",designed=false}:{onUse:(text:string,raw:string)=>void;applyDisabled?:boolean;startLabel?:string;designed?:boolean}){
+  const[adapter,setAdapter]=useState<LocalSpeechAdapter|null>(null),[availability,setAvailability]=useState<LocalAvailability|"checking">("installed"),[listening,setListening]=useState(false),[loading,setLoading]=useState(false),[interim,setInterim]=useState(""),[finalText,setFinalText]=useState(""),[message,setMessage]=useState("");
   const session=useRef<LocalSpeechSession|null>(null), seen=useRef(new Set<string>()),raw=useRef<string[]>([]);
-  const active=useRef(true), engine=useRef<LocalSpeechAdapter|null>(null), busy=useRef(false);
+  const active=useRef(true), engine=useRef<LocalSpeechAdapter|null>(null), busy=useRef(false), stopped=useRef(false);
   useEffect(()=>{active.current=true;
     // Only test injection is inspected on mount. No real capability probe, permission, worker or model load.
     const injected=browserLocalSpeechAdapter();
     if(injected){setAdapter(injected);void injected.available().then(value=>{if(active.current)setAvailability(value)}).catch(()=>{if(active.current)setAvailability("unavailable")})}
     return()=>{active.current=false;session.current?.cancel();cancelLocalSpeech(engine.current);session.current=null};
   },[]);
+  const failed=(code:DictationFailure)=>setMessage(dictationMessage(code,startLabel));
+  // One press: ask for the microphone, load the on-device model if needed, then listen.
   async function tap(){
-    if(busy.current||applyDisabled)return;
-    if(adapter){start(adapter);return}
-    busy.current=true;setMessage("");
-    const value=createLocalSpeechAdapter(percent=>{if(active.current)setMessage(`Loading on-device voice: ${percent}%`)});
-    if(!value){setAvailability("unavailable");busy.current=false;return}
-    engine.current=value;setAvailability("downloading");setMessage("Allow the microphone to load on-device voice…");
-    const installed=await value.install();busy.current=false;
+    if(busy.current||applyDisabled||listening)return;
+    setMessage("");
+    if(adapter&&availability==="installed"){start(adapter);return}
+    const value=adapter??createLocalSpeechAdapter(percent=>{if(active.current)setMessage(`Loading on-device voice: ${percent}%`)});
+    if(!value){setAvailability("unavailable");return}
+    if(!adapter)engine.current=value;
+    busy.current=true;stopped.current=false;setLoading(true);
+    let failure:DictationFailure|null=null;
+    try{if(!await value.install())failure="failed"}catch(error){failure=speechFailure(error)}
+    busy.current=false;
     if(!active.current){cancelLocalSpeech(value);return}
-    if(!installed){setAvailability("unavailable");setMessage("Microphone unavailable. You can type instead.");return}
-    setAvailability("installed");start(value);
+    setLoading(false);
+    if(stopped.current){stopped.current=false;setMessage("");return}
+    if(failure){failed(failure);return}
+    if(adapter)setAvailability("installed");
+    start(value);
   }
-  function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");setMessage(code==="no-speech"?"Microphone unavailable. You can type instead.":"Microphone unavailable. You can type instead.")},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);setMessage("Microphone unavailable. You can type instead.")}}
+  function stopLoading(){stopped.current=true;cancelLocalSpeech(engine.current);setLoading(false);setMessage("")}
+  function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");failed(listeningFailure(code))},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);failed("failed")}}
   function stop(){session.current?.stop();setInterim("")}
   function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("");setFinalText("");raw.current=[]}
-  async function install(){if(!adapter||applyDisabled)return;setAvailability("downloading");setMessage("Installing the on-device speech model… Progress is not provided by this browser.");try{const installed=await adapter.install(),next=installed?await adapter.available():"unavailable";if(next!=="installed"){setAvailability("unavailable");setMessage("");return}setAvailability(next);setMessage("On-device speech model installed. Choose Talk through the example when you are ready.")}catch{setAvailability("unavailable");setMessage("")}}
-  const unavailable=availability==="unavailable"||availability==="checking";
-  return <section className="dictation" aria-label="On-device dictation">
-    <h2>Talk through the example</h2><p>Speak fictional work only. Audio never leaves this device and is never saved. Voice downloads {LOCAL_SPEECH_DOWNLOAD_MIB} MiB from JobGuard on first use (browser caching may require a repeat download). Review and edit the words before using them.</p>
-    {availability==="unavailable"&&<p>On-device voice is unavailable in this browser. Type or use the example.</p>}
-    {availability==="downloadable"&&<button type="button" disabled={applyDisabled} onClick={()=>void install()}>Install on-device voice</button>}
-    {availability==="downloading"&&<p role="status">Preparing on-device voice…</p>}
-    <button type="button" disabled={applyDisabled||unavailable||availability!=="installed"||listening} onClick={()=>void tap()}>Talk through the example</button>
+  const buttonClass=designed?"btn":undefined;
+  return <section className={designed?"dictation card card-body form":"dictation"} aria-label="On-device dictation">
+    <h2>Say the job out loud</h2>
+    {availability==="unavailable"?<p>{dictationMessage("unsupported",startLabel)}</p>:<p>Uses your microphone on this phone or computer. The voice model ({LOCAL_SPEECH_DOWNLOAD_MIB} MiB) downloads the first time you press it. Nothing you say leaves this device.</p>}
+    <button type="button" className={buttonClass} disabled={applyDisabled||availability==="unavailable"||availability==="checking"||listening||loading} onClick={()=>void tap()}>{startLabel}</button>
+    {loading&&<><p role="status">Getting the microphone ready…</p><button type="button" className={buttonClass} onClick={stopLoading}>Cancel</button></>}
     {/* A pending draft must never prevent stopping an already active microphone. */}
-    {listening&&<><p>Listening on this device</p><button type="button" onClick={stop}>Stop listening</button><button type="button" onClick={cancel}>Cancel dictation</button></>}
+    {listening&&<><p>Listening on this device</p><p className="helper">Press Stop listening when you've finished. You check the words before they're used.</p><button type="button" className={buttonClass} onClick={stop}>Stop listening</button><button type="button" className={buttonClass} onClick={cancel}>Cancel dictation</button></>}
     {interim&&<p className="dictation-interim" data-testid="interim-transcript"><span>Provisional: </span>{interim}</p>}
-    {finalText&&<><label htmlFor="dictation-final">Words to review</label><textarea id="dictation-final" disabled={applyDisabled} value={finalText} onChange={e=>{if(!applyDisabled)setFinalText(e.target.value)}}/><button type="button" disabled={applyDisabled} onClick={()=>{if(applyDisabled)return;session.current?.cancel();cancelLocalSpeech(engine.current);setListening(false);onUse(finalText,raw.current.join(" "))}}>Use these words</button></>}
-    {message&&<p>{message}</p>}
+    {finalText&&<><label htmlFor="dictation-final">Words to review</label><textarea id="dictation-final" disabled={applyDisabled} value={finalText} onChange={e=>{if(!applyDisabled)setFinalText(e.target.value)}}/><button type="button" className={buttonClass} disabled={applyDisabled} onClick={()=>{if(applyDisabled)return;session.current?.cancel();cancelLocalSpeech(engine.current);setListening(false);onUse(finalText,raw.current.join(" "))}}>Use these words</button></>}
+    {message&&<p role="status">{message}</p>}
   </section>;
 }

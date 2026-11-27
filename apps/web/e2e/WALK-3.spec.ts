@@ -164,7 +164,7 @@ test("WALK-3 on-device words reach the real capture contract without uploading a
   await expect(tour).toContainText("Step 1 of 9");
   await expandPhoneControls(page);
   await tour.getByRole("button", { name: "I'll do it", exact: true }).click();
-  await page.getByRole("button", { name: "Talk through the example", exact: true }).click();
+  await page.getByRole("button", { name: "Talk through a quote", exact: true }).click();
   await page.getByRole("button", { name: "Use these words", exact: true }).click();
   const request = page.waitForRequest(r => r.method() === "POST" && r.url().endsWith("/api/jobs/capture"));
   await page.getByRole("button", { name: "Make my draft", exact: true }).click();

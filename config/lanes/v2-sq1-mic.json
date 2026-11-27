@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq1-mic": {
+      "branches": [
+        "claude/project-thread-trp08u-sqmic"
+      ],
+      "note": "T2 Q59 V2-SQ1: one press of Talk through a quote asks for the microphone, loads the on-device model and listens; typing always there; each mic failure has its own message, a refused one says how to allow it. Base claude/project-thread-trp08u-sq1 (spoken-quote parser #1001) at d67b3a487. Lane file named v2-sq1-mic because v2-sq1 is the parser PR's lane. No migration, route or table. #890 DUI-1a's designed prop ported for WalkIt and LocalDictation only, with its capture CSS lines. Mounts: apps/web/app/site/extra/site-extra.tsx one startLabel prop (owned by F6 #923, keeps its label); apps/web/app/(designed)/jobs-screens.tsx NewJob mounts WalkIt designed (as #890); e2e VOICE-1, ENT-3, WALK-3, DEMO-VOICE-PHONE and capture specs take the new button name and messages; walk-it-retry.test.tsx new cases.",
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/site/extra/site-extra.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/local-speech.ts",
+        "apps/web/app/ui/walk-it-retry.test.tsx",
+        "apps/web/e2e/DEMO-VOICE-PHONE.spec.ts",
+        "apps/web/e2e/ENT-3.spec.ts",
+        "apps/web/e2e/VOICE-1.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/capture.spec.ts"
+      ]
+    }
+  }
+}
