@@ -2818,7 +2818,7 @@ test("V2-E7: forced reminder policies hide every row from the second firm (rule 
   }
 });
 
-test("V2-E7: the reminders route refuses no session, an invalid session and the second firm (rule 29: pending V2-SX)", async () => {
+test("V2-E7: the reminders route refuses no session, an invalid session and the second firm (E7's own check; rule 29's SX refusals are in builderGetRoutes)", async () => {
   const path = `/api/jobs/${jobId}/fact-reminders`;
   // Positive control first: the builder reads the rows.
   const { cookies } = await signIn("builder");

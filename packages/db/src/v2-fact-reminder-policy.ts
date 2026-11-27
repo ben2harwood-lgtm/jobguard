@@ -51,6 +51,7 @@ export function reminderPlan(input: ReminderInput, now: number): ReminderPlan {
   const none: ReminderPlan = { remind: false, unconfirmed: null };
   if (input.replied || input.cancelled || !input.current || !input.factOpen) return none;
   const flagAt = londonEight(daysBefore(input.neededBy, 1));
+  // Proposed default from the Q46 packet, not from rev 1.3: for Ben to confirm (AGENTS §1).
   const remindAt = Math.max(londonEight(daysBefore(input.neededBy, 2)), input.requestedAt + 24 * HOUR);
   const expired = input.expiresAt <= now;
   return {

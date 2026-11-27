@@ -77,11 +77,14 @@ export class FactReminderRepository {
         "SELECT app.v2_work_plan_editor($1) AS id, current_database() = 'jobguard_v2_local' AS v2", [sha256(sessionId)]);
       if (!actor?.v2) throw new FactReminderError("REMINDER_NOT_V2");
       if (!actor.id) throw new FactReminderError("REMINDER_EDITOR_REQUIRED");
-      // E2's key space (hashtextextended(tenant:key, 2013)). Order: this job's runs, then
-      // each fact ascending, then each request ascending. E2's apply takes fact then
-      // request; request, paste and cancel take one of them; the link reply takes the request.
+      // E2's key space (hashtextextended(tenant:key, 2013)). Order: this job's runs, then the
+      // job's recipients, then each fact ascending, then each request ascending. E2's recipient
+      // correction takes only the recipient lock; apply takes fact then request; request, paste
+      // and cancel take one of them; the link reply takes the request.
       const lock = (key: string) => $client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${tenantId}:${key}`]);
       await lock(`reminders:${jobId}`);
+      // A recipient correction can't commit between the re-read below and this run's commit.
+      await lock(`recipient:${jobId}`);
       const { rows: [prior] } = await $client.query<{ requestDigest: string; actor: string; result: FactReminderRunResult }>(
         `SELECT request_digest AS "requestDigest", actor_membership_id AS actor, result FROM app.v2_fact_reminder_run
         WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [tenantId, jobId, commandId]);
