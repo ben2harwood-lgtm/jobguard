@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-apt-fix-main": {
+      "branches": [
+        "claude/ci-apt-fix-main"
+      ],
+      "note": "CI-only: drop the hosted runner's Microsoft apt source before playwright install --with-deps, because packages.microsoft.com returns 403 and fails apt update (27 Nov 2026). Workflow change, RED.",
+      "allow": [
+        ".github/workflows/ci.yml"
+      ]
+    }
+  }
+}
