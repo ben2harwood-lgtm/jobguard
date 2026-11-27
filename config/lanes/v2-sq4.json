@@ -5,22 +5,8 @@
       "branches": [
         "claude/project-thread-trp08u-sq4"
       ],
-      "note": "T1 Q62 V2-SQ4: the checked demo's journeys (#918 @ 32decb2c1, read only) against V2's routes on v2/main @ 652bcce38. New files only: the report, a unit check that the report and specs agree, and one V2-DEMO spec per journey that runs wholly on V2. The V2-DEMO specs and three helpers are copied unchanged from 32decb2c1 for journeys whose spec is not on v2/main. No product, demo spec or existing helper changes. No route or table.",
+      "note": "T1 Q62 V2-SQ4: the checked demo's journeys (#918 @ 32decb2c1, read only) against V2's routes on v2/main @ 652bcce38. New files only: the report and a unit check that the report and V2-DEMO specs agree. No journey is wholly On V2, so there is no V2-DEMO spec; the probe copies of the 11 specs not on v2/main ran once on CI and were removed. No product, demo spec or helper changes. No route or table.",
       "allow": [
-        "apps/web/e2e/V2-DEMO-DUI-1a.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-1b.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-2.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-3.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-4-company-money.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-4-found-extra-to-paid.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-4-own-job-to-paid.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-5-northside.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-6-northside-presenter.spec.ts",
-        "apps/web/e2e/V2-DEMO-DUI-6-northside.spec.ts",
-        "apps/web/e2e/V2-DEMO-TOMMY-DEMO.spec.ts",
-        "apps/web/e2e/helpers/capture-journey-designed.ts",
-        "apps/web/e2e/helpers/dui-4.ts",
-        "apps/web/e2e/helpers/final-account-lock-journey-designed.ts",
         "apps/web/test/demo-journeys-report.test.ts",
         "reviews/v2/demo-journeys-vs-v2.md"
       ]
