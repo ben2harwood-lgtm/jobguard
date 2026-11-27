@@ -25,7 +25,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "eval:contract": "node dist/evaluation-cli.js",
     "eval:live": "node dist/live-evaluation-cli.js",
-    "eval:spoken-sort-live": "node dist/spoken-sort-live-eval.js"
+    "eval:spoken-sort-live": "node ../../tools/v2/spoken-sort-live-eval.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",

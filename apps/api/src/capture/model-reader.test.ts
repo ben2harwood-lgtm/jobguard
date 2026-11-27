@@ -126,12 +126,14 @@ describe("V2-SQ-G architecture: one live route", () => {
   } };
   for (const top of ["apps", "packages", "tools"]) walk(join(root, top));
   const matching = (pattern: RegExp) => files.filter(file => pattern.test(readFileSync(file, "utf8"))).map(file => relative(root, file)).sort();
-  it("exactly one file imports the live adapter, and only it and the eval script build one", () => {
+  it("exactly one app file imports the live adapter; the hand-run scored eval is the only other", () => {
     expect(matching(/@jobguard\/ai\/live-adapter/u)).toEqual(["apps/api/src/capture/model-reader.ts"]);
+    expect(matching(/anthropic-live-sort(?:\.js)?["']/u)).toEqual(["tools/v2/spoken-sort-live-eval.mjs"]);
     expect(matching(/from\s+["']@anthropic-ai\/sdk["']/u)).toEqual(["packages/ai/src/anthropic-live-sort.ts"]);
   });
   it("exactly one call site calls generateLive()", () => {
     const calls = files.flatMap(file => (readFileSync(file, "utf8").match(/\.generateLive\(/gu) ?? []).map(() => relative(root, file)));
-    expect(calls).toEqual(["apps/api/src/capture/model-reader.ts"]);
+    expect(calls.filter(file => !file.startsWith("tools/v2/spoken-sort-live-eval"))).toEqual(["apps/api/src/capture/model-reader.ts"]);
+    expect(calls.filter(file => file.startsWith("tools/"))).toEqual(["tools/v2/spoken-sort-live-eval.mjs"]);
   });
 });

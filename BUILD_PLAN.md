@@ -3723,6 +3723,7 @@ These tasks are not dispatched automatically. Their deterministic implementation
 | Task | Waits for |
 |---|---|
 | M0-12a Claude route, M0-12b Deepgram | D04 approval of the provider routes |
+| V2-SQ-G practice model reader (Claude Sonnet 5.5 sorts practice words into rooms and trades; numbers stay Reader A's) | Built dark. Live only with Ben's key (spend limit set on the key), his merge of the RED PR, a clean scored run, then `JOBGUARD_SPOKEN_JOB_LIVE=1`. Practice tenant only; not D04 for real data (`docs/decisions/v2-sq-g-practice-model-reader.md`) |
 | M0-13a–d deployment, restore, privacy operations, gate evidence | Ben (deployment is founder-reserved); M0-6L |
 | M1-15T builder trial, VOICE-1 device rehearsal | Real people and devices; G1 for real data |
 | M1-15S shadow-pilot measurement | Accepted SV-6, CH-8, MON-1; G1; approved D12/D13 pilot scope |
