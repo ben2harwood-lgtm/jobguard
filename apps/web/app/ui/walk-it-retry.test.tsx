@@ -1,6 +1,7 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalkIt } from "./jobguard-app";
+import { cancelLocalSpeech, createLocalSpeechAdapter } from "./local-speech";
 import { dictationMessage, LocalDictation, speechFailure, type LocalAvailability, type LocalSpeechAdapter } from "./local-dictation";
 
 // Exercise the real component's handlers using the established review-proposal harness.
@@ -308,7 +309,6 @@ it("keeps the extra-work screen's own button label and uses it in its messages",
 
 // Codex review on #1002: Cancel while the voice model loads must settle the install, or every later press is ignored.
 it("cancelling while the on-device model loads settles the install so it can be tried again", async () => {
-  const { cancelLocalSpeech, createLocalSpeechAdapter } = await import("./local-speech");
   const track = { stop: vi.fn() };
   class SilentWorker { onmessage: unknown; onerror: unknown; onmessageerror: unknown; postMessage() {} terminate = vi.fn(); }
   class Context { sampleRate = 16000; resume() { return Promise.resolve(); } close() { return Promise.resolve(); } }
