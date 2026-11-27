@@ -1924,7 +1924,9 @@ test("G3 link refusals: a made-up token, an expired link and an altered link wit
   }
   assert.deepEqual(bodies, Array(3).fill({ code: "HANDOVER_LINK_REFUSED" }));
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 0);
-  // The second firm's builder cannot read or release the first firm's handover.
+  // The token is the capability: a valid link opens whoever is signed in, even the second firm's builder.
+  assert.match(await (await request(`/handover/${live.result.token}`, { cookies: second.cookies })).text(), /Refit the hall door stop/u);
+  // The firm check is on the builder routes: the second firm's builder cannot list or release the first firm's versions.
   await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
   await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g3.release(1) }), 404);
 });

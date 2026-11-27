@@ -22,6 +22,9 @@ BEGIN
     version integer NOT NULL,
     content_hash char(64) NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
     recipient_email varchar(320) NOT NULL CHECK (btrim(recipient_email) <> ''),
+    -- The customer binding and revision the address came from, so a later correction is visible.
+    party_binding_id uuid NOT NULL,
+    customer_revision_id uuid NOT NULL,
     firm_name varchar(120) NOT NULL CHECK (btrim(firm_name) <> ''),
     token_hash char(64) NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
     request_hash char(64) NOT NULL CHECK (request_hash ~ '^[a-f0-9]{64}$'),
@@ -33,7 +36,9 @@ BEGIN
     UNIQUE (tenant_id, command_id),
     CHECK (expires_at > released_at AND expires_at <= released_at + interval '90 days'),
     FOREIGN KEY (tenant_id, job_id, version) REFERENCES app.v2_handover_version (tenant_id, job_id, version),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id),
+    FOREIGN KEY (tenant_id, job_id, party_binding_id) REFERENCES app.job_party_binding (tenant_id, job_id, id),
+    FOREIGN KEY (tenant_id, customer_revision_id) REFERENCES app.customer_revision (tenant_id, id)
   );
 
   -- Receipt only: one row per release, a time and nothing else. No watchdog trigger
