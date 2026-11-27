@@ -45,8 +45,30 @@ BEGIN
     FOREIGN KEY (tenant_id, job_id, revision_id) REFERENCES app.v2_change_draft (tenant_id, job_id, revision_id)
   );
 
+  -- The line as currently agreed: the quote quantity plus every approved existing-scope variation on the
+  -- line's scope item, whatever its origin, in the line's unit. Each variation counts by its latest approval,
+  -- so a later rejected reprice does not erase an agreement. An F3 draft gives its own direction; any other
+  -- revision is an omission when its signed price is negative. One definition, used by the guard and the app.
+  CREATE OR REPLACE FUNCTION app.v2_change_draft_agreed(p_tenant uuid, p_job uuid, p_line uuid, p_except uuid)
+  RETURNS numeric LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $agreed$
+    SELECT l.quantity_decimal::numeric + coalesce((SELECT sum(CASE WHEN coalesce(d.direction,
+        CASE WHEN r.signed_delta_pence < 0 THEN 'omission' ELSE 'addition' END) = 'omission' THEN -1 ELSE 1 END
+        * r.quantity_decimal::numeric)
+      FROM app.variation_approval a
+      JOIN app.variation_revision r ON (r.tenant_id, r.job_id, r.id) = (a.tenant_id, a.job_id, a.revision_id)
+      JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (a.tenant_id, a.job_id, a.variation_id)
+      LEFT JOIN app.v2_change_draft d ON (d.tenant_id, d.job_id, d.revision_id) = (r.tenant_id, r.job_id, r.id)
+      WHERE (a.tenant_id, a.job_id) = (p_tenant, p_job) AND v.existing_scope_item_id = l.scope_item_id
+        AND r.unit = l.unit AND v.id IS DISTINCT FROM p_except
+        AND NOT EXISTS (SELECT FROM app.variation_approval n WHERE (n.tenant_id, n.job_id, n.variation_id) = (a.tenant_id, a.job_id, a.variation_id)
+          AND n.revision > a.revision)), 0)
+    FROM app.quote_line l WHERE (l.tenant_id, l.id) = (p_tenant, p_line) AND l.job_id = p_job AND l.quantity_decimal IS NOT NULL
+  $agreed$;
+  REVOKE ALL ON FUNCTION app.v2_change_draft_agreed(uuid, uuid, uuid, uuid) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION app.v2_change_draft_agreed(uuid, uuid, uuid, uuid) TO jobguard_runtime;
+
   -- The draft must describe its revision exactly: |new - accepted| in the line's unit, where accepted is the
-  -- line as currently agreed (the latest approved change on the line, else the quote quantity),
+  -- line as currently agreed (app.v2_change_draft_agreed, without the variation being drafted),
   -- on the line's own scope item, for a line of the same job, in the stated direction.
   CREATE OR REPLACE FUNCTION app.v2_change_draft_guard() RETURNS trigger
   LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $guard$
@@ -58,11 +80,7 @@ BEGIN
       WHERE (r.tenant_id, r.job_id, r.id) = (NEW.tenant_id, NEW.job_id, NEW.revision_id)
         AND v.id = NEW.variation_id AND l.job_id = NEW.job_id
         AND v.existing_scope_item_id = l.scope_item_id AND v.scope_item_id = l.scope_item_id
-        AND l.quantity_decimal IS NOT NULL AND NEW.accepted_quantity::numeric = coalesce((SELECT d.new_quantity::numeric
-          FROM app.v2_change_draft d JOIN app.variation av ON (av.tenant_id, av.job_id, av.id) = (d.tenant_id, d.job_id, d.variation_id)
-          WHERE (d.tenant_id, d.job_id, d.quote_line_id) = (NEW.tenant_id, NEW.job_id, NEW.quote_line_id)
-            AND av.state = 'approved' AND d.variation_id <> NEW.variation_id
-          ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1), l.quantity_decimal::numeric)
+        AND NEW.accepted_quantity::numeric = app.v2_change_draft_agreed(NEW.tenant_id, NEW.job_id, NEW.quote_line_id, NEW.variation_id)
         AND r.unit = l.unit
         AND r.quantity_decimal::numeric = abs(NEW.new_quantity::numeric - NEW.accepted_quantity::numeric)
         AND (r.signed_delta_pence = 0 OR (r.signed_delta_pence > 0) = (NEW.direction = 'addition'))

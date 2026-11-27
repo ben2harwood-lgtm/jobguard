@@ -1440,6 +1440,27 @@ test("F3 a reprice through Change price keeps the quantity-change guards", async
     { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
 });
 
+test("F3 the agreed baseline counts every approved change on the item, whatever its origin", async () => {
+  const { jobId, drafts, tile, variations } = await f3.job();
+  const proposalId = randomUUID();
+  const proposed = await variations.command(jobId, { version: "variation-command.v1", action: "propose", proposalId,
+    scopeItemId: tile.scopeItemId, existingScopeItemId: tile.scopeItemId, lineageParentScopeItemId: null,
+    description: "F3 fictional extra splashback logged as an ordinary extra", captureText: "Half a square metre more",
+    price: { quantity: "0.5", unit: tile.unit, unitRatePence: tile.unitRatePence, direction: "addition" } });
+  const previewBody = { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.75" };
+  // While the ordinary extra waits for the customer, no quantity change is drafted on the item.
+  await assert.rejects(drafts.preview(jobId, previewBody), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  await variations.command(jobId, { version: "variation-command.v1", action: "approve", variationId: proposalId,
+    revisionId: proposed.variations.find(v => v.id === proposalId).currentRevisionId, approvalId: randomUUID(),
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  // 1 quoted + 0.5 approved = 1.5 agreed, so 1.75 prices 0.25 (£23.75), not 0.75.
+  const preview = await drafts.preview(jobId, previewBody);
+  assert.deepEqual([preview.line.quantity, preview.delta, preview.previewPence], ["1.5", "0.25", 2375]);
+  await assert.rejects(drafts.command(jobId, f3.confirm(tile, { newQuantity: "1.75" })), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  const saved = await drafts.command(jobId, f3.confirm(tile, { acceptedQuantity: "1.5", newQuantity: "1.75" }));
+  assert.deepEqual([saved.acceptedQuantity, saved.signedDeltaPence], ["1.5", 2375]);
+});
+
 test("F3 refusals write nothing: unpriced, no change, superseded or foreign line, non-owner, bad task; mismatch trigger; append only; firm B sees nothing", async () => {
   const { jobId, builder, drafts, tile } = await f3.job();
   const auth = await authenticatePracticeSession(runtime, builder.sessionId);

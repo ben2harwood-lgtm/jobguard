@@ -77,20 +77,18 @@ export class ChangeDraftRepository {
     return rows.map(row => ({ ...row, unitRatePence: row.unitRatePence === null ? null : Number(row.unitRatePence) }));
   }
 
-  /** The line as currently agreed: a change is drafted from the latest approved change's total, never the original
-   * quote quantity twice. A second change while one is still waiting for the customer is a version conflict.
-   * A variation counts by its state whatever its current revision is, so a reprice through "Change price" keeps these guards. */
+  /** The line as currently agreed: the quote quantity plus every approved existing-scope variation on its scope
+   * item, whatever its origin (app.v2_change_draft_agreed, shared with the 2031 guard). Any other variation on the
+   * item still waiting for the customer, from any path, is a version conflict. */
   private async agreedLine(client: PoolClient, tenantId: string, jobId: string, line: ChangeDraftLineRow, exceptVariationId: string | null) {
     const { rows: [row] } = await client.query<{ pending: boolean; agreed: string | null }>(`SELECT
-      EXISTS (SELECT FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
-        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3)
+      EXISTS (SELECT FROM app.variation v JOIN app.quote_line l ON (l.tenant_id, l.id) = ($1, $3)
+        WHERE (v.tenant_id, v.job_id) = ($1, $2) AND v.existing_scope_item_id = l.scope_item_id
           AND v.state IN ('draft', 'priced') AND v.id IS DISTINCT FROM $4::uuid) AS pending,
-      (SELECT d.new_quantity FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
-        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.state = 'approved'
-          AND v.id IS DISTINCT FROM $4::uuid ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1) AS agreed`,
+      trim_scale(app.v2_change_draft_agreed($1, $2, $3, $4::uuid))::text AS agreed`,
     [tenantId, jobId, line.quoteLineId, exceptVariationId]);
     if (row?.pending) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_VERSION_CONFLICT");
-    return row?.agreed ? { ...line, quantity: String(row.agreed) } : line;
+    return row?.agreed ? { ...line, quantity: row.agreed } : line;
   }
 
   /** The plan's tasks on one scope item, with any builder edits applied. */
