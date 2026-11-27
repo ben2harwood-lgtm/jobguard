@@ -1,0 +1,6 @@
+{
+  "migration": "2008_v2_walk_record.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

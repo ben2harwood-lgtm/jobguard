@@ -23,6 +23,8 @@ export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
 export * from "./v2-work-plan-repository.js";
+// V2 b1a walk session record
+export * from "./v2-walk-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";

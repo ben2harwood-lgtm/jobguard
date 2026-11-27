@@ -1,0 +1,38 @@
+import { describe, expect, it } from "vitest";
+import { currentRoom, leavesWalk, newEntry, nextCaptureOrder, restoreEntry, validMeasurement, type EntryView } from "./walk-state";
+
+const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
+  ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
+describe("B1B device capture order", () => {
+  it("starts at one and resumes after the largest saved slot, independent of clocks", () => {
+    const entries = [row(3, "Hall", "2000-01-01"), row(1, "Kitchen", "2099-01-01")];
+    expect(nextCaptureOrder([])).toBe(1);
+    expect(nextCaptureOrder(entries)).toBe(4);
+    expect(currentRoom(entries)?.room).toBe("Hall");
+    expect(entries[0]?.captureOrder).toBe(3);
+    const command = newEntry("session", entries, { kind: "note", text: "Check tiles" }, "command", "phone-clock");
+    expect(command).toEqual({ version: "v2-walk-entry-command.v1", sessionId: "session", commandId: "command",
+      captureOrder: 4, expectedVersion: 0, deviceCapturedAt: "phone-clock", entry: { kind: "note", text: "Check tiles" } });
+  });
+  it.each(["0", "-1", "01", "1e2", "1.1234567", "NaN", " 1", "1."])("refuses invalid quantity %s", value => {
+    expect(validMeasurement(value)).toBe(false);
+  });
+  it.each(["1", "14.5", "0.000001", "1.123456"])("keeps exact quantity %s", value => {
+    expect(validMeasurement(value)).toBe(true);
+  });
+});
+
+describe("Codex P2 repairs", () => {
+  it("restores a refused entry's content for resubmission", () => {
+    expect(restoreEntry({ kind: "room", room: "Hall" })).toEqual({ room: "Hall" });
+    expect(restoreEntry({ kind: "note", text: "Damp" })).toEqual({ note: "Damp" });
+    expect(restoreEntry({ kind: "measurement", quantity: "2.5", unit: "m" })).toEqual({ quantity: "2.5", unit: "m" });
+  });
+  it("treats links and section buttons as leaving the walk", () => {
+    const at = (match: string | null) => ({ closest: (selector: string) => (match && selector.includes(match) ? {} : null) });
+    expect(leavesWalk(at("a[href]"))).toBe(true);
+    expect(leavesWalk(at("nav button"))).toBe(true);
+    expect(leavesWalk(at(null))).toBe(false);
+    expect(leavesWalk(null)).toBe(false);
+  });
+});
