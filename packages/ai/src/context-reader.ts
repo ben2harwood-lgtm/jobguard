@@ -167,7 +167,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const pence = spokenNumbers.money(rate[1]!);
       if (pence !== null) { price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit"; }
     }
-    descriptionEnd = Math.min(m.index, rate?.index ?? m.index);
+    // "14 square metres of vinyl at 32 a metre": words after the measure still name the work.
+    const between = value.slice(m.index + m[0].length, rate?.index ?? value.length);
+    descriptionEnd = /\p{L}{3,}/u.test(between.replace(/^\s*(?:of|in|on)\b/iu, "x")) && /^\s*(?:of|in)\s/iu.test(between) ? (rate?.index ?? value.length) : Math.min(m.index, rate?.index ?? m.index);
   } else if (!inTotalClause) {
     const said = amounts(value);
     const bare = pricedBare.exec(value);
@@ -215,6 +217,8 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       if (!counted || notCounted.test(words[0]!) || count === null || count < 1 || /^(?:one)$/iu.test(match[1]!) && /^(?:of|more)$/iu.test(words[0]!)) continue;
       // A count sits directly before what it counts, in the same item. Unsure which thing it belongs to: open and ask.
       const before = description.slice(0, match.index);
+      // "fit wardrobes along one wall": a number after a preposition places the work; it does not count it.
+      if (/\b(?:along|on|in|into|across|over|under|around|round|from|by|with|at|onto|behind|between|of)\s+$/iu.test(before)) continue;
       if (/^\d+$/u.test(match[1]!) && count > 99 || /\d|\b(?:hundred|thousand|grand|pounds|quid)\b/iu.test(before)
         || /\b(?:and the|and get|needs? to|then)\s/iu.test(before)) {
         questions.push(`Check how many for “${label()}”: “${match[1]} ${counted}” may belong to another item.`);
@@ -287,6 +291,7 @@ const openNumbers = (line: JobUnderstanding["lines"][number]): JobUnderstanding[
   quantity: { value: null, provenance: { kind: "defaulted", note: "Corrected when said; never resolved" } },
   unit: line.quantity.value === null ? line.unit : { value: null, provenance: { kind: "defaulted", note: "Corrected when said; never resolved" } },
   unitPricePence: { value: null, provenance: { kind: "defaulted", note: "Corrected when said; never resolved" } }, priceBasis: "none" });
+const priceOnly = new RegExp(`^(?:call it|say|make it|that'?s|thats|it'?s|about|around|roughly)?\\s*(?:£?\\d[\\d,]*(?:\\.\\d{1,2})?(?:\\s*(?:pounds|quid|grand|k))?|(?:(?:${numberWord}|a)[\\s-]+(?:and\\s+)?)*(?:${numberWord}|hundred|thousand)\\s+(?:pounds|quid|grand))(?:\\s+(?:a|per)\\s+[\\p{L}]+|\\s+each)?[.\\s]*$`, "iu");
 type Timeline = { start: number; name: string }[];
 function splitWithin(chunk: Cell): Cell[] {
   // "…3200, and get the sparky to move two sockets": a new item the v1 splitter keeps with the last.
@@ -329,7 +334,9 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     const gap = before ? text.slice(before.start + before.value.length, chunk.start) : "";
     // "board and skim the ceiling": a lone verb joined by "and" stays one line; under-splitting beats inventing.
     const loneVerb = before && /^[\p{L}-]+$/u.test(before.value) && isVerb(before.value) && /^\s+and\s+$/iu.test(gap);
-    if (before && !before.inferred && !chunk.inferred && (/^\s*$/u.test(gap) && bareVerb.test(chunk.value) || loneVerb) && !roomOnly.test(before.value)) {
+    // "new front door supplied by the customer, we just fit it, 250": "fit it" is the same item.
+    const sameItem = before && /^\s*$/u.test(gap) && /(?:^|\s)(?:just|we|i|we'll|i'll|they|then we)$/iu.test(before.value) && /^[\p{L}-]+\s+(?:it|them|that|those)\b/iu.test(chunk.value);
+    if (before && !before.inferred && !chunk.inferred && (/^\s*$/u.test(gap) && bareVerb.test(chunk.value) || loneVerb || sameItem) && !roomOnly.test(before.value)) {
       chunks[chunks.length - 1] = { value: text.slice(before.start, chunk.start + chunk.value.length), start: before.start };
     } else chunks.push(chunk);
   }
@@ -355,6 +362,13 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   }
   for (let index = 0; index < chunks.length; index++) {
     let chunk = chunks[index]!;
+    // "Call it 800 pounds a room": a price said on its own is not work. Asked about, never placed.
+    if (!chunk.inferred && priceOnly.test(chunk.value.trim())) {
+      questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Check which work this price is for; it was not placed on a line.` });
+      continue;
+    }
+    // "And downstairs": a place word on its own, not work.
+    if (!chunk.inferred && /^(?:and\s+|then\s+)?(?:upstairs|downstairs|outside|inside)[\s,.]*$/iu.test(chunk.value)) continue;
     const only = chunk.inferred ? null : roomOnly.exec(chunk.value);
     if (only) {
       const name = roomName(only[1]!);

@@ -1,7 +1,7 @@
 {
   "version": "spoken-quote-understanding-cases.v1",
   "author": "planner, 27 Nov 2026",
-  "status": "unseen until its first run is recorded; seen after.",
+  "status": "seen: the first run (commit a5a440580) was unseen; the reader was then fixed against these.",
   "note": "Held-out set 2, written by the planner without seeing Reader A's code or word lists (/mnt/project-files/jobguard-v2/packets/v2-sq-held-out-2-transcripts.md), encoded as written. A list is the set of accepted answers; null in a number list accepts open. An optional line may be absent; if present it must meet its expectations. Hard floor: no wrong or invented number, no invented work. Room and trade are reported, not gated.",
   "cases": [
     { "id": "h2-1-knock-through", "unpunctuated": true,
