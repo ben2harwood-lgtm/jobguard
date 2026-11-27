@@ -533,3 +533,17 @@ it("V2-SQ-D: splitting the one-price row ends its undo, so undo cannot duplicate
   expect(all(p.render(), n => n.type === "button" && text(n) === "Undo one price for Kitchen")).toHaveLength(0);
   expect(all(p.render(), n => n.type === "article")).toHaveLength(5);
 });
+it("V2-SQ-D: undo after editing the one-price row's price shows the restored price, not the edit", () => {
+  const row = { ...line, id: "a", scopeItemId: "scope-a", description: "Strip the units", room: "Kitchen", unitPricePence: 1000, disposition: "accepted" };
+  const result = { ...fixture, proposal: { lines: [{ id: "a", unitPricePence: { value: 1000 }, room: "Kitchen", category: "Work", roomInferred: false }], questions: [] },
+    review: { ...fixture.review!, lines: [row] } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  const priced = () => all(p.render(), n => n.type === "input" && String(n.props["aria-label"] ?? "").startsWith("Price "));
+  for (const input of priced()) input.props.onChange({ target: { value: "777" } });
+  p.button(p.render(), "Undo one price for Kitchen").props.onClick();
+  expect(priced().map(input => input.props.value)).toEqual(["10.00"]);
+});
