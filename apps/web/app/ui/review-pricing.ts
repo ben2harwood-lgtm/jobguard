@@ -40,8 +40,11 @@ export function pounds(pence: number): string {
 
 /** The typed price box: blank is "no price", anything else must be a plain pounds amount. */
 export function priceFromText(text: string): { pence: number | null; error: string | null } {
-  const value = text.trim().replace(/^£/u, "").replaceAll(",", "");
-  if (!value) return { pence: null, error: null };
+  const typed = text.trim().replace(/^£/u, "");
+  if (!typed) return { pence: null, error: null };
+  // Commas only as thousands groups ("1,250.50"); "12,50" is refused, never read as £1,250.
+  if (typed.includes(",") && !/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/u.test(typed)) return { pence: null, error: "Use commas only between thousands, for example 1,250.50." };
+  const value = typed.replaceAll(",", "");
   try { return { pence: parsePoundsToPence(value), error: null }; }
   catch (error) { return { pence: null, error: (error as Error).message }; }
 }

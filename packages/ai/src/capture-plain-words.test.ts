@@ -222,6 +222,37 @@ describe("continuous spoken quotes", () => {
     expect(rows("clear the loft ready to fit the boards paint the walls").map(row => row[0])).toEqual(["clear the loft ready to fit the boards", "paint the walls"]);
     expect(rows("strip out the old kitchen two two pounds paint the walls").map(row => row[3])).toEqual([null, null]);
   });
+  // Codex review on #1001: each of these read a wrong figure with no question.
+  it.each(["paint the walls for one point five pounds fit the door", "paint the walls for one million two hundred pounds fit the door"])(
+    "leaves an amount open when only its end was read: %s", text => {
+      const result = citations(text);
+      expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
+      expect(result.questions.some(q => q.question.value.startsWith("Confirm price: paint the walls"))).toBe(true);
+    });
+  it("keeps a material after old or new with its verb", () => {
+    expect(rows("remove old paint £200 fit the door")).toEqual([["remove old paint", "1", "item", 20000], ["fit the door", "1", "item", null]]);
+  });
+  it.each(["fit twenty one doors paint the walls", "fit one hundred doors paint the walls"])("does not read part of a count: %s", text => {
+    expect(rows(text)[0]!.slice(1, 3)).toEqual(["1", "item"]);
+  });
+  it("reads per only for the counted thing", () => {
+    expect(rows("fit six doors at fifty pounds per door")).toEqual([["fit six doors", "6", "doors", 5000]]);
+    for (const text of ["fit six doors at fifty pounds per pair", "fit six doors at fifty pounds per day"]) {
+      const result = citations(text);
+      expect(result.lines[0]!.unitPricePence.value).toBeNull();
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+    }
+  });
+  it("reads a door like per door, and leaves a day open", () => {
+    expect(rows("fit six doors at fifty pounds a door")).toEqual([["fit six doors", "6", "doors", 5000]]);
+    const text = "fit six doors at fifty pounds a day", result = citations(text);
+    expect(result.lines[0]!.unitPricePence.value).toBeNull();
+    expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+  });
+  it("keeps a leading decorate, render or rehang clause as a line", () => {
+    expect(rows("decorate the bedroom for two hundred pounds fit the door for fifty pounds paint the ceiling for sixty pounds")).toEqual([
+      ["decorate the bedroom", "1", "item", 20000], ["fit the door", "1", "item", 5000], ["paint the ceiling", "1", "item", 6000]]);
+  });
 });
 it.each([["two hundred pounds", 200], ["sixty quid", 60], ["a thousand pounds", 1000], ["one thousand two hundred and fifty pounds", 1250],
   ["twenty five pounds", 25], ["two two pounds", null], ["hundred pounds", null], ["fifteen hundred pounds", 1500], ["two hundred three hundred pounds", null]])("reads spoken pounds: %s", (words, value) => {
