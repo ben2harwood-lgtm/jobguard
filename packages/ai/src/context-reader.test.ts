@@ -69,6 +69,28 @@ describe("V2-SQ-C Reader A", () => {
     expect(twoItems.lines.every(line => line.quantity.value === null)).toBe(true);
   });
 
+  it("leaves approximate, corrected or measured totals open, and never keeps part of a spoken number", () => {
+    const about = readSpokenJob("a", "In the kitchen paint the walls. The kitchen all in about 4500.");
+    expect(about.areaPrices).toEqual([]);
+    expect(about.questions.length).toBeGreaterThan(0);
+    const corrected = readSpokenJob("e", "In the kitchen paint the walls. The kitchen all in 4500, no, make that 5000.");
+    expect(corrected.areaPrices).toEqual([]);
+    expect(corrected.questions.some(question => /4500/u.test(question.text))).toBe(true);
+    const measured = readSpokenJob("d", "In the kitchen tile 12 square metres all in.");
+    expect(measured.wholeJobPrice).toBeNull();
+    expect(measured.areaPrices).toEqual([]);
+    expect(readSpokenJob("b", "tile the floor twenty five square metres at 60 a metre").lines[0]!.quantity.value).toBeNull();
+    expect(readSpokenJob("c", "fit twenty five doors").lines[0]!.quantity.value).toBeNull();
+  });
+
+  it("checks a swapped price back off the wrong line", () => {
+    const text = "Fit the door for 300 and paint the walls for 500.";
+    const job = strip(readSpokenJob("s", text));
+    expect(job.lines.map(line => line.unitPricePence.value)).toEqual([30000, 50000]);
+    const swapped = { ...job, lines: [{ ...job.lines[0]!, unitPricePence: job.lines[1]!.unitPricePence }, { ...job.lines[1]!, unitPricePence: job.lines[0]!.unitPricePence }] };
+    expect(checkSpokenNumbers(swapped, text).lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
+  });
+
   it("labels lines proposed from the same words by where they start", () => {
     const labels = understoodLabels("smith", SMITH, [
       { start: SMITH.indexOf("rip out"), description: "rip out the old units" },

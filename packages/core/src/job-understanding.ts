@@ -56,6 +56,10 @@ export type UnderstoodLine = JobUnderstanding["lines"][number];
  */
 export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null };
 
+const NUMBER_WORDS = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|half|point";
+const NUMBER_WORD_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NUMBER_WORDS})(?:[\\s-]+and)?[\\s-]+$`, "iu");
+const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})(?![\\p{L}])`, "iu");
+
 /**
  * The money rule (plan 4.2), for both readers. A quantity, unit price, room price or whole-job price is kept only
  * when it is extracted and its cited span of the untouched source reads, by JobGuard's own parser, to exactly that
@@ -70,6 +74,8 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if (start < 0 || end > sourceText.length || start >= end) return false;
     // A cited span must be a whole number as said: "5k" inside "4.5k" or "200" inside "1,200" is not what was said.
     if (/\d[.,]?$/u.test(sourceText.slice(Math.max(0, start - 2), start)) || /^[.,]?\d/u.test(sourceText.slice(end, end + 2))) return false;
+    // … nor "five" inside "twenty five", or "twenty" inside "twenty five" or "two hundred".
+    if (NUMBER_WORD_BEFORE.test(sourceText.slice(Math.max(0, start - 40), start)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
     return read[kind](sourceText.slice(start, end)) === expected;
   };
   const spanOf = (provenance: z.infer<typeof provenanceV1>) => provenance.kind === "extracted" ? provenance.span : null;
@@ -78,8 +84,13 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     const own = spanOf(understanding.lines[lineIndex]!.description.provenance), said = spanOf(provenance);
     if (!own || !said) return true;
     if (said.start >= own.start && said.start < own.end) return true;
+    // Another line's words inside the number, or between the number and this line's words, mean the number is theirs.
     if (understanding.lines.some((other, index) => { const words = spanOf(other.description.provenance);
-      return index !== lineIndex && !!words && said.start >= words.start && said.start < words.end; })) return false;
+      return index !== lineIndex && !!words && (said.start >= words.start && said.start < words.end
+        || said.start >= own.end && words.start >= own.end && words.start < said.start
+        || said.end <= own.start && words.end <= own.start && words.end > said.end
+        // A number said straight after another line's words, before this line's, is that line's.
+        || said.end <= own.start && words.end <= said.start && !/[.;!?\n]/u.test(sourceText.slice(words.end, said.start).replace(/(\d)\.(?=\d)/gu, "$1"))); })) return false;
     const between = said.start < own.start ? sourceText.slice(said.end, own.start) : sourceText.slice(own.end, said.start);
     return !/[.;!?\n]/u.test(between.replace(/(\d)\.(?=\d)/gu, "$1"));
   };

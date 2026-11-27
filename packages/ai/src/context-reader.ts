@@ -264,7 +264,9 @@ function totals(text: string): TotalPrice[] {
     while (clauseEnd < text.length && !boundary(clauseEnd)) clauseEnd++;
     const clause = text.slice(clauseStart, clauseEnd);
     const phraseAt = phrase.index - clauseStart, phraseEnd = phraseAt + phrase[0].length;
-    const prices = [...clause.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0]));
+    // A measure or a count ("12 square metres", "6 doors") is never a total price.
+    const prices = [...clause.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
+      && !/^\s*(?:square|sq\b|m2|m²|met(?:re|er)s?|linear|mm|cm|coats?|days?|weeks?|hours?|units?|doors?|items?|rooms?)/iu.test(clause.slice(match.index + match[0].length)));
     // The price said with the total words: the one nearest them.
     const price = prices.length ? prices.reduce((best, match) => Math.min(Math.abs(match.index - phraseEnd), Math.abs(match.index + match[0].length - phraseAt))
       < Math.min(Math.abs(best.index - phraseEnd), Math.abs(best.index + best[0].length - phraseAt)) ? match : best) : null;
@@ -277,7 +279,11 @@ function totals(text: string): TotalPrice[] {
       : match.index >= hi && besideAfter.test(clause.slice(hi, match.index))).at(-1);
     const phraseStart = clauseStart + Math.min(lo, room?.index ?? lo);
     const phraseStop = clauseStart + Math.max(hi, room && room.index >= hi ? room.index + room[0].length : hi);
-    const pence = price && prices.length === 1 || price && prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1 ? spokenNumbers.money(words) : null;
+    // "all in about 4500", "all in 4500, no, make that 5000": approximate or corrected totals stay open and are asked about.
+    const unsure = !!price && (/\b(?:about|around|roughly|approximately|approx|say|call it|maybe|reckon)\s+$/iu.test(clause.slice(0, price.index))
+      || /^[\s,]*(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b/iu.test(text.slice(clauseStart + priceEnd, clauseStart + priceEnd + 60)));
+    const single = !!price && (prices.length === 1 || prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1);
+    const pence = single && !unsure ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
       text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
   }
@@ -400,6 +406,10 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     const fix = chunk.inferred ? null : correction.exec(chunk.value);
     if (fix && (fix.index === 0 || !workClause(chunk.value.slice(0, fix.index).trim()))) {
       const target = lines.length - 1;
+      // A total said after the last line is what this corrects (it is left open in totals()); the line keeps its numbers.
+      const lastWords = target >= 0 && lines[target]!.description.provenance.kind === "extracted" ? lines[target]!.description.provenance.span : null;
+      const totalBetween = priced.some(price => price.phraseStart >= (lastWords?.end ?? 0) && price.phraseEnd <= chunk.start);
+      if (totalBetween) { questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check that price.` }); continue; }
       if (target >= 0) lines[target] = openNumbers(lines[target]!);
       questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check this line.`, ...(target >= 0 ? { lineIndex: target } : {}) });
       continue;
