@@ -2098,7 +2098,7 @@ test("G4 migration 2062 reruns without changing policies, triggers, function bod
   const { result } = await g3.direct(f, g3.release(1));
   await g3.post(f, g4.stop(result.release.releaseId));
   const catalog = async () => (await admin.query(`SELECT
-    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY 1) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
     (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_release_stop'::regclass AND NOT tgisinternal) AS triggers,
     (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_release_stop'::regclass) AS acl,
     (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_handover_link_scope_open', 'v2_handover_link_view')) AS bodies,
