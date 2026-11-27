@@ -1,0 +1,11 @@
+{
+  "packet": "V2-D1 (measurements) firm lock, after Q35 / V2-FL-1",
+  "migration": "2059_v2_measurement_firm_lock.sql",
+  "database": "jobguard_v2_local",
+  "tables": [
+    "app.v2_measurement"
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime: a measurement row is visible and writable only when its job is visible to the signed-in firm",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs: FL guard cases and tools/v2/firm-lock/FL-D1.checks.mjs"
+}
