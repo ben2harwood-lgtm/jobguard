@@ -1357,7 +1357,8 @@ test("F3 done when: 1 to 1.25 drafts price, +60 min and materials; one priced va
   assert.deepEqual([variation.existingScopeItemId, variation.scopeItemId, variation.state], [tile.scopeItemId, tile.scopeItemId, "priced"]);
   const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE payload->'references'->>'commandId'=$1
     OR subject_ref=$1 ORDER BY sequence`, [command.commandId])).rows.map(row => row.event_type);
-  assert.deepEqual(events, ["variation.builder_logged", "v2.change_draft.confirmed"]);
+  // The variation is logged through the shared command receipt, so its command.succeeded record sits between the two.
+  assert.deepEqual(events, ["variation.builder_logged", "command.succeeded", "v2.change_draft.confirmed"]);
   assert.deepEqual(await f3.snapshot(jobId), before, "agreed scope and the plan are unchanged while pending");
   // F6 link for that exact revision shows that exact amount; the customer agrees, the builder approves.
   const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
