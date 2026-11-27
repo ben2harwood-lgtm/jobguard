@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq2": {
+      "branches": [
+        "claude/project-thread-trp08u-sqrows"
+      ],
+      "note": "RED money Q60 V2-SQ2: a price box on every review row, line totals, combine keeps the known sum or stays blank, split parts start blank with the figure before the split, and a running total that says when it is incomplete. The whole-job figure is shown beside the total and never spread. Draft prices only: the quote editor still confirms each rate; schema, save and quote code unchanged. Base claude/project-thread-trp08u-sqmic (SQ1 #1002) at 492f598f4. No migration, route or table. Mount, owned by main: apps/web/app/ui/review-proposal.tsx (price box, line total and origin note on the card; merge keeps combinedPrice; split keeps the parent's quantity and unit; running total above Save review) and its review-proposal.test.tsx appended cases.",
+      "allow": [
+        "apps/web/app/ui/review-pricing.test.ts",
+        "apps/web/app/ui/review-pricing.ts",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/SPOKEN-QUOTE-ROWS.spec.ts"
+      ]
+    }
+  }
+}
