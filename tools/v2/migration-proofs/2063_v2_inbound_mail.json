@@ -1,5 +1,5 @@
 {
-  "migration": "tools/v2/migrations/2023_v2_inbound_mail.sql",
+  "migration": "tools/v2/migrations/2063_v2_inbound_mail.sql",
   "scope": "Dedicated local V2 bootstrap only; absent from shared migrate()",
   "tables": ["v2_inbound_address", "v2_inbound_item", "v2_inbound_command"],
   "required": {

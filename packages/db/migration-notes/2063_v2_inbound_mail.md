@@ -32,7 +32,7 @@ conflicting or foreign references wait. Body text and attachment bytes are not
 stored. Missing/invalid fixture IDs and attachment metadata produce needs_k6b.
 No real provider, files, AI, outbound delivery, stock effect or production route.
 
-Proof specification: tools/v2/migration-proofs/2023_v2_inbound_mail.json.
+Proof specification: tools/v2/migration-proofs/2063_v2_inbound_mail.json.
 Real PostgreSQL, full seeded suite, Playwright at 360/1280 and Mac phone-mode
 execution remain required outside the builder sandbox; this note is not a pass.
 
@@ -45,3 +45,7 @@ For the Mac phone run, set AUTH_ALLOWED_ORIGIN to the existing checked HTTPS LAN
 origin and run the same browser file. It reuses one login at 360 and 1280 pixels.
 Open /inbound-mail in the signed-in practice firm. The seeded quote must first
 be switched live through its normal no-charge command, as the seeded proof does.
+
+Renumbered 2023 -> 2063 above v2/main (2047 FL-1) and the open V2 slices. app.v2_inbound_item
+is listed in tools/v2/firm-lock/pending/FL-K6.json: its job lock (`v2_job`) allows a NULL job_id
+for unrouted mail, which the FL-1 guard shape cannot express.

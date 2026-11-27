@@ -584,7 +584,7 @@ it("refuses direct manual attestations outside the demo database; dropping the g
     .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });
 
-// V2-K6A migration deferral: tools/v2/migrations/2023_v2_inbound_mail.sql is
+// V2-K6A migration deferral: tools/v2/migrations/2063_v2_inbound_mail.sql is
 // installed only by the identity-checked V2 bootstrap, outside migrate(). This
 // predecessor purchase-order suite deliberately does not install local V2 tables.
 // Its forced-RLS, second-firm and rollback proof runs in the full V2 seed suite:
