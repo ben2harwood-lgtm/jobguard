@@ -90,6 +90,14 @@ describe("V2-SQ-G Anthropic adapter (fake fetch, no network)", () => {
     expect(messages.map(message => message.role)).toEqual(["user"]);
     expect(messages[0]!.content).toMatch(/^<transcript>\n/u);
   });
+  it("a timeout is one attempt only (maxRetries 0) and typed as a timeout", async () => {
+    const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+    }));
+    const live = createAnthropicLiveSortAdapter({ ...options, fetch: fetch as unknown as typeof globalThis.fetch })!;
+    expect(await live.send({ model: "claude-sonnet-5-5", system: "s", user: "u", schema: {} as never, maxTokens: 10, timeoutMs: 50 })).toEqual({ kind: "timeout" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("a provider error is mapped without its text", async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "the words and test-key-not-real" } }), { status: 400, headers: { "content-type": "application/json" } }));
     const live = createAnthropicLiveSortAdapter({ ...options, fetch: fetch as unknown as typeof globalThis.fetch })!;

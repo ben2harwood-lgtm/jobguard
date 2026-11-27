@@ -15,6 +15,9 @@ import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-tar
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
 import { joineryTemplate } from "./fixtures/joinery-template.mjs";
+// V2-SQ-G
+import { CaptureApplication } from "../../apps/api/dist/capture/capture.application.js";
+import { CaptureRepository, V2AiCallLedger } from "../../packages/db/dist/index.js";
 // V2-PX
 import { uploadPracticePhoto } from "./test/practice-photo.mjs";
 
@@ -1409,6 +1412,215 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// V2-SQ-G: Reader B, the model reader. A fake provider stands in for the API; no key, no network, zero spend.
+const sqgOn = { JOBGUARD_ENV: "synthetic_demo", JOBGUARD_SPOKEN_JOB_MODEL_KEY: "test-key-not-real", JOBGUARD_SPOKEN_JOB_MONTHLY_CAP_PENCE: "1000", JOBGUARD_SPOKEN_JOB_LIVE: "1" };
+const sqgText = "in the kitchen fit new units two thousand pounds and in the bathroom tile the floor five hundred pounds and move two sockets ninety pounds";
+const sqgCapture = (captureId, text = sqgText) => ({ contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId,
+  fixtureId: "deterministic-local-v1", source: { kind: "text", text } });
+/** Every Anthropic request goes to the fake; everything else (this suite's own server) is untouched. */
+function sqgFakeProvider(reply) {
+  const real = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input?.url ?? input);
+    if (!url.startsWith("https://api.anthropic.com/")) return real(input, init);
+    calls.push(JSON.parse(String(init?.body)));
+    if (reply === "hang") return new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    const body = reply(calls.at(-1));
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  return { calls, restore: () => { globalThis.fetch = real; } };
+}
+/** Agree with Reader A: each item in the area it already named, with its own trade, read back from the items it was sent. */
+const sqgAgree = request => {
+  const user = request.messages[0].content;
+  const items = user.split("<items>\n")[1].split("\n</items>")[0].split("\n").filter(Boolean);
+  return { id: "msg_sqg", type: "message", role: "assistant", model: "claude-sonnet-5-5", stop_reason: "end_turn", stop_sequence: null,
+    content: [{ type: "text", text: JSON.stringify({ areas: [{ name_words: "kitchen" }, { name_words: "bathroom" }],
+      items: items.map((_, item_index) => ({ item_index, area_index: item_index === 0 ? 0 : 1, trade: item_index === 0 ? "Kitchen fitting" : item_index === 1 ? "Tiling" : "Electrics" })),
+      missed: [] }) }], usage: { input_tokens: 640, output_tokens: 90 } };
+};
+const sqgApp = (sessionId, ledger = new V2AiCallLedger(runtime)) => {
+  const app = new CaptureApplication(runtime, sessionId, { ledger, env: sqgOn });
+  const capture = app.capture.bind(app);
+  app.capture = raw => capture(raw, { modelReaderNoticeShown: true });
+  return app;
+};
+const sqgRows = async captureId => ({
+  understanding: (await admin.query("SELECT count(*)::int AS n FROM app.v2_job_understanding WHERE capture_id = $1", [captureId])).rows[0].n,
+  calls: (await admin.query("SELECT phase, outcome, micro_pence::int AS micro, input_tokens, output_tokens FROM app.v2_ai_call WHERE capture_id = $1 ORDER BY phase", [captureId])).rows,
+  proposals: (await admin.query("SELECT model FROM app.job_record_proposal WHERE capture_id = $1", [captureId])).rows,
+});
+
+test("SQ-G: the model reader sorts a spoken capture, keeps Reader A's numbers, and a retry or a view makes no second call", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  try {
+    const captureId = randomUUID();
+    const app = sqgApp(sessionId);
+    const first = await app.capture(sqgCapture(captureId));
+    assert.equal(fake.calls.length, 1);
+    const sent = fake.calls[0];
+    assert.deepEqual(Object.keys(sent).sort(), ["max_tokens", "messages", "model", "output_config", "system"]);
+    assert.equal(sent.model, "claude-sonnet-5-5");
+    const rows = await sqgRows(captureId);
+    assert.equal(rows.understanding, 1);
+    assert.deepEqual(rows.calls.map(row => [row.phase, row.outcome]), [["reserved", null], ["settled", "ok"]]);
+    assert.equal(rows.calls[1].micro, 640 * 200 + 90 * 1000);
+    assert.deepEqual(rows.proposals, [{ model: "fixture-capture-v1+claude-sonnet-5-5" }]);
+    assert.deepEqual(first.proposal.lines.map(line => line.unitPricePence.value), [200000, 50000, 9000]);
+    assert.deepEqual(first.proposal.lines.map(line => [line.room, line.category]),
+      [["Kitchen", "Kitchen fitting"], ["Bathroom", "Other"], ["Bathroom", "Electrics"]], "Tiling shows as Other until the #1016 stopgap is removed");
+    const retry = await app.capture(sqgCapture(captureId));
+    assert.equal(retry.jobId, first.jobId);
+    const { reviewId: _a, ...shown } = await app.view(first.jobId);
+    const { reviewId: _b, ...captured } = first;
+    assert.deepEqual(shown, captured);
+    assert.equal(fake.calls.length, 1, "no second call for a retry or a view");
+  } finally { fake.restore(); }
+});
+
+test("SQ-G: a timeout makes one attempt, keeps the reservation in full, saves Reader A's quote, and a replay makes no call", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider("hang");
+  try {
+    const captureId = randomUUID();
+    const app = sqgApp(sessionId);
+    const today = await new CaptureApplication(runtime, sessionId).capture(sqgCapture(randomUUID()));
+    const saved = await app.capture(sqgCapture(captureId));
+    assert.equal(fake.calls.length, 1, "maxRetries 0: one outbound attempt");
+    const rows = await sqgRows(captureId);
+    assert.deepEqual(rows.calls.map(row => row.phase), ["reserved"], "no settled row: the reservation counts in full");
+    assert.deepEqual([rows.understanding, rows.proposals[0].model], [0, "fixture-capture-v1"]);
+    assert.deepEqual(saved.proposal.lines.map(line => [line.description.value, line.unitPricePence.value]),
+      today.proposal.lines.map(line => [line.description.value, line.unitPricePence.value]), "the same amounts as with the reader off");
+    const replay = await app.capture(sqgCapture(captureId));
+    assert.equal(replay.jobId, saved.jobId);
+    assert.equal(fake.calls.length, 1);
+  } finally { fake.restore(); }
+});
+
+test("SQ-G: two concurrent captures with one id make at most two calls, store one row, and both return it", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  try {
+    const captureId = randomUUID();
+    const [one, two] = await Promise.all([sqgApp(sessionId).capture(sqgCapture(captureId)), sqgApp(sessionId).capture(sqgCapture(captureId))]);
+    assert.equal(one.jobId, two.jobId);
+    assert.ok(fake.calls.length <= 2);
+    const rows = await sqgRows(captureId);
+    assert.equal(rows.understanding, 1);
+    assert.equal(rows.proposals.length, 1);
+  } finally { fake.restore(); }
+});
+
+test("SQ-G: if the insert fails after a call, the spend stays settled and nothing else is written", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  try {
+    const captureId = randomUUID();
+    const app = sqgApp(sessionId);
+    const persist = app.captureRepo.persist.bind(app.captureRepo);
+    app.captureRepo.persist = async () => { throw new Error("SQ-G test: insert failed"); };
+    await assert.rejects(app.capture(sqgCapture(captureId)), /insert failed/u);
+    app.captureRepo.persist = persist;
+    const rows = await sqgRows(captureId);
+    assert.deepEqual(rows.calls.map(row => row.phase), ["reserved", "settled"]);
+    assert.equal(rows.understanding, 0);
+    assert.equal(rows.proposals.length, 0);
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.capture_source WHERE id = $1", [captureId])).rows[0].n, 0);
+  } finally { fake.restore(); }
+});
+
+test("SQ-G: with the live switch off the capture is today's, with no call and no ledger row", async () => {
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  try {
+    const captureId = randomUUID();
+    const off = new CaptureApplication(runtime, sessionId, { ledger: new V2AiCallLedger(runtime), env: { ...sqgOn, JOBGUARD_SPOKEN_JOB_LIVE: undefined } });
+    const saved = await off.capture(sqgCapture(captureId), { modelReaderNoticeShown: true });
+    // On, but from a screen that did not show the notice: no call either.
+    const unnoticed = await new CaptureApplication(runtime, sessionId, { ledger: new V2AiCallLedger(runtime), env: sqgOn }).capture(sqgCapture(randomUUID()));
+    assert.equal((await sqgRows(unnoticed.captureId)).calls.length, 0);
+    const { reviewId: _a, ...today } = await new CaptureApplication(runtime, sessionId).view(saved.jobId);
+    const { reviewId: _b, ...shown } = saved;
+    assert.deepEqual(shown, today);
+    assert.equal(fake.calls.length, 0);
+    const rows = await sqgRows(captureId);
+    assert.deepEqual([rows.understanding, rows.calls.length, rows.proposals[0].model], [0, 0, "fixture-capture-v1"]);
+  } finally { fake.restore(); }
+});
+
+test("SQ-G ledger: reservations at the cap, a crash before settling, month rollover and the daily limit", async () => {
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const ledger = new V2AiCallLedger(runtime);
+  const spent = async () => BigInt((await admin.query(`SELECT coalesce(sum(CASE WHEN s.call_id IS NOT NULL THEN s.micro_pence ELSE r.micro_pence END), 0)::text AS n
+    FROM app.v2_ai_call r LEFT JOIN app.v2_ai_call s ON (s.tenant_id, s.call_id, s.phase) = (r.tenant_id, r.call_id, 'settled')
+    WHERE r.tenant_id = $1 AND r.phase = 'reserved' AND r.utc_month = date_trunc('month', clock_timestamp() AT TIME ZONE 'UTC')::date`, [DEMO_TENANT_ID])).rows[0].n);
+  const r = 1_000_000;
+  const reserve = (cap, over = {}) => ledger.reserve(context, { callId: randomUUID(), captureId: randomUUID(), microPence: r, capMicroPence: Number(cap), dailyLimit: 10_000, ...over });
+  // Six at once against room for three: exactly three are reserved.
+  const before = await spent();
+  const results = await Promise.all(Array.from({ length: 6 }, () => reserve(before + 3n * BigInt(r))));
+  assert.equal(results.filter(result => result.reserved).length, 3);
+  assert.ok(results.filter(result => !result.reserved).every(result => result.reason === "cap_reached"));
+  // Those three were never settled (a crash): each still counts in full.
+  assert.equal(await spent(), before + 3n * BigInt(r));
+  // A settled call counts what it used, not its reservation.
+  const callId = randomUUID(), captureId = randomUUID();
+  const now = await spent();
+  assert.deepEqual(await ledger.reserve(context, { callId, captureId, microPence: r, capMicroPence: Number(now) + r, dailyLimit: 10_000 }), { reserved: true });
+  await ledger.settle(context, { callId, captureId, microPence: 1234, outcome: "ok", modelId: "claude-sonnet-5-5", inputTokens: 1, outputTokens: 1 });
+  assert.equal(await spent(), now + 1234n);
+  // Last month's calls do not count against this month.
+  await admin.query(`INSERT INTO app.v2_ai_call (tenant_id, call_id, phase, capture_id, operation, micro_pence, created_at)
+    VALUES ($1, $2, 'reserved', $3, 'spoken_job_sort.v1', 900000000, date_trunc('month', clock_timestamp()) - interval '1 day')`, [DEMO_TENANT_ID, randomUUID(), randomUUID()]);
+  assert.equal(await spent(), now + 1234n);
+  assert.deepEqual(await reserve(now + 1234n + BigInt(r)), { reserved: true });
+  // The daily limit counts today's calls from the ledger.
+  const { rows: [{ today }] } = await admin.query(`SELECT count(*)::int AS today FROM app.v2_ai_call WHERE tenant_id = $1 AND phase = 'reserved'
+    AND utc_day = (clock_timestamp() AT TIME ZONE 'UTC')::date`, [DEMO_TENANT_ID]);
+  assert.deepEqual(await reserve(10n ** 15n, { dailyLimit: today }), { reserved: false, reason: "daily_limit" });
+  // A settled row needs its reservation.
+  await assert.rejects(admin.query(`INSERT INTO app.v2_ai_call (tenant_id, call_id, phase, capture_id, operation, micro_pence, outcome)
+    VALUES ($1, $2, 'settled', $3, 'spoken_job_sort.v1', 1, 'ok')`, [DEMO_TENANT_ID, randomUUID(), randomUUID()]), { code: "23503" });
+});
+
+test("SQ-G catalog: both tables are forced, append-only for the runtime, and the understanding row is the firm's own", async () => {
+  for (const table of ["app.v2_job_understanding", "app.v2_ai_call"]) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read, has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false }, table);
+  }
+  const { sessionId } = await signIn("builder");
+  const fake = sqgFakeProvider(sqgAgree);
+  let saved;
+  try { saved = await sqgApp(sessionId).capture(sqgCapture(randomUUID())); } finally { fake.restore(); }
+  const outsider = await signIn("second-builder");
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(shared.tenantId, DEMO_TENANT_ID, "both firms' practice sessions share one backing tenant");
+  for (const scope of [shared, outsider.realContext]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    assert.equal((await query("SELECT 1 FROM app.v2_job_understanding WHERE job_id = $1", [saved.jobId])).rowCount, 0);
+  }
+  await assert.rejects(new CaptureApplication(runtime, outsider.sessionId).view(saved.jobId));
+  assert.equal(await new CaptureRepository(runtime).readUnderstanding(shared, saved.jobId), null);
+});
+
+test("SQ-G: the 2069 migration is safe to run twice", async () => {
+  const count = async () => (await admin.query("SELECT count(*)::int AS n FROM pg_policy WHERE polname IN ('v2_job_understanding_runtime','v2_ai_call_runtime')")).rows[0].n;
+  assert.equal(await count(), 2);
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2069_v2_job_understanding.sql", import.meta.url), "utf8"));
+  assert.equal(await count(), 2);
 });
 
 // must stay the last test: it signs the cached builder out

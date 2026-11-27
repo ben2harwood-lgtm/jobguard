@@ -49,13 +49,13 @@ export function JobsList({ workspace }: { workspace: Workspace }) {
   </Shell>;
 }
 
-export function DesignedNewJob() {
-  return <Screen title="Start a new job." active="jobs">{workspace => <NewJob workspace={workspace}/>}</Screen>;
+export function DesignedNewJob({ modelReader = false }: { modelReader?: boolean } = {}) {
+  return <Screen title="Start a new job." active="jobs">{workspace => <NewJob workspace={workspace} modelReader={modelReader}/>}</Screen>;
 }
-function NewJob({ workspace }: { workspace: Workspace }) {
+function NewJob({ workspace, modelReader }: { workspace: Workspace; modelReader: boolean }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
-    <WalkIt designed mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/>
+    <WalkIt designed modelReader={modelReader} mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/>
   </Shell>;
 }
 
