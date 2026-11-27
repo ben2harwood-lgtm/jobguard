@@ -158,3 +158,44 @@ for (const width of [360, 1280]) {
     } finally { await context.close(); }
   });
 }
+
+// V2-F2: a Done task whose proof photo is still pending stays open on the screen, and reads Done after verification.
+test("F2 a pending proof photo holds the task open until it is verified", { timeout: 120_000 }, async () => {
+  const sessionId = storageState.cookies.find(cookie => cookie.name === "jg_session")?.value;
+  const app = createWorkspaceApplication({ pool, sessionId });
+  const { authenticatePracticeSession } = await import("../../packages/db/dist/index.js");
+  const { uploadBriefProgressPhoto } = await import("../../apps/api/dist/workspace/brief-progress-photo.application.js");
+  const { context: tenant, membershipId } = await authenticatePracticeSession(pool, sessionId);
+  const task = brief.content.tasks.find(item => item.taskKey !== "tile-splashback") ?? brief.content.tasks[0];
+  const status = async () => (await app.briefProgress.read(jobId)).tasks.find(item =>
+    item.trade === brief.trade && item.scopeItemId === task.scopeItemId && item.taskKey === task.taskKey);
+  const photo = { version: "v2-brief-progress-photo-command.v1", commandId: randomUUID(), scopeItemId: task.scopeItemId, fixture: "completion-photo" };
+  // Begin the practice upload but stop before finalize, so it really is pending.
+  const stopBeforeFinalize = { async connect() {
+    const client = await pool.connect(), original = client.query.bind(client), release = client.release.bind(client);
+    client.query = async (sql, ...args) => {
+      const result = await original(sql, ...args);
+      if (typeof sql === "string" && sql.includes("app.append_audit(") && JSON.stringify(args).includes("v2.progress_photo.finalized")) throw new Error("F2_STOP");
+      return result;
+    };
+    client.release = (...args) => { client.query = original; return release(...args); };
+    return client;
+  } };
+  await assert.rejects(uploadBriefProgressPhoto(stopBeforeFinalize, tenant, jobId, membershipId, photo), /F2_STOP/u);
+  await app.briefProgress.record(jobId, { version: "v2-brief-progress-command.v2", commandId: randomUUID(), trade: brief.trade,
+    briefVersion: brief.version, scopeItemId: task.scopeItemId, taskKey: task.taskKey, expectedVersion: (await status())?.version ?? 0,
+    kind: "done", note: "", photoId: photo.commandId });
+  const context = await v2Context(browser, storageState, 360);
+  try {
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/brief-progress`);
+    const region = page.getByRole("main").getByRole("region", { name: "tiler brief", exact: true }).getByRole("region", { name: task.title, exact: true });
+    await expect(region.getByRole("status", { name: `Status: ${task.title}` })).toContainText("Done, proof photo still uploading or being checked");
+    await expect(region.getByRole("button", { name: "Done with a new photo" })).toBeVisible();
+    await app.briefProgress.uploadPhoto(jobId, photo);
+    await page.reload();
+    await expect(region.getByRole("status", { name: `Status: ${task.title}` })).toHaveText("Done");
+    await expect(region.getByRole("button", { name: "Done with a new photo" })).toHaveCount(0);
+    if (process.env.V2_TEST_SCREENSHOTS) await page.getByRole("main").screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f2-brief-progress-360.png` });
+  } finally { await context.close(); }
+});

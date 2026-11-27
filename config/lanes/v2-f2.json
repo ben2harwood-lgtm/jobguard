@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f2": {
+      "branches": [
+        "claude/project-thread-trp08u"
+      ],
+      "note": "RED Q49 V2-F2 proof holds the task open (derived status only, no migration; 2028 stays reserved). Base codex/sandbox/v2-f1p @ aeedba94d. F2 mount, owned by F1-P #974: packages/db/src/v2-brief-progress-repository.ts read() adds tasks statuses only. F2 mount, owned by F1-P #974: apps/api/src/workspace/brief-progress.application.ts view spread and type exports only. F2 mount, owned by F1-P #974: apps/web/app/ui/brief-progress.tsx status line, Done with a new photo button and reload after save only. F2 mount, owned by F1-P #974: apps/web/app/ui/brief-progress-photo.ts and its test, taskStatusLabel and needsNewProofPhoto only. F2 mount, owned by F1-P #974: tools/v2/seed.integration.test.mjs and tools/v2/brief-progress.browser.test.mjs own appended cases. F2 mount, owned by core index: packages/db/src/index.ts one export line.",
+      "allow": [
+        "apps/api/src/workspace/brief-progress.application.ts",
+        "apps/web/app/ui/brief-progress-photo.test.ts",
+        "apps/web/app/ui/brief-progress-photo.ts",
+        "apps/web/app/ui/brief-progress.tsx",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-brief-progress-repository.ts",
+        "packages/db/src/v2-proof-status.test.ts",
+        "packages/db/src/v2-proof-status.ts",
+        "tools/v2/brief-progress.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

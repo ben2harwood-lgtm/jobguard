@@ -5,7 +5,7 @@ import { PracticeAccess } from "../practice-access.js";
 import { uploadBriefProgressPhoto } from "./brief-progress-photo.application.js";
 import { CrewBriefApplication } from "./crew-brief.application.js";
 
-export { BriefProgressError, briefProgressCommandV1, briefProgressCommandV2, briefProgressPhotoCommandV1, type BriefProgress, type BriefProgressCommand } from "@jobguard/db";
+export { BriefProgressError, briefProgressCommandV1, briefProgressCommandV2, briefProgressPhotoCommandV1, type BriefProgress, type BriefProgressCommand, type BriefTaskStatus, type TaskProofStatus, taskProofStatus, isTaskComplete } from "@jobguard/db";
 
 export class BriefProgressApplication {
   private readonly access: PracticeAccess;
@@ -20,7 +20,7 @@ export class BriefProgressApplication {
     const { context } = await this.authorize(jobId);
     return { version: "v2-brief-progress-view.v1" as const,
       briefs: await this.briefs.read(jobId, { version: "v2-crew-brief-query.v1" }),
-      progress: await this.progress.read(context, jobId) };
+      ...await this.progress.read(context, jobId) };
   }
   async record(jobId: string, raw: unknown) {
     const { context } = await this.authorize(jobId);

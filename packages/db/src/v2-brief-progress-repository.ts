@@ -6,6 +6,7 @@ import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { WatchdogError, claimCommandIdentity, requestHashFor, requireLiveJob } from "./watchdog.js";
 import { CrewBriefRepository } from "./v2-crew-brief-repository.js";
+import { taskProofStatus, type TaskProofStatus } from "./v2-proof-status.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 export const progressPhotoStates = ["not_uploaded", "pending", "quarantined", "verified", "rejected"] as const;
@@ -36,6 +37,7 @@ export type BriefProgress = Omit<BriefProgressCommand, "version" | "expectedVers
   version: number; actorMembershipId: string; recordedAt: Date; photoReference: string | null;
   photoState: typeof progressPhotoStates[number]; thumbnail: string | null;
 };
+export type BriefTaskStatus = { trade: string; scopeItemId: string; taskKey: string; version: number; status: TaskProofStatus };
 export class BriefProgressError extends Error {
   constructor(readonly code: "BRIEF_PROGRESS_INVALID_COMMAND" | "BRIEF_PROGRESS_EDITOR_REQUIRED" |
     "BRIEF_PROGRESS_COMMAND_CONFLICT" | "BRIEF_PROGRESS_VERSION_CONFLICT" | "BRIEF_PROGRESS_STALE_BRIEF" |
@@ -55,8 +57,43 @@ export class BriefProgressRepository {
       if (!job.rowCount) throw new PracticeAccessError("NOT_FOUND");
       const rows = (await $client.query<BriefProgress>(`SELECT ${columns} FROM app.v2_brief_progress
         WHERE (tenant_id, job_id) = ($1, $2) ORDER BY recorded_at, command_id`, [context.tenantId, jobId])).rows;
-      return Promise.all(rows.map(row => this.photo($client, context.tenantId, jobId, row)));
+      const progress = await Promise.all(rows.map(row => this.photo($client, context.tenantId, jobId, row)));
+      return { progress, tasks: await this.taskStatuses($client, context.tenantId, jobId, progress) };
     });
+  }
+
+  /** V2-F2: one derived status per task with progress, ruled by the brief version its latest row was recorded against. */
+  private async taskStatuses(client: import("pg").PoolClient, tenantId: string, jobId: string, progress: BriefProgress[]) {
+    const latest = new Map<string, BriefProgress>();
+    for (const row of progress) {
+      const key = JSON.stringify([row.trade, row.scopeItemId, row.taskKey]);
+      if ((latest.get(key)?.version ?? -1) < row.version) latest.set(key, row);
+    }
+    const contents = new Map<string, { scopeItemId: string; taskKey?: string; proofNeeded?: string[] }[]>();
+    const tasks: BriefTaskStatus[] = [];
+    for (const row of latest.values()) {
+      const briefKey = JSON.stringify([row.trade, row.briefVersion]);
+      if (!contents.has(briefKey)) {
+        const { rows: [brief] } = await client.query<{ content: { tasks: { scopeItemId: string; taskKey?: string; proofNeeded?: string[] }[] } }>(`
+          SELECT content FROM app.v2_crew_brief WHERE (tenant_id, job_id, trade, expected_version) = ($1, $2, $3, $4)`,
+        [tenantId, jobId, row.trade, row.briefVersion - 1]);
+        contents.set(briefKey, brief?.content.tasks ?? []);
+      }
+      const task = contents.get(briefKey)!.find(item => item.scopeItemId === row.scopeItemId && item.taskKey === row.taskKey);
+      tasks.push({ trade: row.trade, scopeItemId: row.scopeItemId, taskKey: row.taskKey, version: row.version,
+        status: taskProofStatus(await this.provesTask(client, tenantId, jobId, row) ? row : { ...row, photoState: "not_uploaded" },
+          task?.proofNeeded ?? []) });
+    }
+    return tasks;
+  }
+
+  // Codex P1 4710983805: a photo proves a task only when its progress-photo upload was bound to that task's scope.
+  private async provesTask(client: import("pg").PoolClient, tenantId: string, jobId: string, row: BriefProgress) {
+    if (!row.photoReference) return true;
+    const { rowCount } = await client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2
+      AND event_type='v2.progress_photo.attached' AND payload->'references'->>'commandId'=$3
+      AND payload->'references'->>'scopeItemId'=$4`, [tenantId, jobId, row.photoReference, row.scopeItemId]);
+    return Boolean(rowCount);
   }
 
   private async photo(client: import("pg").PoolClient, tenantId: string, jobId: string, row: BriefProgress): Promise<BriefProgress> {
