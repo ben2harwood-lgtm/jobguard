@@ -243,3 +243,6 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 export * from "./v2-crew-contact-repository.js";
 // V2-K10: read-only builder budget.
 export { V2JobProfitRepository } from "./v2-job-profit-repository.js";
+
+// V2-F8 who was on site today.
+export * from "./v2-site-attendance-repository.js";
