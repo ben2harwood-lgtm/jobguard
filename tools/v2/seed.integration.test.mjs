@@ -2764,6 +2764,15 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   assert.deepEqual(await policies(), before);
 });
 
+// Runs after the seed's exact-count and isolation assertions (these synthetic cases add jobs),
+// but before SX signs the builder out, because it uses the two sessions already exercised over HTTP.
+test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
+  Object.assign(process.env, settings, { JOBGUARD_LOCAL_V2: "1", JOBGUARD_ENV: "synthetic_demo", AUTH_CODE_SECRET: authSecret });
+  if (embedded) process.env.JOBGUARD_V2_STORAGE_DIR = storageData;
+  const { runChasingProof } = await import("./chasing.integration.test.mjs");
+  await runChasingProof(t, { admin, runtime, firstSession, secondSession });
+});
+
 // must stay the last test: it signs the cached builder out
 // Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
 test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
@@ -2771,13 +2780,4 @@ test("SX signed-out builder cannot reuse the old real or practice cookies", asyn
   await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
     record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
   });
-});
-
-// Run last: these synthetic cases add jobs after the seed's exact-count and
-// isolation assertions. They use the two sessions already exercised over HTTP.
-test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
-  Object.assign(process.env, settings, { JOBGUARD_LOCAL_V2: "1", JOBGUARD_ENV: "synthetic_demo", AUTH_CODE_SECRET: authSecret });
-  if (embedded) process.env.JOBGUARD_V2_STORAGE_DIR = storageData;
-  const { runChasingProof } = await import("./chasing.integration.test.mjs");
-  await runChasingProof(t, { admin, runtime, firstSession, secondSession });
 });
