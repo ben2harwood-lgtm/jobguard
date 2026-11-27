@@ -78,14 +78,15 @@ export class ChangeDraftRepository {
   }
 
   /** The line as currently agreed: a change is drafted from the latest approved change's total, never the original
-   * quote quantity twice. A second change while one is still waiting for the customer is a version conflict. */
+   * quote quantity twice. A second change while one is still waiting for the customer is a version conflict.
+   * A variation counts by its state whatever its current revision is, so a reprice through "Change price" keeps these guards. */
   private async agreedLine(client: PoolClient, tenantId: string, jobId: string, line: ChangeDraftLineRow, exceptVariationId: string | null) {
     const { rows: [row] } = await client.query<{ pending: boolean; agreed: string | null }>(`SELECT
       EXISTS (SELECT FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
-        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.current_revision_id = d.revision_id
+        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3)
           AND v.state IN ('draft', 'priced') AND v.id IS DISTINCT FROM $4::uuid) AS pending,
       (SELECT d.new_quantity FROM app.v2_change_draft d JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (d.tenant_id, d.job_id, d.variation_id)
-        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.current_revision_id = d.revision_id AND v.state = 'approved'
+        WHERE (d.tenant_id, d.job_id, d.quote_line_id) = ($1, $2, $3) AND v.state = 'approved'
           AND v.id IS DISTINCT FROM $4::uuid ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1) AS agreed`,
     [tenantId, jobId, line.quoteLineId, exceptVariationId]);
     if (row?.pending) throw new ChangeDraftRepositoryError("CHANGE_DRAFT_VERSION_CONFLICT");

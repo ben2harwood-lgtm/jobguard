@@ -61,7 +61,7 @@ BEGIN
         AND l.quantity_decimal IS NOT NULL AND NEW.accepted_quantity::numeric = coalesce((SELECT d.new_quantity::numeric
           FROM app.v2_change_draft d JOIN app.variation av ON (av.tenant_id, av.job_id, av.id) = (d.tenant_id, d.job_id, d.variation_id)
           WHERE (d.tenant_id, d.job_id, d.quote_line_id) = (NEW.tenant_id, NEW.job_id, NEW.quote_line_id)
-            AND av.current_revision_id = d.revision_id AND av.state = 'approved' AND d.variation_id <> NEW.variation_id
+            AND av.state = 'approved' AND d.variation_id <> NEW.variation_id
           ORDER BY d.recorded_at DESC, d.revision_id DESC LIMIT 1), l.quantity_decimal::numeric)
         AND r.unit = l.unit
         AND r.quantity_decimal::numeric = abs(NEW.new_quantity::numeric - NEW.accepted_quantity::numeric)

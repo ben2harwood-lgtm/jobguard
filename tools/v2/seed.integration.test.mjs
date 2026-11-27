@@ -1428,6 +1428,18 @@ test("F3 revise makes a new revision and draft; the old F6 link is refused; an o
   assert.ok(less.tasks.every(task => task.proposedMinutes === 0 && task.materialNeeds.length === 0));
 });
 
+test("F3 a reprice through Change price keeps the quantity-change guards", async () => {
+  const { jobId, drafts, tile, variations } = await f3.job();
+  const first = await drafts.command(jobId, f3.confirm(tile));
+  await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId: first.variationId,
+    revisionId: randomUUID(), expectedRevisionId: first.revisionId, description: "F3 fictional repriced splashback",
+    price: { quantity: "1", unit: "item", unitRatePence: 2375, direction: "addition" } });
+  // The repriced change still waits for the customer, so a second change on the line is refused, not priced independently.
+  await assert.rejects(drafts.command(jobId, f3.confirm(tile, { newQuantity: "1.5" })), { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+  await assert.rejects(drafts.preview(jobId, { version: "v2-change-draft-preview.v1", quoteLineId: tile.quoteLineId, newQuantity: "1.5" }),
+    { code: "CHANGE_DRAFT_VERSION_CONFLICT" });
+});
+
 test("F3 refusals write nothing: unpriced, no change, superseded or foreign line, non-owner, bad task; mismatch trigger; append only; firm B sees nothing", async () => {
   const { jobId, builder, drafts, tile } = await f3.job();
   const auth = await authenticatePracticeSession(runtime, builder.sessionId);
