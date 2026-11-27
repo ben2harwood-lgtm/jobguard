@@ -1,0 +1,67 @@
+{
+  "migration": "tools/v2/migrations/2019_automatic_chasing.sql",
+  "status": "executed_on_fresh_postgresql_and_phone_https",
+  "scope": "V2 bootstrap only; excluded from the production migration runner and LP-0 inventory",
+  "tables": [
+    "app.v2_chase_setting",
+    "app.v2_chase_log",
+    "app.v2_chase_command"
+  ],
+  "required_catalog_assertions": {
+    "owner": "jobguard_migration",
+    "rls": true,
+    "force_rls": true,
+    "firm_binding": "app.current_firm_profile_key()",
+    "tenant_binding": "app.current_tenant()",
+    "job_binding": "visible app.job; tenant and job qualified foreign keys",
+    "runtime": "SELECT and INSERT; setting-column UPDATE only; no DELETE, TRUNCATE or ownership",
+    "routine": "app.v2_chase_invoice_metadata(uuid); fixed search_path; PUBLIC revoked; bound read only"
+  },
+  "execution_test": "tools/v2/seed.integration.test.mjs",
+  "fresh_and_upgrade": "Apply after 2001, repeat 2019 with retained settings/logs, assert catalog and retained counts",
+  "rollback_test": "Force failure on command receipt insert after setting/log insert; no row or audit event survives",
+  "second_firm_test": "Different linked practice firm cannot read, insert, update or delete first-firm state",
+  "audit_test": "One command event and one per captured message; replay adds nothing; no message, amount or hidden finding in payload",
+  "previous_execution": {
+    "commit": "dac686b297835c094fbe29972234cbed5f65f0be",
+    "evidence": "https://github.com/ben2harwood-lgtm/jobguard/pull/926#issuecomment-7146489269",
+    "runtime": "PostgreSQL 16, synthetic embedded V2 stack",
+    "chasing": {
+      "passed": 6,
+      "failed": 1,
+      "failure": "The decline fixture used a command unavailable in the V2 database."
+    },
+    "base_seed": {
+      "passed": 3,
+      "failed": 0
+    },
+    "browser": {
+      "passed": 0,
+      "failed": 2,
+      "failure": "The practice sign-in setup returned 401."
+    }
+  },
+  "current_execution": {
+    "base_commit": "b6441f6a",
+    "change": "test-only: browser spec reads the saved log instead of the run POST body",
+    "runtime": "PostgreSQL 16, synthetic embedded V2 stack, Node 24, cloud container",
+    "seed_with_k4": {
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser_phone_https": {
+      "passed": 2,
+      "failed": 0,
+      "widths": [
+        360,
+        1280
+      ],
+      "screenshots": [
+        "v2-chasing-360.png",
+        "v2-chasing-1280.png"
+      ]
+    },
+    "still_required": "Mac lane B: three fresh-stack phone-mode runs (rule 22); green CI at the pushed head"
+  }
+}

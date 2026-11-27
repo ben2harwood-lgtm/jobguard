@@ -82,10 +82,14 @@ try {
   // V2-E1 open facts (2029) and their firm lock (2064).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_open_fact.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("./migrations/2064_v2_open_fact_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-K4: local-only chasing tables, after the checked V2 boundary.
+  await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
   // V2-FL-6 (2054): must stay the last migration line; later pieces add theirs above it (rule 30).
   await client.query(readFileSync(new URL("./migrations/2054_v2_own_tables_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
+  // V2-K4: discover the local reminders view from the rehearsal launcher.
+  console.log(`Practice reminders: ${settings.AUTH_ALLOWED_ORIGIN}/jobs/${jobId}/chasing`);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();

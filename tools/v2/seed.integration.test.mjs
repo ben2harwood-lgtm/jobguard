@@ -97,7 +97,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, firstSession, secondSession;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   process.env.JOBGUARD_LOCAL_V2 = "1";
@@ -150,7 +150,8 @@ test("SX fixed GET list has working positive controls before checking refusals",
 // End V2-SX positive and refusal block.
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  firstSession = await signIn("builder");
+  const { cookies } = firstSession;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -200,7 +201,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  secondSession = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = secondSession;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -2753,4 +2755,11 @@ test("SX signed-out builder cannot reuse the old real or practice cookies", asyn
   await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
     record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
   });
+// Run last: these synthetic cases add jobs after the seed's exact-count and
+// isolation assertions. They use the two sessions already exercised over HTTP.
+test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
+  Object.assign(process.env, settings, { JOBGUARD_LOCAL_V2: "1", JOBGUARD_ENV: "synthetic_demo", AUTH_CODE_SECRET: authSecret });
+  if (embedded) process.env.JOBGUARD_V2_STORAGE_DIR = storageData;
+  const { runChasingProof } = await import("./chasing.integration.test.mjs");
+  await runChasingProof(t, { admin, runtime, firstSession, secondSession });
 });
