@@ -1,0 +1,6 @@
+{
+  "migration": "2028_v2_measurement.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
