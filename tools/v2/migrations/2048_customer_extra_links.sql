@@ -37,6 +37,14 @@ DO $$ BEGIN
  CREATE POLICY v2_f6_owner ON app.v2_customer_extra_link TO jobguard_migration USING(true) WITH CHECK(true);
  END IF;
 END $$;
+-- V2-FL: the shared practice tenant holds several firms, so add the restrictive firm
+-- lock that 2001 and 2047 put on every job-bound table (same form as 2047's direct rule).
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.v2_customer_extra_link'::regclass AND polname='v2_practice_firm') THEN
+ CREATE POLICY v2_practice_firm ON app.v2_customer_extra_link AS RESTRICTIVE FOR ALL TO jobguard_runtime
+ USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_customer_extra_link.tenant_id,v2_customer_extra_link.job_id)));
+ END IF;
+END $$;
 REVOKE ALL ON app.v2_customer_extra_link FROM PUBLIC,jobguard_identity,jobguard_worker,jobguard_shadow;
 GRANT SELECT,INSERT,UPDATE ON app.v2_customer_extra_link TO jobguard_runtime;
 

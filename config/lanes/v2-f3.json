@@ -30,6 +30,7 @@
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/customer-extra-links.browser.test.mjs",
+        "tools/v2/firm-lock/FL-F3.checks.mjs",
         "tools/v2/seed.integration.test.mjs"
       ]
     }

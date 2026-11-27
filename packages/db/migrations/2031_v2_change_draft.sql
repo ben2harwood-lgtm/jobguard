@@ -96,6 +96,14 @@ BEGIN
   DROP TRIGGER IF EXISTS v2_change_draft_task_immutable ON app.v2_change_draft_task;
   CREATE TRIGGER v2_change_draft_task_immutable BEFORE UPDATE OR DELETE ON app.v2_change_draft_task
     FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_authorization_record();
+  -- V2-FL: the shared practice tenant holds several firms, so both job-bound tables carry the
+  -- restrictive firm lock that 2001 and 2047 put on every job-bound table (2047's direct rule).
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_change_draft;
+  CREATE POLICY v2_practice_firm ON app.v2_change_draft AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_change_draft.tenant_id, v2_change_draft.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_change_draft_task;
+  CREATE POLICY v2_practice_firm ON app.v2_change_draft_task AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_change_draft_task.tenant_id, v2_change_draft_task.job_id)));
 END
 $v2$;
 COMMIT;
