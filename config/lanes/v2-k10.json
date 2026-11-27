@@ -3,9 +3,10 @@
   "lanes": {
     "v2-k10": {
       "branches": [
-        "codex/sandbox/v2-k10"
+        "codex/sandbox/v2-k10",
+        "claude/project-thread-trp08u-k10"
       ],
-      "note": "RED. Read-only V2 builder profit from accepted quote, approved extras and confirmed supplier costs. No migration or data-changing command.",
+      "note": "RED. Read-only V2 builder profit from accepted quote, approved extras and confirmed supplier costs. No migration or data-changing command. next.config.mjs is allowed only for the NEXT_PUBLIC_JOBGUARD_V2_PROFIT flag line, so the job page reads profit only in local V2.",
       "allow": [
         "packages/core/src/v2-job-profit.ts",
         "packages/core/src/v2-job-profit.test.ts",
@@ -20,7 +21,8 @@
         "apps/web/app/ui/workspace-shell.tsx",
         "tools/v2/seed.integration.test.mjs",
         "tools/v2/k10.phone.test.mjs",
-        "apps/web/app/ui/v2-job-profit.test.tsx"
+        "apps/web/app/ui/v2-job-profit.test.tsx",
+        "apps/web/next.config.mjs"
       ]
     }
   }

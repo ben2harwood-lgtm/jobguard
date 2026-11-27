@@ -19,8 +19,14 @@ async function mount() { render(); cleanup = hooks.effect!(); await vi.waitFor((
 beforeEach(() => {
   hooks.state = null; hooks.effect = undefined; fetcher.mockReset();
   vi.stubGlobal("React", React); vi.stubGlobal("fetch", fetcher); vi.stubGlobal("window", new EventTarget());
+  vi.stubEnv("NEXT_PUBLIC_JOBGUARD_V2_PROFIT", "1");
 });
-afterEach(() => { cleanup?.(); cleanup = undefined; vi.unstubAllGlobals(); });
+afterEach(() => { cleanup?.(); cleanup = undefined; vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+it("makes no request and shows nothing outside local V2", () => {
+  vi.stubEnv("NEXT_PUBLIC_JOBGUARD_V2_PROFIT", "");
+  render(); cleanup = hooks.effect!();
+  expect(fetcher).not.toHaveBeenCalled(); expect(render()).toBe("");
+});
 it("renders the exact stored ex-VAT summary and refreshes after a save", async () => {
   fetcher.mockResolvedValueOnce(Response.json(profit));
   await mount();
