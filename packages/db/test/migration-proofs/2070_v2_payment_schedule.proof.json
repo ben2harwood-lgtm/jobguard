@@ -1,5 +1,5 @@
 {
-  "migration": "2067_v2_payment_schedule.sql",
+  "migration": "2070_v2_payment_schedule.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
