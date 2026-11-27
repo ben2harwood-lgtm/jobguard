@@ -12,7 +12,8 @@ test("a fresh browser on the shared address starts a practice firm and reaches N
   const start = page.waitForResponse(response => new URL(response.url()).pathname === "/api/practice-company" && response.request().method() === "POST");
   await page.getByRole("button", { name: "Start my own practice firm", exact: true }).click();
   const response = await start;
-  expect(response.ok(), `POST /api/practice-company returned ${response.status()} ${await response.text()}`).toBe(true);
+  // Status only: the page navigates on success, so its body may no longer be readable. Read it only to explain a refusal.
+  if (!response.ok()) throw new Error(`POST /api/practice-company returned ${response.status()} ${await response.text().catch(() => "")}`);
   await expect(page.getByText("The practice workspace couldn’t open. Please try again.")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Walk the job" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
