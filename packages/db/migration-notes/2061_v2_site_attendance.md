@@ -1,6 +1,6 @@
-# 2016 · V2 who was on site today
+# 2061 · V2 who was on site today
 
-The checked V2 bootstrap applies 2016 after 2027, because its guard reads the
+The checked V2 bootstrap applies 2061 after 2027, because its guard reads the
 crew records. The shared runner leaves databases without the dedicated V2
 database name and firm policy untouched.
 

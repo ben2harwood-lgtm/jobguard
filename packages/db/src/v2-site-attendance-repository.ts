@@ -52,7 +52,7 @@ export class SiteAttendanceRepository {
   async list(context: VerifiedTenantContext, jobId: string, sessionId: string): Promise<SiteAttendanceView> {
     return withTenant(this.pool, context, async ({ $client: client }) => {
       const me = await this.editor(client, sessionId);
-      // The site day is Europe/London's, matching the guard in migration 2016.
+      // The site day is Europe/London's, matching the guard in migration 2061.
       const { rows: [window] } = await client.query<{ today: string; days: string[] }>(`
         WITH w AS (SELECT (clock_timestamp() AT TIME ZONE 'Europe/London')::date AS today)
         SELECT w.today::text AS today, array(SELECT (w.today - n)::text FROM generate_series(0, 6) n ORDER BY n) AS days

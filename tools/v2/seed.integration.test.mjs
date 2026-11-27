@@ -1416,7 +1416,7 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   assert.equal(await policyCount(), before);
 });
 
-// V2-F8 (Q10, migration 2016): who was on site today. The builder taps each person; no location is stored.
+// V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
 const attendanceTable = "app.v2_site_attendance";
 const attendanceApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).siteAttendance;
 const attendanceQuery = { version: "v2-site-attendance-query.v1" };
