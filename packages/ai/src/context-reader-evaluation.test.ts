@@ -21,3 +21,15 @@ describe("V2-SQ-C eval gate: Reader A on the spoken-quote understanding set", ()
     expect(contextReaderFloors(report), text).toEqual({ wrongNumbers: true, inventedWork: true, room: true, trade: true });
   });
 });
+
+const heldOutPath = fileURLToPath(new URL("../../../docs/fixtures/ai/spoken-quote-understanding/held-out.v1.json", import.meta.url));
+describe("V2-SQ-C held-out set (planner-written): hard floor gated, rooms and trades reported", () => {
+  it("keeps no wrong or invented number and invents no work", () => {
+    const cases = loadContextReaderCases(heldOutPath);
+    expect(cases).toHaveLength(10);
+    const report = evaluateContextReader(cases);
+    const text = formatContextReaderReport(report);
+    if (process.env.CONTEXT_READER_HELD_OUT_REPORT) writeFileSync(process.env.CONTEXT_READER_HELD_OUT_REPORT, `${text}\n`);
+    expect({ wrongNumbers: report.wrongNumbers, inventedWork: report.inventedWork }, text).toEqual({ wrongNumbers: 0, inventedWork: 0 });
+  });
+});

@@ -5,9 +5,14 @@ import { readSpokenJob } from "./context-reader.js";
  * V2-SQ-C eval gate for Reader A over docs/fixtures/ai/spoken-quote-understanding/cases.v1.json. Deterministic:
  * no model, no network. A number is wrong when the reader keeps one that is not exactly the said number.
  */
-type ExpectedLine = { words: string; room: string; trade: string; quantity: string | null; unit: string | null; pence: number | null; basis: string };
-type Case = { id: string; text: string; unpunctuated?: boolean; lines: ExpectedLine[]; areaPrices: { room: string; pence: number }[];
-  wholeJobPence: number | null; questions: { line?: string; contains?: string }[] };
+/** A list is the set of accepted answers (held-out cases allow either of two); null in a number list accepts open. */
+type OneOf<T> = T | T[];
+type ExpectedLine = { words: string; room: OneOf<string>; trade: OneOf<string>; quantity: OneOf<string | null>; unit: string | null;
+  pence: OneOf<number | null>; basis: string };
+type Case = { id: string; text: string; unpunctuated?: boolean; lines: ExpectedLine[];
+  areaPrices: { room: string; pence: number; orOpenWithQuestion?: boolean }[];
+  wholeJobPence: number | null; questions: { line?: string; contains?: string; ifOpen?: boolean }[] };
+const accepted = <T>(value: OneOf<T>): T[] => Array.isArray(value) ? value : [value];
 export type ContextReaderReport = {
   cases: number; expectedLines: number; missedWork: number; inventedWork: number; wrongNumbers: number; missedNumbers: number;
   roomRight: number; tradeRight: number; matchedLines: number; questionsExpected: number; questionsRaised: number;
@@ -39,11 +44,12 @@ export function evaluateContextReader(cases: Case[]): ContextReaderReport {
       used.add(index); after = index; matched.set(expected.words, index); report.matchedLines++;
       const line = result.lines[index]!;
       const room = roomOf.get(line.areaKey) ?? "?";
-      if (room === expected.room) report.roomRight++; else miss(`room for “${expected.words}”: ${room}, expected ${expected.room}`);
-      if (line.trade.value === expected.trade) report.tradeRight++; else miss(`trade for “${expected.words}”: ${line.trade.value}, expected ${expected.trade}`);
-      for (const [name, actual, said] of [["quantity", line.quantity.value, expected.quantity], ["price", line.unitPricePence.value, expected.pence]] as const) {
-        if (actual !== null && actual !== said) { report.wrongNumbers++; miss(`WRONG ${name} for “${expected.words}”: ${actual}, said ${said}`); }
-        else if (actual === null && said !== null) { report.missedNumbers++; miss(`${name} not kept for “${expected.words}” (said ${said})`); }
+      if (accepted(expected.room).includes(room)) report.roomRight++; else miss(`room for “${expected.words}”: ${room}, expected ${accepted(expected.room).join(" or ")}`);
+      if (accepted(expected.trade).includes(line.trade.value)) report.tradeRight++; else miss(`trade for “${expected.words}”: ${line.trade.value}, expected ${accepted(expected.trade).join(" or ")}`);
+      for (const [name, actual, said] of [["quantity", line.quantity.value, accepted(expected.quantity)], ["price", line.unitPricePence.value, accepted(expected.pence)]] as const) {
+        const ok = (said as (string | number | null)[]);
+        if (actual !== null && !ok.includes(actual)) { report.wrongNumbers++; miss(`WRONG ${name} for “${expected.words}”: ${actual}, said ${ok.join(" or ")}`); }
+        else if (actual === null && !ok.includes(null)) { report.missedNumbers++; miss(`${name} not kept for “${expected.words}” (said ${ok.join(" or ")})`); }
       }
     }
     result.lines.forEach((line, at) => { if (!used.has(at)) { report.inventedWork++; miss(`INVENTED work “${line.description.value}”`); } });
@@ -52,14 +58,20 @@ export function evaluateContextReader(cases: Case[]): ContextReaderReport {
       if (!item.areaPrices.some(said => said.room === room && said.pence === price.pence)) { report.wrongNumbers++; miss(`WRONG room price ${room} ${price.pence}`); }
     }
     for (const said of item.areaPrices) {
-      if (!result.areaPrices.some(price => roomOf.get(price.areaKey) === said.room && price.pence === said.pence)) { report.missedNumbers++; miss(`room price not kept: ${said.room} ${said.pence}`); }
+      if (result.areaPrices.some(price => roomOf.get(price.areaKey) === said.room && price.pence === said.pence)) continue;
+      report.missedNumbers++; miss(`room price not kept: ${said.room} ${said.pence}`);
+      if (said.orOpenWithQuestion) {
+        report.questionsExpected++;
+        if (result.questions.length > 0 && result.questions.some(asked => /price/iu.test(asked.text))) report.questionsRaised++; else miss(`question not raised for the open room price`);
+      }
     }
     const whole = result.wholeJobPrice?.pence ?? null;
     if (whole !== null && whole !== item.wholeJobPence) { report.wrongNumbers++; miss(`WRONG whole-job price ${whole}`); }
     else if (whole === null && item.wholeJobPence !== null) { report.missedNumbers++; miss(`whole-job price not kept (said ${item.wholeJobPence})`); }
     for (const question of item.questions) {
-      report.questionsExpected++;
       const lineIndex = question.line === undefined ? undefined : matched.get(question.line);
+      if (question.ifOpen && lineIndex !== undefined && result.lines[lineIndex]!.unitPricePence.value !== null) continue;
+      report.questionsExpected++;
       const raised = result.questions.some(asked => (question.line === undefined || asked.lineIndex === lineIndex)
         && (question.contains === undefined || asked.text.toLowerCase().includes(question.contains.toLowerCase())));
       if (raised) report.questionsRaised++; else miss(`question not raised${question.line ? ` on “${question.line}”` : ""}${question.contains ? ` (“${question.contains}”)` : ""}`);
