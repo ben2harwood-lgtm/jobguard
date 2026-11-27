@@ -1,6 +1,6 @@
 # Q63 · V2-G4: who can read the handover pack. The builder can stop a link, a changed customer stops the old one, and another firm sees nothing
 
-**Tier:** RED (a no-sign-in customer capability link). **Builder:** Opus 5.5 thread. **Checker:** Codex, by an `@codex review` comment on the PR. **Base:** G3 #999 `claude/project-thread-trp08u-g3` @ a0514498a (on G2 #998). Record the head sha you start from. **Branch:** the builder thread's own branch, in `config/lanes/v2-g4.json`. **PR:** draft into G3's branch. **Migration: 2059** (the next free number; final number set at merge). **Plan check:** Astra, frm-management-layer#3. Rules 1 to 30 apply. Planner: 27 Nov 11:15 UK. Roadmap row G3 → **G4** "who can read the pack (other firm, cancelled recipient)".
+**Tier:** RED (a no-sign-in customer capability link). **Builder:** Opus 5.5 thread. **Checker:** Codex, by an `@codex review` comment on the PR. **Base:** G3 #999 `claude/project-thread-trp08u-g3` @ a0514498a (on G2 #998). Record the head sha you start from. **Branch:** the builder thread's own branch, in `config/lanes/v2-g4.json`. **PR:** draft into G3's branch. **Migration: 2062** (2059 to 2061 are taken by D1 #904, D4 and F8; final number set at merge). **Plan check:** Astra, frm-management-layer#3. Rules 1 to 30 apply. Planner: 27 Nov 11:15 UK. Roadmap row G3 → **G4** "who can read the pack (other firm, cancelled recipient)".
 
 ## Planner reading (Astra please confirm or correct)
 1. **The builder can stop a link.** A stop is one row per release, with a reason of at most 200 characters, and it can't be undone. A stopped link gets the same `HANDOVER_LINK_REFUSED` as an unknown one. To send the pack again, the builder releases again: a new release and a new link, as G3 already does.
@@ -20,17 +20,17 @@
   - `_open` (line 198), `_acknowledge` (line 210), `_close` (line 232), grants (lines 237 to 239), audit definers (lines 244 to 281).
 - `packages/db/src/v2-handover-release-repository.ts`: `releases()` (line 36), `release()` (line 64) with the recipient read (lines 87 to 91) and `assertV2Recipient`; `captureV2Delivery` after commit (line 116); `open()` (line 121).
 - E2's cancel table, for shape: `2029_v2_fact_reply.sql` lines 74 to 85 on `claude/project-thread-49qd38` @ cf43ea480. Copy it; don't import it.
-- E2's `jobguard_migration` read policies for `job_party_current`, `job_party_binding` and `customer_revision`: `2029_v2_fact_reply.sql` lines 242 to 246. 2059 adds its own copies of these policies, scoped through `v2_handover_link_scoped(t, j)`, because 2029 is on another stack.
+- E2's `jobguard_migration` read policies for `job_party_current`, `job_party_binding` and `customer_revision`: `2029_v2_fact_reply.sql` lines 242 to 246. 2062 adds its own copies of these policies, scoped through `v2_handover_link_scoped(t, j)`, because 2029 is on another stack.
 - `tools/v2/bootstrap.mjs` lines 79 to 80: the 2058 line, the last V2 line on this base.
 
 ## Build
-1. **Migration 2059** `packages/db/migrations/2059_v2_handover_release_stop.sql`, with its note and proof file. Use the V2 fence, plus `to_regclass('app.v2_handover_release') IS NULL` → RETURN.
+1. **Migration 2062** `packages/db/migrations/2062_v2_handover_release_stop.sql`, with its note and proof file. Use the V2 fence, plus `to_regclass('app.v2_handover_release') IS NULL` → RETURN.
    - `app.v2_handover_release_stop`: `tenant_id`, `job_id`, `release_id`, `command_id`, `actor_membership_id`, `reason varchar(200)`, `stopped_at`. PK `(tenant_id, job_id, release_id)`; UNIQUE `(tenant_id, command_id)`; FK to the release.
    - RLS enabled and forced; runtime policy `lp11_policy_tenant()` plus job EXISTS; `GRANT SELECT, INSERT` to `jobguard_runtime`; immutable trigger. A `jobguard_migration` read policy scoped by `v2_handover_link_scoped`.
    - The three scoped customer read policies from reading 2.
    - `CREATE OR REPLACE` of `v2_handover_link_scope_open` and `v2_handover_link_view` with the checks from readings 1 to 3. Everything else in them stays as 2058 has it. A stop or recipient refusal logs a failure like any other.
    - Run it twice; the second run changes nothing. The proof file records both function bodies' hashes before and after.
-2. **Bootstrap.** Add the 2059 line after the 2058 line (rule 30: above FL-6's 2054 if that line is present).
+2. **Bootstrap.** Add the 2062 line after the 2058 line (rule 30: above FL-6's 2054 if that line is present).
 3. **Repository.** `HandoverReleaseRepository.stop(context, jobId, sessionId, { version: "v2-handover-stop-command.v1", commandId, releaseId, reason })`:
    - the actor from `app.v2_work_plan_editor`, under G2's lock `handover:<jobId>`;
    - a replay with the same body returns the stored stop; a different body gives `HANDOVER_COMMAND_CONFLICT`; an unknown or other-job release gives `HANDOVER_RELEASE_NOT_FOUND`;
@@ -47,7 +47,7 @@
   3. **Newer ignores stopped.** Release v1, release v2, stop v2. v1's link shows `newerAvailable: false`.
   4. **Other firm.** A second-firm builder gets 404 on GET and POST (release and stop) of the first firm's job. A first-firm token sent with second-firm cookies gets the refusal body. **Rule 30 firm A/B read check:** the second firm's runtime sees no `v2_handover_release_stop` rows.
   5. Replay and conflict for stop. UPDATE and DELETE are refused.
-  6. A 2059 rerun changes nothing. G3's own seed tests still pass unchanged.
+  6. A 2062 rerun changes nothing. G3's own seed tests still pass unchanged.
 - **Rule 29:** if SX #965 is on the base, prove the new POST body with `assertCapabilityConfined` and the three refusals. Otherwise write "Rule 29: pending V2-SX".
 - **Unit:** the zod command, the labels, the failure mapping.
 - **Browser:** extend G3's `tools/v2/handover-release.browser.test.mjs` by one 360 px case: stop the link, reload the customer page, and see the refusal page.

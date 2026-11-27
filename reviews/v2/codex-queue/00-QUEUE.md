@@ -85,7 +85,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D25 | Q60 | V2-SQ2 split and combine keep known prices; price box per row; running total says incomplete; whole-job figure shown, never spread | **Opus** | SQ1 (Q59) PR | none | RED money |
 | D26 | Q61 | V2-SQ3 proof: untouched transcripts → saved quote that reopens unchanged, desktop and 360 px; Ben's phone checklist | **Opus** | SQ2 (Q60) PR | none | T1 |
 | D27 | Q62 | V2-SQ4 Tommy demo journeys (#918 @ 32decb2c1, read only) vs V2 routes: On V2 / On a V2 PR / Missing; specs for journeys V2 covers | **Opus** | v2/main | none | T1 |
-| D28 | Q63 | V2-G4 who can read the handover pack: builder stops a link; a replaced customer stops the old link; newer ignores stopped; other firm sees nothing | **Opus** | G3 #999 `claude/project-thread-trp08u-g3` | 2059 | RED |
+| D28 | Q63 | V2-G4 who can read the handover pack: builder stops a link; a replaced customer stops the old link; newer ignores stopped; other firm sees nothing | **Opus** | G3 #999 `claude/project-thread-trp08u-g3` | 2062 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
