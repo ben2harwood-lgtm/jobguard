@@ -30,6 +30,10 @@ BEGIN
     USING (tenant_id=(SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id,j.id)=(v2_hire_revision.tenant_id,v2_hire_revision.job_id)
     ));
+  -- FL-1 rule: a restrictive firm lock so runtime only sees hire rows on jobs the firm can see.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_hire_revision;
+  CREATE POLICY v2_practice_firm ON app.v2_hire_revision AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_hire_revision.tenant_id, v2_hire_revision.job_id)));
   REVOKE ALL ON app.v2_hire_revision FROM PUBLIC;
   GRANT SELECT,INSERT ON app.v2_hire_revision TO jobguard_runtime;
 END

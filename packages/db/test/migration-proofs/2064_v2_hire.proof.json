@@ -1,5 +1,5 @@
 {
-  "migration": "2021_v2_hire.sql",
+  "migration": "2064_v2_hire.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
