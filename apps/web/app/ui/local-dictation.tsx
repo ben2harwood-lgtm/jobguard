@@ -19,12 +19,13 @@ export function browserLocalSpeechAdapter(_discoverNative=true):LocalSpeechAdapt
   return typeof window === "undefined" ? null : window.__JOBGUARD_SPEECH_ADAPTER__ ?? null;
 }
 
-export type DictationFailure = "denied" | "no_microphone" | "no_speech" | "unsupported" | "failed";
+export type DictationFailure = "denied" | "no_microphone" | "no_speech" | "unsupported" | "model_failed" | "failed";
 /** A refused or missing microphone, from the DOMException name; anything else stopped the microphone. */
 export function speechFailure(error: unknown): DictationFailure {
   const name = (error as { name?: unknown } | null)?.name;
   if (name === "NotAllowedError" || name === "SecurityError") return "denied";
   if (name === "NotFoundError" || name === "OverconstrainedError") return "no_microphone";
+  if (name === "VoiceModelError") return "model_failed";
   return "failed";
 }
 /** Recognition error codes reported during listening. */
@@ -39,6 +40,7 @@ export function dictationMessage(code: DictationFailure, startLabel = "Talk thro
     case "no_microphone": return "No microphone found. You can type the job below instead.";
     case "no_speech": return `We didn't hear anything. Press ${startLabel} to try again, or type below.`;
     case "unsupported": return "Voice doesn't work in this browser. Type the job below. It works the same way.";
+    case "model_failed": return `The voice model didn't load. Check your connection and press ${startLabel} again, or type below.`;
     case "failed": return "The microphone stopped. Your words so far are kept. You can try again or type.";
   }
 }
@@ -80,7 +82,7 @@ export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk throu
   const buttonClass=designed?"btn":undefined;
   return <section className={designed?"dictation card card-body form":"dictation"} aria-label="On-device dictation">
     <h2>Say the job out loud</h2>
-    {availability==="unavailable"?<p>{dictationMessage("unsupported",startLabel)}</p>:<p>Uses your microphone on this phone or computer. The voice model ({LOCAL_SPEECH_DOWNLOAD_MIB} MiB) downloads once, the first time. Nothing you say leaves this device.</p>}
+    {availability==="unavailable"?<p>{dictationMessage("unsupported",startLabel)}</p>:<p>Uses your microphone on this phone or computer. The voice model ({LOCAL_SPEECH_DOWNLOAD_MIB} MiB) downloads the first time you press it. Nothing you say leaves this device.</p>}
     <button type="button" className={buttonClass} disabled={applyDisabled||availability==="unavailable"||availability==="checking"||listening||loading} onClick={()=>void tap()}>{startLabel}</button>
     {loading&&<><p role="status">Getting the microphone ready…</p><button type="button" className={buttonClass} onClick={stopLoading}>Cancel</button></>}
     {/* A pending draft must never prevent stopping an already active microphone. */}

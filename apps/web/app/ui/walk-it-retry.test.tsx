@@ -262,6 +262,8 @@ it("gives each microphone failure its own message, and says how to allow a refus
   expect(dictationMessage("failed")).toBe("The microphone stopped. Your words so far are kept. You can try again or type.");
   for (const [name, code] of [["NotAllowedError", "denied"], ["SecurityError", "denied"], ["NotFoundError", "no_microphone"],
     ["OverconstrainedError", "no_microphone"], ["AbortError", "failed"]] as const) expect(speechFailure(new DOMException("x", name))).toBe(code);
+  expect(speechFailure(Object.assign(new Error("Local speech unavailable"), { name: "VoiceModelError" }))).toBe("model_failed");
+  expect(dictationMessage("model_failed")).toBe("The voice model didn't load. Check your connection and press Talk through a quote again, or type below.");
   expect(speechFailure(new Error("worker"))).toBe("failed");
 });
 

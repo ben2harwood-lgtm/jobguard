@@ -1,6 +1,7 @@
 import type { LocalSpeechAdapter, LocalSpeechSession } from "./local-dictation";
 
 export const LOCAL_SPEECH_DOWNLOAD_MIB = "42.4";
+// The bundled model is Vosk's small en-US model. "en-GB" below is the page's contract language, not the model's accent.
 type Callbacks = Parameters<LocalSpeechAdapter["start"]>[0];
 
 // Constructed only by a user gesture. Neither native speech nor remote providers are used.
@@ -19,7 +20,7 @@ export function createLocalSpeechAdapter(progress:(percent:number)=>void):LocalS
     void context?.close().catch(()=>{});worker?.terminate();worker=undefined;
   };
   let rejectLoad:((reason:Error)=>void)|undefined;
-  const fail = () => { const cb=callbacks, reject=rejectLoad;rejectLoad=undefined;dispose();reject?.(new Error("Local speech unavailable"));cb?.error("local-unavailable"); };
+  const fail = () => { const cb=callbacks, reject=rejectLoad;rejectLoad=undefined;dispose();reject?.(Object.assign(new Error("Local speech unavailable"),{name:"VoiceModelError"}));cb?.error("local-unavailable"); };
   const finish = () => {const cb=callbacks;dispose();cb?.end()};
   const session:LocalSpeechSession={
     stop(){if(cancelled||stopping)return;stopping=true;if(processor)processor.onaudioprocess=null;stream?.getTracks().forEach(track=>track.stop());

@@ -47,7 +47,7 @@ for(const mode of ["denied","no-speech"] as const)test(`${mode} explains what ha
 
 test("one press asks for the microphone, loads the voice model and starts listening",async({page})=>{
   await inject(page,"downloadable");const speechRequests:string[]=[];page.on("request",r=>{if(/speech|transcri|audio/iu.test(r.url()))speechRequests.push(r.url())});await openCapture(page);
-  await expect(page.getByText("Uses your microphone on this phone or computer. The voice model (42.4 MiB) downloads once, the first time. Nothing you say leaves this device.",{exact:true})).toBeVisible();
+  await expect(page.getByText("Uses your microphone on this phone or computer. The voice model (42.4 MiB) downloads the first time you press it. Nothing you say leaves this device.",{exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:"Install on-device voice"})).toHaveCount(0);
   await page.getByRole("button",{name:"Talk through a quote",exact:true}).click();
   await expect(page.getByText("Listening on this device",{exact:true})).toBeVisible();

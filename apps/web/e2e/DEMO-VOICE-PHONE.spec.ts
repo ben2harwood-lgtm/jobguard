@@ -103,7 +103,7 @@ test("a model download failure preserves typed work",async({page})=>{
   await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
   await page.getByLabel("Work details").fill("Fictional typed draft");
   await page.getByRole("button",{name:button,exact:true}).click();
-  await expect(page.getByText("The microphone stopped. Your words so far are kept. You can try again or type.",{exact:true})).toBeVisible({timeout:60_000});
+  await expect(page.getByText(`The voice model didn't load. Check your connection and press ${button} again, or type below.`,{exact:true})).toBeVisible({timeout:60_000});
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed draft");
 });
 
@@ -117,7 +117,7 @@ test("a same-size WASM hash mismatch preserves typing before any model download"
   await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
   await page.getByLabel("Work details").fill("Fictional typed work survives a corrupt download");
   await page.getByRole("button",{name:button,exact:true}).click();
-  await expect(page.getByText("The microphone stopped. Your words so far are kept. You can try again or type.",{exact:true})).toBeVisible({timeout:60_000});
+  await expect(page.getByText(`The voice model didn't load. Check your connection and press ${button} again, or type below.`,{exact:true})).toBeVisible({timeout:60_000});
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed work survives a corrupt download");
   expect(observed.requests.filter(r=>/\/model\.part-/u.test(r.url))).toEqual([]);
 });
