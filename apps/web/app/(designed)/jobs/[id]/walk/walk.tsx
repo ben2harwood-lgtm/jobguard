@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { WalkEntryCommand, WalkPhotoFilingCommand, WalkSessionCommand } from "@jobguard/api/workspace";
 import { Card, Note, Tag } from "../../../designed-ui";
-import { currentRoom, filingLabel, leavesWalk, needsRoom, roomSummaryEntries, newEntry, restoreEntry, validMeasurement, type EntryBody, type EntryView, type SessionView } from "./walk-state";
+import { currentRoom, filingLabel, leavesWalk, needsRoom, roomSummaryEntries, newEntry, newPhotoEntry, restoreEntry, validMeasurement, walkPhotoAction, walkPhotoLabel, type EntryBody, type EntryView, type SessionView } from "./walk-state";
 
 type Pending = ({ action: "start" } & WalkSessionCommand) | ({ action: "record" } & WalkEntryCommand) | ({ action: "file" } & WalkPhotoFilingCommand);
 
@@ -26,6 +26,7 @@ export function Walk({ jobId }: { jobId: string }) {
   const router = useRouter();
   const endpoint = `/api/v2-backend/jobs/${encodeURIComponent(jobId)}/walk`;
   const [sessions, setSessions] = useState<SessionView[] | null>(null);
+  const [jobLive, setJobLive] = useState<boolean | null>(null);
   const [movingPhoto, setMovingPhoto] = useState<number | null>(null);
   const [selected, setSelected] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
@@ -49,8 +50,8 @@ export function Walk({ jobId }: { jobId: string }) {
     const controller = new AbortController();
     fetch(endpoint, { cache: "no-store", signal: controller.signal }).then(async response => {
       if (!response.ok) throw new Error("unavailable");
-      const body: { sessions: SessionView[] } = await response.json();
-      if (active) { setSessions(body.sessions); setSelected(body.sessions.at(-1)?.sessionId ?? ""); }
+      const body: { sessions: SessionView[]; jobLive?: boolean } = await response.json();
+      if (active) { setSessions(body.sessions); setJobLive(body.jobLive ?? false); setSelected(body.sessions.at(-1)?.sessionId ?? ""); }
     }).catch(() => { if (active) setProblem("The walk could not open. Reload to try again."); });
     return () => { active = false; controller.abort(); };
   }, [endpoint]);
@@ -76,6 +77,17 @@ export function Walk({ jobId }: { jobId: string }) {
     setBusy(true);
     setProblem("");
     try {
+      if (command.action === "record" && command.entry.kind === "photo") {
+        // V2-B1E: upload first under the photo's own id; a retry resends the same ids, so it can't duplicate.
+        const upload = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "photo", version: "v2-walk-photo-command.v1", commandId: command.entry.photoId, fixture: "completion-photo" }) });
+        if (upload.status === 409 && (await upload.json().catch(() => ({})) as { code?: string }).code === "JOB_NOT_LIVE") {
+          setJobLive(false); setPending(null);
+          setProblem("Photos can be added once the job is live (practice limit)");
+          return;
+        }
+        if (!upload.ok) throw new Error("not uploaded");
+      }
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(command) });
       // Version conflicts come back 409; a refused filing comes back 400.
@@ -105,8 +117,9 @@ export function Walk({ jobId }: { jobId: string }) {
       // Read the authoritative order and room links, including after an unknown outcome retry.
       const refreshed = await fetch(endpoint, { cache: "no-store" });
       if (!refreshed.ok) throw new Error("not read");
-      const body: { sessions: SessionView[] } = await refreshed.json();
+      const body: { sessions: SessionView[]; jobLive?: boolean } = await refreshed.json();
       setSessions(body.sessions);
+      setJobLive(body.jobLive ?? false);
       setSelected(command.sessionId);
       setPending(null);
     } catch {
@@ -125,6 +138,13 @@ export function Walk({ jobId }: { jobId: string }) {
     const command = newEntry(session.sessionId, entries, entry, crypto.randomUUID(), new Date().toISOString());
     void save({ action: "record", ...command });
   }
+
+  function takePhoto() {
+    if (!session || blocked || sending.current || !jobLive) return;
+    const command = newPhotoEntry(session.sessionId, entries, crypto.randomUUID(), crypto.randomUUID(), new Date().toISOString());
+    void save({ action: "record", ...command });
+  }
+  const photoAction = walkPhotoAction(jobLive, blocked || unsent || !activeRoom);
 
   function file(entry: EntryView, roomCaptureOrder: number) {
     if (!session || blocked || sending.current) return;
@@ -183,8 +203,8 @@ export function Walk({ jobId }: { jobId: string }) {
                 onChange={event => setRoom(event.target.value)}/></label>
               <button className="btn primary" disabled={blocked || !room.trim() || Boolean(note.trim() || quantity || unit)}>Add room</button>
             </form>
-            <button type="button" className="btn" disabled>Take photo</button>
-            <p>Photos arrive in the next update</p>
+            <button type="button" className="btn" disabled={!photoAction.enabled} onClick={takePhoto} style={{ minHeight: 44 }}>Take photo</button>
+            <p>{photoAction.note}</p>
             <form className="form" onSubmit={event => { event.preventDefault(); if (note.trim()) { add({ kind: "note", text: note.trim() }); setNote(""); } }}>
               <label>Note for {activeRoom?.room ?? "this room"}<textarea placeholder="Dictate or type what you see"
                 maxLength={4000} disabled={blocked || !activeRoom} value={note} onChange={event => setNote(event.target.value)}/></label>
@@ -204,7 +224,7 @@ export function Walk({ jobId }: { jobId: string }) {
         <Card title={`So far in ${roomName ?? "this room"}`}>
           {roomEntries.length === 0 && !pendingEntry && <p className="card-body">Nothing recorded here yet.</p>}
           {roomEntries.map(entry => <article className="card-body" key={entry.captureOrder}>
-            <p>{entry.kind === "measurement" ? `${entry.quantity} ${entry.unit}` : entry.text}</p><Tag tone="green">Saved</Tag>
+            <p>{entry.kind === "measurement" ? `${entry.quantity} ${entry.unit}` : entry.kind === "photo" ? walkPhotoLabel(entry.photo?.state) : entry.text}</p><Tag tone="green">Saved</Tag>
           </article>)}
           {pendingEntry && <article className="card-body" role="status">
             <p>{pendingEntry.entry.kind === "room" ? pendingEntry.entry.room : pendingEntry.entry.kind === "measurement"
@@ -216,6 +236,7 @@ export function Walk({ jobId }: { jobId: string }) {
           <ol aria-label="Saved walk entries">
             {entries.map(entry => <li key={entry.captureOrder} data-testid="walk-entry" className="card-body">
               <strong>{entry.captureOrder}. {entry.kind === "room" ? entry.room : entry.kind === "measurement" ? `${entry.quantity} ${entry.unit}` : entry.kind === "photo" ? "Photo record" : entry.text}</strong>
+              {entry.kind === "photo" && <p data-testid="walk-photo-state">{walkPhotoLabel(entry.photo?.state)}</p>}
               {entry.kind !== "room" && <p>{filingLabel(entry)}</p>}
               {entry.kind === "photo" && <>
                 <button type="button" className="btn" disabled={blocked || unsent}

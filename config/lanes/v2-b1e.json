@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b1e": {
+      "branches": [
+        "claude/project-thread-trp08u-b1e"
+      ],
+      "note": "RED Q50 V2-B1E, option 1 (shared upload rule unchanged, photos on live jobs only). Base codex/sandbox/v2-b1c @ 461f15172. No migration. B1E mount, owned by B1A #920: apps/api/src/workspace/walk.application.ts uploadPhoto and jobLive pass-through only. B1E mount, owned by B1A #920: tools/v2/seed.integration.test.mjs own appended B1E tests. B1E mount, owned by B1B #957 / B1C #973: apps/web/app/(designed)/jobs/[id]/walk/walk.tsx, walk-state.ts and apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts photo action, photo state and photo POST only. B1E mount, owned by B1B #957: tools/v2/walk.browser.test.mjs B1B photo note line and appended B1E test.",
+      "allow": [
+        "apps/api/src/workspace/walk-photo-command.ts",
+        "apps/api/src/workspace/walk-photo.application.ts",
+        "apps/api/src/workspace/walk.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/walk.browser.test.mjs"
+      ]
+    }
+  }
+}

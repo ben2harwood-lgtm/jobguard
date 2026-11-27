@@ -1,4 +1,4 @@
-import { WalkError, walkPhotoFilingCommandV1, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1 } from "@jobguard/api/workspace";
+import { WalkError, walkPhotoCommandV1, walkPhotoFilingCommandV1, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isTrustedBrowserOrigin } from "../../../../contractor/origin";
@@ -10,11 +10,16 @@ const enabled = () => process.env.JOBGUARD_LOCAL_V2 === "1" && process.env.JOBGU
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 const start = walkSessionCommandV1.extend({ action: z.literal("start") });
 const filing = walkPhotoFilingCommandV1.extend({ action: z.literal("file") });
-const commands = z.union([start, filing, walkEntryCommandV1.extend({ action: z.literal("record") })]);
+// V2-B1E: "Take photo" uploads a generated practice photo; the screen then records the photo entry.
+const photo = walkPhotoCommandV1.extend({ action: z.literal("photo") });
+const commands = z.union([start, filing, photo, walkEntryCommandV1.extend({ action: z.literal("record") })]);
 
 function failure(error: unknown) {
   if (error instanceof WalkError) return reply({ code: error.code },
     error.code.endsWith("CONFLICT") ? 409 : error.code === "WALK_EDITOR_REQUIRED" ? 403 : 400);
+  const code = error instanceof Error && "code" in error ? String(error.code) : "";
+  if (code === "JOB_NOT_LIVE") return reply({ code }, 409);
+  if (["UPLOAD_EXPIRED", "OBJECT_INVALID", "COMMAND_CONFLICT", "IDEMPOTENCY_CONFLICT"].includes(code)) return reply({ code }, 409);
   return practiceFailure(error) ?? reply({ code: "WALK_UNAVAILABLE" }, 503);
 }
 
@@ -25,7 +30,8 @@ export async function GET(request: Request, { params }: Route) {
   if (!query.success) return reply({ code: "WALK_INVALID_QUERY" }, 400);
   try {
     const { walk } = await workspaceApplication();
-    return reply({ sessions: await walk.read((await params).id, query.data) });
+    const { id } = await params;
+    return reply({ sessions: await walk.read(id, query.data), jobLive: await walk.jobLive(id) });
   } catch (error) { return failure(error); }
 }
 
@@ -38,6 +44,10 @@ export async function POST(request: Request, { params }: Route) {
   try {
     const { walk } = await workspaceApplication();
     const { id } = await params;
+    if (parsed.data.action === "photo") {
+      const { action: _action, ...command } = parsed.data;
+      return reply(await walk.uploadPhoto(id, command));
+    }
     if (parsed.data.action === "file") {
       const { action: _action, ...command } = parsed.data;
       return reply(await walk.fileWalkPhoto(id, command));

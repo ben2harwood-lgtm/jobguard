@@ -1,7 +1,11 @@
-import { PracticeAccessError, WalkError, WalkRepository, walkQueryV1,
+import { PracticeAccessError, WalkError, WalkRepository, walkQueryV1, withTenant,
   type WalkEntryCommand, type WalkPhotoFilingCommand, type WalkQuery, type WalkSessionCommand } from "@jobguard/db";
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { PracticeAccess } from "../practice-access.js";
+import { uploadWalkPhoto } from "./walk-photo.application.js";
+
+export { walkPhotoCommandV1, type WalkPhotoCommand } from "./walk-photo.application.js";
 
 export { walkPhotoFilingCommandV1, type WalkPhotoFilingCommand,
   WALK_CLOCK_TOLERANCE_SECONDS, WalkError, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1,
@@ -12,7 +16,7 @@ export class WalkApplication {
   private readonly access: PracticeAccess;
   private readonly walks: WalkRepository;
 
-  constructor(pool: Pool, private readonly sessionId?: string) {
+  constructor(private readonly pool: Pool, private readonly sessionId?: string) {
     this.access = new PracticeAccess(pool, sessionId);
     this.walks = new WalkRepository(pool);
   }
@@ -43,6 +47,24 @@ export class WalkApplication {
     const { context } = await this.authorize(jobId);
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
     return this.walks.fileWalkPhoto(context, jobId, this.sessionId, command);
+  }
+
+  // V2-B1E: "Take photo" on the shared upload path, unchanged, so only a live job accepts it (option 1).
+  async uploadPhoto(jobId: string, raw: unknown) {
+    const { context } = await this.authorize(jobId);
+    if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
+    const digest = createHash("sha256").update(this.sessionId).digest("hex");
+    const editor = await withTenant(this.pool, context, async db => (await db.$client.query<{ id: string | null }>(
+      "SELECT app.v2_walk_editor($1) AS id", [digest])).rows[0]?.id);
+    if (!editor) throw new WalkError("WALK_EDITOR_REQUIRED");
+    return uploadWalkPhoto(this.pool, context, jobId, editor, raw);
+  }
+
+  /** Whether the shared upload rule will take a photo now. A hint for the screen; the upload itself decides. */
+  async jobLive(jobId: string) {
+    const { context } = await this.authorize(jobId);
+    return withTenant(this.pool, context, async db => (await db.$client.query<{ status: string }>(
+      "SELECT status FROM app.job WHERE (tenant_id, id) = ($1, $2)", [context.tenantId, jobId])).rows[0]?.status === "live");
   }
 
   private authorize(jobId: string) {
