@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c4": {
+      "branches": [
+        "codex/sandbox/v2-c4"
+      ],
+      "note": "V2 Plan screen and browser evidence. The validator includes config/lanes/v2-c4.json implicitly.",
+      "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/(designed)/v2-mock/fixture.ts",
+        "apps/web/app/(designed)/v2-mock/page.tsx",
+        "apps/web/app/(designed)/v2-mock/work-mock.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/quotes/activation/route.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/workspace-shell-navigation.test.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/artifacts/v2-c4/mock-accepted-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-accepted-360.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-draft-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-draft-360.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-edit-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-edit-360.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-empty-360.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-live-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-live-360.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/mock-problem-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-accepted-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-accepted-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-cancelled-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-cancelled-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-draft-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-draft-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-edit-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-edit-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-empty-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-live-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-live-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-problem-360.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-stale-1280.png",
+        "apps/web/e2e/artifacts/v2-c4/plan-stale-360.png",
+        "apps/web/e2e/v2-c4.spec.mts",
+        "apps/web/playwright.v2-c4.config.ts"
+      ]
+    }
+  }
+}
