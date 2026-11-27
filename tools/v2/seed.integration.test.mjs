@@ -2029,7 +2029,7 @@ test("F7M a link shows only its trade's unpriced brief; presses record once, rep
 });
 
 test("F7M one refusal for unknown, cancelled, expired, replaced and edited-crew links; other tasks refuse and stale briefs say so", async () => {
-  const { app, brief, crew, issue, page } = await f7m.setup();
+  const { app, brief, crew, issue, page, ...f7mExtras } = await f7m.setup();
   const task = brief.content.tasks[0];
   const refused = async (token, extra = {}) => {
     await assert.rejects(page.open(token), { code: "CREW_LINK_REFUSED" });
@@ -2077,6 +2077,15 @@ test("F7M one refusal for unknown, cancelled, expired, replaced and edited-crew 
   await app.workPlan.edit(jobId, planEdit(plan, planned, { durationMinutes: planned.durationMinutes + 5 }));
   assert.equal((await page.open(live.token)).brief.changed, true);
   await assert.rejects(page.receive(f7m.press(live.token, brief, task)), { code: "CREW_LINK_STALE" });
+  // The edit is reverted, so regenerating keeps the same brief row: that regeneration still clears the stale state.
+  const { crewBriefs, command } = f7mExtras;
+  const back = await app.workPlan.read(jobId, planQuery);
+  const again = back.tasks.find(item => item.scopeItemId === task.scopeItemId && item.key === task.taskKey);
+  await app.workPlan.edit(jobId, planEdit(back, again, { durationMinutes: planned.durationMinutes }));
+  const regenerated = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: brief.version, accessWindow: brief.content.accessWindow }));
+  assert.equal(regenerated.version, brief.version, "the unchanged brief keeps its row");
+  assert.equal((await page.open(live.token)).brief.changed, false);
+  assert.equal((await page.receive(f7m.press(live.token, brief, task))).replayed, false);
 });
 
 test("F7M tables are forced, append only and closed to the runtime and the second firm", async () => {

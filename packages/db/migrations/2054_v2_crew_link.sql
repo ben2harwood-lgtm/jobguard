@@ -209,6 +209,9 @@ BEGIN
   DROP POLICY IF EXISTS v2_crew_link_job ON app.job;
   CREATE POLICY v2_crew_link_job ON app.job FOR SELECT TO jobguard_migration
     USING (app.v2_crew_link_scoped(tenant_id, id));
+  DROP POLICY IF EXISTS v2_crew_link_read ON app.v2_crew_brief_command;
+  CREATE POLICY v2_crew_link_read ON app.v2_crew_brief_command FOR SELECT TO jobguard_migration
+    USING (app.v2_crew_link_scoped(tenant_id, job_id));
   DROP POLICY IF EXISTS v2_crew_link_read ON app.v2_work_plan_edit;
   CREATE POLICY v2_crew_link_read ON app.v2_work_plan_edit FOR SELECT TO jobguard_migration
     USING (app.v2_crew_link_scoped(tenant_id, job_id));
@@ -258,11 +261,16 @@ BEGIN
   -- What the crew page may show: the trade, the crew member's own name and the
   -- latest generated brief for the trade, each task with its latest recorded kind
   -- and note. Never a price, value, customer, other trade or job, phone, email or token.
-  -- briefChanged is conservative: any plan edit or new accepted plan since the brief.
+  -- briefChanged is conservative: any plan edit or new accepted plan since the brief was last
+  -- generated. Generating it again unchanged keeps the same row but records a command, so that
+  -- command's time counts as the brief's: a regenerated brief clears the stale state.
   CREATE OR REPLACE FUNCTION app.v2_crew_link_view(l app.v2_crew_link) RETURNS jsonb
     LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $f$
     WITH brief AS (
-      SELECT b.expected_version + 1 AS version, b.content, b.recorded_at FROM app.v2_crew_brief b
+      SELECT b.expected_version + 1 AS version, b.content, greatest(b.recorded_at, (SELECT max(c.recorded_at)
+          FROM app.v2_crew_brief_command c WHERE (c.tenant_id, c.job_id, c.trade, c.brief_version)
+            = (b.tenant_id, b.job_id, b.trade, b.expected_version))) AS recorded_at
+      FROM app.v2_crew_brief b
       WHERE (b.tenant_id, b.job_id, b.trade) = (l.tenant_id, l.job_id, l.trade)
       ORDER BY b.expected_version DESC LIMIT 1
     )
