@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e7": {
+      "branches": [
+        "claude/project-thread-ud4gy1"
+      ],
+      "note": "RED. The validator includes config/lanes/v2-e7.json implicitly. V2-E7 (Q46): at most one reminder per unanswered E2 reply request, to the local catcher only, and an 'unconfirmed' row with its reason from 08:00 London the day before the needed-by date. Stacked on v2-e2 (claude/project-thread-49qd38). E7 mount, owned by E2 #949: apps/web/app/ui/v2-fact-replies.tsx (status text on each request row, the run button, FactAsk exported for its test); apps/web/app/ui/v2-fact-replies.test.tsx (one case); apps/web/app/lib/v2-fact-reply-server.ts (builderFactReminders and factReminderFailure); apps/api/src/workspace/index.ts and packages/db/src/index.ts (one export each); tools/v2/bootstrap.mjs (two lines: 2031 and its firm lock 2067); tools/v2/seed.integration.test.mjs (tests appended); tools/v2/test/refusals.mjs (one builderGetRoutes entry, rule 29, owned by SX #965) and tools/v2-refusals.test.mjs (its fixed-list case now lets later packets append after SX's ten); packages/db/test/purchase-order-audit.integration.test.ts (the _v2_fact_reminder.sql stem and one 'table absent' check). packages/core/src/watchdog.ts: one registry line classifying /api/jobs/[id]/fact-reminders as pre_live_allowed, owned by main, required by the CH-2 route coverage test. E7's own V2 firm lock: tools/v2/migrations/2067_v2_fact_reminder_firm_lock.sql (+ proof) and tools/v2/firm-lock/FL-E7.checks.mjs, as E2's 2066. packages/db/src/v2-open-fact-repository.ts (owned by E1): one line in change() takes E2's fact:<id> advisory lock, so a direct answer, cancel or mark out of date waits for a reminder run (Codex P2 on f084d263).",
+      "allow": [
+        "apps/api/src/workspace/fact-reminder.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/fact-reminders/route.test.ts",
+        "apps/web/app/api/jobs/[id]/fact-reminders/route.ts",
+        "apps/web/app/lib/v2-fact-reply-server.ts",
+        "apps/web/app/ui/v2-fact-reminder-label.test.ts",
+        "apps/web/app/ui/v2-fact-reminder-label.ts",
+        "apps/web/app/ui/v2-fact-replies.test.tsx",
+        "apps/web/app/ui/v2-fact-replies.tsx",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2031_v2_fact_reminder.md",
+        "packages/db/migrations/2031_v2_fact_reminder.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-fact-reminder-policy.test.ts",
+        "packages/db/src/v2-fact-reminder-policy.ts",
+        "packages/db/src/v2-fact-reminder-repository.ts",
+        "packages/db/src/v2-open-fact-repository.ts",
+        "packages/db/test/migration-proofs/2031_v2_fact_reminder.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2-refusals.test.mjs",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-E7.checks.mjs",
+        "tools/v2/migrations/2067_v2_fact_reminder_firm_lock.proof.json",
+        "tools/v2/migrations/2067_v2_fact_reminder_firm_lock.sql",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/refusals.mjs"
+      ]
+    }
+  }
+}

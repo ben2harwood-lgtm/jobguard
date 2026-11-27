@@ -81,6 +81,9 @@ try {
   // V2-E2 fact replies (2030) and their firm lock (2066).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2030_v2_fact_reply.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("./migrations/2066_v2_fact_reply_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-E7 reminders (2031) and their firm lock (2067).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2031_v2_fact_reminder.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("./migrations/2067_v2_fact_reminder_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

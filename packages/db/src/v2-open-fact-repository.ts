@@ -300,6 +300,10 @@ export class OpenFactRepository {
 
   private async change(client: PoolClient, tenantId: string, jobId: string,
     command: Exclude<ParsedCommand, { action: "log" }>, actorId: string, digest: string) {
+    // V2-E7 mount: the fact lock in E2's key space, so a reminder run (which locks each fact
+    // it reads) and a direct answer, cancel or mark out of date take turns. E2's apply already
+    // holds this lock when it calls here; advisory locks are re-entrant in one transaction.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${tenantId}:fact:${command.factId}`]);
     const { rows: [fact] } = await client.query<{ kind: OpenFactKind; version: number; status: OpenFactStatus }>(`
       SELECT f.kind, c.expected_version + 1 AS version, c.status
       FROM app.v2_open_fact f

@@ -4,6 +4,8 @@ export * from "./measurement.application.js";
 export * from "./crew-contact.application.js";
 export * from "./open-fact.application.js";
 export * from "./fact-reply.application.js";
+// V2-E7 reminders.
+export * from "./fact-reminder.application.js";
 export * from "./contracts.js";
 export * from "./workspace.service.js";
 export * from "./workspace-session.js";

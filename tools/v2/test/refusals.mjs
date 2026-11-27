@@ -40,6 +40,7 @@ export const builderGetRoutes = [
   { path: "/api/jobs/{jobId}/quotes/acceptance", expect: body => { assert.ok(body.activeAcceptance); assert.equal(body.activeAcceptance.documentId, body.currentDocument.id); } },
   { path: "/jobs/{jobId}", transport: "api", expect: (body, { jobId }) => assert.equal(body.job.id, jobId) },
   { path: "/jobs/{jobId}/fee-illustration", transport: "api", optional: true, expect: body => { assert.equal(body.version, "fee-illustration-response.v1"); assert.ok(body.source); assert.ok(body.result); } },
+  { path: "/api/jobs/{jobId}/fact-reminders", expect: body => assert.ok(Array.isArray(body.reminders)) },
 ];
 
 export function bindBuilderRoutes({ jobId, tenantId }) {
