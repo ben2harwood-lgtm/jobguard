@@ -20,7 +20,6 @@
         "apps/web/app/api/jobs/capture/route.ts",
         "apps/web/app/ui/jobguard-app.tsx",
         "apps/web/app/ui/walk-it-model-reader.test.tsx",
-        "config/lanes/v2-sq-g.json",
         "docs/decisions/v2-sq-g-practice-model-reader.md",
         "docs/fixtures/ai/spoken-quote-understanding/model-reader-recordings.hand-written.v1.json",
         "docs/operations/claude-data-flow.md",
