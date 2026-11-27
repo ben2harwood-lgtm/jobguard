@@ -518,3 +518,18 @@ it("V2-SQ-D: one price is blocked while a row's inferred room is unchecked, and 
   p.button(all(p.render(), n => n.type === "section" && n.props["aria-label"] === "Loft")[0]!, "Rename").props.onClick();
   expect(all(p.render(), n => n.props["data-testid"] === "room-notice").map(text)).toEqual(["A room name is 1 to 100 characters."]);
 });
+it("V2-SQ-D: splitting the one-price row ends its undo, so undo cannot duplicate or orphan rows", () => {
+  const make = (id: string, description: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room: "Kitchen", unitPricePence: 1000, disposition: "accepted" });
+  const rows = [make("a", "Strip the units"), make("b", "Fit a sink")];
+  const result = { ...fixture, proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: 1000 }, room: r.room, category: "Work", roomInferred: false })), questions: [] },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  expect(all(p.render(), n => n.props["aria-label"] === "Undo one price for Kitchen" || text(n) === "Undo one price for Kitchen")).not.toHaveLength(0);
+  p.button(p.render(), "Split Kitchen: all work as described").props.onClick();
+  expect(all(p.render(), n => n.type === "button" && text(n) === "Undo one price for Kitchen")).toHaveLength(0);
+  expect(all(p.render(), n => n.type === "article")).toHaveLength(5);
+});
