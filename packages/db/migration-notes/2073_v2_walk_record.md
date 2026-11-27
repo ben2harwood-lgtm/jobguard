@@ -61,7 +61,7 @@ job (tenant_id, job_id) is visible to the firm. The V2 bootstrap loads this
 migration after 2047_v2_firm_lock_core, and `tools/v2/firm-lock/FL-B1A.checks.mjs`
 proves firm B can't see firm A's walk rows.
 
-Renumbered 2028 -> 2062 above v2/main (2047 FL-1) and the open V2 slices (2048-2061).
+Renumbered 2028 -> 2062 -> 2073 above v2/main and the open V2 slices (2062 is G4 in the V2 migration register).
 
 The cross-job upload check for a new photo entry runs in its own definer trigger
 (`v2_walk_entry_upload_guard`, enabled ALWAYS, reads evidence_upload only), so an
