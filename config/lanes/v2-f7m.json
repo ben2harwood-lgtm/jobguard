@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-trp08u-f7m"
       ],
-      "note": "RED Q52 V2-F7M crew link: one trade brief by link, no sign-in, no prices; presses are observations the builder confirms. Migration 2041 (number final at merge). Base claude/project-thread-trp08u @ 11b9abbb7. F7M mount, owned by F1 #953: apps/web/app/ui/brief-progress.tsx mounts the Crew links card only. F7M mount, owned by F1 #953: apps/api/src/workspace/application.ts and index.ts one composition line and one export line. F7M mount, owned by core index: packages/db/src/index.ts one export line. F7M mount, owned by F1 #953: packages/core/src/watchdog.ts one registry line for /api/jobs/[id]/crew-links. F7M mount, owned by F1 #953: tools/v2/bootstrap.mjs one migration line; packages/db/test/purchase-order-audit.integration.test.ts deferred-migration entry only. F7M mount, owned by F1 #953: tools/v2/seed.integration.test.mjs and tools/v2/brief-progress.browser.test.mjs own appended cases and two import lines.",
+      "note": "RED Q52 V2-F7M crew link: one trade brief by link, no sign-in, no prices; presses are observations the builder confirms. Migration 2041 (number final at merge). Base claude/project-thread-trp08u @ 11b9abbb7. F7M mount, owned by F1 #953: apps/web/app/ui/brief-progress.tsx mounts the Crew links card only. F7M mount, owned by F1 #953: apps/api/src/workspace/application.ts and index.ts one composition line and one export line. F7M mount, owned by core index: packages/db/src/index.ts one export line. F7M mount, owned by F1 #953: packages/core/src/watchdog.ts one registry line for /api/jobs/[id]/crew-links. F7M mount, owned by F1 #953: tools/v2/bootstrap.mjs one migration line; packages/db/test/purchase-order-audit.integration.test.ts deferred-migration entry only. F7M mount, owned by F1 #953: tools/v2/seed.integration.test.mjs and tools/v2/brief-progress.browser.test.mjs own appended cases and two import lines. F7M mount, owned by web: apps/web/proxy.ts exempts the exact crew-link path /api/v2/brief from the customer-cookie block (token-authorized, reads no cookie).",
       "allow": [
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/crew-link.application.ts",
@@ -21,6 +21,8 @@
         "apps/web/app/ui/crew-links.tsx",
         "apps/web/app/ui/v2-crew-link-label.test.tsx",
         "apps/web/app/ui/v2-crew-link-label.ts",
+        "apps/web/proxy.test.ts",
+        "apps/web/proxy.ts",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2054_v2_crew_link.md",
         "packages/db/migrations/2054_v2_crew_link.sql",
