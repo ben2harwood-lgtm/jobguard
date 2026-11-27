@@ -134,3 +134,44 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     expect(offOrigin).toEqual([]);
   } finally { await context.close(); }
 });
+
+// V2-DV1: a diary note the builder marks "Customer can see this" is offered in this week's draft, at phone width.
+test("DV1 marks a diary note and sees it in the prepared draft at 360", async ({ browser }) => {
+  test.setTimeout(120000);
+  const context = await browser.newContext({ viewport: { width: 360, height: 900 }, ignoreHTTPSErrors: true, storageState });
+  try {
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/friday-update`);
+    await page.waitForLoadState("networkidle");
+    const note = `Tiles delivered and stacked in the hall ${Date.now()}`;
+    // New diary notes need a live job: switch the practice job live (a replay if it already is), then write the note.
+    await page.evaluate(async ({ jobId, note }) => {
+      const monday = new Date(); monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+      const { csrfToken } = await (await fetch(`/api/jobs/${jobId}/friday-update?week=${monday.toISOString().slice(0, 10)}`)).json();
+      const post = (path: string, body: unknown) => fetch(path, { method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken }, body: JSON.stringify(body) });
+      const live = await post(`/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: crypto.randomUUID(), scenario: "no_charge" });
+      if (!live.ok) throw new Error(`activation:${live.status}`);
+      const diary = await post(`/api/jobs/${jobId}/diary`, { version: "job-diary-input.v1", commandId: crypto.randomUUID(), entryMode: "typed", onSite: true, text: note });
+      if (diary.status !== 201) throw new Error(`diary:${diary.status}`);
+    }, { jobId, note });
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    const main = page.getByRole("main");
+    const card = main.getByTestId("friday-diary");
+    await expect(card.getByText(note)).toBeVisible();
+    const row = card.getByTestId("diary-note").filter({ hasText: note });
+    await expect(row.getByLabel("Customer can see this")).toBeEnabled();
+    const [marked] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/jobs/${jobId}/friday-update/diary`),
+      row.getByLabel("Customer can see this").check(),
+    ]);
+    expect(marked.status()).toBe(200);
+    const prepare = main.getByRole("button", { name: /^Prepare (update|again)$/u });
+    await expect(prepare).toBeEnabled(); await prepare.click();
+    await expect(main.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
+    await expect(main.locator("ul li").filter({ hasText: note }).last()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.screenshot({ path: join(screenshots, "v2-dv1-diary-360.png"), fullPage: true });
+  } finally { await context.close(); }
+});

@@ -1,0 +1,6 @@
+{
+  "migration": "2036_v2_diary_share.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

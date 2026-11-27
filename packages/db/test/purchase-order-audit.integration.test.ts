@@ -47,6 +47,8 @@ beforeAll(async () => {
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         // V2-K3 is installed separately by the checked local bootstrap.
         "_v2_friday_update.sql",
+        // V2-DV1
+        "_v2_diary_share.sql",
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
@@ -63,6 +65,8 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  // V2-DV1: the diary share table stays absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_diary_share') AS share")).rows[0].share).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

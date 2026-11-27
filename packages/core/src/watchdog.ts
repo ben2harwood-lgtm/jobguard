@@ -94,6 +94,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "command:WorkState.link": "pre_live_allowed",
   // SV-7A: new diary notes and customer messages are live-only source intake.
   "/api/jobs/[id]/diary": "watchdog_live_only",
+  // V2-DV1: marking a diary note for the Friday update is not site work.
+  "/api/jobs/[id]/friday-update": "pre_live_allowed", // K3 #935 route, unclassified on its base; drop if K3 adds it
+  "/api/jobs/[id]/friday-update/diary": "pre_live_allowed",
   "nest:/jobs/:id/diary": "watchdog_live_only",
   "command:JobSource.diary": "watchdog_live_only",
   "/api/jobs/[id]/customer-messages": "watchdog_live_only",

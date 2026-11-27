@@ -242,3 +242,4 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // V2-K3: customer update snapshots and the local inbox only.
 export * from "./v2-friday-update.js";
 export * from "./v2-friday-update-repository.js";
+export * from "./v2-diary-share-repository.js";

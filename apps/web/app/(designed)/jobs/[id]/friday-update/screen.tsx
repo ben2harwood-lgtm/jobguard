@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { FridayCommand, FridayContent, FridaySnapshot } from "@jobguard/api/workspace";
 import { Card, Head, Note, Shell, Tag } from "../../../designed-ui";
+import { FridayDiaryList, diaryCardTitle, type FridayDiaryRow } from "../../../../ui/v2-friday-diary";
 
 const notice = "Practice sandbox — synthetic data; nothing is sent or charged";
 const empty = { thisWeek: "No work scheduled this week.", nextWeek: "Nothing planned for next week yet." };
@@ -22,7 +23,10 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
   const [preview, setPreview] = useState(false);
   const [draft, setDraft] = useState<FridayContent>({ schema: "friday-content.v1", thisWeek: [], nextWeek: [], photos: [] });
   const [lines, setLines] = useState({ thisWeek: "", nextWeek: "" });
+  const [diary, setDiary] = useState<FridayDiaryRow[]>([]);
+  const [marksChanged, setMarksChanged] = useState(false);
   const pending = useRef<FridayCommand | null>(null);
+  const pendingShare = useRef<{ diaryEntryId: string; shared: boolean; commandId: string } | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   const url = `/api/jobs/${jobId}/friday-update`;
@@ -34,8 +38,28 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
       const data = await response.json();
       if (current) { setSnapshot(data.snapshot); setMessage(data.message ?? ""); setWeekLabel(data.weekLabel); setCsrf(data.csrfToken); }
     }).catch(cause => { if (current) setError(cause.message); }).finally(() => { if (current) setBusy(false); });
+    // DV1: the week's diary notes and the builder's marks. A failed read leaves the card empty, never the update.
+    setDiary([]); setMarksChanged(false);
+    fetch(`${url}/diary?week=${week}`, { cache: "no-store" }).then(async response => {
+      if (response.ok && current) setDiary((await response.json()).entries);
+    }).catch(() => undefined);
     return () => { current = false; };
   }, [url, week]);
+  async function mark(entry: FridayDiaryRow, shared: boolean) {
+    setBusy(true); setError("");
+    // Keep the same identity after a transport error so a retry cannot record the mark twice.
+    const same = pendingShare.current?.diaryEntryId === entry.id && pendingShare.current.shared === shared;
+    const input = same ? pendingShare.current! : { diaryEntryId: entry.id, shared, commandId: crypto.randomUUID() };
+    pendingShare.current = input;
+    try {
+      const response = await fetch(`${url}/diary`, { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf },
+        body: JSON.stringify({ version: "v2-diary-share-command.v1", ...input }) });
+      if (!response.ok) { pendingShare.current = null; throw new Error("Mark refused. Reload to see the current notes."); }
+      pendingShare.current = null;
+      setDiary(rows => rows.map(row => row.id === entry.id ? { ...row, shared } : row)); setMarksChanged(true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Mark unavailable. Retry the same switch."); }
+    finally { setBusy(false); }
+  }
   async function run(action: "prepare" | "edit" | "send") {
     setBusy(true); setError("");
     const base = { schema: "friday-command.v1" as const, commandId: crypto.randomUUID(), week,
@@ -53,6 +77,7 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
       }
       const data = await response.json();
       setSnapshot(data.snapshot); setMessage(data.message); setWeekLabel(data.weekLabel); setEditing(false); pending.current = null;
+      if (action === "prepare") setMarksChanged(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Update unavailable. Retry the same action."); }
     finally { setBusy(false); }
   }
@@ -83,7 +108,7 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
         <div className="card-body form">
           <p>Nothing is sent until you press Send. Practice inbox only.</p>
           <p>The plan shows scheduled work, not completion. Check and edit the wording before sending.</p>
-          <p>Diary notes are not included because customer visibility is not recorded.</p>
+          <p>Only diary notes you mark "Customer can see this" are offered, and only when you prepare the update.</p>
           {!snapshot && <button className="btn primary" disabled={busy} onClick={() => void run("prepare")}>Prepare update</button>}
           {snapshot && <>
             <p>Version {snapshot.contentVersion}</p>
@@ -96,6 +121,10 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
           </>}
         </div>
       </Card>}
+      {!preview && <Card title={diaryCardTitle}><div className="card-body form" data-testid="friday-diary">
+        <FridayDiaryList entries={diary} busy={busy || editing} onToggle={(entry, shared) => void mark(entry, shared)}/>
+        {snapshot && marksChanged && <button className="btn" disabled={busy || editing || !!pending.current} onClick={() => void run("prepare")}>Prepare again</button>}
+      </div></Card>}
       {snapshot && !preview && <>
         {(["thisWeek", "nextWeek"] as const).map(key => <Fragment key={key}><Card title={key === "thisWeek" ? "This week" : "Next week"}>
           <div className="card-body">
