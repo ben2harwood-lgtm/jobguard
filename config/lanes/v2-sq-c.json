@@ -8,7 +8,6 @@
       "note": "T2 V2-SQ-C: job-understanding.v1 contract and money rule in core, Reader A (context reader, code only: no model, network or key) in packages/ai, the 30-transcript understanding set and its eval gate, and the capture workspace view labelling each proposed line with its understood room and trade. Base claude/project-thread-trp08u-sqproof (#1004) at 3278cdf37. No migration, table, route or schema change to proposal_review_line.",
       "allow": [
         "apps/api/src/capture/capture.application.ts",
-        "config/lanes/v2-sq-c.json",
         "docs/fixtures/ai/golden-run.v1.json",
         "docs/fixtures/ai/spoken-quote-understanding/README.md",
         "docs/fixtures/ai/spoken-quote-understanding/cases.v1.json",
