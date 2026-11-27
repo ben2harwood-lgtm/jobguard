@@ -486,17 +486,22 @@ export class FactReplyRepository {
       current = request!.current;
     }
     if (!current) throw new FactReplyError("REPLY_OUT_OF_DATE");
-    const answer = openFactCommandV1.parse({ version: "v2-open-fact-command.v1", action: "answer", commandId: reply!.id,
-      factId: reply!.factId, expectedVersion: reply!.factVersion, answer: openFactAnswerFor(fact, answerOf(reply!)) });
-    const answered = await this.openFacts.commandIn(database, context, jobId, sessionId, answer);
+    // Record the application first: its insert trigger takes the job row share lock and checks the
+    // request again before E1's command appends any audit event, so the lock order stays fact,
+    // recipient, request, job row, audit head, as app.bind_job_parties() takes job row then audit head.
+    const appliedVersion = reply!.factVersion + 1;
     try {
       await $client.query(`INSERT INTO app.v2_fact_reply_applied (tenant_id, job_id, reply_id, fact_version, request_digest, applied_by)
-        VALUES ($1,$2,$3,$4,$5,$6)`, [tenantId, jobId, reply!.id, answered.version, digest, actorId]);
+        VALUES ($1,$2,$3,$4,$5,$6)`, [tenantId, jobId, reply!.id, appliedVersion, digest, actorId]);
     } catch (error) {
       if ((error as { code?: string; message?: string }).code === "40001"
         && (error as { message?: string }).message === "REPLY_OUT_OF_DATE") throw new FactReplyError("REPLY_OUT_OF_DATE");
       throw error;
     }
+    const answer = openFactCommandV1.parse({ version: "v2-open-fact-command.v1", action: "answer", commandId: reply!.id,
+      factId: reply!.factId, expectedVersion: reply!.factVersion, answer: openFactAnswerFor(fact, answerOf(reply!)) });
+    const answered = await this.openFacts.commandIn(database, context, jobId, sessionId, answer);
+    if (answered.version !== appliedVersion) throw new FactReplyError("REPLY_OUT_OF_DATE");
     await this.audit(database, actorId, jobId, "v2.fact_reply.applied_by_builder", { commandId: reply!.id, replyId: reply!.id,
       factId: reply!.factId, factVersion: String(answered.version) }, { request: digest });
     return { action: input.action, id: input.replyId, replayed: false, factVersion: answered.version };

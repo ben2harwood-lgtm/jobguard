@@ -2285,6 +2285,10 @@ test("V2-E2: applying also waits on a customer rebinding, which holds the job ro
       .finally(() => { settled = true; });
     await new Promise(resolve => setTimeout(resolve, 500));
     assert.equal(settled, false, "apply must wait for the job row a rebinding holds");
+    // A rebinding then appends its audit batch. Apply must not hold the audit head while it
+    // waits for the job row, or the two would deadlock.
+    await holder.query("SET LOCAL lock_timeout = '5s'");
+    await holder.query("SELECT 1 FROM audit_control.audit_head WHERE tenant_id = $1 FOR UPDATE", [DEMO_TENANT_ID]);
     await holder.query("COMMIT");
     assert.equal((await applying).factVersion, 2);
   } finally { holder.release(); }
