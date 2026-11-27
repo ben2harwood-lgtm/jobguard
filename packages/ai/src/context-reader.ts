@@ -133,6 +133,8 @@ const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.le
 const correction = /(?:^|[\s,]+)(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b.*$/iu;
 const reference = /\b(?:same again|same as|ditto|the same in)\b/iu;
 const approximate = /\b(?:about|around|roughly|approximately|approx)\s+$/iu;
+/** After a comma, more work is fine; another amount, an alternative or a correction leaves the price open. */
+const plainCommaTail = /^\s*,(?![^]*(?:\d|\b(?:or|no|nah|actually|sorry|make that|maybe|could be|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|quid|pounds?)\b))/iu;
 const measure = new RegExp(`(?:(about|around|roughly|approximately)\\s+)?(\\d{1,4}(?:\\.\\d{1,2})?|${numberWord})\\s+(square\\s+met(?:re|er)s?|sq(?:uare)?\\.?\\s?m|m2|m²|linear\\s+met(?:re|er)s?|met(?:re|er)s?)(?![\\p{L}])`, "iu");
 const perMetre = new RegExp(`(?:\\bat|,)\\s+(£?\\d[\\d,]*(?:\\.\\d{1,2})?(?:\\s*(?:pounds|quid))?|${numberWord}(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred))*\\s+(?:pounds|quid))\\s+(?:a|per|each)\\s+(?:square\\s+|linear\\s+)?met(?:re|er)\\b`, "iu");
 // "for 2400", "at 300", ", 650" at the end: a bare figure in a price position is a price in pounds.
@@ -182,7 +184,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const found = candidates[0]!;
       const after = value.slice(found.at + found.text.length);
       const each = /^\s*(?:each|apiece|a piece)\s*$/iu.test(after);
-      if (after.trim() && !each && !/^\s*,/u.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      if (after.trim() && !each && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
       else {
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";

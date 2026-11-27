@@ -91,6 +91,15 @@ describe("V2-SQ-C Reader A", () => {
     expect(checkSpokenNumbers(swapped, text).lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
   });
 
+  it("leaves a price open when another amount follows it after a comma", () => {
+    for (const text of ["Fit a door for 300, or 500.", "Fit a door for 300, no, five hundred."]) {
+      const job = readSpokenJob("s", text);
+      expect(job.lines[0]!.unitPricePence.value).toBeNull();
+      expect(job.questions.length).toBeGreaterThan(0);
+    }
+    expect(readSpokenJob("s", "Fit a door for 300, hang it level.").lines[0]!.unitPricePence.value).toBe(30000);
+  });
+
   it("labels lines proposed from the same words by where they start", () => {
     const labels = understoodLabels("smith", SMITH, [
       { start: SMITH.indexOf("rip out"), description: "rip out the old units" },
