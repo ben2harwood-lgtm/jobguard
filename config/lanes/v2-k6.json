@@ -3,7 +3,8 @@
   "lanes": {
     "v2-k6": {
       "branches": [
-        "codex/sandbox/v2-k6"
+        "codex/sandbox/v2-k6",
+        "claude/project-thread-trp08u-k6"
       ],
       "note": "RED. K6A fixture-only inbound routing; no intake changes.",
       "allow": [
@@ -18,6 +19,7 @@
         "packages/db/src/v2-inbound-mail.ts",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/guard.mjs",
         "tools/v2/firm-lock/pending/FL-K6.json",
         "tools/v2/inbound-mail.browser.test.mjs",
         "tools/v2/migration-proofs/2063_v2_inbound_mail.json",

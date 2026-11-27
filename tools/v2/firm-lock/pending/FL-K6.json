@@ -1,8 +1,0 @@
-{
-  "slice": "FL-K6",
-  "packet": "K6A",
-  "note": "app.v2_inbound_item holds unrouted mail before it is filed, so job_id is NULL until filing. Its restrictive v2_job policy checks the job whenever job_id is set (job_id IS NULL OR EXISTS app.job), and the permissive v2_firm policy limits every row to its own firm_key. The guard's v2_practice_firm shape allows no OR, and a strict job join would hide the unrouted inbox. Delete this file when the guard can express a nullable job lock or the table is split.",
-  "tables": [
-    "app.v2_inbound_item"
-  ]
-}

@@ -47,5 +47,8 @@ Open /inbound-mail in the signed-in practice firm. The seeded quote must first
 be switched live through its normal no-charge command, as the seeded proof does.
 
 Renumbered 2023 -> 2063 above v2/main (2047 FL-1) and the open V2 slices. app.v2_inbound_item
-is listed in tools/v2/firm-lock/pending/FL-K6.json: its job lock (`v2_job`) allows a NULL job_id
-for unrouted mail, which the FL-1 guard shape cannot express.
+is firm-locked (FL-K6). Unrouted mail has no job yet, so its restrictive `v2_practice_firm` is
+`firm_key = app.current_firm_profile_key()` on the item's own NOT NULL firm_key (set from the
+mailbox's firm), and a separate restrictive `v2_practice_job` requires a visible app.job row
+whenever job_id is set. The FL guard accepts that form only for a direct table whose job_id is
+nullable and whose firm_key is NOT NULL; every other direct table must still join app.job.

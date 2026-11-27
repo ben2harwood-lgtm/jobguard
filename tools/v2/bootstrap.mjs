@@ -73,7 +73,7 @@ try {
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
 
-  // V2-K6A inbound fixture routing (2063), after FL-1; app.v2_inbound_item is pending in FL-K6.
+  // V2-K6A inbound fixture routing (2063), after FL-1; app.v2_inbound_item locks its firm_key (FL-K6).
   await client.query(readFileSync(new URL("./migrations/2063_v2_inbound_mail.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);

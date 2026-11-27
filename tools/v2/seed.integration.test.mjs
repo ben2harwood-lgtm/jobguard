@@ -1495,6 +1495,24 @@ test("FL guard: a lock must be mandatory joins on every job-bound parent's full 
     "a parent without its own firm lock doesn't count");
 });
 
+test("FL guard: K6 inbox locks its own firm_key, with a separate nullable job check", async () => {
+  const catalog = await firmLockCatalog(admin);
+  const row = catalog.find(entry => entry.relation === "app.v2_inbound_item");
+  assert.deepEqual(lockProblems(row, new Set(), new Set()), [], "the real 2063 policies pass");
+  assert.deepEqual(row.not_null, { firm_key: true, job_id: false });
+  const job = row.job_policy.using;
+  const fails = (change, reason) => assert.ok(lockProblems({ ...row, ...change }).some(text => text.includes(reason)), reason);
+  // The firm-key form is only for a nullable job_id; a NOT NULL job_id must still join app.job.
+  fails({ not_null: { firm_key: true, job_id: true } }, "not only mandatory EXISTS joins");
+  fails({ not_null: { firm_key: false, job_id: false } }, "needs a NOT NULL firm_key");
+  fails({ job_policy: null }, "needs a separate v2_practice_job policy");
+  fails({ job_policy: { ...row.job_policy, restrictive: false } }, "v2_practice_job is permissive");
+  fails({ job_policy: { ...row.job_policy, using: `(${job} OR true)`, check: null } }, "v2_practice_job is not job_id IS NULL OR");
+  fails({ job_policy: { ...row.job_policy, using: job.replace("(j.id = v2_inbound_item.job_id)", "(j.tenant_id = v2_inbound_item.tenant_id)"), check: null } },
+    "v2_practice_job is not job_id IS NULL OR");
+  fails({ firm_policy: { ...row.firm_policy, using: `(${row.firm_policy.using} OR true)`, check: null } }, "not only mandatory EXISTS joins");
+});
+
 let firmContexts;
 const firmLockHelpers = {
   test, assert, admin, runtime, withTenant,

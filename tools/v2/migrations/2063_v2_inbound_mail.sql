@@ -47,10 +47,17 @@ DO $$ DECLARE n text; BEGIN
   EXECUTE format('GRANT SELECT,INSERT ON app.%I TO jobguard_runtime',n);
   EXECUTE format('REVOKE UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON app.%I FROM jobguard_runtime',n);
  END LOOP;
- IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.v2_inbound_item'::regclass AND polname='v2_job') THEN
-  CREATE POLICY v2_job ON app.v2_inbound_item AS RESTRICTIVE TO jobguard_runtime
-   USING(job_id IS NULL OR EXISTS(SELECT FROM app.job j WHERE(j.tenant_id,j.id)=(v2_inbound_item.tenant_id,v2_inbound_item.job_id)))
-   WITH CHECK(job_id IS NULL OR EXISTS(SELECT FROM app.job j WHERE(j.tenant_id,j.id)=(v2_inbound_item.tenant_id,v2_inbound_item.job_id)));
+ -- FL: unrouted mail has no job yet, so the item's firm lock is on its own NOT NULL firm_key (the
+ -- mailbox's firm), and the job check is a separate restrictive policy that applies once job_id is set.
+ IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.v2_inbound_item'::regclass AND polname='v2_practice_firm') THEN
+  CREATE POLICY v2_practice_firm ON app.v2_inbound_item AS RESTRICTIVE FOR ALL TO jobguard_runtime
+   USING(firm_key=app.current_firm_profile_key())
+   WITH CHECK(firm_key=app.current_firm_profile_key());
+ END IF;
+ IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.v2_inbound_item'::regclass AND polname='v2_practice_job') THEN
+  CREATE POLICY v2_practice_job ON app.v2_inbound_item AS RESTRICTIVE FOR ALL TO jobguard_runtime
+   USING(job_id IS NULL OR EXISTS(SELECT FROM app.job j WHERE j.tenant_id=v2_inbound_item.tenant_id AND j.id=v2_inbound_item.job_id))
+   WITH CHECK(job_id IS NULL OR EXISTS(SELECT FROM app.job j WHERE j.tenant_id=v2_inbound_item.tenant_id AND j.id=v2_inbound_item.job_id));
  END IF;
 END $$;
 GRANT UPDATE(result) ON app.v2_inbound_command TO jobguard_runtime;
