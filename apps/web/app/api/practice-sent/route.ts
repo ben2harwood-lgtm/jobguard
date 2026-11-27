@@ -10,8 +10,9 @@ const headers = { "Cache-Control": "no-store" };
 export async function GET() {
   try {
     const pool = syntheticPool();
-    const { context } = await authenticatePracticeSession(pool, (await cookies()).get("jg_session")?.value);
-    return NextResponse.json({ items: await new PracticeSentRepository(pool).list(context) }, { headers });
+    const { context, digest } = await authenticatePracticeSession(pool, (await cookies()).get("jg_session")?.value);
+    // Only this session's own jobs: a shared practice tenant holds other sessions' jobs.
+    return NextResponse.json({ items: await new PracticeSentRepository(pool).list(context, digest) }, { headers });
   } catch (error) {
     const code = (error as { code?: string })?.code;
     if (code === "UNAUTHENTICATED" || (error instanceof Error && error.message === "UNAUTHENTICATED")) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });

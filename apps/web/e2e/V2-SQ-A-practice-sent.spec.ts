@@ -7,9 +7,15 @@ type Preview = { view: { documentId: string; reference: string; documentVersion:
 const click = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).click();
 const noOverflow = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
-async function sendPracticeQuote(page: Page): Promise<{ jobId: string; preview: Preview }> {
-  await page.goto("/practice-company");
-  await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
+async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "own"): Promise<{ jobId: string; preview: Preview }> {
+  if (firm === "own") {
+    await page.goto("/practice-company");
+    await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
+  } else {
+    // The shared example tenant: every "Look around an example firm" session shares it, so ownership must filter.
+    expect((await page.request.post("/api/session")).ok()).toBe(true);
+    await page.goto("/classic");
+  }
   await click(page, "＋ Start a new job");
   await page.getByLabel("Work details").fill("JOB: Fictional Sent list job\nITEM: Protect room | £200.00\nITEM: Paint walls | £300.00");
   await click(page, "Make my draft"); await click(page, "Check and edit my draft");
@@ -71,6 +77,20 @@ test("a practice quote send shows in Sent and opens the exact document", async (
     const empty = other.getByRole("dialog", { name: "Your messages" });
     await expect(empty.getByRole("heading", { name: "Nothing sent yet." })).toBeVisible();
     await noOverflow(other);
+  } finally { await separate.close(); }
+});
+
+test("in the shared example firm, one session never sees another session's sends", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  const { preview } = await sendPracticeQuote(page, "shared example");
+  const mine = await (await page.request.get("/api/practice-sent")).json() as { items: { documentId: string }[] };
+  expect(mine.items.map(item => item.documentId)).toContain(preview.view.documentId);
+  const separate = await browser.newContext({ baseURL: new URL(page.url()).origin, viewport: page.viewportSize()! });
+  try {
+    const other = await separate.newPage();
+    expect((await other.request.post("/api/session")).ok()).toBe(true);
+    const theirs = await (await other.request.get("/api/practice-sent")).json() as { items: { documentId: string }[] };
+    expect(theirs.items.map(item => item.documentId)).not.toContain(preview.view.documentId);
   } finally { await separate.close(); }
 });
 

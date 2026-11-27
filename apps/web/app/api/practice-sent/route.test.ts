@@ -7,14 +7,14 @@ vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => stub.pool, p
 import { GET } from "./route";
 
 const context = { tenantId: "fictional-firm" };
-beforeEach(() => { vi.clearAllMocks(); stub.cookie = "fictional-session"; stub.auth.mockResolvedValue({ context }); stub.list.mockResolvedValue([]); });
+beforeEach(() => { vi.clearAllMocks(); stub.cookie = "fictional-session"; stub.auth.mockResolvedValue({ context, digest: "f".repeat(64) }); stub.list.mockResolvedValue([]); });
 
 it("lists only the server-resolved firm's sends and prevents caching", async () => {
   stub.list.mockResolvedValue([{ kind: "quote", sendId: "s1", practice: true }]);
   const response = await GET();
   expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({ items: [{ kind: "quote", sendId: "s1", practice: true }] });
-  expect(stub.auth).toHaveBeenCalledWith(stub.pool, "fictional-session"); expect(stub.list).toHaveBeenCalledWith(context);
+  expect(stub.auth).toHaveBeenCalledWith(stub.pool, "fictional-session"); expect(stub.list).toHaveBeenCalledWith(context, "f".repeat(64));
 });
 
 it("refuses without a practice session and reads nothing", async () => {
