@@ -1701,7 +1701,7 @@ test("FL guard: a lock must be mandatory joins on every job-bound parent's full 
 test("FL guard: K6 inbox locks its own firm_key, with a separate nullable job check", async () => {
   const catalog = await firmLockCatalog(admin);
   const row = catalog.find(entry => entry.relation === "app.v2_inbound_item");
-  assert.deepEqual(lockProblems(row, new Set(), new Set()), [], "the real 2063 policies pass");
+  assert.deepEqual(lockProblems(row, new Set(), new Set()), [], "the real 2072 policies pass");
   assert.deepEqual(row.not_null, { firm_key: true, job_id: false });
   const job = row.job_policy.using;
   const fails = (change, reason) => assert.ok(lockProblems({ ...row, ...change }).some(text => text.includes(reason)), reason);

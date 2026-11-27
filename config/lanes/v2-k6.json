@@ -13,7 +13,7 @@
         "apps/web/app/(designed)/inbound-mail/page.tsx",
         "apps/web/app/(designed)/inbound-mail/tray.tsx",
         "apps/web/app/api/v2/inbound-mail/route.ts",
-        "packages/db/migration-notes/2063_v2_inbound_mail.md",
+        "packages/db/migration-notes/2072_v2_inbound_mail.md",
         "packages/db/src/index.ts",
         "packages/db/src/v2-inbound-mail.test.ts",
         "packages/db/src/v2-inbound-mail.ts",
@@ -22,8 +22,8 @@
         "tools/v2/firm-lock/guard.mjs",
         "tools/v2/firm-lock/pending/FL-K6.json",
         "tools/v2/inbound-mail.browser.test.mjs",
-        "tools/v2/migration-proofs/2063_v2_inbound_mail.json",
-        "tools/v2/migrations/2063_v2_inbound_mail.sql",
+        "tools/v2/migration-proofs/2072_v2_inbound_mail.json",
+        "tools/v2/migrations/2072_v2_inbound_mail.sql",
         "tools/v2/seed.integration.test.mjs"
       ]
     }
