@@ -9,7 +9,8 @@ RLS enabled and forced, runtime policy tenant plus job visibility (the job's pra
 policy confines the firm):
 
 - `app.v2_handover_release`: one link for one saved version (FK to `v2_handover_version`)
-  and one recipient, the job's current customer email. The token is stored only as
+  and one recipient, the job's current customer email, with the party binding and customer
+  revision it came from (FKs), so G4 can tell when a later correction replaced it. The token is stored only as
   `sha256` (`token_hash`). Expiry at most 90 days. The firm's name is kept as released.
   An AFTER INSERT guard requires the version's own `content_hash`, and ordinary site
   completion: the job has scope progress and every scope item's `scope_progress.stage`
