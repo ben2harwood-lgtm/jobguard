@@ -16,6 +16,7 @@
         "apps/web/app/ui/review-proposal.test.tsx",
         "apps/web/app/ui/review-proposal.tsx",
         "apps/web/e2e/V2-SQ-D-rooms.spec.ts",
+        "apps/web/e2e/real-split-review-recovery.spec.ts",
         "packages/ai/src/context-reader.test.ts",
         "packages/ai/src/context-reader.ts"
       ]
