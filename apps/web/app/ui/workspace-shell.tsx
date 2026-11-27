@@ -101,6 +101,8 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
  },[capture,loading,section,fragment]);
+ // A lifecycle change from another card (the V2 Plan's Switch live) re-reads saved facts and keeps local edits.
+ useEffect(()=>{const changed=(event:Event)=>{if((event as CustomEvent).detail===jobId)void load(true);};window.addEventListener("job-lifecycle-changed",changed);return()=>window.removeEventListener("job-lifecycle-changed",changed);},[jobId,load]);
  if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
  if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
