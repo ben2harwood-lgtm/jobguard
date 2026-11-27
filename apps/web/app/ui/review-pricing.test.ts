@@ -81,6 +81,8 @@ describe("price box and rounding", () => {
     expect(priceFromText(" ")).toEqual({ pence: null, error: null });
     expect(priceFromText("twelve").pence).toBeNull();
     expect(priceFromText("12.345").error).not.toBeNull();
+    for (const typed of ["12,50", "1,25", "1,2345", ",500", "1,000,00"]) expect(priceFromText(typed)).toEqual({ pence: null, error: "Use commas only between thousands, for example 1,250.50." });
+    expect(priceFromText("12,500").pence).toBe(1250000);
     expect(priceFromText(String(MAX_MONEY_PENCE)).error).toBe("Price exceeds the application limit.");
   });
 });
