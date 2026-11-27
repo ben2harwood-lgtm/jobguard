@@ -54,3 +54,9 @@ for jobguard_migration). The trigger is enabled ALWAYS, so no writer skips it.
 Both guards take the same per-photo transaction advisory lock before checking,
 so concurrent inserts in either order serialize and the second sees the first.
 A pending upload on the walk's own job is unaffected.
+
+Firm lock (FL-1 rule): both walk tables carry a restrictive `v2_practice_firm`
+policy for jobguard_runtime, so a walk row is visible or writable only while its
+job (tenant_id, job_id) is visible to the firm. The V2 bootstrap loads this
+migration after 2047_v2_firm_lock_core, and `tools/v2/firm-lock/FL-B1A.checks.mjs`
+proves firm B can't see firm A's walk rows.

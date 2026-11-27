@@ -162,6 +162,15 @@ BEGIN
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_walk_entry.tenant_id, v2_walk_entry.job_id)
     ));
 
+  -- FL-1 rule: a restrictive firm lock so runtime only sees walk rows on jobs the firm can see.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_walk_session;
+  CREATE POLICY v2_practice_firm ON app.v2_walk_session AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_walk_session.tenant_id, v2_walk_session.job_id)));
+
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_walk_entry;
+  CREATE POLICY v2_practice_firm ON app.v2_walk_entry AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_walk_entry.tenant_id, v2_walk_entry.job_id)));
+
   REVOKE ALL ON app.v2_walk_session, app.v2_walk_entry FROM PUBLIC;
   GRANT SELECT, INSERT ON app.v2_walk_session, app.v2_walk_entry TO jobguard_runtime;
 END

@@ -70,7 +70,9 @@ try {
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
-  // V2 b1a walk session record
+  // V2-FL-1 firm lock on the V2 core tables (2047).
+  await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-B1A walk session record (2028), after FL-1 so its firm lock follows the same rule.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2028_v2_walk_record.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
