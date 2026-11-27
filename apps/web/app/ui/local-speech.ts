@@ -11,13 +11,15 @@ export function createLocalSpeechAdapter(progress:(percent:number)=>void):LocalS
   let callbacks:Callbacks|undefined, ready=false, cancelled=false, stopping=false, pending=0, sequence=0;
   let timer:ReturnType<typeof setTimeout>|undefined;
   const dispose = () => {
+    // Cancel settles a pending install, so the page is free to try again.
+    const reject=rejectLoad; rejectLoad=undefined; reject?.(new Error("Local speech cancelled"));
     cancelled=true; ready=false; clearTimeout(timer);
     if(processor){processor.onaudioprocess=null;processor.disconnect()}
     source?.disconnect(); stream?.getTracks().forEach(track=>track.stop());
     void context?.close().catch(()=>{});worker?.terminate();worker=undefined;
   };
   let rejectLoad:((reason:Error)=>void)|undefined;
-  const fail = () => { const cb=callbacks;dispose();rejectLoad?.(new Error("Local speech unavailable"));cb?.error("local-unavailable"); };
+  const fail = () => { const cb=callbacks, reject=rejectLoad;rejectLoad=undefined;dispose();reject?.(new Error("Local speech unavailable"));cb?.error("local-unavailable"); };
   const finish = () => {const cb=callbacks;dispose();cb?.end()};
   const session:LocalSpeechSession={
     stop(){if(cancelled||stopping)return;stopping=true;if(processor)processor.onaudioprocess=null;stream?.getTracks().forEach(track=>track.stop());
