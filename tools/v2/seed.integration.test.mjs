@@ -2157,6 +2157,26 @@ test("e9: a failure after the withdrawal commits finishes on the next read witho
   assert.deepEqual((await e9Drafts(jobId)).map(d => d.state).sort(), ["priced", "rejected"]);
 });
 
+test("e9: a builder re-price after a committed withdrawal never sticks the choice", async () => {
+  const { jobId, choices: real, command, sessionId, app } = await e9Setup();
+  const { choices: [over] } = await real.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  const broken = new ChoiceAllowanceApplication(e9FailingStepPool("current"), sessionId, app.variation);
+  await assert.rejects(broken.command(jobId, command(1, { chosen: { item: "Fictional zellige tile", amount: "40.00" } })), { code: "SEAM" });
+  // Before E9 retries, the builder uses "Change price" in Extras on the withdrawn extra.
+  const old = (await app.variation.get(jobId)).variations.find(item => item.id === over.draft.variationId);
+  await app.variation.command(jobId, { version: "variation-command.v1", action: "revise", variationId: old.id, revisionId: randomUUID(),
+    expectedRevisionId: old.currentRevisionId, description: old.description,
+    price: { quantity: "6", unit: "m2", unitRatePence: 500, direction: "addition" } });
+  const repriced = (await app.variation.get(jobId)).variations.find(item => item.id === old.id);
+  assert.equal(repriced.state, "priced", "the builder's re-price makes the withdrawn extra current again");
+  assert.notEqual(repriced.currentRevisionId, old.currentRevisionId);
+  const [view] = await real.read(jobId);
+  assert.equal(view.unfinished, null, "the committed withdrawal is recovered, not retried");
+  assert.equal(view.draft.amount, "90.00");
+  assert.deepEqual(view.withdrawn.map(entry => entry.outcome), ["withdrawn"]);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.variation_rejection WHERE variation_id = $1", [old.id])).rows[0].n, 1);
+});
+
 test("e9: the same choice version sent twice at once gives one variation", async () => {
   const { jobId, choices, command } = await e9Setup();
   const set = command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } });

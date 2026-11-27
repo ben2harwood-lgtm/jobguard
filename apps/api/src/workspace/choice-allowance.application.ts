@@ -134,6 +134,9 @@ export class ChoiceAllowanceApplication {
     } catch (error) {
       const after = await find();
       if (approved(after)) return "kept_agreed";
+      // This rejection id is E9's own. A conflict on it while a revision is already rejected means the
+      // withdrawal committed earlier and the builder has since re-priced the extra: the withdrawal stands.
+      if (errorCode(error) === "VARIATION_COMMAND_CONFLICT" && after.revisions.some(revision => revision.rejected)) return "withdrawn";
       if (after.state !== "rejected") throw error;
     }
     return "withdrawn";
