@@ -244,3 +244,6 @@ export { RamsRepository } from "./v2-rams-repository.js";
 export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash, RamsError, type RamsDraft } from "./v2-rams-draft.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+
+// V2-F8 who was on site today.
+export * from "./v2-site-attendance-repository.js";
