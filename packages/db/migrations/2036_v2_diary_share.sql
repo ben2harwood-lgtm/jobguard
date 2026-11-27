@@ -20,8 +20,8 @@ BEGIN
     recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, job_id, diary_entry_id, sequence),
     UNIQUE (tenant_id, command_id),
-    FOREIGN KEY (tenant_id, job_id, diary_entry_id) REFERENCES app.job_diary_entry (tenant_id, job_id, id),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    -- The actor is the practice credential's membership, as on v2_friday_update; it is not an app.membership row.
+    FOREIGN KEY (tenant_id, job_id, diary_entry_id) REFERENCES app.job_diary_entry (tenant_id, job_id, id)
   );
   ALTER TABLE app.v2_diary_share ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_diary_share FORCE ROW LEVEL SECURITY;
