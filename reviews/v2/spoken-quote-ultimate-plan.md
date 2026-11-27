@@ -7,7 +7,7 @@ Scope: V2 practice tenant only. Fictional data only. Every new V2 table carries 
 
 Ben, 27 Nov 14:06 UK: the demo shows the old screens, "sent" leads nowhere, and the spoken quote must (1) understand the words in context, (2) pull the different jobs apart and put them in different places so they can be quoted differently, (3) price each part, (4) plan the work properly.
 
-## 2. What is wrong today (checked 27 Nov, 14:10 to 14:40 UK)
+## 2. What is wrong today (checked 27 Nov, about 14:10 UK)
 
 | # | Finding | Evidence |
 |---|---|---|
