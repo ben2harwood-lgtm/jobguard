@@ -1271,7 +1271,7 @@ test("K5A task confirmation turns the exact stage due, audits once, and rolls ba
 // V2-K5A: both working tables have the same forced firm boundary and immutable grants.
 test("K5A task-confirmation catalogue and rerunnable migration preserve existing schedules",async()=>{
   const before=(await admin.query("SELECT count(*)::int AS n FROM app.v2_payment_schedule")).rows[0].n;
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2012_v2_payment_schedule.sql",import.meta.url),"utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2067_v2_payment_schedule.sql",import.meta.url),"utf8"));
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_payment_schedule")).rows[0].n,before);
   const {rows:[catalog]}=await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
     relowner::regrole::text AS owner,has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutable
