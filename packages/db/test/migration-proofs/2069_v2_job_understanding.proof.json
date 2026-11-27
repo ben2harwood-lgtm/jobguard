@@ -1,0 +1,6 @@
+{
+  "migration": "2069_v2_job_understanding.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

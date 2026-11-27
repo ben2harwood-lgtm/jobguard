@@ -14,7 +14,7 @@ function agreeing(a: JobUnderstanding): SpokenSortWire {
     areas: names.map(area => ({ name_words: area.name.value })),
     items: a.lines.map((line, item_index) => {
       const at = names.findIndex(area => area.key === line.areaKey);
-      return { item_index, area_index: at === -1 ? null : at, trade: line.trade.value };
+      return { item_index, area_index: at, trade: line.trade.value };
     }),
     missed: [],
   };
@@ -91,7 +91,7 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
     const text = "In the kitchen fit new units 2000 and fit 600mm wall units. Clear the 1930s fireplace. Box in the pipes. Then box in the pipes again.";
     const a = readA(text);
     for (const words of ["fit new units", "fit 600mm wall units", "12 square metres", "200k", "Clear the 1930s fireplace", "box in the pipes", "units 2000 and fit"]) {
-      const wire = { ...agreeing(a), missed: [{ description_words: words, area_index: null, trade: "Other" as const }] };
+      const wire = { ...agreeing(a), missed: [{ description_words: words, area_index: -1, trade: "Other" as const }] };
       const result = combineModelReading(a, text, wire, "k");
       expect(result.understanding.lines.length, words).toBe(a.lines.length);
     }
@@ -100,7 +100,7 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
   it("a missed line placed between an A item and its number is dropped or the reading is discarded; the number stays", () => {
     const text = "Kitchen fit new units and also the plinths 2000.";
     const a = readA(text);
-    const wire = { ...agreeing(a), missed: [{ description_words: "also the plinths", area_index: null, trade: "Carpentry" as const }] };
+    const wire = { ...agreeing(a), missed: [{ description_words: "also the plinths", area_index: -1, trade: "Carpentry" as const }] };
     const result = combineModelReading(a, text, wire, "k");
     expect(numbers(result.understanding, a.lines.length)).toEqual(numbers(a, a.lines.length));
     expect(result.understanding.lines.slice(a.lines.length).every(line => line.unitPricePence.value === null)).toBe(true);
@@ -109,7 +109,7 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
   it("“don't rip out the units” returned as missed work reaches the builder as a question, never as priced work", () => {
     const text = "Kitchen job. Paint the walls 400. Don't rip out the units, they stay.";
     const a = missing(readA(text));
-    const wire = { ...agreeing(a), missed: [{ description_words: "rip out the units", area_index: null, trade: "Strip-out" as const }] };
+    const wire = { ...agreeing(a), missed: [{ description_words: "rip out the units", area_index: -1, trade: "Strip-out" as const }] };
     const result = combineModelReading(a, text, wire, "k");
     expect(result).toMatchObject({ used: true, keptMissed: 1 });
     expect(result.understanding.lines.at(-1)).toMatchObject({ description: { value: "rip out the units" }, unitPricePence: { value: null }, priceBasis: "none" });
@@ -179,8 +179,8 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
     const a = readA(SMITH);
     expect(combineModelReading(a, SMITH, "not json", "s")).toMatchObject({ used: false, reason: "invalid_output" });
     expect(combineModelReading(a, SMITH, { ...agreeing(a), price: 100 }, "s")).toMatchObject({ used: false, reason: "invalid_output" });
-    expect(combineModelReading(a, SMITH, { ...agreeing(a), items: [{ item_index: 0, area_index: null, trade: "Bricklaying" }] }, "s")).toMatchObject({ used: false });
-    expect(spokenSortWireV1.safeParse({ areas: [], items: [], missed: Array.from({ length: 9 }, () => ({ description_words: "x", area_index: null, trade: "Other" })) }).success).toBe(false);
+    expect(combineModelReading(a, SMITH, { ...agreeing(a), items: [{ item_index: 0, area_index: -1, trade: "Bricklaying" }] }, "s")).toMatchObject({ used: false });
+    expect(spokenSortWireV1.safeParse({ areas: [], items: [], missed: Array.from({ length: 9 }, () => ({ description_words: "x", area_index: -1, trade: "Other" })) }).success).toBe(false);
   });
 
   it("property: random and adversarial readings never change A's numbers, and every added line is open", () => {
@@ -200,8 +200,8 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
       const wire: SpokenSortWire = {
         areas: Array.from({ length: Math.floor(random() * 5) }, () => ({ name_words: random() < 0.2 ? "Utility room" : quote() })),
         items: a.lines.flatMap((_, item_index) => random() < 0.15 ? [] : [{ item_index: random() < 0.05 ? item_index + 50 : item_index,
-          area_index: random() < 0.3 ? null : Math.floor(random() * 6) - 1, trade: pick(JOB_TRADES) }]),
-        missed: Array.from({ length: Math.floor(random() * 4) }, () => ({ description_words: quote(), area_index: random() < 0.5 ? null : Math.floor(random() * 4), trade: pick(JOB_TRADES) })),
+          area_index: Math.floor(random() * 7) - 2, trade: pick(JOB_TRADES) }]),
+        missed: Array.from({ length: Math.floor(random() * 4) }, () => ({ description_words: quote(), area_index: Math.floor(random() * 5) - 1, trade: pick(JOB_TRADES) })),
       };
       const result = combineModelReading(a, text, wire, `p${run}`);
       expect(numbers(result.understanding, a.lines.length), JSON.stringify(wire)).toEqual(numbers(a, a.lines.length));

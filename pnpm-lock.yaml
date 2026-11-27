@@ -44,7 +44,7 @@ importers:
     devDependencies:
       next:
         specifier: 16.4.5
-        version: 16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+        version: 16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       turbo:
         specifier: 2.10.12
         version: 2.10.12
@@ -129,7 +129,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   apps/mobile:
     dependencies:
@@ -169,7 +169,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   apps/web:
     dependencies:
@@ -187,7 +187,7 @@ importers:
         version: link:../../packages/db
       next:
         specifier: 16.4.5
-        version: 16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+        version: 16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       pg:
         specifier: 8.16.3
         version: 8.16.3
@@ -209,7 +209,7 @@ importers:
         version: 4.14.0(playwright-core@1.55.1)
       '@opennextjs/cloudflare':
         specifier: 1.20.12
-        version: 1.20.12(next@16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))
+        version: 1.20.12(next@16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))
       '@playwright/test':
         specifier: 1.55.1
         version: 1.55.1
@@ -233,13 +233,16 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
       wrangler:
         specifier: 4.151.1
         version: 4.151.1(@types/node@24.0.3)
 
   packages/ai:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.6.6)
       '@jobguard/core':
         specifier: workspace:*
         version: link:../core
@@ -255,7 +258,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   packages/config:
     dependencies:
@@ -268,7 +271,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   packages/core:
     dependencies:
@@ -281,7 +284,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   packages/db:
     dependencies:
@@ -293,7 +296,7 @@ importers:
         version: link:../storage
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@types/pg@8.15.5)(expo-sqlite@16.0.10(expo@54.0.35(@babel/core@7.29.13)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)(typescript@5.8.3))(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9))(pg@8.16.3)
+        version: 0.45.2(@opentelemetry/api@1.10.0)(@types/pg@8.15.5)(expo-sqlite@16.0.10(expo@54.0.35(@babel/core@7.29.13)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)(typescript@5.8.3))(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9))(pg@8.16.3)
       pg:
         specifier: 8.16.3
         version: 8.16.3
@@ -312,7 +315,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
   packages/storage:
     dependencies:
@@ -334,7 +337,7 @@ importers:
         version: 5.8.3
       vitest:
         specifier: 4.1.12
-        version: 4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
 
 packages:
 
@@ -376,6 +379,15 @@ packages:
   '@angular-devkit/schematics@19.2.27':
     resolution: {integrity: sha512-/PZmyAlb2NGWPikRRuiWLdfHQd8Wrx6lX4HqvTcaDhlU43M3T0ud4PH2T3QDp7BzHYY92xtD8iPxX2asg67G1A==}
     engines: {node: ^18.19.1 || ^20.11.1 || >=22.0.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+
+  '@anthropic-ai/sdk@1.8.0':
+    resolution: {integrity: sha512-yDOArk2+Qpd/djEKmZjrv7JZ+pn5iBHARJ9PAdvfhGf4H5wNqTgY/2K0/yDKdQdm8G8hrNQchMlBAHpPK7yBfg==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@ast-grep/napi-darwin-arm64@0.45.3':
     resolution: {integrity: sha512-rMZJ6frSpR/xSbeV4hiA9WR5hHqk3rVYX8lOqEoUCaUnjEuFXvHdGN4WawJ8pVDq/IqM1UnTtsDSYgUdVmO5DA==}
@@ -2286,6 +2298,10 @@ packages:
       rclone.js:
         optional: true
 
+  '@opentelemetry/api@1.10.0':
+    resolution: {integrity: sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ==}
+    engines: {node: '>=8.0.0'}
+
   '@paralleldrive/cuid2@2.3.1':
     resolution: {integrity: sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw==}
 
@@ -2685,6 +2701,9 @@ packages:
 
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
+
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -3886,6 +3905,9 @@ packages:
   fast-safe-stringify@2.1.1:
     resolution: {integrity: sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fast-uri@3.1.9:
     resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
 
@@ -4244,6 +4266,10 @@ packages:
 
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
+
+  json-schema-to-ts@3.1.1:
+    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
+    engines: {node: '>=16'}
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
@@ -5290,6 +5316,9 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
+  standardwebhooks@1.1.1:
+    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
+
   statuses@1.5.0:
     resolution: {integrity: sha512-OpZ3zP+jT1PI7I8nemJX4AKmAX070ZkYPVWV/AaKTJl+tXCTGyVdC1a4SL8RUQYEwk/f34ZX8UTykN68FwrqAA==}
     engines: {node: '>= 0.6'}
@@ -5520,6 +5549,9 @@ packages:
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
+
+  ts-algebra@2.0.0:
+    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
@@ -6031,6 +6063,14 @@ snapshots:
       rxjs: 7.8.1
     transitivePeerDependencies:
       - chokidar
+
+  '@anthropic-ai/sdk@1.8.0(zod@4.6.6)':
+    dependencies:
+      '@opentelemetry/api': 1.10.0
+      json-schema-to-ts: 3.1.1
+      standardwebhooks: 1.1.1
+    optionalDependencies:
+      zod: 4.6.6
 
   '@ast-grep/napi-darwin-arm64@0.45.3':
     optional: true
@@ -8488,7 +8528,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/aws@4.1.11(next@16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))':
+  '@opennextjs/aws@4.1.11(next@16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -8504,30 +8544,32 @@ snapshots:
       cookie: 1.1.1
       esbuild: 0.28.2
       express: 5.2.1
-      next: 16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+      next: 16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.9.1
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.12(next@16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))':
+  '@opennextjs/cloudflare@1.20.12(next@16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))(wrangler@4.151.1(@types/node@24.0.3))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@dotenvx/dotenvx': 2.38.2
-      '@opennextjs/aws': 4.1.11(next@16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))
+      '@opennextjs/aws': 4.1.11(next@16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9))
       ci-info: 4.4.0
       cloudflare: 4.5.0
       comment-json: 4.6.2
       enquirer: 2.4.1
       glob: 14.0.2
-      next: 16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
+      next: 16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9)
       ts-tqdm: 0.8.6
       wrangler: 4.151.1(@types/node@24.0.3)
       yargs: 18.2.0
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@opentelemetry/api@1.10.0': {}
 
   '@paralleldrive/cuid2@2.3.1':
     dependencies:
@@ -8976,6 +9018,8 @@ snapshots:
       tslib: 2.8.1
 
   '@speed-highlight/core@1.2.24': {}
+
+  '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -9915,8 +9959,9 @@ snapshots:
 
   dotenv@16.4.7: {}
 
-  drizzle-orm@0.45.2(@types/pg@8.15.5)(expo-sqlite@16.0.10(expo@54.0.35(@babel/core@7.29.13)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)(typescript@5.8.3))(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9))(pg@8.16.3):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.10.0)(@types/pg@8.15.5)(expo-sqlite@16.0.10(expo@54.0.35(@babel/core@7.29.13)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)(typescript@5.8.3))(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9))(pg@8.16.3):
     optionalDependencies:
+      '@opentelemetry/api': 1.10.0
       '@types/pg': 8.15.5
       expo-sqlite: 16.0.10(expo@54.0.35(@babel/core@7.29.13)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)(typescript@5.8.3))(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.8)(react@19.1.9))(react@19.1.9)
       pg: 8.16.3
@@ -10372,6 +10417,8 @@ snapshots:
 
   fast-safe-stringify@2.1.1: {}
 
+  fast-sha256@1.3.0: {}
+
   fast-uri@3.1.9: {}
 
   fb-watchman@2.0.4:
@@ -10770,6 +10817,11 @@ snapshots:
   jsesc@3.1.0: {}
 
   json-parse-even-better-errors@2.3.1: {}
+
+  json-schema-to-ts@3.1.1:
+    dependencies:
+      '@babel/runtime': 7.29.13
+      ts-algebra: 2.0.0
 
   json-schema-traverse@1.0.0: {}
 
@@ -11345,7 +11397,7 @@ snapshots:
 
   nested-error-stacks@2.0.1: {}
 
-  next@16.4.5(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9):
+  next@16.4.5(@opentelemetry/api@1.10.0)(@playwright/test@1.55.1)(@types/node@24.0.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.9(react@19.1.9))(react@19.1.9):
     dependencies:
       '@next/env': 16.4.5
       '@swc/helpers': 0.5.23
@@ -11364,6 +11416,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.4.5
       '@next/swc-win32-arm64-msvc': 16.4.5
       '@next/swc-win32-x64-msvc': 16.4.5
+      '@opentelemetry/api': 1.10.0
       '@playwright/test': 1.55.1
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.35.5(@types/node@24.0.3)
@@ -12102,6 +12155,11 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
+  standardwebhooks@1.1.1:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   statuses@1.5.0: {}
 
   statuses@2.0.2: {}
@@ -12300,6 +12358,8 @@ snapshots:
 
   tr46@0.0.3: {}
 
+  ts-algebra@2.0.0: {}
+
   ts-interface-checker@0.1.13: {}
 
   ts-tqdm@0.8.6: {}
@@ -12427,7 +12487,7 @@ snapshots:
       tsx: 4.20.3
       yaml: 2.9.1
 
-  vitest@4.1.12(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1)):
+  vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@24.0.3)(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.12
       '@vitest/mocker': 4.1.12(vite@7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1))
@@ -12450,6 +12510,7 @@ snapshots:
       vite: 7.3.7(@types/node@24.0.3)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.20.3)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@opentelemetry/api': 1.10.0
       '@types/node': 24.0.3
     transitivePeerDependencies:
       - msw
