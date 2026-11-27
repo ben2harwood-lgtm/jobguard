@@ -1588,6 +1588,200 @@ test("forced materials policies hide lines and enquiries and reject changes from
     scopeItemId: tilingId, lineKey: "tiles", expectedVersion: 0, changes: { notes: "x" } }), { code: "NOT_FOUND" });
   await assert.rejects(materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(),
     expectedVersion: 0 }), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const tables = {
+    "app.v2_material_line": {
+      insert: `INSERT INTO app.v2_material_line (tenant_id, job_id, scope_item_id, line_key, expected_version, command_id,
+        changes, actor_membership_id) VALUES ($1,$2,$3,'tiles',999,$4,'{"notes":"x"}',$5)`,
+      params: () => [DEMO_TENANT_ID, jobId, tilingId, randomUUID(), owner.membershipId],
+      set: "changes = '{\"notes\":\"y\"}'" },
+    "app.v2_material_enquiry": {
+      insert: `INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
+        actor_membership_id) VALUES ($1,$2,999,$3,repeat('0', 64),'[]','{}',$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "content = '{}'" },
+    "app.v2_material_enquiry_command": {
+      insert: `INSERT INTO app.v2_material_enquiry_command (tenant_id, job_id, command_id, expected_version,
+        enquiry_version, actor_membership_id) VALUES ($1,$2,$3,0,1,$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "expected_version = 5" },
+  };
+  for (const [table, { insert, params, set }] of Object.entries(tables)) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false }, table);
+    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
+    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0, table);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+      await assert.rejects(query(scope, insert, params()), { code: "42501", message: /row-level security policy/u }, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET ${set} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+    }
+    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+  }
+});
+
+// Audit-chain evidence for the two materials commands (V2-CI2 guard): one event per accepted command,
+// exact replays append nothing, and a failed audit append rolls back the command's own writes.
+
+test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.saveLine", async () => {
+  const { owner, materials, tilingId } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const lineKey = "audit-chain-sealant";
+  const changes = { product: "Fictional silicone sealant", supplier: "Fictional Merchant", neededBy: "2026-12-07" };
+  const command = { version: "v2-material-line-command.v1", commandId: randomUUID(), scopeItemId: tilingId, lineKey,
+    expectedVersion: 0, changes };
+  const before = await auditEvents("v2_materials.line_saved");
+
+  const saved = await materials.saveLine(jobId, command);
+  const recorded = await auditEvents("v2_materials.line_saved");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "scopeItemId", "lineKey", "lineVersion"]),
+    { commandId: command.commandId, scopeItemId: tilingId, lineKey, lineVersion: String(saved.version) });
+  assert.equal(recorded.at(-1).payload.hashes.changes, createHash("sha256").update(JSON.stringify(
+    Object.fromEntries(Object.entries(changes).sort(([a], [b]) => a.localeCompare(b))))).digest("hex"));
+  assert.doesNotMatch(JSON.stringify(recorded.at(-1).payload), /silicone sealant/u, "free text stays out of the audit payload");
+
+  // Exact retries, including concurrent ones, return the same receipt and append nothing.
+  const replays = await Promise.all([materials.saveLine(jobId, command), materials.saveLine(jobId, command)]);
+  assert.deepEqual(replays, [saved, saved]);
+  await assert.rejects(materials.saveLine(jobId, { ...command, changes: { notes: "different" } }),
+    { code: "MATERIALS_COMMAND_CONFLICT" });
+  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded, "audit-chain: replay");
+
+  // Fail the audit append after the line insert: the transaction keeps neither.
+  const next = { ...command, commandId: randomUUID(), expectedVersion: saved.version, changes: { notes: "Clear finish" } };
+  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).saveLine(context, jobId, owner.sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_material_line WHERE command_id = $1", [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded);
+  const view = await materials.read(jobId, materialsQuery);
+  assert.equal(view.lines.find(entry => entry.scopeItemId === tilingId && entry.lineKey === lineKey).version, saved.version);
+
+  await materials.saveLine(jobId, next);
+  assert.equal((await auditEvents("v2_materials.line_saved")).length, recorded.length + 1);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.generate", async () => {
+  const { owner, materials, tilingId, line } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  // Change an input so the next generate creates a new enquiry version.
+  await line(tilingId, "audit-chain-spacers", { product: "Fictional tile spacers", supplier: "Fictional Merchant",
+    neededBy: "2026-12-07" });
+  const start = await materials.read(jobId, materialsQuery);
+  const expectedVersion = start.enquiry?.version ?? 0;
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion };
+  const before = await auditEvents("v2_materials.enquiry_generated");
+
+  const generated = await materials.generate(jobId, command);
+  const recorded = await auditEvents("v2_materials.enquiry_generated");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "expectedVersion", "enquiryVersion", "created"]),
+    { commandId: command.commandId, expectedVersion: String(expectedVersion),
+      enquiryVersion: String(expectedVersion + 1), created: "true" });
+  assert.match(recorded.at(-1).payload.hashes.basis, /^[0-9a-f]{64}$/u);
+  assert.equal(generated.enquiry.version, expectedVersion + 1);
+
+  // Exact retries return the same enquiry and append nothing.
+  const replays = await Promise.all([materials.generate(jobId, command), materials.generate(jobId, command)]);
+  for (const replay of replays) assert.deepEqual(replay.enquiry, generated.enquiry);
+  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded, "audit-chain: replay");
+
+  // Fail the audit append after the enquiry and command inserts: the transaction keeps neither.
+  await line(tilingId, "audit-chain-spacers", { notes: "3 mm" });
+  const next = { ...command, commandId: randomUUID(), expectedVersion: expectedVersion + 1 };
+  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).generate(context, jobId, owner.sessionId, next),
+    { code: "FORCED" });
+  const { rows: [kept] } = await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.v2_material_enquiry WHERE command_id = $1 OR (job_id = $2 AND version = $3)) AS enquiries,
+      (SELECT count(*)::int FROM app.v2_material_enquiry_command WHERE command_id = $1) AS commands`,
+  [next.commandId, jobId, expectedVersion + 2]);
+  assert.deepEqual(kept, { enquiries: 0, commands: 0 }, "audit-chain: rollback");
+  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded);
+  const stale = await materials.read(jobId, materialsQuery);
+  assert.equal(stale.enquiry.version, expectedVersion + 1);
+  assert.equal(stale.enquiry.current, false);
+
+  const regenerated = await materials.generate(jobId, next);
+  assert.equal(regenerated.enquiry.version, expectedVersion + 2);
+  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, recorded.length + 1);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("a copy of a generate command that loses the receipt race to an unchanged-input copy leaves no extra enquiry", async () => {
+  const { owner, materials, tilingId, line, generate } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await generate();
+  const { enquiry: current } = await materials.read(jobId, materialsQuery);
+  assert.equal(current.current, true);
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: current.version };
+
+  // Copy A records its receipt for the current enquiry, then pauses before its audit append and commit.
+  let paused, resume;
+  const reachedAudit = new Promise(resolve => { paused = resolve; });
+  const gate = new Promise(resolve => { resume = resolve; });
+  const pausing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = async (sql, ...rest) => {
+        if (typeof sql === "string" && sql.includes("app.append_audit(")) { paused(); await gate; }
+        return query(sql, ...rest);
+      };
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const first = new MaterialsEnquiryRepository(pausing).generate(context, jobId, owner.sessionId, command);
+  await reachedAudit;
+
+  // The inputs change, and copy B creates a new version before waiting on A's receipt.
+  await line(tilingId, "audit-chain-spacers", { notes: "2 mm" });
+  const events = (await auditEvents("v2_materials.enquiry_generated")).length;
+  const second = materials.generate(jobId, command);
+  for (let waited = 0; ; waited += 25) {
+    const { rowCount } = await admin.query(`SELECT 1 FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock' AND query LIKE '%v2_material_enquiry_command%'`);
+    if (rowCount) break;
+    assert.ok(waited < 10000, "copy B waits on copy A's receipt");
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  resume();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a.enquiry.version, current.version);
+  assert.equal(a.enquiry.current, true);
+  assert.deepEqual([b.enquiry.version, b.enquiry.commandId, b.enquiry.generatedAt],
+    [a.enquiry.version, a.enquiry.commandId, a.enquiry.generatedAt], "both copies share the first copy's outcome");
+  assert.equal(b.enquiry.current, false, "the second copy reports that the shared enquiry is now out of date");
+
+  const { rows: [{ latest }] } = await admin.query(
+    "SELECT max(version)::int AS latest FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(latest, current.version, "the losing copy's new version rolled back");
+  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, events + 1);
+  const after = await materials.read(jobId, materialsQuery);
+  assert.equal(after.enquiry.version, current.version);
+  assert.equal(after.enquiry.current, false);
+  await verifyTenantChain(context.tenantId);
+});
+
 const briefQuery = { version: "v2-crew-brief-query.v1" };
 
 async function plantPhoto(targetJobId, scopeItemId, contentType = "image/jpeg") {
@@ -1834,24 +2028,6 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
   const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
   const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
   const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
-  const tables = {
-    "app.v2_material_line": {
-      insert: `INSERT INTO app.v2_material_line (tenant_id, job_id, scope_item_id, line_key, expected_version, command_id,
-        changes, actor_membership_id) VALUES ($1,$2,$3,'tiles',999,$4,'{"notes":"x"}',$5)`,
-      params: () => [DEMO_TENANT_ID, jobId, tilingId, randomUUID(), owner.membershipId],
-      set: "changes = '{\"notes\":\"y\"}'" },
-    "app.v2_material_enquiry": {
-      insert: `INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
-        actor_membership_id) VALUES ($1,$2,999,$3,repeat('0', 64),'[]','{}',$4)`,
-      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
-      set: "content = '{}'" },
-    "app.v2_material_enquiry_command": {
-      insert: `INSERT INTO app.v2_material_enquiry_command (tenant_id, job_id, command_id, expected_version,
-        enquiry_version, actor_membership_id) VALUES ($1,$2,$3,0,1,$4)`,
-      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
-      set: "expected_version = 5" },
-  };
-  for (const [table, { insert, params, set }] of Object.entries(tables)) {
   const { rows: [photo] } = await admin.query("SELECT * FROM app.v2_crew_brief_photo WHERE job_id = $1 LIMIT 1", [jobId]);
   for (const table of ["app.v2_crew_brief", "app.v2_crew_brief_photo", "app.v2_crew_brief_command"]) {
     const { rows: [acl] } = await admin.query(`SELECT
@@ -1864,168 +2040,6 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
       has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
       FROM pg_class WHERE oid = $1::regclass`, [table]);
     assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
-      identity_access: false, worker_access: false, infra_access: false }, table);
-    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
-    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0, table);
-    for (const scope of [outsider.realContext, context]) {
-      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
-      await assert.rejects(query(scope, insert, params()), { code: "42501", message: /row-level security policy/u }, table);
-      await assert.rejects(query(scope, `UPDATE ${table} SET ${set} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
-      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
-    }
-    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
-  }
-});
-
-// Audit-chain evidence for the two materials commands (V2-CI2 guard): one event per accepted command,
-// exact replays append nothing, and a failed audit append rolls back the command's own writes.
-
-test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.saveLine", async () => {
-  const { owner, materials, tilingId } = await materialsSetup();
-  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
-  const lineKey = "audit-chain-sealant";
-  const changes = { product: "Fictional silicone sealant", supplier: "Fictional Merchant", neededBy: "2026-12-07" };
-  const command = { version: "v2-material-line-command.v1", commandId: randomUUID(), scopeItemId: tilingId, lineKey,
-    expectedVersion: 0, changes };
-  const before = await auditEvents("v2_materials.line_saved");
-
-  const saved = await materials.saveLine(jobId, command);
-  const recorded = await auditEvents("v2_materials.line_saved");
-  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
-  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
-  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "scopeItemId", "lineKey", "lineVersion"]),
-    { commandId: command.commandId, scopeItemId: tilingId, lineKey, lineVersion: String(saved.version) });
-  assert.equal(recorded.at(-1).payload.hashes.changes, createHash("sha256").update(JSON.stringify(
-    Object.fromEntries(Object.entries(changes).sort(([a], [b]) => a.localeCompare(b))))).digest("hex"));
-  assert.doesNotMatch(JSON.stringify(recorded.at(-1).payload), /silicone sealant/u, "free text stays out of the audit payload");
-
-  // Exact retries, including concurrent ones, return the same receipt and append nothing.
-  const replays = await Promise.all([materials.saveLine(jobId, command), materials.saveLine(jobId, command)]);
-  assert.deepEqual(replays, [saved, saved]);
-  await assert.rejects(materials.saveLine(jobId, { ...command, changes: { notes: "different" } }),
-    { code: "MATERIALS_COMMAND_CONFLICT" });
-  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded, "audit-chain: replay");
-
-  // Fail the audit append after the line insert: the transaction keeps neither.
-  const next = { ...command, commandId: randomUUID(), expectedVersion: saved.version, changes: { notes: "Clear finish" } };
-  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).saveLine(context, jobId, owner.sessionId, next),
-    { code: "FORCED" });
-  const { rows: [{ count }] } = await admin.query(
-    "SELECT count(*)::int AS count FROM app.v2_material_line WHERE command_id = $1", [next.commandId]);
-  assert.equal(count, 0, "audit-chain: rollback");
-  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded);
-  const view = await materials.read(jobId, materialsQuery);
-  assert.equal(view.lines.find(entry => entry.scopeItemId === tilingId && entry.lineKey === lineKey).version, saved.version);
-
-  await materials.saveLine(jobId, next);
-  assert.equal((await auditEvents("v2_materials.line_saved")).length, recorded.length + 1);
-  await verifyTenantChain(context.tenantId);
-});
-
-test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.generate", async () => {
-  const { owner, materials, tilingId, line } = await materialsSetup();
-  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
-  // Change an input so the next generate creates a new enquiry version.
-  await line(tilingId, "audit-chain-spacers", { product: "Fictional tile spacers", supplier: "Fictional Merchant",
-    neededBy: "2026-12-07" });
-  const start = await materials.read(jobId, materialsQuery);
-  const expectedVersion = start.enquiry?.version ?? 0;
-  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion };
-  const before = await auditEvents("v2_materials.enquiry_generated");
-
-  const generated = await materials.generate(jobId, command);
-  const recorded = await auditEvents("v2_materials.enquiry_generated");
-  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
-  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
-  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "expectedVersion", "enquiryVersion", "created"]),
-    { commandId: command.commandId, expectedVersion: String(expectedVersion),
-      enquiryVersion: String(expectedVersion + 1), created: "true" });
-  assert.match(recorded.at(-1).payload.hashes.basis, /^[0-9a-f]{64}$/u);
-  assert.equal(generated.enquiry.version, expectedVersion + 1);
-
-  // Exact retries return the same enquiry and append nothing.
-  const replays = await Promise.all([materials.generate(jobId, command), materials.generate(jobId, command)]);
-  for (const replay of replays) assert.deepEqual(replay.enquiry, generated.enquiry);
-  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded, "audit-chain: replay");
-
-  // Fail the audit append after the enquiry and command inserts: the transaction keeps neither.
-  await line(tilingId, "audit-chain-spacers", { notes: "3 mm" });
-  const next = { ...command, commandId: randomUUID(), expectedVersion: expectedVersion + 1 };
-  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).generate(context, jobId, owner.sessionId, next),
-    { code: "FORCED" });
-  const { rows: [kept] } = await admin.query(`SELECT
-      (SELECT count(*)::int FROM app.v2_material_enquiry WHERE command_id = $1 OR (job_id = $2 AND version = $3)) AS enquiries,
-      (SELECT count(*)::int FROM app.v2_material_enquiry_command WHERE command_id = $1) AS commands`,
-  [next.commandId, jobId, expectedVersion + 2]);
-  assert.deepEqual(kept, { enquiries: 0, commands: 0 }, "audit-chain: rollback");
-  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded);
-  const stale = await materials.read(jobId, materialsQuery);
-  assert.equal(stale.enquiry.version, expectedVersion + 1);
-  assert.equal(stale.enquiry.current, false);
-
-  const regenerated = await materials.generate(jobId, next);
-  assert.equal(regenerated.enquiry.version, expectedVersion + 2);
-  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, recorded.length + 1);
-  await verifyTenantChain(context.tenantId);
-});
-
-test("a copy of a generate command that loses the receipt race to an unchanged-input copy leaves no extra enquiry", async () => {
-  const { owner, materials, tilingId, line, generate } = await materialsSetup();
-  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
-  await generate();
-  const { enquiry: current } = await materials.read(jobId, materialsQuery);
-  assert.equal(current.current, true);
-  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: current.version };
-
-  // Copy A records its receipt for the current enquiry, then pauses before its audit append and commit.
-  let paused, resume;
-  const reachedAudit = new Promise(resolve => { paused = resolve; });
-  const gate = new Promise(resolve => { resume = resolve; });
-  const pausing = {
-    async connect() {
-      const client = await runtime.connect();
-      const query = client.query.bind(client);
-      client.query = async (sql, ...rest) => {
-        if (typeof sql === "string" && sql.includes("app.append_audit(")) { paused(); await gate; }
-        return query(sql, ...rest);
-      };
-      const release = client.release.bind(client);
-      client.release = (...args) => { client.query = query; return release(...args); };
-      return client;
-    },
-  };
-  const first = new MaterialsEnquiryRepository(pausing).generate(context, jobId, owner.sessionId, command);
-  await reachedAudit;
-
-  // The inputs change, and copy B creates a new version before waiting on A's receipt.
-  await line(tilingId, "audit-chain-spacers", { notes: "2 mm" });
-  const events = (await auditEvents("v2_materials.enquiry_generated")).length;
-  const second = materials.generate(jobId, command);
-  for (let waited = 0; ; waited += 25) {
-    const { rowCount } = await admin.query(`SELECT 1 FROM pg_stat_activity
-      WHERE wait_event_type = 'Lock' AND query LIKE '%v2_material_enquiry_command%'`);
-    if (rowCount) break;
-    assert.ok(waited < 10000, "copy B waits on copy A's receipt");
-    await new Promise(resolve => setTimeout(resolve, 25));
-  }
-  resume();
-  const [a, b] = await Promise.all([first, second]);
-  assert.equal(a.enquiry.version, current.version);
-  assert.equal(a.enquiry.current, true);
-  assert.deepEqual([b.enquiry.version, b.enquiry.commandId, b.enquiry.generatedAt],
-    [a.enquiry.version, a.enquiry.commandId, a.enquiry.generatedAt], "both copies share the first copy's outcome");
-  assert.equal(b.enquiry.current, false, "the second copy reports that the shared enquiry is now out of date");
-
-  const { rows: [{ latest }] } = await admin.query(
-    "SELECT max(version)::int AS latest FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
-  assert.equal(latest, current.version, "the losing copy's new version rolled back");
-  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, events + 1);
-  const after = await materials.read(jobId, materialsQuery);
-  assert.equal(after.enquiry.version, current.version);
-  assert.equal(after.enquiry.current, false);
-  await verifyTenantChain(context.tenantId);
-});
-
       identity_access: false, worker_access: false, infra_access: false });
     const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
     assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0);
@@ -2405,6 +2419,8 @@ test("D4: a task assigned to a crew record shows the record's current name in th
   assert.equal((await latest()).current, false, "renaming the crew record makes the brief out of date");
   const renamed = (await generate()).content.tasks.find(item => item.taskKey === task.key);
   assert.deepEqual([renamed.owner, renamed.ownerRef], ["Dee Renamed", crew.crewId]);
+});
+
 // V2-E1 open facts. Added as its own block; earlier pieces' tests stay as they are.
 const factQuery = { version: "v2-open-fact-query.v1" };
 const factCommand = fields => ({ version: "v2-open-fact-command.v1", commandId: randomUUID(), ...fields });
@@ -2755,6 +2771,8 @@ test("SX signed-out builder cannot reuse the old real or practice cookies", asyn
   await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
     record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
   });
+});
+
 // Run last: these synthetic cases add jobs after the seed's exact-count and
 // isolation assertions. They use the two sessions already exercised over HTTP.
 test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
