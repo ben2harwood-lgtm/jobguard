@@ -96,16 +96,28 @@ const versionColumns = `fact_id AS "factId", version, command_id AS "commandId",
   chosen_pence::text AS "chosenPence", withdraw_variation_id AS "withdrawVariationId", rejection_id AS "rejectionId",
   rejection_reason AS "rejectionReason", draft_kind AS "draftKind", proposal_id AS "proposalId", revision_id AS "revisionId",
   excess_rate_pence::text AS "excessRatePence", actor_membership_id AS "actorMembershipId", recorded_at AS "recordedAt",
-  (recorded_at AT TIME ZONE 'Europe/London')::date > decide_by AND chosen_item IS NOT NULL AS "chosenLate"`;
+  (recorded_at AT TIME ZONE 'Europe/London')::date::text AS "recordedDay"`;
 
-type VersionRow = Omit<ChoiceAllowanceVersion, "steps" | "allowancePence" | "chosenPence" | "excessRatePence"> & {
-  requestDigest: string; allowancePence: string; chosenPence: string | null; excessRatePence: string | null;
+type VersionRow = Omit<ChoiceAllowanceVersion, "steps" | "allowancePence" | "chosenPence" | "excessRatePence" | "chosenLate"> & {
+  requestDigest: string; recordedDay: string; allowancePence: string; chosenPence: string | null; excessRatePence: string | null;
 };
 
 const toVersion = (row: VersionRow, steps: ChoiceAllowanceVersion["steps"]): ChoiceAllowanceVersion => {
-  const { requestDigest: _digest, ...rest } = row;
-  return { ...rest, allowancePence: Number(row.allowancePence), chosenPence: row.chosenPence === null ? null : Number(row.chosenPence),
+  const { requestDigest: _digest, recordedDay: _day, ...rest } = row;
+  return { ...rest, chosenLate: false, allowancePence: Number(row.allowancePence), chosenPence: row.chosenPence === null ? null : Number(row.chosenPence),
     excessRatePence: row.excessRatePence === null ? null : Number(row.excessRatePence), steps };
+};
+
+/** A choice is late when it was first made, with the same item and price, after the current decide-by date.
+ *  Versions that change only the allowance, quantity or date keep the choice's original day. */
+const markChosenLate = (rows: VersionRow[], versions: ChoiceAllowanceVersion[]) => {
+  let chosenDay: string | null = null;
+  return versions.map((version, index) => {
+    const before = versions[index - 1];
+    const same = before && version.chosenItem !== null && before.chosenItem === version.chosenItem && before.chosenPence === version.chosenPence;
+    chosenDay = version.chosenItem === null ? null : same ? chosenDay : rows[index]!.recordedDay;
+    return { ...version, chosenLate: chosenDay !== null && chosenDay > version.decideBy };
+  });
 };
 
 export class ChoiceAllowanceRepository {
@@ -132,8 +144,9 @@ export class ChoiceAllowanceRepository {
       const { rows: [clock] } = await $client.query<{ today: string }>(
         "SELECT (clock_timestamp() AT TIME ZONE 'Europe/London')::date::text AS today");
       return facts.map(fact => {
-        const own = versions.filter(row => row.factId === fact.factId).map(row => toVersion(row,
-          steps.filter(step => step.factId === row.factId && step.version === row.version).map(({ step, outcome }) => ({ step, outcome }))));
+        const rows = versions.filter(row => row.factId === fact.factId);
+        const own = markChosenLate(rows, rows.map(row => toVersion(row,
+          steps.filter(step => step.factId === row.factId && step.version === row.version).map(({ step, outcome }) => ({ step, outcome })))));
         const latest = own.at(-1);
         // A choice still undecided past its decide-by date is late.
         return { ...fact, overdue: Boolean(latest && latest.chosenItem === null && clock!.today > latest.decideBy), versions: own };
@@ -290,7 +303,7 @@ export class ChoiceAllowanceRepository {
     const { rows: steps } = await client.query<{ version: number; step: ChoiceStep; outcome: ChoiceOutcome | null }>(`
       SELECT version, step, outcome FROM app.v2_choice_allowance_step WHERE (tenant_id, job_id, fact_id) = ($1, $2, $3)
     `, [tenantId, jobId, factId]);
-    return rows.map(row => toVersion(row, steps.filter(step => step.version === row.version).map(({ step, outcome }) => ({ step, outcome }))));
+    return markChosenLate(rows, rows.map(row => toVersion(row, steps.filter(step => step.version === row.version).map(({ step, outcome }) => ({ step, outcome })))));
   }
 }
 

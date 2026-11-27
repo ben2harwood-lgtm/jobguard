@@ -2,12 +2,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { ChoiceAllowanceView } from "@jobguard/api/workspace";
 
-type Form = { basis: "per_unit" | "total"; amount: string; quantity: string; unit: string; decideBy: string; item: string; chosen: string };
+export type Form = { basis: "per_unit" | "total"; amount: string; quantity: string; unit: string; decideBy: string; item: string; chosen: string };
 const formFor = (choice: ChoiceAllowanceView): Form => ({
   basis: choice.allowance?.basis ?? "per_unit", amount: choice.allowance?.amount ?? "",
   quantity: choice.allowance?.basis === "per_unit" ? choice.allowance.quantity : "", unit: choice.allowance?.basis === "per_unit" ? choice.allowance.unit : "",
   decideBy: choice.allowance?.decideBy ?? choice.neededBy, item: choice.chosen?.item ?? "", chosen: choice.chosen?.amount ?? "",
 });
+/** Forms after a load or save: the saved choice (or all, on load) shows what was stored; the rest keep unsaved edits. */
+export const mergeForms = (current: Record<string, Form>, next: ChoiceAllowanceView[], saved?: string): Record<string, Form> =>
+  Object.fromEntries(next.map(choice => [choice.factId,
+    saved === undefined || choice.factId === saved || !current[choice.factId] ? formFor(choice) : current[choice.factId]!]));
 const per = (choice: ChoiceAllowanceView) => choice.allowance?.basis === "per_unit" ? ` per ${choice.allowance.unit}` : "";
 const draftWords: Record<NonNullable<ChoiceAllowanceView["draft"]>["state"], string> = {
   being_drafted: "Being drafted", awaiting_approval: "Draft extra, waiting for your review in Extras",
@@ -21,9 +25,10 @@ export function V2ChoiceAllowances({ jobId }: { jobId: string }) {
   const [busy, setBusy] = useState(false);
   const pending = useRef<{ fingerprint: string; commandId: string } | null>(null);
   const path = `/api/jobs/${jobId}/choice-allowances`;
-  const show = (next: ChoiceAllowanceView[]) => {
+  // Resets the saved choice's form (or every form on first load); other forms keep any unsaved edits.
+  const show = (next: ChoiceAllowanceView[], saved?: string) => {
     setChoices(next);
-    setForms(Object.fromEntries(next.map(choice => [choice.factId, formFor(choice)])));
+    setForms(current => mergeForms(current, next, saved));
   };
   useEffect(() => {
     let active = true;
@@ -59,7 +64,7 @@ export function V2ChoiceAllowances({ jobId }: { jobId: string }) {
         return;
       }
       pending.current = null;
-      show(data.choices);
+      show(data.choices, choice.factId);
     } catch { setError("Could not load the saved choice. Reload to check before trying again."); }
     finally { setBusy(false); }
   };
@@ -85,7 +90,7 @@ export function V2ChoiceAllowances({ jobId }: { jobId: string }) {
         {choice.warning && <p role="alert">{choice.warning}</p>}
         {choice.unfinished && <p role="alert">This choice change is not finished yet. Reload to finish it.</p>}
         <form onSubmit={event => { event.preventDefault(); void save(choice); }}>
-          <fieldset style={{ minWidth: 0 }}><legend>Allowance and choice</legend>
+          <fieldset disabled={busy} style={{ minWidth: 0 }}><legend>Allowance and choice</legend>
             <label>Allowance basis <select value={form.basis} onChange={event => change(choice.factId, { basis: event.target.value as Form["basis"] })}>
               <option value="per_unit">Per unit</option><option value="total">Total</option></select></label>
             <label>Allowance (£{form.basis === "per_unit" ? " per unit" : ""}) <input required inputMode="decimal" value={form.amount}

@@ -2185,6 +2185,20 @@ test("e9: a late choice is flagged, a non-choice fact is refused and V2 mode is 
   finally { process.env.JOBGUARD_LOCAL_V2 = previous; }
 });
 
+test("e9: an on-time choice stays on time when only its allowance changes later; a new choice after the date is late", async () => {
+  const { jobId, choices, command, factId } = await e9Setup();
+  const metro = { item: "Fictional metro tile", amount: "31.00" };
+  await choices.command(jobId, command(0, { decideBy: "2020-06-01", chosen: metro }));
+  // The choice was made before the decide-by date (the owner role moves the timestamp back to stage it).
+  await admin.query("UPDATE app.v2_choice_allowance SET recorded_at = '2020-05-01T12:00:00Z' WHERE fact_id = $1 AND version = 1", [factId]);
+  assert.equal((await choices.read(jobId))[0].late, null);
+  await choices.command(jobId, command(1, { decideBy: "2020-06-01", allowance: { ...e9Tiles, quantity: "7" }, chosen: metro }));
+  assert.equal((await choices.read(jobId))[0].late, null, "an allowance-only edit keeps the choice's own day");
+  await choices.command(jobId, command(2, { decideBy: "2020-06-01", allowance: { ...e9Tiles, quantity: "7" },
+    chosen: { item: "Fictional gold tile", amount: "40.00" } }));
+  assert.equal((await choices.read(jobId))[0].late, "chosen_late");
+});
+
 test("e9: forced choice-allowance policies hide rows and refuse writes from the second firm", async () => {
   const { jobId, choices, command, factId } = await e9Setup();
   await choices.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
