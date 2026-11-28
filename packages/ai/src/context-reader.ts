@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -25,6 +25,8 @@ function thousands(words: string): number | null {
   const value = spoken && !/\d/u.test(spoken[1]!) ? spokenPounds(spoken[1]!) : null;
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
+/** Where one work item ends and the next begins inside a sentence: a comma, or "and"/"then" before a work verb. */
+const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
     const text = words.trim();
@@ -41,8 +43,12 @@ export const spokenNumbers: SpokenNumberReader = {
     if (!/^[a-z]+(?:[\s-][a-z]+)?$/u.test(text) || /pounds|quid|hundred|thousand/u.test(text)) return null;
     return spokenPounds(text);
   },
-  // The same said-amount guards as the reader's own line prices (V2-SQ-M).
-  open: (before, after) => saidAmountOpen(before, after, "line"),
+  // The same said-amount guards as the reader's own line prices (V2-SQ-M), on the amount's own work clause only:
+  // another item in the same sentence ("…, fit a handle for twenty pounds and fifty pence") never opens this one.
+  open: (before, after) => {
+    const ownBefore = before.split(itemBreak).at(-1) ?? before, ownAfter = after.split(itemBreak)[0] ?? after;
+    return saidAmountOpen(ownBefore, ownAfter, "line");
+  },
 };
 /** Reader B (SQ-G) passes its output through the same check. */
 export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: string) =>
