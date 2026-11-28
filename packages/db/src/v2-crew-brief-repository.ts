@@ -4,9 +4,9 @@ import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
-import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
 import { applyWorkPlanEdits, type WorkPlanEditRow, type WorkPlanScopeRow, type WorkPlanTask } from "./v2-work-plan-edits.js";
 import type { WorkPlanTemplate } from "./v2-work-plan-repository.js";
+import { isStaged, workPlanTemplates } from "./v2-work-plan-templates.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const trade = z.string().trim().min(1).max(100);
@@ -90,7 +90,13 @@ const canonical = (value: unknown): string => Array.isArray(value) ? `[${value.m
 const publicBrief = ({ accessWindow: _a, photoIds: _p, expectedVersion: _e, ...brief }: BriefRow): CrewBrief => brief;
 
 export class CrewBriefRepository {
-  constructor(private readonly pool: Pool, private readonly template: WorkPlanTemplate = splashbackDecoratingTemplate) {}
+  // A brief reads the accepted plan through the template its stored row names, as WorkPlanRepository does.
+  // `template`, when given, stands in for the stored template of the same key (tests only).
+  constructor(private readonly pool: Pool, private readonly template?: WorkPlanTemplate) {}
+
+  private templateFor(key: string): WorkPlanTemplate | undefined {
+    return key === this.template?.key ? this.template : workPlanTemplates.get(key);
+  }
 
   // Latest brief per trade, marked current when the plan would still produce the same brief.
   read(context: VerifiedTenantContext, jobId: string, query: CrewBriefQuery) {
@@ -219,7 +225,8 @@ export class CrewBriefRepository {
       WHERE (j.tenant_id, j.id) = ($1, $2)
     `, [tenantId, jobId]);
     if (!head?.quoteRevisionId || !head.templateKey) throw new CrewBriefError("CREW_BRIEF_ACCEPTED_PLAN_REQUIRED");
-    if (head.templateKey !== this.template.key) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
+    const template = this.templateFor(head.templateKey);
+    if (!template) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
     const key: PlanKey = [tenantId, jobId, head.quoteRevisionId];
 
     const { rows: scope } = await client.query<WorkPlanScopeRow>(`
@@ -228,13 +235,13 @@ export class CrewBriefRepository {
       FROM app.quote_line l LEFT JOIN app.v2_work_plan_task t
         USING (tenant_id, job_id, quote_revision_id, scope_item_id)
       WHERE (l.tenant_id, l.job_id, l.quote_revision_id) = ($1, $2, $3) AND l.included
-      ORDER BY l.ordinal, t.position
+      ORDER BY ${isStaged(template) ? "t.position NULLS LAST, l.ordinal" : "l.ordinal, t.position"}
     `, key);
     const base = scope.flatMap((row, index): WorkPlanTask[] => {
       if (row.template_task_key === null) return [];
-      const task = this.template.tasks.find(entry => entry.key === row.template_task_key);
+      const task = template.tasks.find(entry => entry.key === row.template_task_key);
       if (!task) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
-      const { category: _category, ...details } = task;
+      const { category: _category, stage: _stage, ...details } = task;
       return [{ ...details, position: index + 1, scopeItemId: row.scope_item_id,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) }];
     });
@@ -263,8 +270,8 @@ export class CrewBriefRepository {
       .filter(row => !seen.has(row.scopeItemId) && seen.add(row.scopeItemId))
       .filter(row => row.addition)
       .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
-    const extraTasks = extras.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
-      .map(({ category: _category, ...task }): WorkPlanTask => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
+    const extraTasks = extras.flatMap(row => template.tasks.filter(task => task.category === row.source.category)
+      .map(({ category: _category, stage: _stage, ...task }): WorkPlanTask => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) })))
       .map((task, index) => ({ ...task, position: base.length + index + 1 }));
     const { rows: edits } = await client.query<WorkPlanEditRow>(`

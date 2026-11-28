@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d4-sqf": {
+      "branches": [
+        "claude/project-thread-trp08u-cbt"
+      ],
+      "note": "Train v2-1a fix. D4's crew brief reads the accepted plan through its stored template (trades.v1 after SQ-F) and keeps its stage order. The validator includes config/lanes/v2-d4-sqf.json implicitly. Compare against train/v2-1a.",
+      "allow": [
+        "packages/db/src/v2-crew-brief-repository.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
