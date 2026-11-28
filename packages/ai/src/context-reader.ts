@@ -148,6 +148,8 @@ const vatOnly = new RegExp(`^${vatTail}\\.?$`, "iu");
 const eachAfter = new RegExp(`^\\s*(?:each|apiece|a piece)${vatTail}?\\.?\\s*$`, "iu");
 const perAfter = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu");
 /** "a door" or "per door" is per-item only for the line's own counted thing: "six doors at fifty pounds a door". */
+// Rate qualifier guard: "a/an/per <noun>" right after an amount is a rate whatever follows it.
+const perAnyAfter = /^\s+(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])/iu;
 const countedBefore = new RegExp(`(?:\\d{1,4}|${numberWord})\\s+(?:[\\p{L}-]+\\s+){0,2}([\\p{L}-]+)\\s+(?:for|at)\\s*$`, "iu");
 function sameUnit(unit: string, perWord: string): boolean {
   const a = unit.toLowerCase(), b = perWord.toLowerCase();
@@ -205,7 +207,8 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at))) {
       const found = candidates[0]!;
       const after = value.slice(found.at + found.text.length);
-      const per = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
+      const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
+      const per = whole ?? perAnyAfter.exec(after);
       const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
       const vat = vatOnly.test(after);
       if (after.trim() && !each && !vat && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
@@ -217,6 +220,8 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         // "a piece" is "each" and names no counted thing.
         if (each && per && counted && !eachAfter.test(after)) { perWord = per[1]!; perCountAt = counted.index; }
         if (vatWords.test(after)) vatSaid = true;
+        // "a door including hinges": per door, but the words after it are not part of the line, so they are asked about.
+        if (each && per && !whole && !eachAfter.test(after)) questions.push(`Check “${value.slice(0, 400)}”: the words after the price were not read into this line.`);
       }
     } else if (candidates.length) questions.push(`Confirm price: ${value.slice(0, 450)}`);
     else {

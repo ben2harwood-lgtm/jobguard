@@ -1,6 +1,7 @@
 // One place for the per-item and VAT sentences, run through both readers: the fixture parser and Reader A.
 // Rule (planner, 28 Nov): "a <noun>" or "per <noun>" right after the amount is per-item only when the noun is the
-// line's own counted thing; VAT words after a price add a VAT question and never change the number; anything else stays open.
+// line's own counted thing (more words after it are asked about); VAT words after a price add a VAT question and never
+// change the number; anything else stays open. A number next to an amount but outside it leaves the amount open.
 import { describe, expect, it } from "vitest";
 import { parseCaptureFixture } from "./capture-fixture-parser.js";
 import { checkSpokenNumbers, readSpokenJob } from "./context-reader.js";
@@ -20,10 +21,15 @@ describe.each(Object.entries(readers))("per-item and VAT words, %s", (_name, rea
       expect(read(text)).toMatchObject({ pence: [5000] });
       expect(read(text).questions).toContain(vat(text));
     });
-  it.each(["fit six doors at fifty pounds a day plus VAT", "fit six doors at fifty pounds a door for the hall"])(
-    "leaves it open when the word is not the counted thing, or more words follow: %s", text => {
+  it.each(["fit six doors at fifty pounds a day plus VAT", "fit six doors at fifty pounds a day including materials"])(
+    "leaves it open when the word is not the counted thing, whatever follows: %s", text => {
       expect(read(text).pence).toEqual([null]);
       expect(read(text).questions).toContain(`Confirm price: ${text}`);
+    });
+  it.each(["fit six doors at fifty pounds a door for the hall", "fit six doors at fifty pounds a door including hinges"])(
+    "keeps the per-item price when more words follow the counted thing, and asks about them: %s", text => {
+      expect(read(text).pence).toEqual([5000]);
+      expect(read(text).questions).toContain(`Check “${text}”: the words after the price were not read into this line.`);
     });
   it("keeps a line price said with VAT words and asks about VAT", () => {
     const text = "supply and fit one door for two hundred pounds plus VAT";
@@ -61,6 +67,18 @@ describe("Reader A per-item reads", () => {
     expect(checked.lines[0]).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
     const other = "fit six switches at fifty pounds a day";
     expect(readChecked(other).lines[0]!.unitPricePence.value).toBeNull();
+  });
+  // Planner rules 1 and 2, as the parser reads them.
+  it("keeps a per-item price when more words follow the counted thing, and leaves other rate words or unread numbers open", () => {
+    const hinges = "fit six doors at fifty pounds a door including hinges";
+    const job = readSpokenJob("source", hinges);
+    expect(job.lines[0]).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
+    expect(job.questions.map(q => q.text)).toContain(`Check “${hinges}”: the words after the price were not read into this line.`);
+    for (const text of ["fit six doors at fifty pounds a day including materials", "fit one door for one thousand and a hundred pounds"]) {
+      const open = readSpokenJob("source", text);
+      expect(open.lines[0]!.unitPricePence.value, text).toBeNull();
+      expect(open.questions.map(q => q.text), text).toContain(`Confirm price: ${text}`);
+    }
   });
   it("reads 'a piece' as each, and leaves two counts of the same thing open", () => {
     const line = (text: string) => readSpokenJob("source", text).lines[0]!;
