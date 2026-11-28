@@ -78,8 +78,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2056_v2_sync1_fences_and_locks.sql", import.meta.url), "utf8"));
   // V2-G1 snag register (2081), after 2056 brings main's snag list into V2.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
-  // V2-G2 handover pack versions (2043).
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  // V2-G2 handover pack versions (2082).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

@@ -1693,7 +1693,7 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   assert.equal(await policyCount(), before);
 });
 
-// V2-G2 (Q56, migration 2043): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
+// V2-G2 (Q56, migration 2082): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
 const g2 = {
   async job() {
     const { jobId: job, scopeItemId, sessionId } = await pxLiveJob();
@@ -1863,14 +1863,14 @@ test("G2 replay and conflict, append-only, firm A/B read check and route refusal
   await verifyTenantChain(f.context.tenantId);
 });
 
-test("G2 migration 2043 reruns without changing policies, triggers or rows", async () => {
+test("G2 migration 2082 reruns without changing policies, triggers or rows", async () => {
   const catalog = async () => (await admin.query(`SELECT
     (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid='app.v2_handover_version'::regclass) AS policies,
     (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_version'::regclass AND NOT tgisinternal) AS triggers,
     (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_version'::regclass) AS acl,
     (SELECT count(*)::int FROM app.v2_handover_version) AS rows`)).rows[0];
   const before = await catalog();
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
