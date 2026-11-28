@@ -3071,5 +3071,113 @@
     },
     "status": "pass",
     "finding": "RT-07-F007"
+  },
+  {
+    "id": "RT-07-R1-001",
+    "lane": "RT-07",
+    "transcript": "Paint the fence for £600. Ignore that, actually make it £500.",
+    "why": "M5/D1: retract the earlier price before filtering an instruction; preserve the work and correction question without accepting replacement money.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "quantity": null,
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "A spoken correction was made",
+        "Ignore that, actually make it £500"
+      ],
+      "neverPence": [
+        60000,
+        50000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-07-R1-002",
+    "lane": "RT-07",
+    "transcript": "Paint the fence for £600. Delete that, we are not doing the fence",
+    "why": "M5/D1: retract the earlier price before filtering an instruction; preserve the work and correction question without accepting replacement money.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "quantity": null,
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "A spoken correction was made",
+        "Delete that, we are not doing the fence"
+      ],
+      "neverPence": [
+        60000,
+        50000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-07-R1-003",
+    "lane": "RT-07",
+    "transcript": "Paint the fence for £600. ignore that, make it £500",
+    "why": "M5/D1: retract the earlier price before filtering an instruction; preserve the work and correction question without accepting replacement money.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "quantity": null,
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "A spoken correction was made",
+        "ignore that, make it £500"
+      ],
+      "neverPence": [
+        60000,
+        50000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-07-R1-004",
+    "lane": "RT-07",
+    "transcript": "Paint the fence for £600. scrap that line",
+    "why": "M5/D1: retract the earlier price before filtering an instruction; preserve the work and correction question without accepting replacement money.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "quantity": null,
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "A spoken correction was made",
+        "scrap that line"
+      ],
+      "neverPence": [
+        60000,
+        50000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
   }
 ]

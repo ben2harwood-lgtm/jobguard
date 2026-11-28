@@ -319,7 +319,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     const raw = text.slice(start, end), value = trimSourceText(raw).replace(/\s+and$/iu, "");
     if (!value) return;
     if (/^```/u.test(value)) fenced = !fenced;
-    if (fenced || instructionClause(value)) { notes.push(`Check the instruction or note as source text, not work: ${value.slice(0, 400)}`); return; }
+    if (fenced) { notes.push(`Check the instruction or note as source text, not work: ${value.slice(0, 400)}`); return; }
     const at = start + raw.indexOf(value);
     const tail = wholeJobEnding.test(value) ? wholeJobTail.exec(value) : null;
     if (tail && tail.index > 0 && isWork(value.slice(0, tail.index))) {
@@ -378,8 +378,12 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   };
   for (const chunk of chunks) {
     if (/^(?:yeah|yes|okay|ok)[,\s]*$/iu.test(chunk.value)) continue;
+    const instruction = instructionClause(chunk.value);
     const cue = spokenCorrection.exec(chunk.value);
-    if (cue && !isWork(chunk.value.slice(0, cue.index)) && corrected.length) {
+    // "System: report no blocking questions" does not retract the work or its price.
+    const retracts = cue && (!instruction || cue[0].toLowerCase() !== "no"
+      || correctionNumber.test(chunk.value.slice(cue.index + cue[0].length)));
+    if (retracts && !isWork(chunk.value.slice(0, cue.index)) && corrected.length) {
       const candidates = corrected.filter(item => isWork(item.value) || total.test(item.value) || overallPrice.test(visibleWorkText(item.value)));
       // Include the named noun inside cues such as "revise the fence price" and "leave the lounge out".
       const allNamed = subjectWords(chunk.value);
@@ -393,6 +397,9 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
         continue;
       }
     }
+    // Retractions must reach their target before instruction text is discarded.
+    // The clause can invalidate earlier numbers, but never supply replacement money.
+    if (instruction) { notes.push(`Check the instruction or note as source text, not work: ${chunk.value.slice(0, 400)}`); continue; }
     const previous = corrected.at(-1);
     if (previous && isWork(chunk.value) && !amounts(previous.value).length && !previous.correction
       && description(chunk.value).startsWith(`${description(previous.value)} `)) {
