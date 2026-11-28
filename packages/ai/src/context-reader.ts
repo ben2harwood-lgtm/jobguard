@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, invisibleFormat, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -29,6 +29,7 @@ function thousands(words: string): number | null {
 const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
+    if (invisibleFormat.test(words)) return null;
     const text = words.trim();
     const found = amounts(text);
     if (found.length === 1 && found[0]!.text === text) return found[0]!.pence;
@@ -310,8 +311,10 @@ const besideBefore = /^[\s,]*(?:(?:all in|in total|altogether|total|is|comes to|
 const besideAfter = /^[\s,]*(?:(?:all in|in total|altogether|for|for the|the)[\s,]*)*$/iu;
 function totals(text: string): TotalPrice[] {
   const found: TotalPrice[] = [];
+  const points = amountPoints(text);
   // A clause ends at punctuation, never at the point or comma inside a number ("4.5k", "1,200").
-  const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !(/[.,]/u.test(text[at]!) && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
+  const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !points.has(at)
+    && !(text[at] === "," && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
   for (const phrase of text.matchAll(new RegExp(total.source, "giu"))) {
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;

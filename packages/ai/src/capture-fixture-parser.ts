@@ -40,7 +40,17 @@ const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approxi
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
 export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
 export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
-const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+// Keep corrupted literals whole so they produce an open price, never a valid prefix or a second work line.
+export const invisibleFormat = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
+const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?=[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]*[\p{Cf}\p{Default_Ignorable_Code_Point}])[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]+|£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+/** Decimal punctuation, including malformed repeated dots, belongs to the amount rather than a new clause. */
+export function amountPoints(text: string): Set<number> {
+  const points = new Set<number>();
+  for (const match of text.matchAll(/\d(\.+)(?=\d)/gu)) {
+    for (let offset = 1; offset <= match[1]!.length; offset++) points.add(match.index + offset);
+  }
+  return points;
+}
 
 // Spoken amounts ("two hundred pounds", "a thousand and fifty quid"): the words are the cited price.
 export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
@@ -121,19 +131,21 @@ const hedgeAfter = /^\s*(?:-?ish\b|or so\b|(?:roughly|approximately|approx)(?![\
 // A limit, floor or credit around the amount (V2-SQ-M): a ceiling, a floor or a credit is never a fixed price, and a
 // credit is never read as a charge or worked out as a negative one; the builder is asked. "Paint the ceiling - £200"
 // (a dash with a space after it) is punctuation; "-£50" and "−£50", with the sign against the amount, are a minus.
-const limitBefore = /(?:(?<![\p{L}])(?:up\s+to|at\s+(?:the\s+)?(?:most|least|maximum|minimum|max|min)|no\s+(?:more|less|higher|lower)\s+than|not\s+(?:more|less)\s+than|not\s+(?:over|exceeding)|(?:a\s+|the\s+)?(?:maximum|minimum|max|min)(?:\s+(?:price|cost|charge|budget|spend))?(?:\s+of)?|capped\s+at|starting\s+(?:at|from)|minus|less|(?:a\s+)?credit(?:\s+of)?|under|below|over|above)\s*|(?:^|\s)[-–]|−\s*)$/iu;
-const limitAfter = /^\s*(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|at\s+(?:the\s+)?(?:most|least)|or\s+(?:less|more|under|over|below|above|thereabouts)|credit(?:ed)?|off(?:\s+(?:the\s+)?(?:bill|price|total|invoice|quote))?|discount|refund(?:ed)?|back)(?![\p{L}])/iu;
+const limitBefore = /(?:(?<![\p{L}])(?:up\s+to|at\s+(?:the\s+)?(?:most|least|maximum|minimum|max|min)|no\s+(?:more|less|higher|lower)\s+than|not\s+(?:more|less)\s+than|not\s+(?:over|exceeding)|(?:a\s+|the\s+)?(?:maximum|minimum|max|min)(?:\s+(?:price|cost|charge|budget|spend))?(?:\s+of)?|capped\s+at|starting\s+(?:at|from)|(?:take|knock)\s+off|deduct(?:ion)?(?:\s+of)?|discount(?:\s+of)?|minus(?:\s+the)?|less|rebate(?:\s+of)?|refund(?:\s+of)?|back\s+for|(?:a\s+)?credit(?:\s+of)?|under|below|over|above)\s*|(?:^|\s)[-–]|−\s*|\(\s*)$/iu;
+const limitAfter = /^\s*(?:[-–−)]|(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|at\s+(?:the\s+)?(?:most|least)|or\s+(?:less|more|under|over|below|above|thereabouts)|credit(?:ed)?|off(?:\s+(?:the\s+)?(?:bill|price|total|invoice|quote))?|discount|rebate|refund(?:ed)?|back)(?![\p{L}]))/iu;
 /**
  * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
  * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
  * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
  * a hedge word qualifies it ("about 500", "500 or so"); a limit, floor or credit word qualifies it ("up to £200",
- * "£200 minimum", "minus fifty pounds", "-£50", "£50 off the bill"); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
+ * "£200 minimum", "take off £50", "-£50", "(£50)", "£50-", "£50 off the bill"); invisible format characters
+ * occur in its clause (never stripped from the source); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
   return spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+    || invisibleFormat.test(before) || invisibleFormat.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
@@ -153,11 +165,13 @@ const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${nu
 export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
   isTiming: (value: string) => boolean = value => timing.test(value)): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
+  const points = amountPoints(text);
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
-    const raw = text.slice(start, end), value = raw.trim().replace(/\s+and$/iu, "");
+    // U+FEFF is both whitespace and a format character: retain it for the price guard and the source span.
+    const raw = text.slice(start, end), value = raw.replace(/^[^\S\uFEFF]+|[^\S\uFEFF]+$/gu, "").replace(/\s+and$/iu, "");
     if (!value) return;
-    const at = start + raw.length - raw.trimStart().length;
+    const at = start + raw.indexOf(value);
     const tail = wholeJobTail.exec(value);
     if (tail && tail.index > 0 && isWork(value.slice(0, tail.index).trim())) {
       const head = value.slice(0, tail.index).trimEnd();
@@ -175,7 +189,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     if (correctionEnd !== undefined) { i = correctionEnd - 1; continue; }
     const char = text[i]!;
     // A decimal point or thousands separator belongs to the amount.
-    if (/[.!?;\r\n]/u.test(char) && !(char === "." && /\d/u.test(text[i - 1] ?? "") && /\d/u.test(text[i + 1] ?? ""))) {
+    if (/[.!?;\r\n]/u.test(char) && !points.has(i)) {
       // A correction may follow a pause or sentence end: it still retracts the preceding item's price.
       if (spokenCorrection.exec(text.slice(i + 1).trimStart())?.index === 0) continue;
       add(start, i); start = i + 1;

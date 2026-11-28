@@ -75,7 +75,7 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     const { start, end } = provenance.span;
     if (start < 0 || end > sourceText.length || start >= end) return false;
     // A cited span must be a whole number as said: "5k" inside "4.5k" or "200" inside "1,200" is not what was said.
-    if (/\d[.,]?$/u.test(sourceText.slice(Math.max(0, start - 2), start)) || /^[.,]?\d/u.test(sourceText.slice(end, end + 2))) return false;
+    if (/\d[.,]*$/u.test(sourceText.slice(Math.max(0, start - 80), start)) || /^[.,]*\d/u.test(sourceText.slice(end, end + 80))) return false;
     // … nor "five" inside "twenty five", or "twenty" inside "twenty five" or "two hundred".
     // A number word that ends one of the job's own room names ("Bedroom two £500") names the room (V2-SQ-L).
     const before = sourceText.slice(Math.max(0, start - 40), start);
@@ -89,7 +89,7 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     // The room's own name is left out, so its number is not read as a second number.
     if (kind === "money" && read.open) {
       // A currency sign just outside a digits-only citation ("up to £" + "200") is part of the amount, not of the words before it.
-      let near = sourceText.slice(Math.max(0, start - 80), start).replace(/[£$€]\s*$/u, "");
+      let near = sourceText.slice(Math.max(0, start - 80), start).replace(/[£$€][^\S\uFEFF]*$/u, "");
       if (ownRoom) near = near.replace(ownRoom, "");
       const after = sourceText.slice(end, end + 80);
       if (read.open(near.slice(near.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)))) return false;
@@ -153,7 +153,7 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if (unitPricePence.value !== null && !(cites(unitPricePence.provenance, unitPricePence.value, "money") && belongs(lineIndex, unitPricePence.provenance))) {
       unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
       priceBasis = "none";
-      questions.push({ text: `Price needed for “${label}”.`, lineIndex });
+      questions.push({ text: read.open ? `Confirm price: ${label}` : `Price needed for “${label}”.`, lineIndex });
     }
     return { ...line, quantity, unitPricePence, priceBasis };
   });
