@@ -68,7 +68,7 @@ export class ProductionSettlementDeniedError extends Error {
  * All other modes refuse, even perfectly shaped claimed cash or claimed approvals.
  */
 export function requireProductionSettlementEligibility(mode: string, facts?: unknown): void {
-  if (mode === "synthetic_demo") return;
+  if (mode === "synthetic_demo" && process.env.JOBGUARD_ENV !== "pilot_no_charge") return;
   const result = readProductionSettlementEligibility(facts);
   if (!result.eligible) throw new ProductionSettlementDeniedError();
 }

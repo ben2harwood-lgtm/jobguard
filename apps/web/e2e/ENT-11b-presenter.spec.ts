@@ -1,12 +1,13 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test.setTimeout(600_000);
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 
-for (const width of [360, 1280]) test(`ENT-11b Northside presenter path at ${width}px`, async ({ page, browser }, info) => {
-  test.skip(info.project.name !== "desktop", "this test explicitly runs both widths");
+test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
   const startedAt = Date.now();
-  await page.setViewportSize({ width, height: 800 });
+  const { width, height } = page.viewportSize()!;
   await page.goto("/northside");
   await expect(page.getByText(banner, { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Start Northside practice" }).click();
@@ -59,7 +60,7 @@ for (const width of [360, 1280]) test(`ENT-11b Northside presenter path at ${wid
   const clientLink = page.getByTestId("client-link");
   await expect(clientLink).toBeVisible();
   const href = (await clientLink.getAttribute("href"))!;
-  const clientContext = await browser.newContext({ viewport: { width, height: 800 } });
+  const clientContext = await browser.newContext({ viewport: { width, height } });
   try {
     const customer = await clientContext.newPage();
     await customer.goto(new URL(href, page.url()).href);
@@ -82,7 +83,34 @@ for (const width of [360, 1280]) test(`ENT-11b Northside presenter path at ${wid
   await expect(page.getByRole("status")).toHaveText("Exported 1 line.");
   await expect(page.getByText("1 line · net £1,080.00", { exact: false })).toBeVisible();
   await button("Approve delivery").click();
-  await expect(link("Download CSV")).toBeVisible();
+  const csvLink = link("Download CSV");
+  await expect(csvLink).toHaveAttribute("download", "");
+  const [csvFile] = await Promise.all([
+    page.waitForEvent("download", { timeout: 15_000 }),
+    csvLink.click(),
+  ]);
+  expect(csvFile.suggestedFilename()).toBe("jobguard-billing-export.csv");
+  const csvBytes = await readFile(await csvFile.path());
+
+  const csvResponse = await page.request.get(csvFile.url());
+  expect(csvResponse.status()).toBe(200);
+  const disposition = csvResponse.headers()["content-disposition"];
+  expect(disposition).toBe('attachment; filename="jobguard-billing-export.csv"');
+  const sha256 = createHash("sha256").update(csvBytes).digest("hex");
+  expect(sha256).toBe(csvResponse.headers()["x-content-sha256"]);
+  expect(csvBytes).toEqual(await csvResponse.body());
+
+  const [header, row, end, ...remaining] = new TextDecoder("utf-8", { fatal: true }).decode(csvBytes).split("\r\n");
+  expect([end, ...remaining]).toEqual([""]);
+  const columns = header!.split(",");
+  const cells = Array.from(row!.matchAll(/"((?:[^"]|"")*)"(?=,|$)/gu), match => match[1]!.replaceAll('""', '"'));
+  expect(cells).toHaveLength(columns.length);
+  const extra = Object.fromEntries(columns.map((column, index) => [column, cells[index]]));
+  expect(extra).toMatchObject({ description, quantity: "1", approved_net_pence: "108000", currency: "GBP", batch_total_net_pence: "108000" });
+  await info.attach("billing-csv-download", {
+    body: JSON.stringify({ filename: csvFile.suggestedFilename(), bytes: csvBytes.length, sha256, disposition, description, netPence: extra.approved_net_pence }),
+    contentType: "application/json",
+  });
 
   const invoice = page.getByTestId("invoice-NS-INVOICE-1");
   const totals = invoice.locator("tbody tr").last().locator("th");

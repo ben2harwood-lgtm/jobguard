@@ -1,5 +1,5 @@
 "use client";
-import { JOB_SAVED_EVENT, jobPageFetch as fetch } from "./job-page-fetch";
+import { JOB_SAVED_EVENT, jobPageFetch } from "./job-page-fetch";
 import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem, FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
@@ -10,8 +10,9 @@ const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZo
 const answers = Object.keys(answerLabels) as RevealAnswer[];
 const pendingReadNotice = "The saved final check is temporarily unavailable. We’ll keep checking for its result.";
 
-/** Reveal and non-confirming answers after the lock. "Yes, extra work" waits on SV-5 Q2. */
-export function FinalCheckReveal({ jobId }: { jobId: string }) {
+/** Show the saved Final Check and record the builder’s explicit answers. */
+export function FinalCheckReveal({ jobId, pilotFetch }: { jobId: string; pilotFetch?: typeof fetch }) {
+ const fetchCheck = pilotFetch ?? jobPageFetch;
  const [savedRead, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
  const savedJob = useRef(jobId);
  const read = savedJob.current === jobId ? savedRead : null;
@@ -40,14 +41,14 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
    const reading = (async () => {
     try {
      const saved = await readPhase(async () => {
-      const response = await fetch(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
+      const response = await fetchCheck(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
       if (!response.ok) throw new Error("The saved final check is unavailable. Load the saved final check to try again.");
       return finalCheckReadV1.parse(await response.json());
      });
      if (timedOut || controller.signal.aborted || currentJob.current !== jobId || epoch.current !== requestEpoch) throw new Error("READ_EXPIRED");
      // The authorised unlocked projection is fixed; do not read hidden diagnostics.
      const open = saved.state === "unlocked" ? 0 : await readPhase(async () => {
-      const queue = await fetch(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
+      const queue = await fetchCheck(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
       if (queue.status === 401 || queue.status === 403) throw new Error("ACCESS_UNAVAILABLE");
       return queue.ok ? (await queue.json() as unknown[]).length : 0;
      });
@@ -78,7 +79,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     else setBusy(false);
    }
   }
- }, [jobId]);
+ }, [jobId, fetchCheck]);
  useEffect(() => {
   setRead(null); setError(""); setRequested(false); state.current = null; uncertain.current = false; writing.current = false;
   const changed = (event: Event) => { if ((event as CustomEvent<{jobId?: string}>).detail?.jobId === jobId && !writing.current) void load(); };
@@ -105,7 +106,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   writing.current = true; uncertain.current = true; setBusy(true); setError("");
   let refusal = "";
   try {
-   const response = await fetch(`/api/jobs/${jobId}/final-check/runs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "final-check-run.request.v1" }) });
+   const response = await fetchCheck(`/api/jobs/${jobId}/final-check/runs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "final-check-run.request.v1" }) });
    if (currentJob.current !== jobId || lifetime.current !== generation) return;
    if (response.ok) setRequested(true);
    else {
@@ -125,7 +126,10 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   let message = "";
   try {
    const [path, body] = choice === "extra_work" ? ["catches", catchCommand(read, revealed, crypto.randomUUID())] : ["dispositions", dispositionCommand(read, revealed, choice, referenceId, crypto.randomUUID())];
-   const response = await fetch(`/api/jobs/${jobId}/final-check/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+   const response = await fetchCheck(`/api/jobs/${jobId}/final-check/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+   if (response.ok && pilotFetch && choice === "extra_work" && currentJob.current === jobId && lifetime.current === generation) {
+    window.dispatchEvent(new CustomEvent(JOB_SAVED_EVENT, { detail: { jobId } }));
+   }
    if (!response.ok) message = response.status === 409 ? "This item changed. The saved check has been reloaded; answer again." : "The answer was refused. Nothing was changed.";
   } catch { message = "The result is unknown. The saved check has been reloaded; check it before answering again."; }
   finally {
@@ -139,13 +143,13 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   {error && <p role={error === pendingReadNotice ? "status" : "alert"}>{error}</p>}
   {read && <>
    <p role="status" data-testid="final-check-status">{revealStatus(read)}</p>
-   {(read.state === "pending" || read.state === "failed") && read.lockId && <p>
+   {!pilotFetch && (read.state === "pending" || read.state === "failed") && read.lockId && <p>
     <button type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Run the final check (practice)</button>
     {read.state === "failed" && <button type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Try again</button>}
     {requested && <span data-testid="final-check-run-requested"> Asked for. The saved final check will update here.</span>}
    </p>}
-   {read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load}/>}
-   {read.state === "completed" && read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} onAnswer={answer}/>)}
+   {!pilotFetch && read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load}/>}
+   {read.state === "completed" && read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} pilot={Boolean(pilotFetch)} onAnswer={answer}/>)}
    {(read.postLockItems ?? []).length > 0 && <>
     <h3>Found after the lock</h3>
     <p>Evidence that arrived after you completed the final account. You can use it, but it never earns JobGuard a fee.</p>
@@ -158,7 +162,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
  </section>;
 }
 
-function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: FinalCheckRead; busy: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => Promise<void> }) {
+function Item({ revealed, read, busy, pilot, onAnswer }: { revealed: RevealItem; read: FinalCheckRead; busy: boolean; pilot: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => Promise<void> }) {
  const [choice, setChoice] = useState<RevealAnswer>("already_included");
  const choices = referenceChoices(choice, read.lockedLines ?? []);
  const [reference, setReference] = useState("");
@@ -178,6 +182,7 @@ function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: 
     {needsReference && <div className={styles.field}><label htmlFor={ref}>{choice === "already_included" ? "Which locked line?" : "Which original quote item?"}</label>
      <select id={ref} value={reference} disabled={busy} onChange={e => setReference(e.target.value)}><option value="">Choose one</option>{choices.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>}
     <button type="button" disabled={busy || (needsReference && reference === "")} onClick={() => void onAnswer(revealed, choice, needsReference ? reference : null)}>Save answer</button>
+    {pilot && needsReference && <button type="button" disabled={busy} onClick={() => void onAnswer(revealed, choice, null)}>Dispute without a reference</button>}
    </div>
   </>}
  </article>;
@@ -189,7 +194,7 @@ function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<vo
  const [busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const [saved,setSaved]=useState<ReturnType<typeof lateSourceReceiptV1.parse>[]>([]);
  const loadHistory=useCallback(async()=>{
-  const response=await fetch(`/api/jobs/${jobId}/historical-evidence`,{cache:"no-store"});
+  const response=await jobPageFetch(`/api/jobs/${jobId}/historical-evidence`,{cache:"no-store"});
   if(!response.ok)throw new Error("Imported evidence could not load.");
   const raw:unknown=await response.json();
   if(!Array.isArray(raw))throw new Error("Imported evidence could not load.");
@@ -203,7 +208,7 @@ function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<vo
   if(pending.current?.key!==key)pending.current={key,commandId:crypto.randomUUID()};
   setBusy(true);setMessage("");
   try {
-   const response=await fetch(`/api/jobs/${jobId}/historical-evidence`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+   const response=await jobPageFetch(`/api/jobs/${jobId}/historical-evidence`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
     version:"late-source-import.v1",commandId:pending.current.commandId,fictionalCustomer:{kind:"named_fictional_customer",name},text,statedSentAt})});
    if(!response.ok){setMessage("Import refused. Use an old message dated before the final-account lock.");return;}
    lateSourceReceiptV1.parse(await response.json());

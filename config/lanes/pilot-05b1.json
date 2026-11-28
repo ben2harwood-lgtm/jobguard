@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-05b1": {
+      "branches": [
+        "codex/sandbox/pilot-05b1"
+      ],
+      "note": "RED pilot Final Check processing and private certificate publication with fictional data.",
+      "allow": [
+        ".env.example",
+        "apps/api/src/final-check-worker-connection.ts",
+        "apps/api/src/final-check.worker.test.ts",
+        "apps/api/src/final-check.worker.ts",
+        "apps/api/src/pilot-ingress.test.ts",
+        "apps/api/src/pilot-worker.ts",
+        "apps/api/src/worker.ts",
+        "packages/config/src/pilot-resources.test.ts",
+        "packages/config/src/pilot-resources.ts",
+        "packages/db/migration-notes/0777_pilot_final_check.md",
+        "packages/db/migrations/0777_pilot_final_check.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/final-check-rerun-upgrade.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0777_pilot_final_check.proof.json",
+        "packages/db/test/pilot-final-check.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}

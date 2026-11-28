@@ -1,3 +1,4 @@
+import { PilotG1DeniedError, requireG1ForPilot } from "@jobguard/config";
 import type {Pool} from "pg";
 import {JobSourceError,customerMessageInputV1,diaryInputV1} from "@jobguard/core";
 import {JobSourceRepository,importLateSource,readLateSources} from "@jobguard/db";
@@ -8,7 +9,14 @@ export class JobSourceApplication {
  private readonly access:PracticeAccess;
  private readonly repository:JobSourceRepository;
  constructor(private readonly pool:Pool,sessionId?:string){this.assertMode();this.access=new PracticeAccess(pool,sessionId);this.repository=new JobSourceRepository(pool)}
- private assertMode(){if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new JobSourceError("SYNTHETIC_MODE_REQUIRED")}
+ private assertMode(){
+  try { requireG1ForPilot(process.env.JOBGUARD_ENV, process.env); }
+  catch (error) {
+   if (!(error instanceof PilotG1DeniedError)) throw error;
+   throw new JobSourceError("SYNTHETIC_MODE_REQUIRED");
+  }
+  if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new JobSourceError("SYNTHETIC_MODE_REQUIRED");
+ }
  async historical(jobId:string){this.assertMode();const auth=await this.access.job(jobId);return readLateSources(this.pool,auth.context,jobId)}
  async importHistorical(jobId:string,raw:unknown){this.assertMode();const auth=await this.access.job(jobId);return importLateSource(this.pool,auth.context,jobId,auth.digest,raw)}
  async diary(jobId:string,query:unknown={}){this.assertMode();const auth=await this.access.job(jobId);if(!jobSourceReadQueryV1.safeParse(query).success)throw new JobSourceError("INVALID_JOB_SOURCE_INPUT");return this.repository.read(auth.context,jobId,auth.digest,"diary")}

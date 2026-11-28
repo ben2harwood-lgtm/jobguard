@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-04a": {
+      "branches": [
+        "codex/sandbox/pilot-04a"
+      ],
+      "note": "RED pilot job capture, scope review and exact quote approval through verified membership.",
+      "allow": [
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/contracts.ts",
+        "apps/api/src/quote/contracts.ts",
+        "apps/api/src/quote/quote.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-job-access.ts",
+        "apps/web/app/(designed)/jobs/[id]/overview/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/(designed)/jobs/new/page.tsx",
+        "apps/web/app/(designed)/jobs/page.tsx",
+        "apps/web/app/(designed)/pilot-jobs.tsx",
+        "apps/web/app/api/firm-profile/route.ts",
+        "apps/web/app/api/jobs/[id]/confirm/route.ts",
+        "apps/web/app/api/jobs/[id]/parties/route.ts",
+        "apps/web/app/api/jobs/[id]/proposal/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/artifacts/[artifactId]/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/delivery/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/preview/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/route.ts",
+        "apps/web/app/api/jobs/[id]/review/route.ts",
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/lib/pilot-workspace-route.d.mts",
+        "apps/web/app/lib/pilot-workspace-route.mjs",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "apps/web/app/lib/pilot-workspace-server.ts",
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/pilot-04a-server.mjs",
+        "apps/web/e2e/pilot-04a.browser.ts",
+        "apps/web/e2e/pilot-04a.config.ts",
+        "packages/db/migration-notes/0773_pilot_capture_track.md",
+        "packages/db/migrations/0773_pilot_capture_track.sql",
+        "packages/db/src/firm-profile-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/pilot-command-owner.ts",
+        "packages/db/src/pilot-quote-delivery-repository.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/src/review-repository.ts",
+        "packages/db/test/migration-proofs/0773_pilot_capture_track.proof.json"
+      ]
+    }
+  }
+}

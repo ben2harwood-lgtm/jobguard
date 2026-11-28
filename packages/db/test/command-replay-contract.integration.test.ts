@@ -66,6 +66,15 @@ const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry:
 // generic dispatcher. Its exact replay, changed-request conflict and cross-kind ID
 // conflicts execute in real-gap-proof-by-trade.integration.test.ts.
 const proofStatementReplayCase = { key: "proof.statement", registry: ["/api/jobs/[id]/proof#answer_statement", "command:proof.statement"] };
+// QW-1 extra photos run the evidence begin/finalize commands through their own pilot service. Exact replay
+// of begin and finalize and a changed-request conflict execute in variation-photo-service.integration.test.ts.
+const extraPhotoReplayCase = { key: "/api/jobs/[id]/variations/photos", registry: ["/api/jobs/[id]/variations/photos"] };
+// QW-4 snag commands are answered once by their checked routines (app.snag_command) and the evidence finalize command. Exact
+// replay and a changed-request conflict for add, events and photo finalize execute in snag-list.integration.test.ts.
+const snagReplayCase = { key: "/api/jobs/[id]/snags", registry: ["/api/jobs/[id]/snags", "/api/jobs/[id]/snags/[snagId]/events", "/api/jobs/[id]/snags/[snagId]/photos"] };
+// V2-G1 snag register commands (owner, person events, agreed mark) answer once by command id in app.v2_snag_owner, app.v2_snag_event_person and app.v2_snag_agreed. Exact
+// replay and a changed-request conflict execute in tools/v2/seed.integration.test.mjs ("G1 replay and conflict").
+const snagRegisterReplayCase = { key: "/api/jobs/[id]/snag-register", registry: ["/api/jobs/[id]/snag-register"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
 }, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
@@ -84,7 +93,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase, extraPhotoReplayCase, snagReplayCase, snagRegisterReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });

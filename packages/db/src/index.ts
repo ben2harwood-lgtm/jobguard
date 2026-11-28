@@ -13,12 +13,16 @@ export {
   type VerifiedTenantContext,
 } from "./tenant-context.js";
 export * from "./evidence.js";
+export * from "./quote-line-pack-repository.js";
+export * from "./variation-photo.js";
 
 export * from "./job-repository.js";
 
 export * from "./ledger.js";
 export * from "./commands.js";
 export * from "./outbox.js";
+export { CommercialEmailOutbox } from "./commercial-email-outbox.js";
+export { InvoiceEmailRepository } from "./invoice-email-repository.js";
 export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
@@ -46,6 +50,7 @@ export * from "./job-import-repository.js";
 export * from "./sandbox-repository.js";
 
 export * from "./quote-delivery-repository.js";
+export * from "./pilot-quote-delivery-repository.js";
 export * from "./recovery-demo-repository.js";
 export * from "./fee-illustration-repository.js";
 export * from "./practice-scope.js";
@@ -252,6 +257,16 @@ export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash,
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
 export * from "./v2-work-plan-templates.js";
+export { assertPilotConnection } from "./pilot-connection.js";
+
+export { PilotJobRepository } from "./pilot-job-repository.js";
+export * from "./snag-repository.js";
+
+export * from "./v2-snag-register-repository.js";
+export * from "./v2-handover-repository.js";
+export * from "./v2-handover-release-repository.js";
+export * from "./v2-review-request-repository.js";
+export * from "./v2-aftercare-repository.js";
 
 // V2-SQ-A practice Sent list (read only).
 export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";

@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { config, proxy } from "./proxy";
 
-const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "stages", "stage-acknowledge", "variations/read", "variation-approvals", "extra-approvals", "practice-pay-now"];
+const portalActions = ["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "stages", "stage-acknowledge", "variations/read", "variation-approvals", "variation-photo", "extra-approvals", "practice-pay-now"];
 const request = (path: string, cookie?: string, method = "GET") => new NextRequest(`https://jobguard.example.invalid${path}`, {
   method,
   headers: cookie === undefined ? {} : { cookie },
@@ -33,6 +33,10 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
     "/api/customer-portal/extra-approvals/", "/api/customer-portal/extra-approvals/extra",
     "/api/customer-portal/EXTRA-APPROVALS", "/api/customer-portal/unknown", "/api/customer-portal/READ",
     "/api/customer-portal/variations", "/api/customer-portal/variation-approvals/extra",
+    // V2-G3: only the exact handover receipt path is exempt.
+    "/api/v2/handover/", "/api/v2/handover/extra", "/api/v2/HANDOVER", "/api/v2", "/api/jobs/fictional/handover/releases",
+    // QW-4: builder snag routes are never customer routes.
+    "/api/jobs/fictional/snags", "/api/jobs/fictional/snags/fictional/events", "/api/jobs/fictional/snags/fictional/photos",
   ])("denies customer access to %s even alongside builder cookies", async path => {
     for (const cookie of ["jobguard_customer=fictional", "jobguard_customer=", "jobguard_customer=fictional; jg_session=legacy; jobguard_session=builder"]) {
       for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
@@ -44,6 +48,13 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
         expect(response.headers.has("set-cookie")).toBe(false);
       }
     }
+  });
+
+  it("lets a portal cookie holder reach the token-authorized handover receipt", () => {
+    // The route still checks its origin and the link token; the portal cookie grants nothing there.
+    const response = proxy(request("/api/v2/handover", "jobguard_customer=fictional", "POST"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.has("set-cookie")).toBe(false);
   });
 
   it.each([undefined, "jg_session=legacy", "jobguard_session=builder"])("leaves builder authentication to the route for %s", cookie => {

@@ -5,6 +5,11 @@ import { workspaceApplication } from "../../../../lib/workspace-server";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"no-store"};
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+    return pilotWorkspaceRoute(request, async app => app.continuation.progress((await params).id));
+  }
+
  if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401,headers});
  try {return NextResponse.json(await (await workspaceApplication()).workState.get((await params).id,Object.fromEntries(new URL(request.url).searchParams)),{headers});}
  catch(error){
@@ -14,6 +19,11 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
 }
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+    return pilotWorkspaceRoute(request, async app => app.continuation.changeProgress((await params).id, await request.json().catch(() => null)));
+  }
+
  if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401,headers});
  let raw:unknown;
  try{raw=await request.json();}catch{return NextResponse.json({code:"INVALID_WORK_STATE_INPUT",environment:"synthetic_demo",realExternalActions:0},{status:400,headers});}

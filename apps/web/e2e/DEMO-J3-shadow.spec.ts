@@ -241,13 +241,13 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  expect(await read("shadow-demo")).toEqual(report);
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  await page.screenshot({ path: testInfo.outputPath(`DEMO-J3-${testInfo.project.name}.png`), fullPage: true });
- return { jobId, report, customerApprovals };
+ return { jobId, report, customerApprovals, packs: settled.packs };
 }
 
 // These are three assertion groups over the same persisted result. Run all nine
 // journey steps once per viewport; neither read below changes the saved job.
 test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs", async ({ page, browser }, testInfo) => {
- const { jobId, report, customerApprovals } = await test.step("Complete all nine fresh J3 journey steps", () => completeJ3(page, browser, testInfo));
+ const { jobId, report, customerApprovals, packs } = await test.step("Complete all nine fresh J3 journey steps", () => completeJ3(page, browser, testInfo));
 
  await test.step("J3-VALUE-COMBINED: value report retains £3,600 captures and £800/£80/£720 after the combined invoice", async () => {
  expect(report.value).toMatchObject({ version: "job-value.v3", jobId, status: "mapped", receipt: {
@@ -256,6 +256,28 @@ test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice,
  } });
  await page.goto(`/jobs/${jobId}/value`);
  for (const [id, amount] of [["found-recovered-net", "£800.00"], ["found-success-fee", "£80.00"], ["found-yours-before-tax", "£720.00"], ["tracked-captured-net", "£3,600.00"], ["tracked-fee", "£0.00"]]) await expect(page.getByTestId(id!)).toHaveText(amount!);
+ });
+
+ await test.step("An independent practice session cannot read or download the saved export", async () => {
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+   expect((await other.request.post("/api/session")).ok()).toBe(true);
+   for (const pack of packs) {
+    const listPath = `/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`;
+    for (const path of [listPath, pack.downloadPath]) {
+     const denied = await other.request.get(path);
+     expect([403, 404]).toContain(denied.status());
+     const body = await denied.text();
+     for (const secret of [jobId, pack.caseId, pack.manifestHash, "fitted garden drainage"]) expect(body).not.toContain(secret);
+    }
+    const ownerList = await jsonResult(page.request.get(listPath), "List saved evidence packs as owner");
+    const listed = ownerList.packs.find((item: { manifestHash: string }) => item.manifestHash === pack.manifestHash);
+    expect(listed).toBeDefined();
+    const ownerDownload = await page.request.get(pack.downloadPath);
+    expect(ownerDownload.ok()).toBe(true);
+    expect(await ownerDownload.text()).toBe(listed.artifactText);
+   }
+  } finally { await other.close(); }
  });
 
  await test.step("DEMO-J3-APPROVAL-READ", async () => {

@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-01b": {
+      "branches": [
+        "codex/sandbox/pilot-01b"
+      ],
+      "note": "RED pilot runtime and operator resource bindings with fictional refusal tests.",
+      "allow": [
+        ".env.example",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/identity-http.ts",
+        "apps/api/src/auth/identity.application.ts",
+        "apps/api/src/auth/identity.controller.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/main.ts",
+        "apps/api/src/pilot-ingress.test.ts",
+        "apps/api/src/pilot-ingress.ts",
+        "apps/api/src/pilot-worker.ts",
+        "apps/api/src/production-settlement-guard.ts",
+        "apps/api/src/worker.ts",
+        "apps/web/app/lib/identity-server.ts",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "apps/web/app/lib/pilot-workspace-server.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "docs/contracts/environment-modes-v1.md",
+        "packages/config/src/index.ts",
+        "packages/config/src/node-crypto.d.ts",
+        "packages/config/src/pilot-resources.test.ts",
+        "packages/config/src/pilot-resources.ts",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/pilot-connection.ts",
+        "packages/db/src/worker-pool.ts",
+        "packages/db/test/pilot-connection.test.ts",
+        "packages/storage/src/index.ts",
+        "packages/storage/src/pilot-storage.test.ts",
+        "tools/pilot-restore-target.mjs",
+        "tools/pilot-restore-target.test.mjs"
+      ]
+    }
+  }
+}

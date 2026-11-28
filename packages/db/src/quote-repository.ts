@@ -1,3 +1,4 @@
+import { requirePilotCommandOwner } from "./pilot-command-owner.js";
 import {createHash,randomUUID} from "node:crypto";
 import type {Pool,PoolClient} from "pg";
 import {evaluateDraftQuote,quoteLineV1,type QuoteBlocker,type QuoteLine} from "@jobguard/core";
@@ -15,7 +16,8 @@ export async function assertQuoteScopeCoverage(db:TenantTransaction,tenantId:str
 export class QuoteConflictError extends Error{readonly code="QUOTE_REVISION_CONFLICT";}
 export class QuoteScopeRevisionError extends Error{readonly code="QUOTE_SCOPE_REVISION_MISMATCH";constructor(){super("QUOTE_SCOPE_REVISION_MISMATCH");}}
 export class QuoteRepository{constructor(private readonly pool:Pool){}
-async saveDraft(context:VerifiedTenantContext,input:{jobId:string;draftId:string;expectedRevision:number;currency:string;taxPolicyVersion:string;lines:unknown[];blockingQuestions?:string[];effectiveAt:Date;actorRef?:string}){const lines=input.lines.map(x=>quoteLineV1.parse(x));const result=evaluateDraftQuote({...input,lines});return withTenant(this.pool,context,async db=>{
+async saveDraft(context:VerifiedTenantContext,input:{jobId:string;draftId:string;expectedRevision:number;currency:string;taxPolicyVersion:string;lines:unknown[];blockingQuestions?:string[];effectiveAt:Date;actorRef?:string;pilot?:boolean}){const lines=input.lines.map(x=>quoteLineV1.parse(x));const result=evaluateDraftQuote({...input,lines});return withTenant(this.pool,context,async db=>{
+if (input.pilot) await requirePilotCommandOwner(db);
 // Scope revisions are immutable. Check their tenant/job/item relationship before any draft, observation or audit write.
 const sources=(await db.$client.query<{id:string;scope_item_id:string}>(`SELECT id,scope_item_id FROM app.scope_revision WHERE tenant_id=$1 AND job_id=$2 AND id=ANY($3::uuid[])`,[context.tenantId,input.jobId,lines.map(line=>line.scopeRevisionId)])).rows;
 if(lines.some(line=>!sources.some(source=>source.id===line.scopeRevisionId&&source.scope_item_id===line.scopeItemId)))throw new QuoteScopeRevisionError();

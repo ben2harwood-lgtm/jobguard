@@ -67,7 +67,7 @@ export async function settleJ3(page: Page, jobId: string, lockId: string, catche
  const lines = await read("receipt-case-allocations");
  const cases = (await read("recovery-cases")).cases;
  const assessments = [];
- const packs: { caseId: string; manifestHash: string }[] = [];
+ const packs: { caseId: string; manifestHash: string; downloadPath: string }[] = [];
  {
   for (const item of catches) {
    const recovery = cases.find((row: { caseType: string; sourceRefs: string[] }) => row.caseType === "missed_variation_final_account" && row.sourceRefs.includes(`variation:${item.id}`));
@@ -135,7 +135,7 @@ export async function settleJ3(page: Page, jobId: string, lockId: string, catche
    expect(cli.status).toBe(1); // No independent checkpoint supplied; retain that limitation.
    await explorer.getByRole("button", { name: "Approve lock and reveal pack for attachment", exact: true }).click();
    await expect(explorer).toContainText("Approval recorded for these exact hashes", { timeout: 180_000 });
-   packs.push({ caseId: assessed.assessment.caseId, manifestHash: verified.manifestHash });
+   packs.push({ caseId: assessed.assessment.caseId, manifestHash: verified.manifestHash, downloadPath: url! });
   }
  }
  return { invoice, paymentId, assessments, packs, final };

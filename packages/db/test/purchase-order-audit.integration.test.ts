@@ -46,8 +46,25 @@ beforeAll(async () => {
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql",
+        // 0772 replaces an invitation routine introduced by the deferred LP-11 migration.
+        "_pilot_identity_invitations.sql", "_pilot_customer_portal.sql", "_pilot_final_account.sql", "_pilot_final_check.sql",
+        "_pilot_commercial_email.sql", "_pilot_final_check_reveal.sql", "_receipt_deduplication.sql",
+        // 0781 adds an LP-11 bound-tenant policy, so it is deferred with LP-11.
+        "_variation_revision_photo.sql",
+        // 0782 (QW-4 snag list) uses the LP-11 bound-tenant policy, so it is deferred with LP-11.
+        "_snag_list.sql",
         // V2-C3C
-        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_crew_contact.sql",
+        // V2-G1
+        "_v2_snag_register.sql",
+        // V2-G2
+        "_v2_handover_version.sql", "_v2_handover_release.sql",
+        // V2-G4
+        "_v2_handover_release_stop.sql",
+        // V2-G8
+        "_v2_review_request.sql",
+        // V2-G9
+        "_v2_aftercare_offer.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // V2-K5A: absent from the shared synthetic upgrade fixture; applied on the second pass.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") &&
       (String(values?.[0]).endsWith("_v2_payment_schedule.sql") || String(values?.[0]).endsWith("_v2_payment_stage_due.sql") ||
@@ -70,6 +87,18 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  // V2-G1: the snag register stays absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_snag_owner') AS owner")).rows[0].owner).toBeNull();
+  // V2-G2: handover versions stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_version') AS handover")).rows[0].handover).toBeNull();
+  // V2-G3: handover releases stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_release') AS handover")).rows[0].handover).toBeNull();
+  // V2-G4: handover link stops stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_release_stop') AS stop")).rows[0].stop).toBeNull();
+  // V2-G8: review requests stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_review_request') AS review")).rows[0].review).toBeNull();
+  // V2-G9: aftercare offers stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_aftercare_offer') AS aftercare")).rows[0].aftercare).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

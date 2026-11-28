@@ -5,6 +5,10 @@ import { workspaceApplication } from "../../../../../lib/workspace-server";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"no-store"};
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.finalCheck.confirmCatch((await params).id, await request.json().catch(() => null)), 201);
+ }
  if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401,headers});
  let raw:unknown;
  try{raw=await request.json();}catch{return NextResponse.json({code:"INVALID_FINAL_CHECK_INPUT"},{status:400,headers});}

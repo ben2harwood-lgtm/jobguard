@@ -1,0 +1,8 @@
+/* V2-G7 (Q76): M3's tap targets on Snags, Handover and the customer's pack only. Every control is at least 44 px;
+   a checkbox is a 44 by 44 box. Long names and titles wrap instead of scrolling sideways at 360.
+   The floor is !important because these screens sit inside design-tools.css's ".jgd .jgd-legacy.jgd-tools :is(...)"
+   rules (42 px), which outrank any one class; it applies only inside this class, never globally. */
+.tap { overflow-wrap: anywhere; min-width: 0; }
+.tap :where(button, select, input:not([type="checkbox"]):not([type="radio"]), textarea, a.btn) { min-height: 44px !important; min-width: 44px !important; max-width: 100%; }
+.tap :where(input[type="checkbox"], input[type="radio"]) { width: 44px !important; height: 44px !important; min-height: 44px !important; flex: 0 0 44px; }
+.tap :where(select) { width: 100%; }

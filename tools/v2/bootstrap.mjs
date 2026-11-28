@@ -82,6 +82,20 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2071_v2_stage_invoice_draft.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-SYNC-1 (2056): main's snag fence retargeted and its new job tables firm-locked.
+  await client.query(readFileSync(new URL("./migrations/2056_v2_sync1_fences_and_locks.sql", import.meta.url), "utf8"));
+  // V2-G1 snag register (2081), after 2056 brings main's snag list into V2.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
+  // V2-G2 handover pack versions (2082).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
+  // V2-G3 handover release by link and acknowledgement (2083), after 2082.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2083_v2_handover_release.sql", import.meta.url), "utf8"));
+  // V2-G4 stop a handover link, and refuse a link sent to an earlier customer contact (2084), after 2083.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
+  // V2-G8 one review request a week after the handover release (2085), after 2084.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2085_v2_review_request.sql", import.meta.url), "utf8"));
+  // V2-G9 aftercare check-up offers at 6 and 12 months (2086), after 2085.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2086_v2_aftercare_offer.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

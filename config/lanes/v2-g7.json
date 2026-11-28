@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-g7": {
+      "branches": [
+        "claude/project-thread-trp08u-g7"
+      ],
+      "note": "T2 Q76 V2-G7: Snags, Handover and the customer's handover pack finished to the M3 mock (#1062): a 44 px floor for every control through a component CSS module (v2-tap.module.css) on these three screens only, M3's Snags empty and problem copy, the customer pack's newer-version alert first with role=alert, and no sideways scroll at 360. Base claude/project-thread-trp08u-g9 @ 4d91590f1. The G1 audit-key repair the browser run found (eventSequence) now comes from G1 through Q78. No route, table or migration.",
+      "allow": [
+        "apps/web/app/handover/[token]/view.tsx",
+        "apps/web/app/ui/v2-handover-release-label.test.tsx",
+        "apps/web/app/ui/v2-handover-release-label.tsx",
+        "apps/web/app/ui/v2-handover.tsx",
+        "apps/web/app/ui/v2-snag-register-label.test.tsx",
+        "apps/web/app/ui/v2-snag-register-label.ts",
+        "apps/web/app/ui/v2-snag-register.tsx",
+        "apps/web/app/ui/v2-tap.module.css",
+        "apps/web/e2e/v2-g7.spec.mts",
+        "apps/web/playwright.v2-g7.config.ts"
+      ]
+    }
+  }
+}

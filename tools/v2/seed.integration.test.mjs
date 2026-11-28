@@ -8,6 +8,12 @@ import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
+// V2-G3
+import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
+// V2-G8
+import { ReviewRequestRepository } from "../../packages/db/dist/index.js";
+// V2-G9
+import { AftercareRepository } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
@@ -2052,6 +2058,283 @@ test("K5A-1 frozen stages keep their amount, and count a newly counted origin on
   await assertScheduleAddsUp(read);
 });
 
+// V2-SYNC-1 (Q45, migration 2056): main's snag list, extra photos and pilot final check on V2.
+const snagTables = ["app.snag_command", "app.snag", "app.snag_revision", "app.snag_event", "app.snag_photo", "app.snag_photo_upload"];
+const syncLockedTables = [...snagTables, "app.variation_revision_photo"];
+const visibleRows = async (scope, table) => withTenant(runtime, scope, async db =>
+  (await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [jobId])).rowCount);
+
+test("2056 retargets only the snag fence, keeps its owner and privileges, and locks main's new job tables", async () => {
+  const { rows: [routine] } = await admin.query(`SELECT pg_get_functiondef(p.oid) AS definition, p.proowner::regrole::text AS owner,
+    p.prosecdef AS definer, p.proacl::text[] AS acl FROM pg_proc p WHERE p.oid='app.snag_practice_actor(uuid,uuid)'::regprocedure`);
+  assert.match(routine.definition, /current_database\(\)<>'jobguard_v2_local'/u);
+  assert.doesNotMatch(routine.definition, /jobguard_synthetic_demo/u);
+  assert.equal(routine.owner, "jobguard_migration");
+  assert.equal(routine.definer, true);
+  assert.ok(!routine.acl?.some(item => /^(jobguard_runtime|=)/u.test(item)), "runtime and PUBLIC still cannot call it");
+  // 0775 and 0777 keep main's fences (SX rev 4; 0777 is proven unreachable below).
+  for (const routineName of ["app.lp11_bind_shadow_job(uuid,uuid)"]) {
+    const { rows: [kept] } = await admin.query("SELECT pg_get_functiondef($1::regprocedure) AS d", [routineName]);
+    assert.match(kept.d, /current_database\(\)<>'jobguard_synthetic_demo'/u, routineName);
+  }
+  const { rows } = await admin.query(`SELECT c.oid::regclass::text AS relation, NOT p.polpermissive AS restrictive, p.polcmd::text AS command,
+    (SELECT array_agg(r::regrole::text) FROM unnest(p.polroles) r) AS roles, pg_get_expr(p.polqual, p.polrelid) AS using
+    FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid AND p.polname='v2_practice_firm' WHERE c.oid=ANY($1::regclass[]) ORDER BY 1`,
+  [syncLockedTables]);
+  assert.deepEqual(rows.map(row => row.relation).sort(), [...syncLockedTables].sort());
+  for (const row of rows) {
+    assert.deepEqual([row.restrictive, row.command, row.roles], [true, "*", ["jobguard_runtime"]], row.relation);
+    assert.match(row.using, /SELECT\s+FROM app\.job j\s+WHERE \(\(j\.tenant_id = \w+\.tenant_id\) AND \(j\.id = \w+\.job_id\)\)/u, row.relation);
+  }
+  // 0776's terms approvals are per tenant (no job_id); runtime has no way in.
+  const { rows: [terms] } = await admin.query(`SELECT has_table_privilege('jobguard_runtime','app.pilot_final_check_terms_approval',
+    'SELECT,INSERT,UPDATE,DELETE') AS runtime`);
+  assert.equal(terms.runtime, false);
+});
+
+test("a snag is recorded, revised and marked fixed on the V2 practice job, and the second firm sees none of them", async () => {
+  const owner = await signIn("builder");
+  const snagId = randomUUID();
+  const path = `/api/jobs/${jobId}/snags`;
+  const added = await json(await request(path, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title: "Fictional loose hall skirting" } }));
+  assert.equal(added.jobId, jobId);
+  assert.ok(added.snags.some(snag => snag.id === snagId && snag.state === "open"));
+  // Snag photos need open work, and the Switch live test above has closed this job's work (reopening is
+  // refused by capacity admission in practice), so this proof covers the snag, its revision and its events.
+  await json(await request(path, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag.v1", action: "revise", commandId: randomUUID(), snagId, expectedRevision: 1,
+      title: "Fictional loose hall skirting by the door", location: null, assigneeLabel: null, dueOn: null } }));
+  await json(await request(`${path}/${snagId}/events`, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag-event.v1", commandId: randomUUID(), action: "mark_fixed" } }));
+  const listed = await json(await request(path, { cookies: owner.cookies }));
+  assert.equal(listed.snags.find(snag => snag.id === snagId).state, "fixed");
+
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  for (const table of ["app.snag_command", "app.snag", "app.snag_revision", "app.snag_event"]) {
+    assert.ok(await visibleRows(ownerContext, table) > 0, `${table}: the owning firm reads its rows`);
+  }
+
+  const second = await signIn("second-builder");
+  assert.equal((await json(await request(path, { cookies: second.cookies }), 404)).code, "NOT_FOUND");
+  const refused = await request(path, { cookies: second.cookies, csrf: second.csrfToken,
+    body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId: randomUUID(), title: "Fictional intruding snag" } });
+  assert.equal((await json(refused, 404)).code, "NOT_FOUND");
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) {
+    for (const table of snagTables) assert.equal(await visibleRows(scope, table), 0, `${table}: hidden from the second firm`);
+  }
+});
+
+// V2-G1 (Q53, migration 2081): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
+const g1Tables = ["app.v2_snag_owner", "app.v2_snag_event_person", "app.v2_snag_agreed"];
+const g1 = {
+  path: () => `/api/jobs/${jobId}/snag-register`,
+  async crew(owner, displayName, trade) {
+    return createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).crewContacts.record({ version: "crew-contact.v1",
+      commandId: randomUUID(), crewId: randomUUID(), expectedRevision: 0, displayName, trade, phone: `07700 900${String(Math.floor(Math.random() * 900) + 100)}`,
+      email: `${displayName.toLowerCase().replace(/\W+/gu, ".")}@crew.jobguard-v2.invalid` });
+  },
+  async add(owner, title, fields = {}) {
+    const snagId = randomUUID();
+    await json(await request(`/api/jobs/${jobId}/snags`, { cookies: owner.cookies, csrf: owner.csrfToken,
+      body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title, ...fields } }));
+    return snagId;
+  },
+  post: (owner, body, status = 200) => request(g1.path(), { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response, status)),
+  event: (snagId, action, person, commandId = randomUUID()) => ({ version: "v2-snag-event-command.v1", commandId, snagId, action, person }),
+  snag: (register, snagId) => register.snags.find(row => row.id === snagId),
+  mainEvents: async snagId => (await admin.query("SELECT sequence, kind FROM app.snag_event WHERE snag_id=$1 ORDER BY sequence", [snagId])).rows,
+};
+
+test("G1 done when: crew owner and due date; fixed by Jordan; Jordan refused as checker with no main event; Sam checks", async () => {
+  const owner = await signIn("builder");
+  const jordan = await g1.crew(owner, "Jordan Fictional", "joiner"), sam = await g1.crew(owner, "Sam Fictional", "decorator");
+  const snagId = await g1.add(owner, "Refit the hall door stop", { dueOn: "2026-12-04" });
+  await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: jordan.crewId });
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "crew", crewId: jordan.crewId }));
+  const refused = await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: jordan.crewId }), 409);
+  assert.equal(refused.code, "V2_SNAG_CHECKER_IS_FIXER");
+  assert.deepEqual(await g1.mainEvents(snagId), [{ sequence: 1, kind: "fixed" }], "the refused check left no main event");
+  const register = await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: sam.crewId }));
+  const snag = g1.snag(register, snagId);
+  assert.deepEqual([snag.title, snag.dueOn, snag.state], ["Refit the hall door stop", "2026-12-04", "checked"]);
+  assert.deepEqual(snag.owner, { crewId: jordan.crewId, name: "Jordan Fictional", trade: "joiner" });
+  assert.deepEqual([snag.people[1].name, snag.people[2].name], ["Jordan Fictional", "Sam Fictional"]);
+  const reread = g1.snag(await json(await request(g1.path(), { cookies: owner.cookies })), snagId);
+  assert.deepEqual(reread, snag);
+  const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.snag.%'
+    AND payload->'references'->>'snagId'=$2 ORDER BY sequence`, [jobId, snagId])).rows.map(row => row.event_type);
+  assert.deepEqual(events, ["v2.snag.owner_set", "v2.snag.event_person", "v2.snag.event_person"]);
+});
+
+test("G1 agreed outstanding reads back and clears; a checked snag cannot be agreed; owner refusals and fallback", async () => {
+  const owner = await signIn("builder"), second = await signIn("second-builder");
+  const snagId = await g1.add(owner, "Touch up the hall skirting", { assigneeLabel: "Dave (sparky)" });
+  let register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "visit agreed with Alex" });
+  assert.equal(g1.snag(register, snagId).agreed.note, "visit agreed with Alex");
+  register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: false, note: null });
+  assert.equal(g1.snag(register, snagId).agreed, null);
+  // Owner: another firm's crew record and an unknown id are refused; clearing falls back to main's label.
+  const foreign = await g1.crew(second, "Other Firm Crew", "tiler");
+  for (const crewId of [foreign.crewId, randomUUID()]) {
+    assert.equal((await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId }, 409)).code, "V2_SNAG_CREW_UNAVAILABLE");
+  }
+  const mine = await g1.crew(owner, "Riley Fictional", "painter");
+  register = await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: mine.crewId });
+  assert.equal(g1.snag(register, snagId).owner.name, "Riley Fictional");
+  register = await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: null });
+  assert.deepEqual([g1.snag(register, snagId).owner, g1.snag(register, snagId).assigneeLabel], [null, "Dave (sparky)"]);
+  // The builder fixes, a crew member checks: then nothing is outstanding.
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "builder" }));
+  assert.equal((await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "builder" }), 409)).code, "V2_SNAG_CHECKER_IS_FIXER");
+  await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: mine.crewId }));
+  assert.equal((await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "late" }, 409)).code,
+    "V2_SNAG_NOTHING_OUTSTANDING");
+  // Plan check condition 2: a mark made before a later reopen does not carry over.
+  const later = await g1.add(owner, "Fictional loose tile in the hall");
+  register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId: later, agreed: true, note: "agreed at walk-round" });
+  assert.equal(g1.snag(register, later).agreed.note, "agreed at walk-round");
+  await g1.post(owner, g1.event(later, "mark_fixed", { kind: "builder" }));
+  await g1.post(owner, g1.event(later, "reopen", { kind: "builder" }));
+  register = await json(await request(g1.path(), { cookies: owner.cookies }));
+  assert.equal(g1.snag(register, later).agreed, null, "the reopen clears the earlier agreement");
+});
+
+test("G1 replay and conflict; main's own route still works and shows person not recorded", async () => {
+  const owner = await signIn("builder");
+  const sam = await g1.crew(owner, "Sam Replay", "decorator");
+  const snagId = await g1.add(owner, "Fictional sticking drawer");
+  const fixed = g1.event(snagId, "mark_fixed", { kind: "builder" });
+  const first = await g1.post(owner, fixed);
+  assert.deepEqual(await g1.post(owner, fixed), first);
+  assert.equal((await g1.post(owner, { ...fixed, person: { kind: "crew", crewId: sam.crewId } }, 409)).code, "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_snag_event_person WHERE snag_id=$1", [snagId])).rows[0].n, 1);
+  // One command identity across owner, event and agreed records.
+  const ownerSet = { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: sam.crewId };
+  await g1.post(owner, ownerSet);
+  assert.equal((await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: ownerSet.commandId, snagId, agreed: true, note: "Customer agreed" }, 409)).code,
+    "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await g1.post(owner, { ...ownerSet, commandId: fixed.commandId }, 409)).code, "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_snag_agreed WHERE snag_id=$1", [snagId])).rows[0].n, 0);
+  // Reopen and fix again through main's own route: no person row, and the register says so.
+  await g1.post(owner, g1.event(snagId, "reopen", { kind: "builder" }));
+  await json(await request(`/api/jobs/${jobId}/snags/${snagId}/events`, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag-event.v1", commandId: randomUUID(), action: "mark_fixed" } }));
+  const snag = g1.snag(await json(await request(g1.path(), { cookies: owner.cookies })), snagId);
+  assert.deepEqual(snag.people[3], { kind: "unknown" });
+  assert.equal(snag.state, "fixed");
+});
+
+test("G1 tables are forced, append only, firm-locked; person rows bind their own snag; main's snag schema is unchanged", async () => {
+  const owner = await signIn("builder"), second = await signIn("second-builder");
+  const snagId = await g1.add(owner, "Fictional loose tile");
+  const other = await g1.add(owner, "Fictional cracked tile");
+  await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "agreed" });
+  await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: null });
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "builder" }));
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: shared } = await authenticatePracticeSession(runtime, second.sessionId);
+  const query = (scope, sql, args) => withTenant(runtime, scope, db => db.$client.query(sql, args));
+  for (const table of g1Tables) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT') AS can_write,
+      has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_write: true, can_mutate: false });
+    assert.ok(await visibleRows(context, table) > 0, `${table}: the owning firm reads its rows`);
+    for (const scope of [shared, second.realContext]) assert.equal(await visibleRows(scope, table), 0, `${table}: hidden from the second firm`);
+    for (const sql of [`UPDATE ${table} SET job_id=job_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(query(context, sql, [jobId]), { code: "42501" });
+      await assert.rejects(admin.query(sql, [jobId]));
+    }
+  }
+  // A person row for another snag's event (no such event on that snag) is refused.
+  await assert.rejects(admin.query(`INSERT INTO app.v2_snag_event_person (tenant_id, job_id, snag_id, event_sequence, person_kind, firm_key, command_id)
+    SELECT tenant_id, job_id, $2, event_sequence, person_kind, firm_key, $3 FROM app.v2_snag_event_person WHERE snag_id = $1`,
+  [snagId, other, randomUUID()]));
+  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2081 rerun.
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname) FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname LIKE 'snag\\_%') functions,
+    (SELECT jsonb_agg(c.relname || '.' || a.attname || ':' || format_type(a.atttypid, a.atttypmod) ORDER BY c.relname, a.attnum)
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE c.relnamespace='app'::regnamespace AND c.relname LIKE 'snag%'
+      AND a.attnum > 0 AND NOT a.attisdropped) columns,
+    (SELECT count(*)::int FROM pg_policy WHERE polname LIKE 'v2_snag_%') policies,
+    (SELECT count(*)::int FROM pg_trigger WHERE tgname LIKE 'v2_snag_%') triggers`)).rows[0];
+  const before = await catalog();
+  assert.ok(before.functions.length >= 4 && !before.functions.some(text => /v2_snag/u.test(text)), "no main snag routine names the V2 register");
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before, "2081 reruns without change and never touches main's snag schema");
+  assert.ok(!before.columns.some(column => column.startsWith("v2_")), "no V2 column on main's snag tables");
+  // Rule 29: GET refuses no session, an invalid session and the second firm.
+  const typed = async cookies => { const response = await request(g1.path(), cookies ? { cookies } : {});
+    return [response.status, (await response.json()).code]; };
+  assert.deepEqual(await typed(), [401, "UNAUTHENTICATED"]);
+  const invalid = await typed(`jg_session=${randomUUID()}`);
+  assert.ok(["UNAUTHENTICATED", "NOT_FOUND"].includes(invalid[1]) && invalid[0] >= 401 && invalid[0] <= 404, String(invalid));
+  assert.equal((await json(await request(g1.path(), { cookies: second.cookies }), 404)).code, "NOT_FOUND");
+});
+
+test("a variation revision photo on the V2 practice job is hidden from the second firm", async () => {
+  // Extra photos are written only by main's pilot route (QW-1), never in practice mode, so the proof
+  // row is placed directly with triggers off and removed afterwards. Only visibility is under test.
+  const { rows: [revision] } = await admin.query(`SELECT tenant_id, job_id, variation_id, id, scope_item_id FROM app.variation_revision
+    WHERE job_id=$1 AND scope_item_id IS NOT NULL LIMIT 1`, [jobId]);
+  assert.ok(revision, "the seed suite has recorded a variation revision on the practice job");
+  const evidenceId = randomUUID();
+  const fixture = await admin.connect();
+  const placed = async sql => {
+    try { await fixture.query(`BEGIN; SET LOCAL session_replication_role=replica; ${sql}; COMMIT`); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+  };
+  try {
+    await placed(`INSERT INTO app.evidence_object(id, tenant_id, job_id, scope_item_id, upload_id, kind, evidence_type, object_key, object_version_id,
+        sha256, byte_length, content_type, retention_class, server_received_at, server_verified_at)
+      VALUES ('${evidenceId}', '${revision.tenant_id}', '${revision.job_id}', '${revision.scope_item_id}', '${randomUUID()}', 'original', 'variation_photo',
+        'v2-sync1-proof/${evidenceId}', 'v2-sync1-proof', '${"a".repeat(64)}', 1, 'image/png', 'standard_evidence', now(), now());
+      INSERT INTO app.variation_revision_photo(tenant_id, job_id, variation_id, revision_id, scope_item_id, evidence_id, position, sha256, received_at)
+      VALUES ('${revision.tenant_id}', '${revision.job_id}', '${revision.variation_id}', '${revision.id}', '${revision.scope_item_id}',
+        '${evidenceId}', 6, '${"a".repeat(64)}', now())`);
+    const owner = await signIn("builder");
+    const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+    assert.equal(await visibleRows(ownerContext, "app.variation_revision_photo"), 1, "the owning firm reads the photo link");
+    const second = await signIn("second-builder");
+    const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+    for (const scope of [second.realContext, secondContext]) {
+      assert.equal(await visibleRows(scope, "app.variation_revision_photo"), 0);
+    }
+  } finally {
+    try {
+      await placed(`DELETE FROM app.variation_revision_photo WHERE evidence_id='${evidenceId}';
+        DELETE FROM app.evidence_object WHERE id='${evidenceId}'`);
+    } finally { fixture.release(); }
+  }
+});
+
+test("0777's pilot final-check branch cannot be reached from the V2 practice job", async () => {
+  // On jobguard_v2_local, lp11_bind_shadow_job takes 0777's pilot branch, which needs the pilot shadow login.
+  // That login exists only on jobguard_pilot* databases, so the branch refuses before any pilot side effect.
+  const { rows: [state] } = await admin.query(`SELECT app.pilot_final_check_login() AS login,
+    (SELECT count(*)::int FROM control_plane.pilot_final_check_binding) AS bindings,
+    (SELECT count(*)::int FROM app.pilot_final_check_terms_approval) AS approvals,
+    (SELECT count(*)::int FROM infrastructure.final_check_request) AS requests,
+    (SELECT tenant_id FROM app.job WHERE id=$1) AS tenant`, [jobId]);
+  assert.deepEqual({ ...state, tenant: undefined }, { login: false, bindings: 0, approvals: 0, requests: 0, tenant: undefined });
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await assert.rejects(client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [state.tenant, jobId]), /FINAL_CHECK_FORBIDDEN/u);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+  const { rows: [after] } = await admin.query(`SELECT (SELECT count(*)::int FROM control_plane.lp11_shadow_scope) AS scopes,
+    (SELECT count(*)::int FROM control_plane.pilot_final_check_binding) AS bindings`);
+  assert.deepEqual(after, { scopes: 0, bindings: 0 });
+  // The job is a practice job, which the pilot branch's job query also excludes (practice_session_digest IS NULL).
+  const { rows: [job] } = await admin.query("SELECT practice_session_digest IS NOT NULL AS practice FROM app.job WHERE id=$1", [jobId]);
+  assert.equal(job.practice, true);
+});
+
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
 const crewTable = "app.v2_crew_contact";
 const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
@@ -2383,6 +2666,883 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// V2-G2 (Q56, migration 2082): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
+const g2 = {
+  async job() {
+    const { jobId: job, scopeItemId, sessionId } = await pxLiveJob();
+    const owner = await signIn("builder");
+    const { context } = await authenticatePracticeSession(runtime, sessionId);
+    const app = createWorkspaceApplication({ pool: runtime, sessionId });
+    const photo = await uploadPracticePhoto(runtime, context, { jobId: job, scopeItemId });
+    const variationId = randomUUID();
+    const proposed = await app.variation.command(job, { version: "variation-command.v1", action: "propose", proposalId: variationId,
+      scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+      description: "splashback extended to the end of the worktop", captureText: "Customer asks to extend the splashback",
+      price: { quantity: "1", unit: "item", unitRatePence: 9500, direction: "addition" } });
+    await app.variation.command(job, { version: "variation-command.v1", action: "approve", variationId,
+      revisionId: proposed.variations.find(item => item.id === variationId).currentRevisionId, approvalId: randomUUID(),
+      attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+    const jordan = await g1.crew(owner, "Jordan Handover", "joiner"), sam = await g1.crew(owner, "Sam Handover", "decorator");
+    const snagId = randomUUID();
+    await json(await request(`/api/jobs/${job}/snags`, { cookies: owner.cookies, csrf: owner.csrfToken,
+      body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title: "Refit the hall door stop", dueOn: "2026-12-04" } }));
+    const register = body => request(`/api/jobs/${job}/snag-register`, { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response));
+    await register({ version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: jordan.crewId });
+    await register({ version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "Visit agreed with Alex." });
+    return { job, owner, sessionId, context, photo, variationId, snagId, jordan, sam, register,
+      path: `/api/jobs/${job}/handover`,
+      post: (body, status = 200) => request(`/api/jobs/${job}/handover`, { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response, status)) };
+  },
+  save: (choice, expectedVersion = 0, commandId = randomUUID()) => ({ version: "v2-handover-save-command.v1", commandId, expectedVersion, choice }),
+  events: async commandId => (await admin.query(`SELECT payload FROM app.audit_event WHERE event_type='v2.handover.version_saved'
+    AND payload->'references'->>'commandId'=$1`, [commandId])).rows,
+};
+const g2Text = content => content.sections.flatMap(section => [section.title, ...section.lines]).join("\n");
+
+test("G2 done when: the builder ticks every section, previews, and saves version 1 with no amounts", async () => {
+  const f = await g2.job();
+  const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.ok(view.sources.lines.length >= 3);
+  assert.deepEqual(view.versions, []);
+  assert.equal(JSON.stringify(view.sources).match(/pence|unitRate|netPence|signedDelta/iu), null, "the sources carry no money field");
+  const choice = { sections: ["done", "changes", "photos", "certificates", "snags", "contacts"],
+    lineIds: view.sources.lines.slice(0, 3).map(row => row.id), variationIds: [f.variationId], photoIds: [f.photo.evidenceId], snagIds: [f.snagId],
+    certificates: [{ text: "Tile adhesive and grout data sheets", status: "included" }, { text: "electrical certificate", status: "still_needed" }] };
+  const before = (await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n;
+  const { preview } = await f.post({ version: "v2-handover-preview.v1", choice });
+  assert.deepEqual(preview.refused, []);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, before, "a preview writes nothing");
+  const command = g2.save(choice);
+  const { saved } = await f.post(command);
+  assert.equal(saved.version, 1);
+  assert.deepEqual(saved.content, preview.content, "the saved version is the previewed text");
+  const text = g2Text(saved.content);
+  assert.match(text, /Agreed change · splashback extended to the end of the worktop/u);
+  assert.match(text, /Refit the hall door stop · Jordan Handover · due 4 Dec\. Visit agreed with Alex\./u);
+  assert.match(text, /Still needed: electrical certificate\. Your builder will supply it separately\./u);
+  assert.match(text, /Site photo 1 · /u);
+  assert.deepEqual(saved.content.sections.find(section => section.key === "photos").photos, [{ id: f.photo.evidenceId, sha256: f.photo.sha256 }]);
+  const { rows: money } = await admin.query(`SELECT unit_rate_pence::text AS v FROM app.quote_line WHERE job_id=$1
+    UNION SELECT signed_delta_pence::text FROM app.variation_revision WHERE job_id=$1 UNION SELECT unit_rate_pence::text FROM app.variation_revision WHERE job_id=$1`, [f.job]);
+  const stored = (await admin.query("SELECT content FROM app.v2_handover_version WHERE job_id=$1 AND version=1", [f.job])).rows[0].content;
+  const storedText = g2Text(stored);
+  assert.doesNotMatch(storedText, /£|pence|pounds|\d+[.,]\d{2}\b/u);
+  for (const { v } of money.filter(row => Number(row.v) > 0)) {
+    assert.doesNotMatch(storedText, new RegExp(`\\b${v}\\b`, "u"));
+    assert.doesNotMatch(storedText, new RegExp(`\\b${(Number(v) / 100).toFixed(2).replace(".", "\\.")}\\b`, "u"));
+  }
+  assert.deepEqual((await f.post(command)).saved, { ...saved, replayed: true });
+  assert.equal((await g2.events(command.commandId)).length, 1);
+  const [event] = await g2.events(command.commandId);
+  assert.equal(event.payload.hashes.content, saved.contentHash);
+  assert.doesNotMatch(JSON.stringify(event.payload), /door stop|splashback|electrical/u);
+  const reloaded = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.deepEqual(reloaded.versions.map(row => [row.version, row.contentHash]), [[1, saved.contentHash]]);
+});
+
+test("G2 a checked snag leaves Outstanding in version 2, and version 1 reads back unchanged", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags", "contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post(g2.save(choice))).saved;
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.equal(view.sources.snags.some(row => row.id === f.snagId), false, "a checked snag is not outstanding");
+  // Naming it again is refused; dropping it saves version 2.
+  assert.equal((await f.post(g2.save(choice, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  const second = (await f.post(g2.save({ ...choice, sections: ["contacts"], snagIds: [] }, 1))).saved;
+  assert.equal(second.version, 2);
+  assert.equal(second.content.sections.some(section => section.key === "snags"), false);
+  const again = (await admin.query("SELECT content, content_hash FROM app.v2_handover_version WHERE job_id=$1 AND version=1", [f.job])).rows[0];
+  assert.equal(again.content_hash, first.contentHash);
+  assert.deepEqual(again.content, first.content);
+});
+
+test("G2 refusals: an amount, a stale version, a snag checked after preview, another job's photo, nothing ticked", async () => {
+  const f = await g2.job();
+  const base = { sections: ["certificates"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [{ text: "Spare tiles worth £40", status: "included" }] };
+  const amount = await f.post(g2.save(base), 409);
+  assert.deepEqual([amount.code, amount.refused], ["HANDOVER_LINE_REFUSED", [{ section: "certificates", line: "Spare tiles worth £40", reason: "amount" }]]);
+  assert.equal((await f.post(g2.save({ ...base, sections: [] }), 409)).code, "HANDOVER_NOTHING_CHOSEN");
+  const ok = { ...base, certificates: [{ text: "Spare tiles left in the loft", status: "included" }] };
+  await f.post(g2.save(ok));
+  assert.equal((await f.post(g2.save(ok, 0), 409)).code, "HANDOVER_VERSION_CONFLICT");
+  // Previewed with the snag, then the snag is checked before Save.
+  const withSnag = { ...ok, sections: ["snags"], certificates: [], snagIds: [f.snagId] };
+  assert.deepEqual((await f.post({ version: "v2-handover-preview.v1", choice: withSnag })).preview.refused, []);
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "builder" } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  assert.equal((await f.post(g2.save(withSnag, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  // Another job's photo is never offered, and naming it is refused.
+  const other = await g2.job();
+  assert.equal((await json(await request(f.path, { cookies: f.owner.cookies }))).sources.photos.some(row => row.id === other.photo.evidenceId), false);
+  assert.equal((await f.post(g2.save({ ...ok, sections: ["photos"], certificates: [], photoIds: [other.photo.evidenceId] }, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, 1);
+});
+
+// Codex review on #998: a snag's note edited in another session after the preview must not be frozen unseen.
+test("G2 saves only the previewed text: a note changed after the preview refuses the save until it is previewed again", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.match(first.contentHash, /^[0-9a-f]{64}$/u);
+  await f.register({ version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId: f.snagId, agreed: true, note: "Visit moved to Friday." });
+  assert.equal((await f.post({ ...g2.save(choice), previewHash: first.contentHash }, 409)).code, "HANDOVER_SOURCE_CHANGED");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  const again = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.notEqual(again.contentHash, first.contentHash);
+  const { saved } = await f.post({ ...g2.save(choice), previewHash: again.contentHash });
+  assert.deepEqual(saved.content, again.content);
+  assert.equal(saved.contentHash, again.contentHash);
+  assert.match(g2Text(saved.content), /Visit moved to Friday\./u);
+});
+
+test("G2 the pack reads a snag's latest revision, and a revision after the preview refuses the save", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  await json(await request(`/api/jobs/${f.job}/snags`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken,
+    body: { version: "snag.v1", action: "revise", commandId: randomUUID(), snagId: f.snagId, expectedRevision: 1,
+      title: "Refit the hall door stop and buffer", location: null, assigneeLabel: null, dueOn: null } }));
+  assert.equal((await f.post({ ...g2.save(choice), previewHash: first.contentHash }, 409)).code, "HANDOVER_SOURCE_CHANGED");
+  const again = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.match(g2Text(again.content), /Refit the hall door stop and buffer/u);
+  assert.doesNotMatch(g2Text(again.content), /2026-12-04|4 Dec/u, "the revision cleared the due date");
+  await f.post({ ...g2.save(choice), previewHash: again.contentHash });
+});
+
+test("G2 replay and conflict, append-only, firm A/B read check and route refusals", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] };
+  const command = g2.save(choice);
+  await f.post(command);
+  assert.equal((await f.post({ ...command, choice: { ...choice, sections: ["contacts", "certificates"], certificates: [{ text: "Other", status: "included" }] } }, 409)).code,
+    "HANDOVER_COMMAND_CONFLICT");
+  for (const sql of ["UPDATE app.v2_handover_version SET content=content WHERE job_id=$1", "DELETE FROM app.v2_handover_version WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+  const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid='app.v2_handover_version'::regclass`);
+  assert.deepEqual(catalog, { relrowsecurity: true, relforcerowsecurity: true });
+  // Rule 29 / rule 30: no session, a bad session and the second firm see nothing.
+  await json(await request(f.path), 401);
+  const invalid = await request(f.path, { cookies: "jg_session=" + "x".repeat(43) });
+  assert.ok([401, 404].includes(invalid.status), String(invalid.status));
+  const second = await signIn("second-builder");
+  await json(await request(f.path, { cookies: second.cookies }), 404);
+  await json(await request(f.path, { cookies: second.cookies, csrf: second.csrfToken, body: g2.save(choice, 1) }), 404);
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rowCount, 0);
+  });
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G2 migration 2082 reruns without changing policies, triggers or rows", async () => {
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid='app.v2_handover_version'::regclass) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_version'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_version'::regclass) AS acl,
+    (SELECT count(*)::int FROM app.v2_handover_version) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G3 (Q57, migration 2083): release a saved handover version by customer link, and "Acknowledge receipt".
+const g3 = {
+  // No V2 command completes site work yet, so the fixture completes every scope item through main's
+  // app.transition_scope_progress, as the job's own practice session (the site-work guard refuses a maintenance write).
+  complete: async f => withTenant(runtime, (await authenticatePracticeSession(runtime, f.sessionId)).context, async db => {
+    const { rows } = await db.$client.query(`SELECT scope_item_id AS id, stage, revision FROM app.scope_progress
+      WHERE job_id=$1 AND stage<>'complete'`, [f.job]);
+    for (const { id, stage, revision } of rows) {
+      if (stage === "not_started") await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'in_progress','start')",
+        [DEMO_TENANT_ID, f.job, id, revision]);
+      await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'complete','complete')",
+        [DEMO_TENANT_ID, f.job, id, revision + (stage === "not_started" ? 1 : 0)]);
+    }
+  }),
+  release: (handoverVersion, commandId = randomUUID()) => ({ version: "v2-handover-release-command.v1", commandId, handoverVersion }),
+  releases: f => request(`${f.path}/releases`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/releases`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  open: token => request(`/handover/${token}`),
+  acknowledge: (token, status = 200, cookies) => request("/api/v2/handover", { cookies, body: { version: "v2-handover-acknowledge.v1", token } })
+    .then(response => json(response, status)),
+  // In process, for the catcher count and a past clock. The catcher logs metadata only, under local V2.
+  async direct(f, body, clock) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new HandoverReleaseRepository(practiceMaterialPool(runtime, auth.digest), clock);
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.release(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  async ready() {
+    const f = await g2.job();
+    await g3.complete(f);
+    const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+    const line = view.sources.lines[0].id;
+    const v1 = (await f.post(g2.save({ sections: ["done", "snags", "contacts"], lineIds: [line], variationIds: [], photoIds: [],
+      snagIds: [f.snagId], certificates: [] }))).saved;
+    return { ...f, line, v1 };
+  },
+};
+const linkTables = ["app.snag_event", "app.variation_approval", "app.final_account_lock", "app.customer_invoice", "app.v2_snag_owner",
+  "app.v2_snag_agreed", "app.v2_handover_version", "app.v2_handover_release"];
+const linkSnapshot = async jobId => Object.fromEntries(await Promise.all(linkTables.map(async table =>
+  [table, (await admin.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS rows
+    FROM ${table} t WHERE job_id=$1`, [jobId])).rows[0]])));
+
+test("G3 done when: the customer opens v1 by link, sees the outstanding snag, acknowledges, and later receives a corrected v2", async () => {
+  const f = await g3.ready();
+  const first = await g3.direct(f, g3.release(1));
+  assert.equal(first.result.replayed, false);
+  assert.deepEqual(first.captured, [{ event: "v2.delivery.captured", kind: "v2_handover_release" }], "one catcher delivery, metadata only");
+  const { rows: [stored] } = await admin.query("SELECT recipient_email, token_hash FROM app.v2_handover_release WHERE id=$1", [first.result.release.releaseId]);
+  assert.equal(stored.recipient_email, "customer@jobguard-v2.invalid");
+  assert.equal(stored.token_hash, createHash("sha256").update(first.result.token).digest("hex"), "only the hash is stored");
+  // The customer, with no sign-in.
+  const page = await g3.open(first.result.token);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get("cache-control")?.includes("no-store") ?? false, true);
+  const html = await page.text();
+  assert.match(html, /Outstanding snags/u);
+  assert.match(html, /Refit the hall door stop/u);
+  assert.match(html, /Receipt only: acknowledging this pack does not agree the account or sign off any snag\./u);
+  assert.doesNotMatch(html, /Newer version available/u);
+  assert.doesNotMatch(html, /£|pence/u);
+  const ack = await g3.acknowledge(first.result.token);
+  assert.equal(ack.replayed, false);
+  // The builder checks the snag, saves version 2 without it and releases it.
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  assert.equal(second.captured.length, 1, "one more delivery");
+  const old = await (await g3.open(first.result.token)).text();
+  assert.match(old, /Newer version available/u);
+  assert.match(old, /Refit the hall door stop/u, "version 1 still shows unchanged");
+  const corrected = await (await g3.open(second.result.token)).text();
+  assert.doesNotMatch(corrected, /Refit the hall door stop|Newer version available/u);
+  const { releases, siteComplete } = await g3.releases(f);
+  assert.equal(siteComplete, true);
+  assert.deepEqual(releases.map(row => [row.version, row.acknowledgedAt !== null, row.superseded]), [[1, true, true], [2, false, false]]);
+  assert.equal(JSON.stringify(releases).includes(first.result.token), false, "the history never carries a token");
+  // A replay returns the release without the link, and delivers nothing.
+  const replay = await g3.direct(f, { ...g3.release(1), commandId: (await admin.query("SELECT command_id FROM app.v2_handover_release WHERE id=$1",
+    [first.result.release.releaseId])).rows[0].command_id });
+  assert.deepEqual([replay.result.replayed, replay.result.token, replay.captured.length], [true, null, 0]);
+  const events = (await admin.query(`SELECT event_type, actor_ref, payload FROM app.audit_event WHERE subject_ref=$1
+    AND event_type IN ('v2.handover.released', 'v2.handover.acknowledged') ORDER BY sequence`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type), ["v2.handover.released", "v2.handover.acknowledged", "v2.handover.released"]);
+  assert.equal(events[1].actor_ref, `handover_link:${first.result.release.releaseId}`);
+  assert.doesNotMatch(JSON.stringify(events), /door stop|customer@|jobguard-v2\.invalid/u);
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G3 release is refused while a scope item is still in progress, with no delivery and no row", async () => {
+  const f = await g2.job();
+  const saved = (await f.post(g2.save({ sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] }))).saved;
+  assert.equal((await g3.releases(f)).siteComplete, false);
+  const refused = await g3.direct(f, g3.release(saved.version));
+  assert.equal(refused.result.code, "HANDOVER_SITE_NOT_COMPLETE");
+  assert.deepEqual(refused.captured, []);
+  assert.equal((await g3.post(f, g3.release(saved.version), 409)).code, "HANDOVER_SITE_NOT_COMPLETE");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  // Never the financial lock: completing the site work alone is enough.
+  await g3.complete(f);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.final_account_lock WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  assert.ok((await g3.post(f, g3.release(saved.version))).token);
+});
+
+test("G3 link refusals: a made-up token, an expired link and an altered link with the second firm signed in are one refusal", async () => {
+  const f = await g3.ready();
+  const expired = await g3.direct(f, { ...g3.release(1), expiresInDays: 30 }, () => Date.now() - 31 * 86_400_000);
+  const live = await g3.direct(f, g3.release(1));
+  const second = await signIn("second-builder");
+  const altered = live.result.token.slice(0, -1) + (live.result.token.endsWith("A") ? "B" : "A");
+  const bodies = [];
+  for (const [token, cookies] of [["x".repeat(43), undefined], [expired.result.token, undefined], [altered, second.cookies]]) {
+    bodies.push(await g3.acknowledge(token, 404, cookies));
+    const page = await (await g3.open(token)).text();
+    assert.match(page, /This link can’t be opened|This link can&#x27;t be opened|This link can’t/u);
+    assert.doesNotMatch(page, /Refit the hall door stop|£|pence/u);
+  }
+  assert.deepEqual(bodies, Array(3).fill({ code: "HANDOVER_LINK_REFUSED" }));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  // The token is the capability: a valid link opens whoever is signed in, even the second firm's builder.
+  assert.match(await (await request(`/handover/${live.result.token}`, { cookies: second.cookies })).text(), /Refit the hall door stop/u);
+  // The firm check is on the builder routes: the second firm's builder cannot list or release the first firm's versions.
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g3.release(1) }), 404);
+});
+
+test("G3 acknowledging twice is one row, and both tables refuse UPDATE and DELETE", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const first = await g3.acknowledge(result.token), again = await g3.acknowledge(result.token);
+  assert.deepEqual([again.replayed, again.acknowledgedAt], [true, first.acknowledgedAt]);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 1);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.acknowledged'`, [f.job])).rows[0].n, 1);
+  for (const sql of ["UPDATE app.v2_handover_release SET firm_name=firm_name WHERE job_id=$1", "DELETE FROM app.v2_handover_release WHERE job_id=$1",
+    "UPDATE app.v2_handover_acknowledgement SET acknowledged_at=acknowledged_at WHERE job_id=$1", "DELETE FROM app.v2_handover_acknowledgement WHERE job_id=$1",
+    "INSERT INTO app.v2_handover_acknowledgement (tenant_id, job_id, release_id) SELECT tenant_id, job_id, id FROM app.v2_handover_release WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+  for (const sql of ["UPDATE app.v2_handover_release SET firm_name=firm_name WHERE job_id=$1", "DELETE FROM app.v2_handover_acknowledgement WHERE job_id=$1"])
+    await assert.rejects(admin.query(sql, [f.job]));
+  const { rows } = await admin.query(`SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+    WHERE oid IN ('app.v2_handover_release'::regclass, 'app.v2_handover_acknowledgement'::regclass) ORDER BY relname`);
+  assert.deepEqual(rows.map(row => [row.relrowsecurity, row.relforcerowsecurity]), [[true, true], [true, true]]);
+});
+
+test("G3 acknowledgement changes nothing else: snag, variation, lock, invoice and handover rows are identical", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const before = await linkSnapshot(f.job);
+  await g3.acknowledge(result.token);
+  assert.deepEqual(await linkSnapshot(f.job), before);
+  const { rows: [{ triggers }] } = await admin.query(`SELECT coalesce(string_agg(tgname, ',' ORDER BY tgname), '') AS triggers FROM pg_trigger
+    WHERE tgrelid='app.v2_handover_acknowledgement'::regclass AND NOT tgisinternal`);
+  assert.equal(triggers, "v2_handover_acknowledgement_immutable", "no watchdog or other trigger on the receipt table");
+  const reloaded = await (await g3.open(result.token)).text();
+  assert.match(reloaded, /Receipt acknowledged/u);
+  assert.match(reloaded, /Refit the hall door stop/u, "the snag is still outstanding: receipt signs nothing off");
+});
+
+test("G3 a superseded link stays read-only: v1 released, v2 released, then v1 cannot be acknowledged", async () => {
+  const f = await g3.ready();
+  const first = await g3.direct(f, g3.release(1));
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  const old = await (await g3.open(first.result.token)).text();
+  assert.match(old, /This version can no longer be acknowledged/u);
+  assert.doesNotMatch(old, />Acknowledge receipt</u, "no receipt button on a superseded link");
+  assert.equal((await g3.acknowledge(first.result.token, 404)).code, "HANDOVER_LINK_REFUSED");
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_handover_acknowledgement WHERE release_id=$1", [first.result.release.releaseId])).rowCount, 0);
+  assert.equal((await g3.acknowledge(second.result.token)).replayed, false, "the newest link still records receipt");
+});
+
+test("G3 firm A/B read check, and migration 2083 reruns without changing policies, triggers or rows", async () => {
+  const f = await g3.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  await g3.acknowledge(result.token);
+  const second = await signIn("second-builder");
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_handover_release", "app.v2_handover_acknowledgement"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0, `${table} hidden`);
+  });
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY 1) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_handover_release'::regclass,
+      'app.v2_handover_acknowledgement'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(relacl::text, ',' ORDER BY relname) FROM pg_class WHERE oid IN ('app.v2_handover_release'::regclass,
+      'app.v2_handover_acknowledgement'::regclass)) AS acl,
+    (SELECT count(*)::int FROM app.v2_handover_release) + (SELECT count(*)::int FROM app.v2_handover_acknowledgement) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2083_v2_handover_release.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G4 (Q63, migration 2084): who can read the handover pack. The builder can stop a link, a changed customer
+// stops the old one, "newer version available" ignores stopped releases, and another firm sees nothing.
+// G3's rerun case reapplies 2083, which puts back the pre-G4 link function bodies. Each G4 case reapplies
+// 2084 first (it is idempotent), so these cases always run against the G4 bodies whatever ran before.
+const g4Migration = readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8");
+const g4 = {
+  async ready() { await admin.query(g4Migration); return g3.ready(); },
+  stop: (releaseId, reason = "Sent by mistake", commandId = randomUUID()) => ({ version: "v2-handover-stop-command.v1", commandId, releaseId, reason }),
+  // The ordinary customer-and-site path: a correction on a live job, with a reason. A null customerRef is a new customer.
+  async customer(f, email, { same = false } = {}) {
+    const app = createWorkspaceApplication({ pool: runtime, sessionId: f.sessionId });
+    const view = await app.parties.view({ sessionId: f.sessionId }, f.job);
+    const known = view.customers.find(row => row.id === view.currentIds.customerId);
+    return app.parties.command({ sessionId: f.sessionId }, f.job, {
+      version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+      expectedJobRevision: view.jobRevision, expectedBindingId: view.currentIds.bindingId,
+      customer: { ...view.current.customer, ...(same ? {} : { name: "Fictional Replacement Customer" }), email },
+      customerRef: same ? { id: known.id, revisionId: known.revisionId, expectedRevision: known.revision } : null,
+      site: view.current.site, savedSiteRevisionId: view.current.siteRevisionId, reuseSiteId: null, expectedReuseRevisionId: null,
+      confirmSamePlace: false, payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: true, reason: "Customer contact changed",
+    });
+  },
+  refused: async (token, cookies) => {
+    assert.deepEqual(await g3.acknowledge(token, 404, cookies), { code: "HANDOVER_LINK_REFUSED" });
+    const page = await (await g3.open(token)).text();
+    assert.match(page, /This link can’t be opened|This link can&#x27;t be opened|This link can’t/u);
+    assert.doesNotMatch(page, /Refit the hall door stop|£|pence/u);
+  },
+};
+
+test("G4 stop: a stopped link is refused like an unknown one, history shows it, and a new release opens", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  const stopped = await g3.post(f, g4.stop(first.result.release.releaseId));
+  assert.equal(stopped.replayed, false);
+  assert.ok(stopped.release.stoppedAt);
+  await g4.refused(first.result.token);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  const history = (await g3.releases(f)).releases;
+  assert.deepEqual(history.map(row => [row.version, row.stoppedAt !== null, row.recipientCurrent]), [[1, true, true]]);
+  const again = await g3.direct(f, g3.release(1));
+  assert.equal(again.captured.length, 1, "one more catcher delivery");
+  assert.equal((await g3.open(again.result.token)).status, 200);
+  assert.match(await (await g3.open(again.result.token)).text(), /Refit the hall door stop/u);
+  const events = (await admin.query(`SELECT payload FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.link_stopped'`, [f.job])).rows;
+  assert.equal(events.length, 1);
+  // The audit layer adds its own auditActor*/auditTrust keys; the stop itself references only these three.
+  assert.deepEqual(Object.keys(events[0].payload.references).filter(key => !key.startsWith("audit")).sort(),
+    ["commandId", "handoverVersion", "releaseId"]);
+  assert.doesNotMatch(JSON.stringify(events), /Sent by mistake|customer@|jobguard-v2\.invalid/u, "no reason text and no email");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G4 changed customer: the old link is refused, a cosmetic edit keeps it, and a release to the new customer opens", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  await g4.customer(f, "CUSTOMER@jobguard-v2.invalid", { same: true });
+  assert.equal((await g3.open(first.result.token)).status, 200, "a change of case keeps the link");
+  assert.equal((await g3.releases(f)).releases[0].recipientCurrent, true);
+  await g4.customer(f, "replacement@jobguard-v2.invalid");
+  await g4.refused(first.result.token);
+  assert.deepEqual((await g3.releases(f)).releases.map(row => [row.recipientCurrent, row.stoppedAt]), [[false, null]]);
+  const next = await g3.direct(f, g3.release(1));
+  assert.equal(next.captured.length, 1, "one delivery, to the new address");
+  assert.equal((await admin.query("SELECT recipient_email FROM app.v2_handover_release WHERE id=$1", [next.result.release.releaseId])).rows[0].recipient_email,
+    "replacement@jobguard-v2.invalid");
+  assert.match(await (await g3.open(next.result.token)).text(), /Refit the hall door stop/u);
+  await g4.refused(first.result.token);
+});
+
+test("G4 newer-version ignores a stopped release", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  assert.match(await (await g3.open(first.result.token)).text(), /Newer version available/u);
+  await g3.post(f, g4.stop(second.result.release.releaseId, "Released too early"));
+  assert.doesNotMatch(await (await g3.open(first.result.token)).text(), /Newer version available/u);
+  assert.deepEqual((await g3.releases(f)).releases.map(row => [row.version, row.superseded, row.stoppedAt !== null]), [[1, false, false], [2, false, true]]);
+});
+
+test("G4 other firm: 404 on read, release and stop; a stopped first-firm token with second-firm cookies is refused; no stop rows", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g3.release(1) }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g4.stop(result.release.releaseId) }), 404);
+  await g3.post(f, g4.stop(result.release.releaseId));
+  await g4.refused(result.token, second.cookies);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no stop rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db =>
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_handover_release_stop WHERE job_id=$1", [f.job])).rowCount, 0));
+});
+
+test("G4 stop replay and conflict; an unknown release; UPDATE and DELETE refused", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const body = g4.stop(result.release.releaseId);
+  const first = await g3.post(f, body), replay = await g3.post(f, body);
+  assert.deepEqual([replay.replayed, replay.release.stoppedAt], [true, first.release.stoppedAt]);
+  assert.equal((await g3.post(f, { ...body, reason: "Another reason" }, 409)).code, "HANDOVER_RELEASE_COMMAND_CONFLICT");
+  assert.equal((await g3.post(f, g4.stop(result.release.releaseId), 409)).code, "HANDOVER_LINK_ALREADY_STOPPED");
+  assert.equal((await g3.post(f, g4.stop(randomUUID()), 404)).code, "HANDOVER_RELEASE_NOT_FOUND");
+  assert.equal((await g3.post(f, { ...g4.stop(result.release.releaseId), reason: " " }, 400)).code, "HANDOVER_RELEASE_INVALID_COMMAND");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release_stop WHERE job_id=$1", [f.job])).rows[0].n, 1);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.link_stopped'`, [f.job])).rows[0].n, 1);
+  for (const sql of ["UPDATE app.v2_handover_release_stop SET reason=reason WHERE job_id=$1", "DELETE FROM app.v2_handover_release_stop WHERE job_id=$1"]) {
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+    await assert.rejects(admin.query(sql, [f.job]));
+  }
+  const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid='app.v2_handover_release_stop'::regclass`);
+  assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+});
+
+test("G4 migration 2084 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  await g3.post(f, g4.stop(result.release.releaseId));
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_release_stop'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_release_stop'::regclass) AS acl,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_handover_link_scope_open', 'v2_handover_link_view')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_handover_release_stop) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G8 (migration 2085): one polite review request a week after the handover release, only with the
+// builder's switch on, never repeated, none while the final invoice is unpaid or a recovery case is open.
+// Practice only: the send reaches the local catcher. A release eight days ago comes from G3's past clock.
+const g8 = {
+  get: f => request(`${f.path}/review-request`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/review-request`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  turn: (enabled, commandId = randomUUID()) => ({ version: "v2-review-request-switch.v1", commandId, enabled }),
+  send: (commandId = randomUUID()) => ({ version: "v2-review-request-send.v1", commandId }),
+  async ready({ daysAgo = 8 } = {}) {
+    const f = await g4.ready();
+    const { result } = await g3.direct(f, g3.release(1), () => Date.now() - daysAgo * 86_400_000);
+    return { ...f, releaseId: result.release.releaseId };
+  },
+  // In process, for the catcher count. The catcher logs metadata only, under local V2.
+  async direct(f, body) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new ReviewRequestRepository(practiceMaterialPool(runtime, auth.digest));
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.command(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  // Money and recovery rows are written only by main's money paths, never in practice mode, so they are
+  // placed directly with triggers off and removed afterwards. Only the review rule is under test.
+  async placed(sql, values = []) {
+    const fixture = await admin.connect();
+    try { await fixture.query("BEGIN"); await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query(sql, values); await fixture.query("COMMIT"); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+    finally { fixture.release(); }
+  },
+  rows: async f => (await admin.query("SELECT count(*)::int AS n FROM app.v2_review_request WHERE job_id=$1", [f.job])).rows[0].n,
+};
+
+test("G8 done when: off sends nothing, on a week after release sends one to the catcher, and it is never repeated", async () => {
+  const f = await g8.ready();
+  assert.deepEqual([(await g8.get(f)).state, (await g8.get(f)).enabled], ["off", false]);
+  const off = await g8.direct(f, g8.send());
+  assert.deepEqual([off.result.code, off.result.state, off.captured], ["REVIEW_REQUEST_NOT_DUE", "off", []]);
+  // The database refuses a request without the switch, whoever writes it.
+  const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  await assert.rejects(admin.query(`INSERT INTO app.v2_review_request (tenant_id, job_id, release_id, recipient_email, command_id, request_hash,
+    actor_membership_id) VALUES ($1, $2, $3, 'customer@jobguard-v2.invalid', $4, $5, $6)`,
+  [f.context.tenantId, f.job, f.releaseId, randomUUID(), "a".repeat(64), actor.id]), /V2_REVIEW_REQUEST_NOT_DUE/u);
+  assert.equal((await g8.post(f, g8.turn(true))).state, "due");
+  const body = g8.send();
+  const sent = await g8.direct(f, body);
+  assert.equal(sent.result.state, "sent");
+  assert.deepEqual(sent.captured, [{ event: "v2.delivery.captured", kind: "v2_review_request" }], "one catcher delivery, metadata only");
+  assert.equal((await admin.query("SELECT recipient_email FROM app.v2_review_request WHERE job_id=$1", [f.job])).rows[0].recipient_email,
+    "customer@jobguard-v2.invalid");
+  const replay = await g8.direct(f, body);
+  assert.deepEqual([replay.result.replayed, replay.captured], [true, []]);
+  assert.equal((await g8.post(f, body)).replayed, true, "the route replays too");
+  assert.equal((await g8.post(f, g8.send(), 409)).code, "REVIEW_REQUEST_ALREADY_SENT");
+  // Off and on again changes nothing: it is never sent twice.
+  await g8.post(f, g8.turn(false)); await g8.post(f, g8.turn(true));
+  const again = await g8.direct(f, g8.send());
+  assert.deepEqual([again.result.code, again.captured], ["REVIEW_REQUEST_ALREADY_SENT", []]);
+  assert.equal(await g8.rows(f), 1);
+  const events = (await admin.query(`SELECT event_type, payload FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.review_request.%'
+    ORDER BY occurred_at`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type).sort(), ["v2.review_request.sent", "v2.review_request.switched",
+    "v2.review_request.switched", "v2.review_request.switched"]);
+  assert.doesNotMatch(JSON.stringify(events), /customer@|jobguard-v2\.invalid|review would help/u, "no email and no message text");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G8 waits: too soon after release, a stopped link, and a changed customer send none", async () => {
+  const f = await g8.ready({ daysAgo: 2 });
+  await g8.post(f, g8.turn(true));
+  const soon = await g8.get(f);
+  assert.equal(soon.state, "too_soon");
+  assert.ok(Math.abs(Date.parse(soon.dueAt) - (Date.now() + 5 * 86_400_000)) < 3_600_000, "due a week after the release");
+  assert.deepEqual(await g8.post(f, g8.send(), 409), { code: "REVIEW_REQUEST_NOT_DUE", state: "too_soon", environment: "synthetic_demo" });
+  const old = await g8.ready();
+  await g8.post(old, g8.turn(true));
+  await g3.post(old, g4.stop(old.releaseId));
+  assert.equal((await g8.get(old)).state, "no_release");
+  const changed = await g8.ready();
+  await g8.post(changed, g8.turn(true));
+  await g4.customer(changed, "replacement@jobguard-v2.invalid");
+  assert.equal((await g8.get(changed)).state, "recipient_changed");
+  for (const job of [f, old, changed]) {
+    const { captured } = await g8.direct(job, g8.send());
+    assert.deepEqual(captured, []);
+    assert.equal(await g8.rows(job), 0);
+  }
+});
+
+test("G8 an unpaid final invoice or an open recovery case sends none", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  assert.equal((await g8.get(f)).state, "due");
+  const [invoice, payment, recovery, supplier] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const t = f.context.tenantId;
+  try {
+    await g8.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,
+      issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+      VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+    [invoice, t, f.job, randomUUID(), randomUUID(), `G8-${invoice.slice(0, 8)}`, "b".repeat(64)]);
+    assert.equal((await g8.get(f)).state, "unpaid_invoice");
+    assert.equal((await g8.post(f, g8.send(), 409)).state, "unpaid_invoice");
+    await g8.placed(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,
+      builder_attested,provenance) VALUES($1,$2,$3,$4,$5,'2026-12-02',12000,'GBP','bank_transfer','G8 fixture',true,'manual_builder_attestation')`,
+    [payment, t, f.job, invoice, randomUUID()]);
+    assert.equal((await g8.get(f)).state, "due", "paid in full");
+    await g8.placed(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)
+      VALUES($1,$2,$3,$4,$5,'G8 fixture')`, [randomUUID(), t, f.job, payment, randomUUID()]);
+    assert.equal((await g8.get(f)).state, "unpaid_invoice", "a reversed payment leaves it unpaid");
+    await g8.placed("DELETE FROM app.customer_payment_reversal WHERE payment_id=$1", [payment]);
+    // A supplier overcharge case is between the builder and a merchant: it does not hold the request.
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true)`, [supplier, t, f.job]);
+    assert.equal((await g8.get(f)).state, "due", "a supplier case is not a customer dispute");
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [recovery, t, f.job]);
+    assert.equal((await g8.get(f)).state, "open_dispute");
+    const { result, captured } = await g8.direct(f, g8.send());
+    assert.deepEqual([result.code, result.state, captured], ["REVIEW_REQUEST_NOT_DUE", "open_dispute", []]);
+    // The workbench keeps the snapshot and appends events: the current state, not the snapshot, decides.
+    await g8.placed(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash)
+      VALUES($1,$2,$3,$4,1,5000,'GBP','G8 fixture',$5)`, [randomUUID(), t, f.job, recovery, "c".repeat(64)]);
+    const event = (sequence, type, from, to) => g8.placed(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,
+      event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'G8 fixture',$9,$10)`,
+    [randomUUID(), t, f.job, recovery, sequence, type, from, to, randomUUID(), "d".repeat(64)]);
+    await event(1, "assemble_evidence", "identified", "evidence_assembled");
+    assert.equal((await g8.get(f)).state, "open_dispute", "a case still being pursued holds the request");
+    await event(2, "close_no_recovery", "evidence_assembled", "closed_no_recovery");
+    assert.equal((await g8.get(f)).state, "due", "a closed case no longer holds it, though its snapshot still says active");
+    assert.equal(await g8.rows(f), 0);
+  } finally {
+    await g8.placed("DELETE FROM app.recovery_case_event WHERE case_id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.recovery_claim_revision WHERE case_id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.recovery_case WHERE id IN ($1, $2)", [recovery, supplier]);
+    await g8.placed("DELETE FROM app.customer_payment_reversal WHERE payment_id=$1", [payment]);
+    await g8.placed("DELETE FROM app.customer_payment WHERE id=$1", [payment]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [invoice]);
+  }
+});
+
+test("G8 other firm: 404 on read, switch and send; no review rows seen; UPDATE and DELETE refused", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  await g8.direct(f, g8.send());
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/review-request`, { cookies: second.cookies }), 404);
+  for (const body of [g8.turn(false), g8.send()])
+    await json(await request(`${f.path}/review-request`, { cookies: second.cookies, csrf: second.csrfToken, body }), 404);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no switch or request rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_review_request", "app.v2_review_request_switch"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0);
+  });
+  for (const table of ["app.v2_review_request", "app.v2_review_request_switch"]) {
+    for (const sql of [`UPDATE ${table} SET command_id=command_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+      await assert.rejects(admin.query(sql, [f.job]));
+    }
+    const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+  }
+  assert.equal((await g8.post(f, { ...g8.send(), recipient: "someone@example.com" }, 400)).code, "REVIEW_REQUEST_INVALID_COMMAND");
+});
+
+test("G8 migration 2085 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  await g8.direct(f, g8.send());
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy
+      WHERE polrelid IN ('app.v2_review_request'::regclass, 'app.v2_review_request_switch'::regclass)) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_review_request'::regclass,
+      'app.v2_review_request_switch'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_review_request_due', 'v2_review_request_guard')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_review_request) + (SELECT count(*)::int FROM app.v2_review_request_switch) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2085_v2_review_request.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G9 (migration 2086): after the handover release, one check-up offer at 6 months and one at 12, only
+// with the builder's aftercare switch on, each sent once. Practice only: the send reaches the local catcher.
+// Releases in the past come from G3's past clock, through G8's ready().
+const g9 = {
+  get: f => request(`${f.path}/aftercare`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/aftercare`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  turn: (enabled, commandId = randomUUID()) => ({ version: "v2-aftercare-switch.v1", commandId, enabled }),
+  send: (commandId = randomUUID()) => ({ version: "v2-aftercare-send.v1", commandId }),
+  async direct(f, body) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new AftercareRepository(practiceMaterialPool(runtime, auth.digest));
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.command(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  insert: async (f, months) => {
+    const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+    return admin.query(`INSERT INTO app.v2_aftercare_offer (tenant_id, job_id, at_months, release_id, recipient_email, command_id, request_hash,
+      actor_membership_id) VALUES ($1, $2, $3, $4, 'customer@jobguard-v2.invalid', $5, $6, $7)`,
+    [f.context.tenantId, f.job, months, f.releaseId, randomUUID(), "a".repeat(64), actor.id]);
+  },
+  months: async f => (await admin.query("SELECT at_months FROM app.v2_aftercare_offer WHERE job_id=$1 ORDER BY at_months", [f.job])).rows
+    .map(row => row.at_months),
+};
+
+test("G9 done when: off sends nothing, the 6-month offer goes once to the catcher, then the 12-month one waits", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  assert.equal((await g9.get(f)).state, "off");
+  const off = await g9.direct(f, g9.send());
+  assert.deepEqual([off.result.code, off.result.state, off.captured], ["AFTERCARE_NOT_DUE", "off", []]);
+  await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "the database refuses an offer without the switch");
+  await g9.post(f, g9.turn(true));
+  assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 6]);
+  await assert.rejects(g9.insert(f, 12), /V2_AFTERCARE_NOT_DUE/u, "the 12-month offer is not due yet");
+  const body = g9.send();
+  const sent = await g9.direct(f, body);
+  assert.deepEqual(sent.captured, [{ event: "v2.delivery.captured", kind: "v2_aftercare_offer" }], "one catcher delivery, metadata only");
+  assert.equal(sent.result.state, "too_soon");
+  const { rows: [release] } = await admin.query("SELECT released_at + interval '12 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.equal(sent.result.nextAt, release.at.toISOString(), "next is the 12-month point");
+  const replay = await g9.direct(f, body);
+  assert.deepEqual([replay.result.replayed, replay.captured], [true, []]);
+  assert.equal((await g9.post(f, g9.send(), 409)).state, "too_soon");
+  assert.deepEqual(await g9.months(f), [6]);
+  const events = (await admin.query(`SELECT event_type, payload FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.aftercare.%'`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type).sort(), ["v2.aftercare.offered", "v2.aftercare.switched"]);
+  assert.equal(events.find(row => row.event_type === "v2.aftercare.offered").payload.references.months, "6");
+  assert.doesNotMatch(JSON.stringify(events), /customer@|jobguard-v2\.invalid|check-up visit/u, "no email and no message text");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G9 after 12 months only the 12-month offer goes, once; the late 6-month one is skipped", async () => {
+  const f = await g8.ready({ daysAgo: 380 });
+  await g9.post(f, g9.turn(true));
+  assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 12]);
+  await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "too late for the 6-month offer");
+  const sent = await g9.direct(f, g9.send());
+  assert.deepEqual([sent.result.state, sent.captured.length], ["done", 1]);
+  const again = await g9.direct(f, g9.send());
+  assert.deepEqual([again.result.code, again.result.state, again.captured], ["AFTERCARE_NOT_DUE", "done", []]);
+  // Off and on again changes nothing.
+  await g9.post(f, g9.turn(false)); await g9.post(f, g9.turn(true));
+  assert.equal((await g9.get(f)).state, "done");
+  assert.deepEqual(await g9.months(f), [12]);
+});
+
+test("G9 waits: before 6 months, after a stopped link, and after a changed customer, nothing is sent", async () => {
+  const f = await g8.ready({ daysAgo: 30 });
+  await g9.post(f, g9.turn(true));
+  const soon = await g9.get(f);
+  const { rows: [release] } = await admin.query("SELECT released_at + interval '6 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.deepEqual([soon.state, soon.nextAt], ["too_soon", release.at.toISOString()]);
+  const stopped = await g8.ready({ daysAgo: 200 });
+  await g9.post(stopped, g9.turn(true));
+  await g3.post(stopped, g4.stop(stopped.releaseId));
+  assert.equal((await g9.get(stopped)).state, "no_release");
+  const changed = await g8.ready({ daysAgo: 200 });
+  await g9.post(changed, g9.turn(true));
+  await g4.customer(changed, "replacement@jobguard-v2.invalid");
+  assert.equal((await g9.get(changed)).state, "recipient_changed");
+  for (const job of [f, stopped, changed]) {
+    const { captured } = await g9.direct(job, g9.send());
+    assert.deepEqual(captured, []);
+    assert.deepEqual(await g9.months(job), []);
+  }
+});
+
+test("G9 a re-release does not move the clocks: the months count from the first release", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g3.post(f, g4.stop(f.releaseId));
+  const again = await g3.direct(f, g3.release(1));
+  const view = await g9.get(f);
+  assert.deepEqual([view.state, view.months], ["due", 6], "200 days after the first release, though the new one is from today");
+  const sent = await g9.direct(f, g9.send());
+  assert.deepEqual([sent.result.state, sent.captured.length], ["too_soon", 1]);
+  const { rows: [first] } = await admin.query("SELECT released_at + interval '12 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.equal(sent.result.nextAt, first.at.toISOString(), "the 12-month point is a year after the first release");
+  const { rows: [offer] } = await admin.query("SELECT release_id FROM app.v2_aftercare_offer WHERE job_id=$1", [f.job]);
+  assert.equal(offer.release_id, again.result.release.releaseId, "the offer follows the live release");
+});
+
+test("G9 holds like G8 while an invoice is unpaid or a recovery case is open; a hold past 12 months skips the 6-month offer", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  const late = await g8.ready({ daysAgo: 380 });
+  await g9.post(f, g9.turn(true));
+  await g9.post(late, g9.turn(true));
+  const [invoice, lateInvoice, recovery] = [randomUUID(), randomUUID(), randomUUID()];
+  const t = f.context.tenantId;
+  const unpaid = (id, job) => g8.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,
+    issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+    VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+  [id, t, job, randomUUID(), randomUUID(), `G9-${id.slice(0, 8)}`, "b".repeat(64)]);
+  try {
+    await unpaid(invoice, f.job);
+    assert.equal((await g9.get(f)).state, "unpaid_invoice");
+    const held = await g9.direct(f, g9.send());
+    assert.deepEqual([held.result.code, held.result.state, held.captured], ["AFTERCARE_NOT_DUE", "unpaid_invoice", []]);
+    await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "the database holds it too");
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [recovery, t, f.job]);
+    assert.equal((await g9.get(f)).state, "open_dispute");
+    assert.equal((await g9.post(f, g9.send(), 409)).state, "open_dispute");
+    await g8.placed("DELETE FROM app.recovery_case WHERE id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [invoice]);
+    assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 6], "released when the hold ends");
+    await unpaid(lateInvoice, late.job);
+    assert.equal((await g9.get(late)).state, "unpaid_invoice");
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [lateInvoice]);
+    assert.deepEqual([(await g9.get(late)).state, (await g9.get(late)).months], ["due", 12], "the held 6-month offer is now too late");
+    assert.deepEqual([await g9.months(f), await g9.months(late)], [[], []]);
+  } finally {
+    await g8.placed("DELETE FROM app.recovery_case WHERE id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id IN ($1, $2)", [invoice, lateInvoice]);
+  }
+});
+
+test("G9 other firm: 404 on read, switch and send; no aftercare rows seen; UPDATE and DELETE refused", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g9.direct(f, g9.send());
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/aftercare`, { cookies: second.cookies }), 404);
+  for (const body of [g9.turn(false), g9.send()])
+    await json(await request(`${f.path}/aftercare`, { cookies: second.cookies, csrf: second.csrfToken, body }), 404);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no switch or offer rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_aftercare_offer", "app.v2_aftercare_switch"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0);
+  });
+  for (const table of ["app.v2_aftercare_offer", "app.v2_aftercare_switch"]) {
+    for (const sql of [`UPDATE ${table} SET command_id=command_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+      await assert.rejects(admin.query(sql, [f.job]));
+    }
+    const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+  }
+  assert.equal((await g9.post(f, { ...g9.send(), months: 12 }, 400)).code, "AFTERCARE_INVALID_COMMAND");
+});
+
+test("G9 migration 2086 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g9.direct(f, g9.send());
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy
+      WHERE polrelid IN ('app.v2_aftercare_offer'::regclass, 'app.v2_aftercare_switch'::regclass)) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_aftercare_offer'::regclass,
+      'app.v2_aftercare_switch'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_aftercare_due', 'v2_aftercare_offer_guard')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_aftercare_offer) + (SELECT count(*)::int FROM app.v2_aftercare_switch) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2086_v2_aftercare_offer.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
 });
 
 // V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.

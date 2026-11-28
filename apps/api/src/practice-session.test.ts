@@ -130,7 +130,10 @@ it.each(methods)("$name cannot initialize practice authority in production or pi
   vi.stubEnv("JOBGUARD_ENV",mode);
   const query=vi.fn(),connect=vi.fn();const session="18000000-0000-4000-8000-000000000001";
   const app=new(entry.ctor as any)({query,connect},session);
-  await expect(Promise.resolve().then(()=>entry.invoke(app,session))).rejects.toThrow(/SYNTHETIC_MODE_REQUIRED|ELIGIBILITY_REVIEWER_FORBIDDEN|D11_PRODUCTION_PATH_REFUSED_PROPOSED/);
+  const refusal = mode === "pilot_no_charge" && entry.name === "CustomerInvoiceApplication.issue"
+    ? /^PILOT_G1_CLOSED$/u
+    : /SYNTHETIC_MODE_REQUIRED|ELIGIBILITY_REVIEWER_FORBIDDEN|D11_PRODUCTION_PATH_REFUSED_PROPOSED/;
+  await expect(Promise.resolve().then(()=>entry.invoke(app,session))).rejects.toThrow(refusal);
   expect(query).not.toHaveBeenCalled();expect(connect).not.toHaveBeenCalled();
  }
 });

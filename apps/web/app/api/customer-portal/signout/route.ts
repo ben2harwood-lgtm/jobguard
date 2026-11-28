@@ -1,5 +1,5 @@
 import { CustomerSigninApplication, customerHttp } from "@jobguard/api/identity";
-import { identityApplication } from "../../../lib/identity-server";
+import { customerPortalRequest } from "../../../lib/customer-portal-server";
 export async function POST(request: Request) {
-  return customerHttp(() => new CustomerSigninApplication(identityApplication(), process.env.JOBGUARD_ENV), "signout", request);
+  return customerPortalRequest(request, identityApplication => customerHttp(() => new CustomerSigninApplication(identityApplication(), process.env.JOBGUARD_ENV), "signout", request), true);
 }
