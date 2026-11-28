@@ -12,6 +12,8 @@ describe("V2-G3 handover release wording", () => {
     expect(html).toContain(receiptOnly);
     expect(html).not.toContain("Newer version available");
     expect(renderToStaticMarkup(<CustomerPack firmName="F" version={1} content={content} newer/>)).toContain("Newer version available");
+    // V2-G7: M3 shows it as an alert at the top of the pack.
+    expect(renderToStaticMarkup(<CustomerPack firmName="F" version={1} content={content} newer/>)).toMatch(/^<div class="form"><div role="alert"[^>]*><strong>Newer version available/u);
   });
   it("labels releases, receipts and refusals", () => {
     const row = { version: 1, recipient: "customer@jobguard-v2.invalid", releasedAt: "2026-12-02T18:10:00Z", acknowledgedAt: null, superseded: false,

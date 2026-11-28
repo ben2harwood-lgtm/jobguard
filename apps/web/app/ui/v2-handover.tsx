@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HandoverChoice, HandoverContent, HandoverRefusal, HandoverSectionKey, HandoverSources, HandoverVersion } from "@jobguard/api/workspace";
 import { Card, Empty, Note } from "../(designed)/designed-ui";
+import styles from "./v2-tap.module.css";
 import { HandoverPack, handoverEmpty, handoverIntro, handoverProblem, handoverProblemText, handoverRefusalText, handoverSaved,
   handoverTitle, handoverVersionLine } from "./v2-handover-label";
 import { HandoverReleases } from "./v2-handover-release";
@@ -77,16 +78,16 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
     if (result) { setStatus(handoverSaved(result.saved.version)); setPreview(null); await load().catch(() => setProblem(true)); }
   }
 
-  if (problem) return <div role="alert"><Note tone="warning">{handoverProblem}</Note></div>;
+  if (problem) return <div role="alert" className={styles.tap}><Note tone="warning">{handoverProblem}</Note></div>;
   if (!view) return <p>Loading handover…</p>;
   const { sources, versions } = view;
   const nothing = !sources.lines.length && !sources.variations.length && !sources.photos.length && !sources.snags.length;
-  if (nothing && !versions.length) return <Empty title={handoverEmpty[0]} text={handoverEmpty[1]}/>;
+  if (nothing && !versions.length) return <div className={styles.tap}><Empty title={handoverEmpty[0]} text={handoverEmpty[1]}/></div>;
   const on = (key: HandoverSectionKey) => choice.sections.includes(key);
   const item = (key: "lineIds" | "variationIds" | "photoIds" | "snagIds", id: string, label: string) =>
     <label key={id} style={tick}><input type="checkbox" style={box} disabled={busy} checked={choice[key].includes(id)}
       onChange={event => change({ ...choice, [key]: toggle(choice[key], id, event.target.checked) })}/>{label}</label>;
-  return <div className="form" data-testid="handover" style={{ overflowWrap: "anywhere" }}>
+  return <div className={`form ${styles.tap}`} data-testid="handover">
     <Card title={handoverTitle((versions.at(-1)?.version ?? 0) + 1)} sub="Practice job · saving sends nothing">
       <div className="card-body form"><p>{handoverIntro}</p>
         {sections.map(section => <fieldset key={section.key} style={{ border: 0, padding: 0, margin: 0 }}>

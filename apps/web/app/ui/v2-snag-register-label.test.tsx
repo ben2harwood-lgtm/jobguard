@@ -2,12 +2,16 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { agreedLine, checkedTag, checkerOption, fixedTag, personName, samePerson, snagDue, snagOwnerLine, snagPeople,
-  snagProblemText } from "./v2-snag-register-label";
+  snagEmpty, snagEmptyTitle, snagLoadProblem, snagProblemText } from "./v2-snag-register-label";
 
 const jordan = { kind: "crew" as const, crewId: "j", name: "Jordan", trade: "joiner" };
 const sam = { kind: "crew" as const, crewId: "s", name: "Sam", trade: "decorator" };
 
 describe("V2-G1 snag register wording", () => {
+  it("uses the M3 empty and problem copy", () => {
+    expect([snagEmptyTitle, snagEmpty]).toEqual(["No snags recorded yet", "Add a snag with an owner, due date and photo when you find one."]);
+    expect(snagLoadProblem).toBe("Snags could not load. Sign in to the right practice firm and try again. Nothing new was recorded or sent.");
+  });
   it("renders the mock's card lines", () => {
     const snag = { owner: { name: "Jordan" }, assigneeLabel: "Old label", dueOn: "2026-12-04",
       events: [{ sequence: 1, kind: "fixed" as const }, { sequence: 2, kind: "checked" as const }], people: { 1: jordan, 2: sam } };

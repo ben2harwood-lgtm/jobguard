@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SnagRegister } from "@jobguard/api/workspace";
 import { Card, Empty, Note, Tag } from "../(designed)/designed-ui";
+import styles from "./v2-tap.module.css";
 import { agreedLine, checkedTag, checkerOption, fixedTag, samePerson, snagCheckerAlert, snagEmpty, snagFinalAccountNote,
-  snagOwnerLine, snagPeople, snagProblemText, type RegisterPerson } from "./v2-snag-register-label";
+  snagEmptyTitle, snagLoadProblem, snagOwnerLine, snagPeople, snagProblemText, type RegisterPerson } from "./v2-snag-register-label";
 
 type Snag = SnagRegister["snags"][number];
 type Crew = SnagRegister["crew"][number];
@@ -76,7 +77,7 @@ export function SnagRegisterScreen({ jobId }: { jobId: string }) {
     if (!response.ok) throw new Error();
     setRegister(await response.json() as SnagRegister);
   }, [base]);
-  useEffect(() => { void load().catch(() => setProblem("Snags could not load. Sign in to the right practice firm and try again.")); }, [load]);
+  useEffect(() => { void load().catch(() => setProblem(snagLoadProblem)); }, [load]);
 
   async function call(path: string, body: Record<string, unknown>) {
     const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -114,12 +115,12 @@ export function SnagRegisterScreen({ jobId }: { jobId: string }) {
     finally { setBusy(false); }
   }
 
-  if (problem) return <div role="alert"><Note tone="warning"><strong>{problem}</strong></Note></div>;
+  if (problem) return <div role="alert" className={styles.tap}><Note tone="warning"><strong>{problem}</strong></Note></div>;
   if (!register) return <p>Loading snags…</p>;
-  return <section aria-label="Snags" className="form" data-testid="snag-register">
+  return <section aria-label="Snags" className={`form ${styles.tap}`} data-testid="snag-register">
     <p>Open {register.counts.open} · fixed {register.counts.fixed} · checked {register.counts.checked} · overdue {register.counts.overdue} · agreed to leave open {register.counts.agreed}</p>
     {notice && <p role="alert">{notice}</p>}
-    {register.snags.length === 0 && <Card title="Snags"><Empty title="No snags" text={snagEmpty}/></Card>}
+    {register.snags.length === 0 && <Card title="Snags"><Empty title={snagEmptyTitle} text={snagEmpty}/></Card>}
     {register.snags.map(snag => <SnagCard key={snag.id} snag={snag} crew={register.crew} busy={busy} send={send} photo={photo}/>)}
     <article aria-label="Record another snag"><Card title="Record another snag"><div className="card-body form">
       <label>What needs doing<input maxLength={200} value={title} onChange={event => setTitle(event.target.value)}/></label>
