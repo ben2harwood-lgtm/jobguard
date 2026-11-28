@@ -15,3 +15,8 @@
 
 ## Added 28 Nov 15:26 UK (from Q82's result)
 Q82 found no bug: the Job started panel mounts in the pricing view, and a slow first load under `next dev` hid it. Add, as its own commit in this PR: a live job opened with no fragment lands on Work and proof (pricing), in workspace-shell. Test: no fragment on a live job → pricing; `#scope` → scope; a job not started → unchanged. Don't touch jobguard-app.tsx or designed-ui.tsx (Codex RT-FIX-7).
+
+## Planner decision (28 Nov 15:40 UK, from the builder's stop)
+- B1 is done as #1095 (29a51d494).
+- B2 moves to Q85 (V2-LINK-1), because main's `demo_issue_customer_link` checks the database name and V2 can't use it.
+- The default-view addition above is **dropped**. Site work, the diary, messages and the final check render only inside the editor's "Job started" panel after its reads load, so a plain live URL would hide them. 11 tests pin the current order on purpose. "Work and proof" stays the third link in the nav.
