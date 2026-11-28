@@ -1716,6 +1716,12 @@ test("C6 done when: a line added from a prompt is unpriced, blocks preview until
   assert.equal(unpriced.revision, 2);
   assert.equal(unpriced.issuable, false, "an unpriced included line blocks issue");
   assert.equal(unpriced.lines.at(-1).origin, "human");
+  // Plan check: the line reaches the editor unpriced. The scope row stores 0 only because scope revisions need a
+  // number; the saved quote line keeps null, never that 0, and preview stays refused until it is priced or excluded.
+  assert.equal((await quote.get(draftJob)).scope.find(item => item.scopeItemId === receipt.scopeItemId).unitRatePence, 0);
+  assert.equal(unpriced.lines.at(-1).unitRatePence, null, "the added line is saved unpriced, not at the scope's 0");
+  assert.equal(unpriced.lines.at(-1).rateProvenance, null);
+  await assert.rejects(preview(), error => error.code === "QUOTE_NOT_ISSUABLE");
   await save(2, [...lines, pricedLine(receipt, { unitRatePence: 24000, rateProvenance: "entered" })]);
   const priced = await latest();
   assert.equal(priced.issuable, true);

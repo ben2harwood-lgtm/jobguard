@@ -37,6 +37,12 @@ describe("V2-C6 add a line to the quote", () => {
     expect(withAddedScope(merged, [item])).toHaveLength(2);
   });
 
+  it("shows an added line unpriced even though its scope row stores 0", () => {
+    // The workspace reports the scope revision's stored 0; the editor line must stay null so preview stays blocked.
+    const fromWorkspace = { ...item, quantity: "1", unit: "item", unitRatePence: 0 };
+    expect(withAddedScope([], [fromWorkspace]).map(line => [line.unitRatePence, line.rateProvenance])).toEqual([[null, null]]);
+  });
+
   it("keeps a line added while a draft save was in flight", () => {
     const savedLine = { ...addedLine(item), scopeItemId: "10000000-0000-8000-8000-000000000003", unitRatePence: 4500 };
     const lateItem = { ...item, scopeItemId: "10000000-0000-8000-8000-000000000004", description: "Parking permit" };
