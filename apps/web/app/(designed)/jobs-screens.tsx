@@ -9,7 +9,7 @@ import { jobsResponseV1, type JobSummary } from "../lib/contracts";
 import { jobWorkspaceResponseV1, type JobWorkspaceResponse } from "@jobguard/api/workspace-contracts";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { WalkIt } from "../ui/jobguard-app";
-import { Card, Empty, Head, Icon, Legacy, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Icon, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const LIST_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -55,8 +55,7 @@ export function DesignedNewJob() {
 function NewJob({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
-    <Head kicker="NEW JOB" title="Describe the work" text="Type or paste what you plan to do. You can check and change everything before a quote."/>
-    <Legacy label="Start a new job" cards><WalkIt mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
+    <WalkIt designed mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/>
   </Shell>;
 }
 
@@ -118,14 +117,14 @@ function JobFrame({ workspace, jobId, tab, children }: { workspace: Workspace; j
   </Shell>;
 }
 
-function nextAction(job: Detail["job"], summary: JobSummary | null, facts?: JobFacts): { title: string; body: string; label: string; tab: JobTab } {
+function nextAction(job: Detail["job"], summary: JobSummary | null, facts?: JobFacts): { title: string; body: string; label: string; tab: JobTab; fragment?: string } {
   if (facts?.payment?.state === "paid" && facts.checksAvailable) return { title: "Customer invoices paid", body: "See the saved payments and job history. Payment alone does not confirm that site work is finished.", label: "See the money trail", tab: "money" };
-  if (summary && (summary.document.delivery === "queued" || summary.document.delivery === "outcome_unknown")) return { title: "Check whether the quote was sent", body: documentLine(summary) + ".", label: "Check the quote", tab: "work" };
+  if (summary && (summary.document.delivery === "queued" || summary.document.delivery === "outcome_unknown")) return { title: "Check whether the quote was sent", body: documentLine(summary) + ".", label: "Check the quote", tab: "work", fragment: "#quote" };
   switch (job.status) {
     case "draft": return { title: "Finish describing the work", body: "Check the draft before a quote is prepared. Nothing is sent yet.", label: "Open the draft", tab: "work" };
-    case "quoting": return { title: "Price and send the quote", body: "Price the checked work, preview the quote, then choose to send it.", label: "Price the work", tab: "work" };
-    case "accepted": return { title: "Start the work", body: "The customer said yes. Switch the job on when the work begins.", label: "Start the job", tab: "work" };
-    case "live": return { title: "Keep the job record up to date", body: "Add proof photos and log any extra work as it happens, so nothing is forgotten.", label: "Record the work", tab: "work" };
+    case "quoting": return { title: "Price and send the quote", body: "Price the checked work, preview the quote, then choose to send it.", label: "Price the work", tab: "work", fragment: "#quote" };
+    case "accepted": return { title: "Start the work", body: "The customer said yes. Switch the job on when the work begins.", label: "Start the job", tab: "work", fragment: "#quote" };
+    case "live": return { title: "Keep the job record up to date", body: "Add proof photos and log any extra work as it happens, so nothing is forgotten.", label: "Record the work", tab: "work", fragment: "#work-proof" };
     case "invoiced": return { title: "Watch for the customer’s payment", body: "The invoice is recorded. A payment you enter by hand is not a bank-confirmed receipt.", label: "Check the money", tab: "money" };
     case "paid": return { title: "Check the saved money records", body: "Review the invoices, payments and credits recorded for this job.", label: "See the money trail", tab: "money" };
     case "lost": return { title: "This job did not go ahead", body: "The record is kept for reference.", label: "Open the records", tab: "records" };
@@ -148,7 +147,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [discardError, setDiscardError] = useState("");
-  const open = (tab: JobTab) => router.push(`/jobs/${job.id}/${tab}`);
+  const open = (tab: JobTab, fragment = "") => router.push(`/jobs/${job.id}/${tab}${fragment}`);
   async function discardDraft() {
     setDiscarding(true);
     setDiscardError("");
@@ -183,7 +182,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
     {!detail.attentionComplete && !detail.attentionFailed && <p role="status">Loading job checks…</p>}
     <div className="job-spot">
       <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><p className="photo-disclosure">Illustrative photograph of a property</p><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{quoteLine(summary ?? { status: job.status, document: { kind: "unknown", reference: null, delivery: "unknown" } })}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
-      <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => catchAction ? router.push(`/jobs/${job.id}/work#variation-${catchAction.id}`) : detail.facts?.blocker ? router.push(`/jobs/${job.id}/work#final-account-title`) : open(action.tab)}>{action.label} →</button></div>
+      <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => catchAction ? router.push(`/jobs/${job.id}/work#variation-${catchAction.id}`) : detail.facts?.blocker ? router.push(`/jobs/${job.id}/work#final-account-title`) : open(action.tab, action.fragment)}>{action.label} →</button></div>
         {job.status === "draft" && <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
           {confirmDiscard ? <>
             <p>Discarding hides this draft. Nothing was sent to a customer.</p>
@@ -221,7 +220,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
 function WorkTab({ children }: { children?: ReactNode }) {
   return <>
     <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
-    <Legacy label="Job workspace" cards>{children}</Legacy>
+    <section className="job-work-tools" aria-label="Job workspace">{children}</section>
   </>;
 }
 
@@ -234,7 +233,7 @@ export function MoneyTab({ value, facts, children }: { value: JobValue | null; s
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>
-    <div style={{ marginTop: 19 }}><Legacy label="Job money trail" cards>{children}</Legacy></div>
+    <div className="designed-money-stack">{children}</div>
   </>;
 }
 
@@ -258,7 +257,7 @@ function RecordsTab({ jobId, children }: { jobId: string; children?: ReactNode }
         </div></Card>
         <div style={{ marginTop: 18 }}><Card title="Kept records"><div className="work-list">{links.map(([path, title, text]) => <div className="work-item" key={path}><div className="work-item-icon"><Icon name="file"/></div><div className="work-text"><strong>{title}</strong><small>{text}</small></div><a className="btn small" href={`/jobs/${jobId}/${path}`}>Open →</a></div>)}</div></Card></div>
       </div>
-      <div><Legacy label="Job diary and messages" cards>{children}</Legacy></div>
+      <div className="designed-records-stack">{children}</div>
     </div>
   </>;
 }

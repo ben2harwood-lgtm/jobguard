@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { contractorHref } from "../lib/contractor-href";
 import { workOrderRevisionsV1 } from "@jobguard/core";
 import { pounds } from "../lib/pounds";
 import styles from "./work-orders.module.css";
@@ -8,7 +9,7 @@ import styles from "./work-orders.module.css";
 type Revisions = ReturnType<typeof workOrderRevisionsV1.parse>;
 const fieldLabels: Record<string, string> = { status: "status", issuedOn: "issue date", dueOn: "due date", priority: "priority", teamId: "team", assignedMembershipIds: "assigned operatives" };
 
-export function WorkOrderRevisions({ workOrderId }: { workOrderId: string }) {
+export function WorkOrderRevisions({ workOrderId, designed = false }: { workOrderId: string; designed?: boolean }) {
   const [view, setView] = useState<Revisions | null>(null), [code, setCode] = useState(""), [status, setStatus] = useState("Loading the persisted order…");
   const errorRef = useRef<HTMLParagraphElement>(null);
   const load = useCallback(async () => {
@@ -21,13 +22,15 @@ export function WorkOrderRevisions({ workOrderId }: { workOrderId: string }) {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (code) errorRef.current?.focus(); }, [code]);
   const newestFirst = view ? [...view.revisions].reverse() : [];
-  return <main className={styles.main}>
-    <Link href="/contractor/work-orders">Back to work orders</Link>
+  const billing = view && <Link href={`/contractor/jobs/${view.jobId}/billing`}>Billing and reconciliation</Link>;
+  const possibleExtras = view && <Link href={`/contractor/jobs/${view.jobId}/possible-extras`}>Possible extras</Link>;
+  return <main className={designed ? `${styles.main} contractor-page` : styles.main}>
+    <Link href={contractorHref("/contractor/work-orders", designed)}>Back to work orders</Link>
     <h1>{view ? `Order ${view.reference}` : "Order"}</h1>
     <p role="status">{status}</p>
     {code && <p role="alert" tabIndex={-1} ref={errorRef}>{code === "NOT_FOUND" ? "This order is not available to you." : code === "UNAUTHENTICATED" ? "Start the generated contractor practice first." : `The request was refused (${code}).`}</p>}
     {view && <>
-      <Link href={`/contractor/jobs/${view.jobId}/billing`}>Billing and reconciliation</Link>{" · "}<Link href={`/contractor/jobs/${view.jobId}/possible-extras`}>Possible extras</Link>
+      {designed ? <div className="contractor-related">{billing}{possibleExtras}</div> : <>{billing}{" · "}{possibleExtras}</>}
       <dl className={styles.facts}>
         <div><dt>Job</dt><dd data-testid="job-state">{view.jobStatus === "live" ? "Live" : view.jobStatus}</dd></div>
         <div><dt>Current revision</dt><dd data-testid="current-revision">{view.currentRevision}</dd></div>

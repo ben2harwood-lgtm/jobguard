@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { contractorHref } from "../../lib/contractor-href";
 import { MustDecide } from "./must-decide";
 import { DuplicateCandidates } from "./duplicate-candidates";
 import { NorthsidePractice } from "../../northside/northside-practice";
@@ -17,7 +18,7 @@ async function act(extra: Extra, action: string, body: Record<string, unknown>) 
 }
 
 /** One list for the people who move an extra along: the surveyor prices it, the supervisor submits and approves, the granted surveyor or commercial manager sends it to the client. Each sees only the button for their step. */
-export function ExtraApprovals() {
+export function ExtraApprovals({ designed = false }: { designed?: boolean } = {}) {
   const [role, setRole] = useState(""), [extras, setExtras] = useState<Extra[] | null>(null), [rates, setRates] = useState<Record<string, Rate[]>>({}), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<Array<{ job_id: string; variation_id: string; request_id: string; step_index: number; overdue: boolean; escalated: boolean }>>([]);
   const [links, setLinks] = useState<Record<string, { extraId: string; path: string; recipient: string }>>({});
@@ -47,11 +48,12 @@ export function ExtraApprovals() {
       if (["reject", "withdraw", "revise"].includes(action)) setOutcome(action === "revise" ? "Price revised. A new approval request was created." : action === "reject" ? "Extra rejected." : "Extra withdrawn.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-  return <main className={styles.page}>
-    <NorthsidePractice />
-    <Link href="/northside">Practice hub</Link>
+  return <main className={designed ? `${styles.page} contractor-page` : styles.page}>
+    {!designed && <NorthsidePractice />}
+    <Link href={contractorHref("/northside", designed)}>Practice hub</Link>
     <h1>Extras to move along</h1>
     <p className={styles.note}>Practice data. You are signed in as <strong data-testid="approvals-role">{role || "…"}</strong>. Nothing is sent: the client link below is local. A pending fake outbox record is not delivery.</p>
+    {designed && <details className="contractor-switch"><summary>Switch practice role</summary><NorthsidePractice /></details>}
     <MustDecide queue={queue} />
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {["supervisor", "surveyor", "commercial_manager"].includes(role) && extras && <section aria-label="Possible duplicates">
@@ -68,8 +70,8 @@ export function ExtraApprovals() {
       return <section key={x.extraId} id={`extra-${x.extraId}`} tabIndex={-1} className={styles.card} data-testid="extra-card" aria-label={`Extra on ${x.orderReference}`}>
         <h2>{x.orderReference}: {x.description}</h2>
         <p>{x.note}</p>
-        <p><span className={styles.pill} data-testid="extra-state">{status}</span> {x.hasPhoto && "Photo attached · "}{x.residentConfirmed && "Resident confirmed · "}{(x.netPence ?? x.quotedPence) !== null && <span data-testid="extra-amount">{pounds((x.netPence ?? x.quotedPence)!)}</span>}</p>
-        {x.steps.length > 0 && <ol className={styles.steps} data-testid="extra-steps">{x.steps.map(s => <li key={s.index}>{s.role.replace("_", " ")}: {s.done ? "done" : x.outcome ? "-" : "waiting"}</li>)}</ol>}
+        <p><span className={styles.pill} data-testid="extra-state">{status}</span> {x.hasPhoto && "Photo attached · "}{x.residentConfirmed && "Resident confirmed · "}{(x.netPence ?? x.quotedPence) !== null && <span className={designed ? "contractor-amount" : undefined} data-testid="extra-amount">{pounds((x.netPence ?? x.quotedPence)!)}</span>}</p>
+        {x.steps.length > 0 && <ol className={designed ? `${styles.steps} contractor-steps` : styles.steps} data-testid="extra-steps">{x.steps.map(s => <li key={s.index}>{s.role.replace("_", " ")}: {s.done ? "done" : x.outcome ? "-" : "waiting"}</li>)}</ol>}
         {role === "surveyor" && x.state === "logged" && x.quotedPence === null && rates[x.jobId] && <div>
           <div className={styles.row}><label htmlFor={`rate-${x.extraId}`}>Rate card item</label><select id={`rate-${x.extraId}`} value={card.code} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, code: e.target.value } })}>{rates[x.jobId]!.map(r => <option key={r.code} value={r.code}>{r.code} - {r.description} ({pounds(r.ratePence)} per {r.unit})</option>)}</select></div>
           <div className={styles.row}><label htmlFor={`qty-${x.extraId}`}>Quantity measured</label><input id={`qty-${x.extraId}`} inputMode="numeric" value={card.quantity} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, quantity: e.target.value } })} /></div>
@@ -77,7 +79,7 @@ export function ExtraApprovals() {
           <div className={styles.actions}><button disabled={busy || total === null} onClick={() => { if (!busy && total !== null) void run(x, "price", { sorCode: card.code, quantity: qty }); }}>Price this extra</button></div></div>}
         {role === "supervisor" && x.state === "logged" && x.quotedPence !== null && x.requestId === null && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "submit")}>Submit for approval</button></div>}
         {queue.some(q => q.request_id === x.requestId && q.overdue) && <p role="status">Mandatory approval overdue. {queue.some(q => q.request_id === x.requestId && q.escalated) ? "The named backup is now eligible; original approvers remain eligible." : "Waiting for an eligible approver."}</p>}
-        {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "approve")}>Approve as {role.replace("_", " ")}</button></div>}
+        {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div className={styles.actions}><button className={designed ? "contractor-primary" : undefined} disabled={busy} onClick={() => void run(x, "approve")}>Approve as {role.replace("_", " ")}</button></div>}
         {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div>
           <div className={styles.row}><label htmlFor={`reject-${x.extraId}`}>Reason for rejection</label><select id={`reject-${x.extraId}`} required value={reason[`reject-${x.extraId}`] ?? ""} onChange={e => setReason({ ...reason, [`reject-${x.extraId}`]: e.target.value })}><option value="">Choose a reason</option><option value="not_agreed">Not agreed</option></select></div>
           <button disabled={busy || !reason[`reject-${x.extraId}`]} onClick={() => void run(x, "reject", { reasonCode: reason[`reject-${x.extraId}`] })}>Reject this extra</button>

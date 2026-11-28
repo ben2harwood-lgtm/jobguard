@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-3": {
+      "branches": [
+        "codex/sandbox/dui-3"
+      ],
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/DUI-3.spec.ts",
+        "apps/web/e2e/artifacts/dui-3/README.md",
+        "apps/web/e2e/artifacts/dui-3/desktop-confirmed-catch.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-declaration.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-final-account.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-locked.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-processing.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-confirmed-catch.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-declaration.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-final-account.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-locked.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-processing.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-reference-results.png",
+        "apps/web/e2e/artifacts/dui-3/desktop-results.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-confirmed-catch.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-declaration.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-final-account.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-locked.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-processing.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-confirmed-catch.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-declaration.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-final-account.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-locked.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-processing.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-reference-results.png",
+        "apps/web/e2e/artifacts/dui-3/mobile-360-results.png",
+        "apps/web/e2e/helpers/final-account-lock-journey-designed.ts"
+      ],
+      "note": "Changed registration: config/lanes/dui-3.json (covered by the lane checker\u2019s own-file rule)."
+    }
+  }
+}
