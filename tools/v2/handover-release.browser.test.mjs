@@ -106,3 +106,23 @@ test("V2-G4 at 360px: stop the latest link, and the customer's reload shows the 
     await expect(pack.locator("body")).not.toContainText("Receipt only");
   } finally { await customer.close(); await context.close(); }
 });
+
+test("V2-G8 at 360px: switch the review request on after a release; it waits a week and shows what the customer gets", { timeout: 120000 }, async () => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
+  try {
+    const jobId = (await (await context.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")).json()).jobs[0].id;
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/handover`);
+    await page.getByTestId("handover-releases").getByRole("button", { name: /^Release this version · version \d+$/u }).click();
+    await expect(page.getByTestId("handover-link")).toBeVisible();
+    const review = page.getByTestId("review-request");
+    const toggle = review.getByLabel("Ask the customer for a review a week after the handover release");
+    if (await toggle.isChecked()) { await toggle.uncheck(); await expect(review.getByRole("status")).toContainText("Off."); }
+    await page.reload();
+    await review.getByLabel("Ask the customer for a review a week after the handover release").check();
+    // The shared seed job may already hold money rows, so only the switch itself is asserted here; the rule is in the seed cases.
+    await expect(review.getByRole("status")).not.toContainText("Off.");
+    await expect(review).toContainText("a short review would help");
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no sideways scroll at 360px");
+  } finally { await context.close(); }
+});

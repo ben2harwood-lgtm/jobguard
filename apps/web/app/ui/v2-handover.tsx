@@ -6,6 +6,7 @@ import { Card, Empty, Note } from "../(designed)/designed-ui";
 import { HandoverPack, handoverEmpty, handoverIntro, handoverProblem, handoverProblemText, handoverRefusalText, handoverSaved,
   handoverTitle, handoverVersionLine } from "./v2-handover-label";
 import { HandoverReleases } from "./v2-handover-release";
+import { ReviewRequest } from "./v2-review-request";
 
 const sections: { key: HandoverSectionKey; title: string }[] = [{ key: "done", title: "What was done" }, { key: "changes", title: "Changes" },
   { key: "photos", title: "Photos" }, { key: "certificates", title: "Manuals and certificates" }, { key: "snags", title: "Outstanding snags" },
@@ -129,6 +130,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
         {opened === row.version && <HandoverPack content={row.content}/>}
       </div>) : <p>No version saved yet.</p>}
       {versions.length > 0 && <HandoverReleases jobId={jobId} versions={versions.map(row => row.version)}/>}
+      {versions.length > 0 && <ReviewRequest jobId={jobId}/>}
     </div></Card>
   </div>;
 }
