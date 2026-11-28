@@ -9,7 +9,7 @@ type View = ReturnType<typeof workStateView>;
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
 
 /** Work-state controls over the persisted CH-4 commands. The server picks actor, tenant and time. */
-export function JobWorkState({ jobId, company }: { jobId: string; company?: { tenantId: string; csrfToken: string } }) {
+export function JobWorkState({ jobId, company, designed = false }: { jobId: string; designed?: boolean; company?: { tenantId: string; csrfToken: string } }) {
  const endpoint = company ? `/api/meter/jobs/${jobId}/work-state` : `/api/jobs/${jobId}/work-state`;
  const tenantId = company?.tenantId, csrfToken = company?.csrfToken;
  const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState(""), [offer, setOffer] = useState(false);
@@ -70,33 +70,33 @@ export function JobWorkState({ jobId, company }: { jobId: string; company?: { te
   void send(jobWorkStateCommandV1.parse({ version: "job-work-state-command.v1", commandId: crypto.randomUUID(), expectedRevision: view.revision, action, ...extra }));
  };
  const closed = view?.closedEventId != null, noteMissing = note.trim() === "";
- return <section id="site-work" className={styles.panel} aria-labelledby="site-work-title" aria-busy={busy} data-testid="job-work-state">
+ return <section id="site-work" className={designed ? "card card-body designed-site-work" : styles.panel} aria-labelledby="site-work-title" aria-busy={busy} data-testid="job-work-state">
   <h2 id="site-work-title">Site work</h2>
-  {error && <p role="alert">{error}</p>}
+  {error && <p className={designed ? "note error" : undefined} role="alert">{error}</p>}
   {(offer || view?.locked) && <p role="status" data-testid="linked-job-offer"><strong>{LINKED_JOB_COPY}</strong>. This job's final account is locked, so new site work belongs on a new job. <a href="/classic">Start a new job</a></p>}
   {view && <>
    <p>State: <strong data-testid="work-state">{closed ? "Closed" : view.finishedMarkerId ? "Finished on site" : "Work under way"}</strong> · revision <span data-testid="work-state-revision">{view.revision}</span></p>
-   <div className={styles.actions}>
-    {!closed && !view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
-    {!closed && view.finishedMarkerId && <button type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
-    {closed && <button type="button" disabled={busy} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
-    {!closed && <button type="button" disabled={busy || view.locked} onClick={() => act("resume")}>Resume site work</button>}
+   <div className={designed ? "work-actions form" : styles.actions}>
+    {!closed && !view.finishedMarkerId && <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => act("finish")}>Finished on site</button>}
+    {!closed && view.finishedMarkerId && <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => act("cancel_finish", { markerId: view.finishedMarkerId })}>Cancel finished on site</button>}
+    {closed && <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => act("reopen", { closeEventId: view.closedEventId })}>Reopen job</button>}
+    {!closed && <button className={designed ? "btn" : undefined} type="button" disabled={busy || view.locked} onClick={() => act("resume")}>Resume site work</button>}
    </div>
    <p>{view.locked ? "Reopening permits administration only. New site work needs a linked job." : "Resuming or reopening checks the saved jobs-on-the-go meter before it records the event."}</p>
-   {!closed && <fieldset className={styles.actions}>
+   {!closed && <fieldset className={designed ? "work-actions form" : styles.actions}>
     <legend>Close job</legend>
     <div className={styles.field}><label htmlFor="close-reason">Reason</label><select id="close-reason" value={reason} disabled={busy} onChange={e => setReason(e.target.value as CloseReason)}>{(Object.keys(closeReasonLabels) as CloseReason[]).map(key => <option key={key} value={key}>{closeReasonLabels[key]}</option>)}</select></div>
     <div className={styles.field}><label htmlFor="close-note">Note (required)</label><textarea id="close-note" value={note} maxLength={2000} disabled={busy} onChange={e => setNote(e.target.value)}/></div>
-    <button type="button" disabled={busy || noteMissing} onClick={() => act("close", { reason, note: note.trim() })}>Close job</button>
+    <button className={designed ? "btn" : undefined} type="button" disabled={busy || noteMissing} onClick={() => act("close", { reason, note: note.trim() })}>Close job</button>
    </fieldset>}
    <ol data-testid="work-state-history">{view.events.map((event: JobWorkStateEvent) => <li key={event.id} data-testid="work-state-event" data-event-id={event.id} data-kind={event.kind}>
     {workEventLabels[event.kind]} · {when(event.factAt)}{event.closeReason && <> · {closeReasonLabels[event.closeReason]}: {event.closeNote}</>}
    </li>)}</ol>
    {view.events.length === 0 && <p>No site work recorded yet.</p>}
   </>}
-  <div className={styles.actions}>
-   <button type="button" disabled={busy} onClick={() => { pending.current = null; setError(""); void read(); }}>Load saved site work</button>
-   {pending.current && !busy && <button type="button" onClick={() => void send(pending.current!)}>Retry the same action</button>}
+  <div className={designed ? "work-actions form" : styles.actions}>
+   <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => { pending.current = null; setError(""); void read(); }}>Load saved site work</button>
+   {pending.current && !busy && <button className={designed ? "btn" : undefined} type="button" onClick={() => void send(pending.current!)}>Retry the same action</button>}
   </div>
  </section>;
 }

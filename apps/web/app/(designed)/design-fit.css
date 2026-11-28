@@ -121,3 +121,26 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd .designed-quote .quote-room{display:grid;gap:10px;margin-block:12px}
 .jgd .designed-quote .quote-room-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .jgd .designed-quote .quote-room-head h3{margin:0;font-size:16px}
+
+/* V2-SQ-I-2: site work, proof, extras, the start card and the live activation card. Copied (read only) from #918 @ 32decb2c1
+   design-fit.css lines 112-131, without the selectors for screens not on this base (.designed-progress, .designed-acceptance). */
+.jgd .designed-workspace :is(.designed-activation,.designed-proof,.designed-site-work,.designed-variations){min-width:0;margin-block:12px;overflow-wrap:anywhere}
+.jgd .designed-workspace .designed-activation{display:grid;gap:12px}
+.jgd .designed-workspace .designed-activation>*{margin:0}
+.jgd .designed-workspace :is(.designed-proof,.designed-activation > .card) dl,
+.jgd .designed-workspace .designed-variations .variation-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:8px;margin-block:10px}
+.jgd .designed-workspace :is(.designed-proof,.designed-activation > .card) dl>div,
+.jgd .designed-workspace .designed-variations .variation-summary>div{padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--pale)}
+.jgd .designed-workspace :is(.designed-proof,.designed-activation > .card) dd{margin:3px 0 0;font-weight:750}
+.jgd .designed-workspace .designed-variations.variation-workspace{border-top:1px solid var(--line)}
+.jgd .designed-workspace .designed-variations .variation-list>article{background:var(--white)}
+.jgd .designed-workspace .designed-variations .variation-entry{padding:12px;border-radius:8px;background:var(--pale)}
+.jgd .designed-workspace .designed-variations .variation-list{display:grid;gap:8px;margin-block:12px}
+.jgd .designed-workspace .designed-variations .variation-revision{padding:10px;margin-block:8px;border-radius:7px;background:var(--pale)}
+.jgd .designed-workspace .designed-variations .variation-revision p{margin-block:4px}
+.jgd .designed-workspace :is(.proof-actions,.variation-actions,.work-actions){display:flex;flex-wrap:wrap;gap:8px;margin-block:10px}
+.jgd .designed-workspace :is(.designed-site-work,.designed-proof,.designed-activation) fieldset:not(.jgd-legacy *){min-width:0}
+.jgd .designed-workspace :is(.designed-site-work,.designed-proof,.designed-activation,.designed-start,.designed-variations) .btn:not(.jgd-legacy *){min-height:44px;max-width:100%;white-space:normal}
+.jgd .designed-workspace :is(.btn,input,textarea,select,a,summary):not(.jgd-legacy *):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd .designed-workspace .btn:not(.jgd-legacy *):disabled{opacity:.62;cursor:not-allowed}
+.jgd .designed-workspace :is(#quote,#work-proof,#variations-title,[id^="variation-"]){scroll-margin-top:56px}
