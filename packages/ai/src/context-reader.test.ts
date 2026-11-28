@@ -251,3 +251,17 @@ describe("V2-SQ-C Reader A", () => {
     }
   });
 });
+
+describe("V2-SQ-M limit and credit words only count beside the amount", () => {
+  it.each([
+    ["Fit the radiator under the window for £150", 15000], ["Paint the hall over the stairs for £300", 30000],
+    ["Lay the floor in the back bedroom for £400", 40000], ["Hang the door - £200", 20000], ["Hang the door – £200", 20000],
+  ])("keeps %s", (text, pence) => {
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([pence]);
+  });
+  it("leaves a credit room total and whole-job total open", () => {
+    const read = readSpokenJob("00000000-0000-4000-8000-000000000002", "In the kitchen paint the ceiling for £200. The kitchen all in minus £300. For the whole job up to £400.");
+    expect(read.areaPrices).toEqual([]);
+    expect(read.wholeJobPrice).toBeNull();
+  });
+});
