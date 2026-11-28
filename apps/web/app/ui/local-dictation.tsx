@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { cancelLocalSpeech, createLocalSpeechAdapter, LOCAL_SPEECH_DOWNLOAD_MIB } from "./local-speech";
 
 export type LocalAvailability = "installed" | "downloadable" | "downloading" | "unavailable";
@@ -43,16 +43,19 @@ export function dictationMessage(code: DictationFailure, startLabel = "Talk thro
   }
 }
 
+type TranscriptSegment = { kind:"final"|"provisional"; text:string };
+
 export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk through a quote",designed=false}:{onUse:(text:string,raw:string)=>void;applyDisabled?:boolean;startLabel?:string;designed?:boolean}){
-  const[adapter,setAdapter]=useState<LocalSpeechAdapter|null>(null),[availability,setAvailability]=useState<LocalAvailability|"checking">("installed"),[listening,setListening]=useState(false),[loading,setLoading]=useState(false),[interim,setInterim]=useState(""),[finalText,setFinalText]=useState(""),[message,setMessage]=useState("");
+  const[adapter,setAdapter]=useState<LocalSpeechAdapter|null>(null),[availability,setAvailability]=useState<LocalAvailability|"checking">("installed"),[listening,setListening]=useState(false),[loading,setLoading]=useState(false),[interim,setInterim]=useState(""),[segments,setSegments]=useState<TranscriptSegment[]>([]),[message,setMessage]=useState("");
   const session=useRef<LocalSpeechSession|null>(null), seen=useRef(new Set<string>()),raw=useRef<string[]>([]);
-  const recordingSnapshot=useRef({text:"",rawLength:0});
+  const recordingSnapshot=useRef<{segments:TranscriptSegment[];rawLength:number}>({segments:[],rawLength:0});
+  const pending=useRef(""), recording=useRef(0);
   const active=useRef(true), engine=useRef<LocalSpeechAdapter|null>(null), busy=useRef(false), stopped=useRef(false);
   useEffect(()=>{active.current=true;
     // Only test injection is inspected on mount. No real capability probe, permission, worker or model load.
     const injected=browserLocalSpeechAdapter();
     if(injected){setAdapter(injected);void injected.available().then(value=>{if(active.current)setAvailability(value)}).catch(()=>{if(active.current)setAvailability("unavailable")})}
-    return()=>{active.current=false;session.current?.cancel();cancelLocalSpeech(engine.current);session.current=null};
+    return()=>{active.current=false;recording.current++;session.current?.cancel();cancelLocalSpeech(engine.current);session.current=null};
   },[]);
   const failed=(code:DictationFailure)=>setMessage(dictationMessage(code,startLabel));
   // One press: ask for the microphone, load the on-device model if needed, then listen.
@@ -75,9 +78,36 @@ export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk throu
     start(value);
   }
   function stopLoading(){stopped.current=true;cancelLocalSpeech(engine.current);setLoading(false);setMessage("")}
-  function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}recordingSnapshot.current={text:finalText,rawLength:raw.current.length};setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");failed(listeningFailure(code))},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);failed("failed")}}
-  function stop(){session.current?.stop();setInterim("")}
-  function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("");setFinalText(recordingSnapshot.current.text);raw.current.length=recordingSnapshot.current.rawLength}
+  function start(value:LocalSpeechAdapter){
+    if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}
+    recordingSnapshot.current={segments,rawLength:raw.current.length};
+    const token=++recording.current;
+    setMessage("");pending.current="";setInterim("");seen.current.clear();setListening(true);
+    function finish(message?:string){
+      if(token!==recording.current)return;
+      recording.current++;session.current=null;setListening(false);
+      const partial=pending.current;pending.current="";setInterim("");
+      if(partial)setSegments(old=>[...old,{kind:"provisional",text:partial}]);
+      if(message||partial)setMessage([message,partial?"Listening stopped. Provisional words are kept below. Check or edit them before using them.":""].filter(Boolean).join(" "));
+    }
+    try{
+      const next=value.start({
+        interim:text=>{if(token!==recording.current)return;pending.current=text;setInterim(text)},
+        final:(text,id)=>{if(token!==recording.current||seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setSegments(old=>{
+          const last=old.at(-1);
+          // Only combine adjacent finals: an interrupted clause keeps its place.
+          return last?.kind==="final"
+            ? [...old.slice(0,-1),{kind:"final",text:`${last.text}${last.text?" ":""}${text}`.trim()}]
+            : [...old,{kind:"final",text:text.trim()}];
+        });pending.current="";setInterim("")},
+        error:code=>{if(token!==recording.current)return;const current=session.current;finish(dictationMessage(listeningFailure(code),startLabel));current?.cancel()},
+        end:()=>finish(),
+      });
+      if(token===recording.current)session.current=next;
+    }catch{finish(dictationMessage("failed",startLabel));cancelLocalSpeech(value)}
+  }
+  function stop(){session.current?.stop()}
+  function cancel(){recording.current++;pending.current="";session.current?.cancel();session.current=null;setListening(false);setInterim("");setSegments(recordingSnapshot.current.segments);raw.current.length=recordingSnapshot.current.rawLength}
   const buttonClass=designed?"btn":undefined;
   return <section className={designed?"dictation card card-body form":"dictation"} aria-label="On-device dictation">
     <h2>Say the job out loud</h2>
@@ -87,7 +117,12 @@ export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk throu
     {/* A pending draft must never prevent stopping an already active microphone. */}
     {listening&&<><p>Listening on this device</p><p className="helper">Press Stop listening when you've finished. You check the words before they're used.</p><button type="button" className={buttonClass} onClick={stop}>Stop listening</button><button type="button" className={buttonClass} onClick={cancel}>Cancel dictation</button></>}
     {interim&&<p className="dictation-interim" data-testid="interim-transcript"><span>Provisional: </span>{interim}</p>}
-    {finalText&&<><label htmlFor="dictation-final">Words to review</label><textarea id="dictation-final" disabled={applyDisabled} value={finalText} onChange={e=>{if(!applyDisabled)setFinalText(e.target.value)}}/><button type="button" className={buttonClass} disabled={applyDisabled} onClick={()=>{if(applyDisabled)return;session.current?.cancel();cancelLocalSpeech(engine.current);setListening(false);onUse(finalText,raw.current.join(" "))}}>Use these words</button></>}
+    {segments.map((segment,index)=>{
+      const label=segment.kind==="provisional"?"Provisional words to review":"Words to review";
+      const id=`dictation-${segment.kind}${index?`-${index}`:""}`;
+      return <Fragment key={id}><label htmlFor={id}>{label}</label><textarea id={id} disabled={applyDisabled} value={segment.text} onChange={e=>{if(!applyDisabled)setSegments(old=>old.map((value,i)=>i===index?{...value,text:e.target.value}:value))}}/></Fragment>;
+    })}
+    {segments.some(segment=>segment.text)&&<button type="button" className={buttonClass} disabled={applyDisabled} onClick={()=>{if(applyDisabled)return;recording.current++;session.current?.cancel();cancelLocalSpeech(engine.current);setListening(false);onUse(segments.map(segment=>segment.text).filter(Boolean).join(" "),raw.current.join(" "))}}>Use these words</button>}
     {message&&<p role="status">{message}</p>}
   </section>;
 }

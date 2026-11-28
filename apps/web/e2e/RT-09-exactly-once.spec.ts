@@ -185,7 +185,6 @@ test("RT-09-B11 back from review retains an unsaved added work clause", async ({
   const reviewUrl = page.url();
   await button(page, "← Walk the job").click(); await page.goto(reviewUrl);
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F001");
   await expect(page.getByLabel(`Description ${changed}`, { exact: true })).toHaveValue(changed);
 });
 
@@ -202,7 +201,6 @@ test("RT-09-B13 reload mid-review retains the added unsaved work clause", async 
   const f = await fixture(page); await f.review();
   await page.getByLabel("Description Fit shelves", { exact: true }).fill(changed);
   await page.reload(); await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F001");
   await expect(page.getByLabel(`Description ${changed}`, { exact: true })).toHaveValue(changed);
 });
 
@@ -244,7 +242,6 @@ for (const event of ["error", "end"] as const) test(`RT-09-B16-${event} interrup
   await expect(page.getByTestId("interim-transcript")).toContainText("and fit brackets");
   await page.evaluate(event => { if (event === "error") (window as any).__rt09Speech.error("not-allowed"); else (window as any).__rt09Speech.end(); }, event);
   await expect(page.getByLabel("Words to review", { exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F002");
   // The uncertain recognition may be labelled provisional or asked about, but
   // the work clause must remain available rather than being silently erased.
   await expect.poll(() => page.getByRole("region", { name: "On-device dictation" }).evaluate(region =>
@@ -269,4 +266,29 @@ test("RT-09-B17 two real tabs editing one recording retain the winning and confl
   await expect(second.getByLabel("Description Fit shelves and supports", { exact: true })).toHaveValue("Fit shelves and supports");
   expect([...f.jobs.values()][0]!.review!.lines[0]!.description).toBe(changed);
   expect(f.effects()).toBe(0); await second.close();
+});
+
+for (const event of ["error", "end"] as const) test(`RT-09-B18-${event} resumed dictation keeps kitchen provisional words before bathroom work`, async ({ page }) => {
+  const f = await fixture(page); await speech(page); await f.open();
+  await button(page, "Talk through a quote").click();
+  await page.evaluate(() => { (window as any).__rt09Speech.final("Kitchen: paint walls", "first"); (window as any).__rt09Speech.interim("and ceiling"); });
+  await page.evaluate(event => { if (event === "error") (window as any).__rt09Speech.error("not-allowed"); else (window as any).__rt09Speech.end(); }, event);
+  await button(page, "Talk through a quote").click();
+  await page.evaluate(() => (window as any).__rt09Speech.final("Bathroom: fit shelves", "first"));
+  await button(page, "Stop listening").click();
+  const region = page.getByRole("region", { name: "On-device dictation" });
+  await expect.poll(() => region.locator("textarea").evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value))).toEqual(["Kitchen: paint walls", "and ceiling", "Bathroom: fit shelves"]);
+  await expect(page.getByLabel("Provisional words to review", { exact: true })).toHaveValue("and ceiling");
+  await button(page, "Use these words").click();
+  await expect(page.locator("#walk-source")).toHaveValue("Kitchen: paint walls and ceiling Bathroom: fit shelves");
+  // Reviewing a provisional clause changes the edited source, never raw finals.
+  await page.getByLabel("Provisional words to review", { exact: true }).fill("and kitchen ceiling");
+  await button(page, "Talk through a quote").click();
+  await page.evaluate(() => { (window as any).__rt09Speech.final("cancelled work", "first"); (window as any).__rt09Speech.interim("cancelled provisional"); });
+  await button(page, "Cancel dictation").click();
+  await expect.poll(() => region.locator("textarea").evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value))).toEqual(["Kitchen: paint walls", "and kitchen ceiling", "Bathroom: fit shelves"]);
+  await button(page, "Use these words").click(); await button(page, "Make my draft").click();
+  await expect(button(page, "Check and edit my draft")).toBeVisible();
+  expect(f.captures[0]!.source).toMatchObject({ text: "Kitchen: paint walls and kitchen ceiling Bathroom: fit shelves",
+    acquisition: { rawFinalText: "Kitchen: paint walls Bathroom: fit shelves", humanEdited: true } });
 });

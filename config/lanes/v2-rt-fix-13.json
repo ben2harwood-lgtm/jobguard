@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-13": {
+      "branches": [
+        "codex/sandbox/rt-fix-13"
+      ],
+      "note": "RT-FIX-13 / RT-09: tab-local unsaved review recovery, editable interrupted provisional speech with RT-FIX-7 cancel preserved, and typed stale Discard conflicts. Practice data only; no migrations. Browser checks use e2e/RT-09.playwright.config.ts on port 3199 only. Commit only; existing independent-review and merge gates remain. Final repair round 2: preserve interrupted provisional segments in transcript order across resumed dictation, editable and separate from raw finals; RT-FIX-7 cancellation retained.",
+      "test": "pnpm --filter @jobguard/web test --maxWorkers=2",
+      "allow": [
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/capture-state.test.ts",
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/review-draft.ts",
+        "apps/web/app/ui/walk-it-retry.test.tsx",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/e2e/RT-09-exactly-once.spec.ts",
+        "packages/db/test/RT-09-exactly-once.integration.test.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}

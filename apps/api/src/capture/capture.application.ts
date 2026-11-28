@@ -44,10 +44,27 @@ export class CaptureApplication{ private readonly access: PracticeAccess;
      aggregateRevision: expectedRevision, amountPence: null, currency: null,
      policyVersion: "synthetic-uiwire-1", expiresAt: new Date(Date.now() + 300000),
     },
-   }, new DiscardDraftJob(practice.context.tenantId));
+   }, {
+    // Use Confirm's job lock before begin_command, preserving replay and lock order.
+    async lock(db) {
+     await db.$client.query("SELECT pg_advisory_xact_lock(hashtext(current_setting('app.tenant_id')),hashtext($1))", [subjectRef]);
+    },
+    async mutate(db, authorized) {
+     // Check the stored job revision in the command transaction before the routine
+     // refuses a non-draft job (including one another tab has just confirmed).
+     const current = (await db.$client.query<{ revision: number }>(
+      "SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2", [practice.context.tenantId, subjectRef],
+     )).rows[0];
+     if (current && current.revision !== expectedRevision) {
+      throw new CaptureApplicationError("REVIEW_REVISION_CONFLICT");
+     }
+     return new DiscardDraftJob(practice.context.tenantId).mutate(db, authorized);
+    },
+   });
   } catch (error) {
    const failure = error as { code?: string; message?: string };
-   if (failure.code === "40001" && failure.message === "DISCARD_DRAFT_REVISION_CONFLICT") {
+   // Revision checks in the dispatcher may fail before the discard routine's own check.
+   if (failure.code === "40001") {
     throw new CaptureApplicationError("REVIEW_REVISION_CONFLICT");
    }
    if ((failure.code === "22023" && failure.message === "DISCARD_DRAFT_REFUSED") ||

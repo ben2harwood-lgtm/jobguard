@@ -131,7 +131,7 @@ describe("RT-09 API exactly-once paths", () => {
       expect(final.status).toBe("quoting"); expect(final.source.text).toBe(words);
       expect(await scopeCount(view.jobId)).toBe(1);
     });
-    it.fails("[RT-09-F003] returns a clear typed conflict", () => {
+    it("[RT-09-F003] returns a clear typed conflict", () => {
       expect(refusal).toMatchObject({ code: "REVIEW_REVISION_CONFLICT" });
     });
   });
