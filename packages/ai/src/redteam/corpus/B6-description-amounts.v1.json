@@ -1,0 +1,812 @@
+[
+  {
+    "id": "B6-001",
+    "lane": "RT-08",
+    "transcript": "Fit new units two thousand pounds and in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-002",
+    "lane": "RT-08",
+    "transcript": "Fit new units two thousand pounds then in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-003",
+    "lane": "RT-08",
+    "transcript": "Fit new units £2,000 and in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-004",
+    "lane": "RT-08",
+    "transcript": "Fit new units £2,000 then in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-005",
+    "lane": "RT-08",
+    "transcript": "Fit new units 2k and in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-006",
+    "lane": "RT-08",
+    "transcript": "Fit new units 2k then in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-007",
+    "lane": "RT-08",
+    "transcript": "Fit new units for 2000 and in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": [
+            null,
+            200000
+          ]
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-008",
+    "lane": "RT-08",
+    "transcript": "Fit new units for 2000 then in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": [
+            null,
+            200000
+          ]
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-009",
+    "lane": "RT-08",
+    "transcript": "Fit new units for two thousand and in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-010",
+    "lane": "RT-08",
+    "transcript": "Fit new units for two thousand then in the bathroom fit a basin £200",
+    "why": "B6: amount suffix and next-room lead-in leave the prefix-cited work description; unresolved shorthand stays open.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit a basin",
+          "unitPricePence": 20000,
+          "room": "Bathroom"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-011",
+    "lane": "RT-08",
+    "transcript": "Move two sockets ninety pounds and in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-012",
+    "lane": "RT-08",
+    "transcript": "Move two sockets ninety pounds then in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-013",
+    "lane": "RT-08",
+    "transcript": "Move two sockets ninety quid and in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-014",
+    "lane": "RT-08",
+    "transcript": "Move two sockets ninety quid then in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-015",
+    "lane": "RT-08",
+    "transcript": "Move two sockets £90 and in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-016",
+    "lane": "RT-08",
+    "transcript": "Move two sockets £90 then in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-017",
+    "lane": "RT-08",
+    "transcript": "Move two sockets for 90 and in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": [
+            null,
+            9000
+          ]
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-018",
+    "lane": "RT-08",
+    "transcript": "Move two sockets for 90 then in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": [
+            null,
+            9000
+          ]
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-019",
+    "lane": "RT-08",
+    "transcript": "Move two sockets for ninety and in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-020",
+    "lane": "RT-08",
+    "transcript": "Move two sockets for ninety then in the hallway paint walls £300",
+    "why": "B6: spoken or numeric price and next-room lead-in are removed only by shortening the source span.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Move two sockets",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "unitPricePence": 30000,
+          "room": "Hallway"
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-021",
+    "lane": "RT-08",
+    "transcript": "fit new units two thousand pounds and in the bathroom",
+    "why": "B6: exact reported fragment; price words and incomplete next-room lead-in never remain in a priced description.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "fit new units",
+          "unitPricePence": [
+            null,
+            200000
+          ]
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-022",
+    "lane": "RT-08",
+    "transcript": "move two sockets ninety pounds and in the hallway",
+    "why": "B6: exact reported fragment; price words and incomplete next-room lead-in never remain in a priced description.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": [
+            null,
+            9000
+          ]
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-023",
+    "lane": "RT-08",
+    "transcript": "supply and fit three thousand two hundred pounds and get the sparky to move two sockets",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "supply and fit",
+          "unitPricePence": 320000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-024",
+    "lane": "RT-08",
+    "transcript": "Fit new units two thousand pounds move two sockets",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-025",
+    "lane": "RT-08",
+    "transcript": "Paint the walls £500 and ask the electrician to move two sockets £90",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 50000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": 9000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-026",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 new price £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-027",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 make that £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-028",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 actually £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-029",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 revised £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-030",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 instead £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-031",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 or £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-032",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 sorry £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-033",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 , new price £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-034",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 new skirting £600",
+    "why": "New work after a stated price still starts a distinct item; the revision guard must only keep price revisions together.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 50000
+        },
+        {
+          "descriptionIncludes": "new skirting",
+          "unitPricePence": 60000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  }
+]

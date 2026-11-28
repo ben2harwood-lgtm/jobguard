@@ -62,6 +62,22 @@ const NUMBER_WORDS = "zero|one|two|three|four|five|six|seven|eight|nine|ten|elev
 const NUMBER_WORD_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NUMBER_WORDS})(?:[\\s-]+and)?[\\s-]+$`, "iu");
 const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})(?![\\p{L}])`, "iu");
 
+/** One transcript can propose work for several jobs, but can never silently save it as one. */
+export function multipleJobQuestion(text: string): string | null {
+  const distinct = (pattern: RegExp) => [...new Set([...text.matchAll(pattern)].map(match => match[0].trim().toLowerCase()))];
+  // Coordinated titles sharing a surname name one household; distinct surnames still name separate customers.
+  const customers = distinct(/\b(?:mr|mrs|ms|miss|dr)\.?\s+(?:(?:and|&)\s+(?:mr|mrs|ms|miss|dr)\.?\s+)?[\p{L}'’-]+|\b(?:first|second)\s+customer\s+[\p{L}'’-]+/giu);
+  for (const match of text.matchAll(/\b(?:[Ff]or|[Cc]ustomer|[Cc]lient)\s+(\p{Lu}[\p{L}'’-]*(?:\s+\p{Lu}[\p{L}'’-]*){0,2})(?=[\s,:]+(?:at|paint|fit|tile|plaster|repair|rewire|wants?|needs?)\b)/gu)) {
+    const name = match[1]!.toLowerCase();
+    if (!customers.includes(name)) customers.push(name);
+  }
+  const addresses = distinct(/\b(?:\d+[a-z]?\s+(?:[\p{L}'’-]+\s+){1,4}(?:road|lane|close|avenue|grove|walk|street|drive|way)|(?:[\p{L}'’-]+\s+){1,3}(?:house|cottage)(?=\s+job\b))/giu);
+  const explicit = /\b(?:two\s+(?:separate\s+)?jobs|(?:first|second)\s+job|customer\s+(?:one|two))\b/iu.test(text);
+  if (!explicit && customers.length < 2 && addresses.length < 2) return null;
+  const named = [...customers, ...addresses].join(", ").slice(0, 350);
+  return `This sounds like more than one job${named ? `: ${named}` : ""}. Split it before saving?`;
+}
+
 /**
  * The money rule (plan 4.2), for both readers. A quantity, unit price, room price or whole-job price is kept only
  * when it is extracted and its cited span of the untouched source reads, by JobGuard's own parser, to exactly that
@@ -70,6 +86,7 @@ const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})
  */
 export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourceText: string, read: SpokenNumberReader): JobUnderstanding {
   const questions = [...understanding.questions];
+  const boundaryQuestion = multipleJobQuestion(sourceText);
   const ask = (question: JobUnderstanding["questions"][number]) => {
     if (questions.length < 200) { questions.push(question); return; }
     const existing = questions.findIndex(item => question.lineIndex !== undefined && item.lineIndex === question.lineIndex);
@@ -200,6 +217,10 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     return false;
   });
   let wholeJobPrice = understanding.wholeJobPrice;
+  if (boundaryQuestion) {
+    wholeJobPrice = null;
+    if (!questions.some(question => question.text === boundaryQuestion)) ask({ text: boundaryQuestion });
+  }
   if (wholeJobPrice && (!cites(wholeJobPrice.provenance, wholeJobPrice.pence, "money") || reused(moneySpans.length - 1))) {
     wholeJobPrice = null;
     ask({ text: "Check the whole-job price; it was not read exactly." });

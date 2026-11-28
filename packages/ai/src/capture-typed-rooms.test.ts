@@ -26,8 +26,16 @@ describe("V2-SQ-J typed text gets the same rooms as spoken text", () => {
   it.each(fixture.cases.map(c => [c.id, c] as const))("%s: every row in its room, trade and price, and no room-only row", (_id, c) => {
     const { rows } = review(c.text);
     expect(rows.map(row => roomOnlyWords.test(row.description.trim().replace(/[.:,]$/u, "")))).not.toContain(true);
-    expect(rows).toHaveLength(c.rows.length);
-    c.rows.forEach((want, i) => {
+    // B6: split the Smith suite amount from the following unpriced sockets; neither line borrows money.
+    const expected = c.id === "smith-recogniser" ? [...c.rows.slice(0, 4),
+      { words: "supply and fit", room: "Upstairs bathroom", trade: "Plumbing", pence: 320000 },
+      { words: "move two sockets", room: "Upstairs bathroom", trade: "Electrics", pence: null }, ...c.rows.slice(5)]
+      : c.id === "smith-typed" ? [...c.rows.slice(0, 5),
+        { words: "supply and fit 3200", room: "Upstairs bathroom", trade: "Plumbing", pence: null },
+        { words: "move two sockets", room: "Upstairs bathroom", trade: "Electrics", pence: null }, ...c.rows.slice(6)] : c.rows;
+    // B6: the split retains every work row in the Smith fixture.
+    expect(rows).toHaveLength(expected.length);
+    expected.forEach((want, i) => {
       expect(rows[i]!.description).toContain(want.words);
       expect({ room: rows[i]!.room, category: rows[i]!.category, pence: rows[i]!.pence }).toEqual({ room: want.room, category: want.trade, pence: want.pence });
     });
@@ -69,6 +77,7 @@ describe("V2-SQ-K bathroom suite work gets the plumbing trade", () => {
     const bathroom = rows.find(row => row.description.startsWith("supply and fit"))!;
     expect([bathroom.room, bathroom.category, bathroom.pence]).toEqual(["Upstairs bathroom", "Plumbing", 320000]);
     // Rows and prices are pinned by the fixture cases above; only this row's trade label changed (Other to Plumbing).
-    expect(rows).toHaveLength(6);
+    // B6: the suite and unpriced sockets are separate Smith rows.
+    expect(rows).toHaveLength(7);
   });
 });

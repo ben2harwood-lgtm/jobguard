@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-11": {
+      "branches": [
+        "codex/sandbox/rt-11"
+      ],
+      "note": "RT-11 attack corpus and focused pricing tests only. HEAD_UNDER_TEST a44f5d35b363a5182b166ff724d2d09ca5c1060f. No source changes; open findings retain spoken expectations. The lane boundary checker automatically permits this lane's own config file; explicit grants of config/lanes paths are forbidden.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-11-totals-currency-units.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "FINDINGS.md"
+      ]
+    }
+  }
+}

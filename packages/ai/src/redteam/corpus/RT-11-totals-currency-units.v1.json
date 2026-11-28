@@ -1,0 +1,3146 @@
+[
+  {
+    "id": "RT-11-001",
+    "lane": "RT-11",
+    "transcript": "Fit door £150, paint skirting £80, that's £300 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 8000
+        }
+      ],
+      "wholeJobPricePence": 30000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F001"
+  },
+  {
+    "id": "RT-11-002",
+    "lane": "RT-11",
+    "transcript": "Fit door £150, paint skirting £80, that's £200 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 8000
+        }
+      ],
+      "wholeJobPricePence": 20000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F002"
+  },
+  {
+    "id": "RT-11-003",
+    "lane": "RT-11",
+    "transcript": "Fit door £150, paint skirting £80, that's £230 all in",
+    "why": "Matching total stays a total and never doubles a line",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 8000
+        }
+      ],
+      "wholeJobPricePence": 23000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-004",
+    "lane": "RT-11",
+    "transcript": "Fit door £100, paint skirting £200, that's £0 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 10000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 20000
+        }
+      ],
+      "wholeJobPricePence": 0,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F004"
+  },
+  {
+    "id": "RT-11-005",
+    "lane": "RT-11",
+    "transcript": "Fit door £0, paint skirting £80, that's £100 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 0
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 8000
+        }
+      ],
+      "wholeJobPricePence": 10000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F005"
+  },
+  {
+    "id": "RT-11-006",
+    "lane": "RT-11",
+    "transcript": "Fit door £150, paint skirting £0, that's £150 all in",
+    "why": "Matching total stays a total and never doubles a line",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 0
+        }
+      ],
+      "wholeJobPricePence": 15000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-007",
+    "lane": "RT-11",
+    "transcript": "Fit door £99, paint skirting £1, that's £101 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 9900
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 100
+        }
+      ],
+      "wholeJobPricePence": 10100,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F007"
+  },
+  {
+    "id": "RT-11-008",
+    "lane": "RT-11",
+    "transcript": "Fit door £1, paint skirting £1, that's £1 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 100
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 100
+        }
+      ],
+      "wholeJobPricePence": 100,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F008"
+  },
+  {
+    "id": "RT-11-009",
+    "lane": "RT-11",
+    "transcript": "Fit door £125, paint skirting £75, that's £200 all in",
+    "why": "Matching total stays a total and never doubles a line",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 12500
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 7500
+        }
+      ],
+      "wholeJobPricePence": 20000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-010",
+    "lane": "RT-11",
+    "transcript": "Fit door £250, paint skirting £50, that's £250 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 25000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 5000
+        }
+      ],
+      "wholeJobPricePence": 25000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F010"
+  },
+  {
+    "id": "RT-11-011",
+    "lane": "RT-11",
+    "transcript": "Fit door £999, paint skirting £1, that's £1001 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 99900
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 100
+        }
+      ],
+      "wholeJobPricePence": 100100,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F011"
+  },
+  {
+    "id": "RT-11-012",
+    "lane": "RT-11",
+    "transcript": "Fit door £20, paint skirting £30, that's £40 all in",
+    "why": "Whole-job total differs from lines; keep all three figures and ask about the mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 2000
+        },
+        {
+          "descriptionIncludes": "paint skirting",
+          "unitPricePence": 3000
+        }
+      ],
+      "wholeJobPricePence": 4000,
+      "areaPrices": [],
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F012"
+  },
+  {
+    "id": "RT-11-013",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit door £150. Paint skirting £80. Kitchen £300 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 8000,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 30000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F013"
+  },
+  {
+    "id": "RT-11-014",
+    "lane": "RT-11",
+    "transcript": "In the bathroom. Fit door £100. Paint skirting £50. Bathroom £140 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 10000,
+          "room": "Bathroom"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 5000,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Bathroom",
+          "pence": 14000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F014"
+  },
+  {
+    "id": "RT-11-015",
+    "lane": "RT-11",
+    "transcript": "In the lounge. Fit door £80. Paint skirting £20. Lounge £100 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 8000,
+          "room": "Lounge"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 2000,
+          "room": "Lounge"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Lounge",
+          "pence": 10000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-016",
+    "lane": "RT-11",
+    "transcript": "In the bedroom two. Fit door £125. Paint skirting £75. Bedroom two £250 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 12500,
+          "room": "Bedroom two"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 7500,
+          "room": "Bedroom two"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Bedroom two",
+          "pence": 25000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F016"
+  },
+  {
+    "id": "RT-11-017",
+    "lane": "RT-11",
+    "transcript": "In the hall. Fit door £200. Paint skirting £100. Hall £200 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 20000,
+          "room": "Hall"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 10000,
+          "room": "Hall"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Hall",
+          "pence": 20000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F017"
+  },
+  {
+    "id": "RT-11-018",
+    "lane": "RT-11",
+    "transcript": "In the loft. Fit door £0. Paint skirting £100. Loft £120 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 0,
+          "room": "Loft"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 10000,
+          "room": "Loft"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Loft",
+          "pence": 12000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F018"
+  },
+  {
+    "id": "RT-11-019",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit door £99. Paint skirting £1. Kitchen £101 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 9900,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 100,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 10100
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F019"
+  },
+  {
+    "id": "RT-11-020",
+    "lane": "RT-11",
+    "transcript": "In the bathroom. Fit door £0. Paint skirting £0. Bathroom £0 all in.",
+    "why": "Room subtotal remains exactly as spoken; discrepant lines require reconciliation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 0,
+          "room": "Bathroom"
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 0,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Bathroom",
+          "pence": 0
+        }
+      ],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-021",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen £300 all in. In the bathroom. Fit basin. Bathroom £200 all in. For the whole job £400.",
+    "why": "Room totals and job total are separate amounts; no allocation to unpriced work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Fit basin",
+          "unitPricePence": null,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 30000
+        },
+        {
+          "room": "Bathroom",
+          "pence": 20000
+        }
+      ],
+      "wholeJobPricePence": 40000,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F021"
+  },
+  {
+    "id": "RT-11-022",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen £300 all in. In the bathroom. Fit basin. Bathroom £200 all in. For the whole job £600.",
+    "why": "Room totals and job total are separate amounts; no allocation to unpriced work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Fit basin",
+          "unitPricePence": null,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 30000
+        },
+        {
+          "room": "Bathroom",
+          "pence": 20000
+        }
+      ],
+      "wholeJobPricePence": 60000,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F022"
+  },
+  {
+    "id": "RT-11-023",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen £300 all in. In the bathroom. Fit basin. Bathroom £200 all in. For the whole job £500.",
+    "why": "Room totals and job total are separate amounts; no allocation to unpriced work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Fit basin",
+          "unitPricePence": null,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 30000
+        },
+        {
+          "room": "Bathroom",
+          "pence": 20000
+        }
+      ],
+      "wholeJobPricePence": 50000,
+      "lineCount": 2,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-024",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen £1 all in. In the bathroom. Fit basin. Bathroom £1 all in. For the whole job £1.",
+    "why": "Room totals and job total are separate amounts; no allocation to unpriced work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "Fit basin",
+          "unitPricePence": null,
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 100
+        },
+        {
+          "room": "Bathroom",
+          "pence": 100
+        }
+      ],
+      "wholeJobPricePence": 100,
+      "lineCount": 2,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F024"
+  },
+  {
+    "id": "RT-11-025",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for €2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F025"
+  },
+  {
+    "id": "RT-11-026",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for $2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F026"
+  },
+  {
+    "id": "RT-11-027",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 euros",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F027"
+  },
+  {
+    "id": "RT-11-028",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 dollars",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F028"
+  },
+  {
+    "id": "RT-11-029",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for USD 2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F029"
+  },
+  {
+    "id": "RT-11-030",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 USD",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F030"
+  },
+  {
+    "id": "RT-11-031",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for EUR 2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F031"
+  },
+  {
+    "id": "RT-11-032",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 EUR",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F032"
+  },
+  {
+    "id": "RT-11-033",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for CAD 2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F033"
+  },
+  {
+    "id": "RT-11-034",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for AUD 2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F034"
+  },
+  {
+    "id": "RT-11-035",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 US dollars",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F035"
+  },
+  {
+    "id": "RT-11-036",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 Canadian dollars",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F036"
+  },
+  {
+    "id": "RT-11-037",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for CHF 2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F037"
+  },
+  {
+    "id": "RT-11-038",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for ¥2000",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F038"
+  },
+  {
+    "id": "RT-11-039",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 yen",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F039"
+  },
+  {
+    "id": "RT-11-040",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for €2,000.50",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F040"
+  },
+  {
+    "id": "RT-11-041",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for $2,000.50",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F041"
+  },
+  {
+    "id": "RT-11-042",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 euro",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F042"
+  },
+  {
+    "id": "RT-11-043",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for two thousand euros",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F043"
+  },
+  {
+    "id": "RT-11-044",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for two thousand dollars",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F044"
+  },
+  {
+    "id": "RT-11-045",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for £2000 USD",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F045"
+  },
+  {
+    "id": "RT-11-046",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for €2000 pounds",
+    "why": "Foreign or conflicting currency must stay unpriced and ask which currency, without conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        200000,
+        200050
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F046"
+  },
+  {
+    "id": "RT-11-047",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for £2000",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F047"
+  },
+  {
+    "id": "RT-11-048",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 pounds",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F048"
+  },
+  {
+    "id": "RT-11-049",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for two thousand pounds",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F049"
+  },
+  {
+    "id": "RT-11-050",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for two grand",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F050"
+  },
+  {
+    "id": "RT-11-051",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for GBP 2000",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F051"
+  },
+  {
+    "id": "RT-11-052",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 GBP",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F052"
+  },
+  {
+    "id": "RT-11-053",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 sterling",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F053"
+  },
+  {
+    "id": "RT-11-054",
+    "lane": "RT-11",
+    "transcript": "Rewire the house for 2000 pounds sterling",
+    "why": "Explicit sterling is exact GBP, never a foreign-currency conversion",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire the house",
+          "unitPricePence": 200000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "neverPence": [
+        2000,
+        20000,
+        2000000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F054"
+  },
+  {
+    "id": "RT-11-055",
+    "lane": "RT-11",
+    "transcript": "Fit door £150. For the whole job €300.",
+    "why": "Foreign whole-job total stays open without clearing the exact GBP door price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F055"
+  },
+  {
+    "id": "RT-11-056",
+    "lane": "RT-11",
+    "transcript": "Fit door £150. For the whole job $300.",
+    "why": "Foreign whole-job total stays open without clearing the exact GBP door price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F056"
+  },
+  {
+    "id": "RT-11-057",
+    "lane": "RT-11",
+    "transcript": "Fit door £150. For the whole job 300 euros.",
+    "why": "Foreign whole-job total stays open without clearing the exact GBP door price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F057"
+  },
+  {
+    "id": "RT-11-058",
+    "lane": "RT-11",
+    "transcript": "Fit door £150. For the whole job USD 300.",
+    "why": "Foreign whole-job total stays open without clearing the exact GBP door price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F058"
+  },
+  {
+    "id": "RT-11-059",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen €300 all in.",
+    "why": "Foreign room total must never acquire a GBP pence value",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F059"
+  },
+  {
+    "id": "RT-11-060",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen $300 all in.",
+    "why": "Foreign room total must never acquire a GBP pence value",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F060"
+  },
+  {
+    "id": "RT-11-061",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen 300 euros all in.",
+    "why": "Foreign room total must never acquire a GBP pence value",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F061"
+  },
+  {
+    "id": "RT-11-062",
+    "lane": "RT-11",
+    "transcript": "In the kitchen. Fit cupboards. Kitchen USD 300 all in.",
+    "why": "Foreign room total must never acquire a GBP pence value",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit cupboards",
+          "unitPricePence": null,
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "currency"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F062"
+  },
+  {
+    "id": "RT-11-063",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 square feet at £25 a square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F063"
+  },
+  {
+    "id": "RT-11-064",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 square metres at £25 a square foot",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F064"
+  },
+  {
+    "id": "RT-11-065",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 m2 at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F065"
+  },
+  {
+    "id": "RT-11-066",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 m² at £25 per linear metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F066"
+  },
+  {
+    "id": "RT-11-067",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 sq m at £25 a foot",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F067"
+  },
+  {
+    "id": "RT-11-068",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 square metres at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F068"
+  },
+  {
+    "id": "RT-11-069",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 metres at £25 a square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F069"
+  },
+  {
+    "id": "RT-11-070",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 meters at £25 per m²",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F070"
+  },
+  {
+    "id": "RT-11-071",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 linear metres at £25 a square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F071"
+  },
+  {
+    "id": "RT-11-072",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 feet at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F072"
+  },
+  {
+    "id": "RT-11-073",
+    "lane": "RT-11",
+    "transcript": "Fit fence 20 yards at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit fence",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F073"
+  },
+  {
+    "id": "RT-11-074",
+    "lane": "RT-11",
+    "transcript": "Fit fence 20 metres at £25 a yard",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit fence",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F074"
+  },
+  {
+    "id": "RT-11-075",
+    "lane": "RT-11",
+    "transcript": "Fit six doors at £25 per m²",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six doors",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F075"
+  },
+  {
+    "id": "RT-11-076",
+    "lane": "RT-11",
+    "transcript": "Fit six doors at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six doors",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F076"
+  },
+  {
+    "id": "RT-11-077",
+    "lane": "RT-11",
+    "transcript": "Fit six doors at £25 per square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six doors",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F077"
+  },
+  {
+    "id": "RT-11-078",
+    "lane": "RT-11",
+    "transcript": "Lay tiles 20 square metres at £25 per box",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay tiles",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F078"
+  },
+  {
+    "id": "RT-11-079",
+    "lane": "RT-11",
+    "transcript": "Fit six radiators at £25 per hour",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six radiators",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F079"
+  },
+  {
+    "id": "RT-11-080",
+    "lane": "RT-11",
+    "transcript": "Fit four windows at £25 a square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four windows",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F080"
+  },
+  {
+    "id": "RT-11-081",
+    "lane": "RT-11",
+    "transcript": "Lay carpet 20 square yards at £25 a square metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay carpet",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F081"
+  },
+  {
+    "id": "RT-11-082",
+    "lane": "RT-11",
+    "transcript": "Fit worktop 6 feet 2 inches at £25 a metre",
+    "why": "Rate unit differs from the counted thing: ask about units, never silently convert or multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit worktop",
+          "unitPricePence": null,
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "unit"
+      ],
+      "neverPence": [
+        2500,
+        50000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-11-F082"
+  },
+  {
+    "id": "RT-11-083",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 square metres at £25 a square metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F083"
+  },
+  {
+    "id": "RT-11-084",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 square meters at £25 a square meter",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F084"
+  },
+  {
+    "id": "RT-11-085",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 m2 at £25 per m2",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F085"
+  },
+  {
+    "id": "RT-11-086",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 m² at £25 per m²",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F086"
+  },
+  {
+    "id": "RT-11-087",
+    "lane": "RT-11",
+    "transcript": "Lay laminate 20 sq m at £25 per square metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay laminate",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F087"
+  },
+  {
+    "id": "RT-11-088",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 metres at £25 a metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F088"
+  },
+  {
+    "id": "RT-11-089",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 meters at £25 a meter",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F089"
+  },
+  {
+    "id": "RT-11-090",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 20 linear metres at £25 per linear metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "m",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F090"
+  },
+  {
+    "id": "RT-11-091",
+    "lane": "RT-11",
+    "transcript": "Fit skirting 2.5 metres at £25.50 a metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": 2550,
+          "quantity": "2.5",
+          "unit": "m",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        6375
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F091"
+  },
+  {
+    "id": "RT-11-092",
+    "lane": "RT-11",
+    "transcript": "Lay tiles 2.5 square metres at £25.50 a square metre",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay tiles",
+          "unitPricePence": 2550,
+          "quantity": "2.5",
+          "unit": "m²",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        6375
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F092"
+  },
+  {
+    "id": "RT-11-093",
+    "lane": "RT-11",
+    "transcript": "Fit six doors at £25 a door",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six doors",
+          "unitPricePence": 2500,
+          "quantity": "6",
+          "unit": "doors",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-094",
+    "lane": "RT-11",
+    "transcript": "Fit four windows at £25 a window",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four windows",
+          "unitPricePence": 2500,
+          "quantity": "4",
+          "unit": "windows",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-095",
+    "lane": "RT-11",
+    "transcript": "Fit three radiators at £25 per radiator",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three radiators",
+          "unitPricePence": 2500,
+          "quantity": "3",
+          "unit": "radiators",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        7500
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-096",
+    "lane": "RT-11",
+    "transcript": "Fit two sockets at £25 each",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two sockets",
+          "unitPricePence": 2500,
+          "quantity": "2",
+          "unit": "sockets",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-097",
+    "lane": "RT-11",
+    "transcript": "Lay carpet 20 square feet at £25 a square foot",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay carpet",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "square feet",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F097"
+  },
+  {
+    "id": "RT-11-098",
+    "lane": "RT-11",
+    "transcript": "Fit fence 20 yards at £25 a yard",
+    "why": "Matching rate and quantity keep the original measure and rate; extracted money is never their product",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit fence",
+          "unitPricePence": 2500,
+          "quantity": "20",
+          "unit": "yards",
+          "priceBasis": "per_unit"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F098"
+  },
+  {
+    "id": "RT-11-099",
+    "lane": "RT-11",
+    "transcript": "Paint the lounge two coats £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-100",
+    "lane": "RT-11",
+    "transcript": "Paint the lounge three coats £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-101",
+    "lane": "RT-11",
+    "transcript": "Paint the lounge 2 coats £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-102",
+    "lane": "RT-11",
+    "transcript": "Render the two-storey house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Render",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-103",
+    "lane": "RT-11",
+    "transcript": "Render the 2-storey house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Render",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-104",
+    "lane": "RT-11",
+    "transcript": "Rewire the 3 bed house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F104"
+  },
+  {
+    "id": "RT-11-105",
+    "lane": "RT-11",
+    "transcript": "Rewire the three bed house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Rewire",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F105"
+  },
+  {
+    "id": "RT-11-106",
+    "lane": "RT-11",
+    "transcript": "Run 15mm pipe to the rad £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Run 15mm pipe",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F106"
+  },
+  {
+    "id": "RT-11-107",
+    "lane": "RT-11",
+    "transcript": "Run 22mm pipe to the rad £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Run 22mm pipe",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F107"
+  },
+  {
+    "id": "RT-11-108",
+    "lane": "RT-11",
+    "transcript": "Fit 2x4 timber in the loft £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 2x4 timber",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-109",
+    "lane": "RT-11",
+    "transcript": "Fit 2 x 4 timber in the loft £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 2 x 4 timber",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-110",
+    "lane": "RT-11",
+    "transcript": "Fit 4 by 2 timber in the loft £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 4 by 2 timber",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-111",
+    "lane": "RT-11",
+    "transcript": "Fit 18mm plywood to the floor £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 18mm plywood",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-112",
+    "lane": "RT-11",
+    "transcript": "Fit 6mm glass in the door £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 6mm glass",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-113",
+    "lane": "RT-11",
+    "transcript": "Fit 2.5mm cable to the socket £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit 2.5mm cable",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-114",
+    "lane": "RT-11",
+    "transcript": "Paint the lounge two layers £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-115",
+    "lane": "RT-11",
+    "transcript": "Fit door with 3 inch hinges £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-116",
+    "lane": "RT-11",
+    "transcript": "Fit door with 75mm hinges £120",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 12000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-117",
+    "lane": "RT-11",
+    "transcript": "Paint the grade 2 listed house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-118",
+    "lane": "RT-11",
+    "transcript": "Fit kitchen in the 3-bedroom house £300",
+    "why": "Number describes coats, building, material size or fitting: exact line price must not multiply",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit kitchen",
+          "unitPricePence": 30000,
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-119",
+    "lane": "RT-11",
+    "transcript": "Fit door £150.25. Paint skirting £80.50. For the whole job £230.76.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15025
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 8050
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 23076,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F119"
+  },
+  {
+    "id": "RT-11-120",
+    "lane": "RT-11",
+    "transcript": "Fit door £150.25. Paint skirting £80.50. For the whole job £230.75.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 15025
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 8050
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 23075,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-121",
+    "lane": "RT-11",
+    "transcript": "Fit door £0.01. Paint skirting £0.02. For the whole job £0.04.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 1
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 2
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 4,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F121"
+  },
+  {
+    "id": "RT-11-122",
+    "lane": "RT-11",
+    "transcript": "Fit door £0.01. Paint skirting £0.02. For the whole job £0.03.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 1
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 2
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 3,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-11-123",
+    "lane": "RT-11",
+    "transcript": "Fit door £99.99. Paint skirting £0.01. For the whole job £99.99.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 9999
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 1
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 9999,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F123"
+  },
+  {
+    "id": "RT-11-124",
+    "lane": "RT-11",
+    "transcript": "Fit door £25.50. Paint skirting £25.50. For the whole job £51.01.",
+    "why": "Penny-precise totals stay as said, including a one-penny mismatch",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit door",
+          "unitPricePence": 2550
+        },
+        {
+          "descriptionIncludes": "Paint skirting",
+          "unitPricePence": 2550
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": 5101,
+      "questionsInclude": [
+        "add up"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-11-F124"
+  }
+]
