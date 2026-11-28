@@ -35,7 +35,12 @@ async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "o
   const result = await response; expect(result.ok(), await result.text()).toBe(true);
   const preview = await result.json() as Preview;
   await click(page, "Simulate sending this quote");
-  await expect(page.locator(".quote-notice")).toHaveText("Simulated delivery — nothing real was sent.");
+  const notice = page.locator(".quote-notice");
+  const sent = "Simulated delivery — nothing real was sent.";
+  // The shared example firm queues the send for the deterministic fake worker; run it, as a builder would.
+  await expect(notice).toHaveText(new RegExp(`^(?:${sent}|The exact quote is queued only for the deterministic fake worker\\. Nothing was sent\\.)$`, "u"));
+  if ((await notice.textContent())?.includes("queued")) await click(page, "Continue fake worker");
+  await expect(notice).toHaveText(sent);
   return { jobId, preview };
 }
 
