@@ -1,5 +1,5 @@
 // V2-G9 wording for the aftercare check-up offers after handover. Pure: tested without a browser.
-export type AftercareState = "off" | "no_release" | "recipient_changed" | "too_soon" | "due" | "done";
+export type AftercareState = "off" | "no_release" | "recipient_changed" | "open_dispute" | "unpaid_invoice" | "too_soon" | "due" | "done";
 
 export const aftercareSwitchLabel = "Offer the customer a check-up visit 6 and 12 months after the handover release";
 export const aftercareSend = (months: number) => `Send the ${months}-month check-up offer (practice)`;
@@ -15,6 +15,8 @@ export function aftercareStateLine(view: { state: AftercareState; months: number
     case "off": return "Off. No aftercare offer is sent for this job.";
     case "no_release": return "Waits for a handover release.";
     case "recipient_changed": return "The customer contact changed after the release. Release the pack to the current customer first.";
+    case "open_dispute": return "Not sent while a recovery case is open on this job.";
+    case "unpaid_invoice": return "Not sent while an invoice on this job is unpaid.";
     case "too_soon": return `Next offer due ${day(view.nextAt!)}.`;
     case "due": return `The ${view.months}-month offer is due now. Each offer is sent once.`;
     case "done": return "Both offers are done. Nothing more is sent.";

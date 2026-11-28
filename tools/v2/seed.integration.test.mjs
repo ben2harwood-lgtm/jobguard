@@ -2475,6 +2475,56 @@ test("G9 waits: before 6 months, after a stopped link, and after a changed custo
   }
 });
 
+test("G9 a re-release does not move the clocks: the months count from the first release", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g3.post(f, g4.stop(f.releaseId));
+  const again = await g3.direct(f, g3.release(1));
+  const view = await g9.get(f);
+  assert.deepEqual([view.state, view.months], ["due", 6], "200 days after the first release, though the new one is from today");
+  const sent = await g9.direct(f, g9.send());
+  assert.deepEqual([sent.result.state, sent.captured.length], ["too_soon", 1]);
+  const { rows: [first] } = await admin.query("SELECT released_at + interval '12 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.equal(sent.result.nextAt, first.at.toISOString(), "the 12-month point is a year after the first release");
+  const { rows: [offer] } = await admin.query("SELECT release_id FROM app.v2_aftercare_offer WHERE job_id=$1", [f.job]);
+  assert.equal(offer.release_id, again.result.release.releaseId, "the offer follows the live release");
+});
+
+test("G9 holds like G8 while an invoice is unpaid or a recovery case is open; a hold past 12 months skips the 6-month offer", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  const late = await g8.ready({ daysAgo: 380 });
+  await g9.post(f, g9.turn(true));
+  await g9.post(late, g9.turn(true));
+  const [invoice, lateInvoice, recovery] = [randomUUID(), randomUUID(), randomUUID()];
+  const t = f.context.tenantId;
+  const unpaid = (id, job) => g8.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,
+    issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+    VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+  [id, t, job, randomUUID(), randomUUID(), `G9-${id.slice(0, 8)}`, "b".repeat(64)]);
+  try {
+    await unpaid(invoice, f.job);
+    assert.equal((await g9.get(f)).state, "unpaid_invoice");
+    const held = await g9.direct(f, g9.send());
+    assert.deepEqual([held.result.code, held.result.state, held.captured], ["AFTERCARE_NOT_DUE", "unpaid_invoice", []]);
+    await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "the database holds it too");
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [recovery, t, f.job]);
+    assert.equal((await g9.get(f)).state, "open_dispute");
+    assert.equal((await g9.post(f, g9.send(), 409)).state, "open_dispute");
+    await g8.placed("DELETE FROM app.recovery_case WHERE id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [invoice]);
+    assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 6], "released when the hold ends");
+    await unpaid(lateInvoice, late.job);
+    assert.equal((await g9.get(late)).state, "unpaid_invoice");
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [lateInvoice]);
+    assert.deepEqual([(await g9.get(late)).state, (await g9.get(late)).months], ["due", 12], "the held 6-month offer is now too late");
+    assert.deepEqual([await g9.months(f), await g9.months(late)], [[], []]);
+  } finally {
+    await g8.placed("DELETE FROM app.recovery_case WHERE id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id IN ($1, $2)", [invoice, lateInvoice]);
+  }
+});
+
 test("G9 other firm: 404 on read, switch and send; no aftercare rows seen; UPDATE and DELETE refused", async () => {
   const f = await g8.ready({ daysAgo: 200 });
   await g9.post(f, g9.turn(true));

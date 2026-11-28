@@ -17,9 +17,12 @@ confines the firm). Runtime may select and insert.
 `app.v2_aftercare_due(t, j, ignoring)` (STABLE, runs as the caller) returns the state the screen
 shows and the guard enforces, first match wins: `off`, `no_release` (no release whose link is
 not stopped), `recipient_changed` (G4's address rule), `done` (the 12-month offer was sent),
-`too_soon` (with the next date), `due` (with the month). Months count from the newest unstopped
-release. Once the 12-month point has passed, only the 12-month offer can go: an unsent 6-month
-offer is skipped as too late. `ignoring` lets the insert guard leave its own new row out.
+`open_dispute` and `unpaid_invoice` (G8's hold, same facts as 2085: an open recovery case against
+the customer, or an issued invoice whose total less credit notes is more than its payments less
+reversals), `too_soon` (with the next date), `due` (with the month). Months count from the first
+handover release, stopped or not, so a corrected re-release does not move them; the offer is sent
+for the newest unstopped release. Once the 12-month point has passed, only the 12-month offer can
+go: an unsent 6-month offer is skipped as too late, including when a hold ran past 12 months. `ignoring` lets the insert guard leave its own new row out.
 
 `app.v2_aftercare_offer_guard` (AFTER INSERT) refuses with `V2_AFTERCARE_NOT_DUE` (23514) unless
 the row is the offer due now, for that release and that address.

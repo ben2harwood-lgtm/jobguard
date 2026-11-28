@@ -13,7 +13,7 @@ export const aftercareSendV1 = z.strictObject({ version: z.literal("v2-aftercare
 export type AftercareSwitch = z.input<typeof aftercareSwitchV1>;
 export type AftercareSend = z.input<typeof aftercareSendV1>;
 
-export type AftercareState = "off" | "no_release" | "recipient_changed" | "too_soon" | "due" | "done";
+export type AftercareState = "off" | "no_release" | "recipient_changed" | "open_dispute" | "unpaid_invoice" | "too_soon" | "due" | "done";
 export type AftercareView = { enabled: boolean; state: AftercareState; months: 6 | 12 | null; nextAt: string | null;
   offers: { months: 6 | 12; sentAt: string }[] };
 
