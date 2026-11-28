@@ -86,6 +86,9 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D26 | Q61 | V2-SQ3 proof: untouched transcripts → saved quote that reopens unchanged, desktop and 360 px; Ben's phone checklist | **Opus** | SQ2 (Q60) PR | none | T1 |
 | D27 | Q62 | V2-SQ4 Tommy demo journeys (#918 @ 32decb2c1, read only) vs V2 routes: On V2 / On a V2 PR / Missing; specs for journeys V2 covers | **Opus** | v2/main | none | T1 |
 | D28 | Q63 | V2-G4 who can read the handover pack: builder stops a link; a replaced customer stops the old link; newer ignores stopped; other firm sees nothing | **Opus** | G3 #999 `claude/project-thread-trp08u-g3` | 2062 | RED |
+| D29 | Q64 | V2-SQ-E quote laid out by room: optional `sections` in the quote document (absent = byte-identical), `v2_quote_section`, itemised or one room total; totals unchanged | **Opus** | SQ-D #1019 | 2087 | RED money |
+| D30 | Q65 | V2-SQ-H one end-to-end spoken-quote proof (mic → rooms → quote by room → acceptance → plan per room → Sent), 1280 and 360, plus Mac-tunnel preview run | **Opus** | SQ-E (Q64) PR | none | T1 |
+| D31 | Q66 | V2-SQ-I-1 designed review, quote and customer-and-site screens on V2 (copied from #918, read only) + plain empty-draft message | **Opus** | SQ-E (Q64) PR | none | T2 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
