@@ -1,6 +1,6 @@
 K6A (RED) — local inbound address and routing
 
-2023 is installed only by tools/v2/bootstrap.mjs after the checked 2001 V2
+2072 is installed only by tools/v2/bootstrap.mjs after the checked 2001 V2
 retargeting migration. It is deliberately outside the shared migrate() runner:
 normal environments and the predecessor purchase-order audit installation do
 not acquire these tables. The purchase-order audit suite needs no shared-schema
@@ -32,7 +32,7 @@ conflicting or foreign references wait. Body text and attachment bytes are not
 stored. Missing/invalid fixture IDs and attachment metadata produce needs_k6b.
 No real provider, files, AI, outbound delivery, stock effect or production route.
 
-Proof specification: tools/v2/migration-proofs/2063_v2_inbound_mail.json.
+Proof specification: tools/v2/migration-proofs/2072_v2_inbound_mail.json.
 Real PostgreSQL, full seeded suite, Playwright at 360/1280 and Mac phone-mode
 execution remain required outside the builder sandbox; this note is not a pass.
 
@@ -46,6 +46,9 @@ origin and run the same browser file. It reuses one login at 360 and 1280 pixels
 Open /inbound-mail in the signed-in practice firm. The seeded quote must first
 be switched live through its normal no-charge command, as the seeded proof does.
 
-Renumbered 2023 -> 2063 above v2/main (2047 FL-1) and the open V2 slices. app.v2_inbound_item
-is listed in tools/v2/firm-lock/pending/FL-K6.json: its job lock (`v2_job`) allows a NULL job_id
-for unrouted mail, which the FL-1 guard shape cannot express.
+Renumbered 2023 -> 2063 -> 2072 above v2/main and the open V2 slices (2063 is D3 in the V2 migration register). app.v2_inbound_item
+is firm-locked (FL-K6). Unrouted mail has no job yet, so its restrictive `v2_practice_firm` is
+`firm_key = app.current_firm_profile_key()` on the item's own NOT NULL firm_key (set from the
+mailbox's firm), and a separate restrictive `v2_practice_job` requires a visible app.job row
+whenever job_id is set. The FL guard accepts that form only for a direct table whose job_id is
+nullable and whose firm_key is NOT NULL; every other direct table must still join app.job.

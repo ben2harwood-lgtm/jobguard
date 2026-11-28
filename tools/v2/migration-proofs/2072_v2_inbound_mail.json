@@ -1,11 +1,11 @@
 {
-  "migration": "tools/v2/migrations/2063_v2_inbound_mail.sql",
+  "migration": "tools/v2/migrations/2072_v2_inbound_mail.sql",
   "scope": "Dedicated local V2 bootstrap only; absent from shared migrate()",
   "tables": ["v2_inbound_address", "v2_inbound_item", "v2_inbound_command"],
   "required": {
     "owner": "jobguard_migration",
     "rls": "enabled and forced; bound tenant and current_firm_profile_key",
-    "jobVisibility": "filed items additionally require a visible app.job row",
+    "firmLock": "item: restrictive v2_practice_firm on its NOT NULL firm_key; restrictive v2_practice_job requires a visible app.job row once job_id is set",
     "grants": "SELECT/INSERT; item state/link/revision and command result UPDATE only; no DELETE or TRUNCATE",
     "foreignKeys": "tenant and firm-qualified address; tenant/job/document-qualified supplier document"
   },
