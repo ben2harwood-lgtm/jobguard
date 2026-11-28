@@ -216,3 +216,24 @@ Validation results follow below. A fixed finding records the repair; it does not
 - `git diff --check` — passed. The lane permits exactly the ten changed product/test/register paths; its own lane file is implicitly permitted, with no grant of `config/lanes/`. The pre-existing untracked `.pnpm-store/` stays out of the commit.
 
 No live microphone, approved-region AI evaluation, independent review, merge or release is claimed. Browser speech uses the existing deterministic adapter; browser network cases use the supplied route fixtures. Remaining delivery gate: run the unchanged RT-09 DB preservation and typed-conflict assertions where embedded PostgreSQL starts, then apply the existing exact-head review/CI gates.
+
+### RT-FIX-13 repair round 1 — real discard refusal
+
+Base: `21966732b`, branch `codex/sandbox/rt-fix-13`.
+
+The real discard routine checks draft eligibility before revision, so Confirm followed by stale Discard raises PostgreSQL `22023 / DISCARD_DRAFT_REFUSED`, not `40001`. The application now compares the expected revision with the stored **job** revision inside the command transaction before invoking that routine. It takes Confirm's existing job advisory lock before `begin_command`; replay still returns the recorded result before mutation. A revision mismatch returns `REVIEW_REVISION_CONFLICT`; a refusal at the current revision keeps `DISCARD_DRAFT_REFUSED`. No repository, migration, commercial policy or web changes.
+
+The unit regression now runs the mutation callback against a stored revision and models the real `22023 / DISCARD_DRAFT_REFUSED` failure. It covers stale revisions 0 and 2, a current-revision refusal, and the existing `40001` mapping. The A10 integration preservation test is unchanged.
+
+- Repaired the installed embedded PostgreSQL symlinks with `node scripts/hydrate-symlinks.js` from `node_modules/.pnpm/@embedded-postgres+darwin-arm64*/node_modules/@embedded-postgres/darwin-arm64`.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src/capture/capture-state.test.ts` — **13 passed**.
+- `pnpm --filter @jobguard/api exec vitest run --maxWorkers=2 src` — **268 files / 4,533 tests passed**, outside the sandbox. The initial sandbox run was stopped after multiple embedded PostgreSQL setup failures; no tests were excluded from the permitted run.
+- `pnpm --filter @jobguard/api openapi:check` — **passed**.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/RT-09-exactly-once.integration.test.ts` — **13/13 passed against real embedded PostgreSQL outside the sandbox**, including both A10 assertions. The sandbox attempt failed during initialization before test execution; the permitted run completed in 10.03 s. The fixture selects a free port in 58800–59199; neither 3000 nor 55432 was used.
+- `pnpm typecheck --concurrency=2 --cache-dir=/tmp/jobguard-rt-fix13-r1-turbo` — **8 tasks passed**.
+- `pnpm --filter @jobguard/web test --maxWorkers=2` — **267 files / 3,838 tests passed**, including all database-backed files, outside the sandbox.
+- `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/tmp/rt-fix13-round1-git-excludes AGENT_LANE=v2-rt-fix-13 LANE_BASE_REF=21966732^ pnpm lint --concurrency=2 --cache-dir=/tmp/jobguard-rt-fix13-r1-turbo` — **boundary checks and 8 lint tasks passed**. The temporary excludes file contains only the pre-existing `.pnpm-store/`; no repository ignore rule changed.
+- `pnpm build --concurrency=2 --cache-dir=/tmp/jobguard-rt-fix13-r1-turbo` — **8 tasks passed**, including API and optimized web builds.
+- `git diff --check` and final lane-boundary check — **passed**. Only the application, its unit regression and this existing receipt are changed; `.pnpm-store/` remains untracked and excluded from the commit.
+
+The real PostgreSQL execution hold recorded above is resolved by this repair round. Exact-head independent review/CI and merge gates remain; this is a commit-only repair.
