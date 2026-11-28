@@ -54,6 +54,35 @@ export const sorVersionImportV1 = z.object({
   });
 });
 export type SorVersionImport = z.infer<typeof sorVersionImportV1>;
+/**
+ * CC-I1: the optional "what this rate includes" text, typed by the contractor from its own contract, at most 1,000 characters (the same
+ * bound as the contract inclusion clause, ENTERPRISE-R1-F §4.2). Trimmed; empty is refused (leave it out instead). Line breaks are kept;
+ * other control characters are refused. Stored on that version's rate item only; audit payloads carry its hash, never the text.
+ */
+export const SOR_ITEM_INCLUDES_MAX = 1000;
+export const sorItemIncludesTextV1 = z.string().trim().min(1).max(SOR_ITEM_INCLUDES_MAX).regex(/^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/u);
+export const sorItemV2 = sorItemV1.extend({ includes: sorItemIncludesTextV1.optional() }).strict();
+/** sor-version-import.v2: v1 plus the optional per-item includes text. v1 is unchanged and still accepted. */
+export const sorVersionImportV2 = z.object({
+  version: z.literal("sor-version-import.v2"), environment: z.literal("synthetic_demo"), commandId: z.guid({ error: "Invalid uuid" }),
+  scheduleId: z.guid({ error: "Invalid uuid" }), reference: z.string().trim().min(1).max(100), effectiveFrom: z.string().date(),
+  items: z.array(sorItemV2).min(1).max(10000),
+}).strict().superRefine((value, context) => {
+  const codes = new Set<string>();
+  value.items.forEach((item, index) => {
+    if (codes.has(item.code)) context.addIssue({ code: "custom", path: ["items", index, "code"], message: "Duplicate SoR code" });
+    codes.add(item.code);
+  });
+});
+export type SorVersionImportV2 = z.infer<typeof sorVersionImportV2>;
+/** Either import version, chosen by its `version` field. */
+export const sorVersionImportAny = z.union([sorVersionImportV1, sorVersionImportV2]);
+/** One rate item's includes text for one rate-list version; null when that version's item has none (every v1 and pre-0785 item). */
+export const sorItemIncludesV1 = z.object({
+  version: z.literal("sor-item-includes.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0),
+  sorVersionId: z.guid({ error: "Invalid uuid" }), code: codeV1, includes: sorItemIncludesTextV1.nullable(),
+}).strict();
+export type SorItemIncludes = z.infer<typeof sorItemIncludesV1>;
 const effectiveVersionV1 = z.object({ id: z.guid({ error: "Invalid uuid" }), effectiveFrom: z.string().date() });
 /** Caller supplies persisted, same-contract candidates. No implicit latest-version fallback. */
 export function selectSorVersion<T extends { id: string; effectiveFrom: string }>(issuedOn: string, allowedIds: readonly string[], versions: readonly T[]): T {
@@ -81,6 +110,11 @@ export function priceWorkOrderLines(lines: readonly Readonly<{ sorCode: string; 
 export const sorVersionResultV1 = z.object({
   version: z.literal("sor-version-result.v1"), environment: z.literal("synthetic_demo"), versionId: z.guid({ error: "Invalid uuid" }), scheduleId: z.guid({ error: "Invalid uuid" }),
   itemCount: z.number().int().positive(), effectiveFrom: z.string().date(), replayed: z.boolean(), realExternalActions: z.literal(0),
+}).strict();
+/** sor-version-import.v2's answer: v1's plus how many items carry includes text. */
+export const sorVersionResultV2 = z.object({
+  version: z.literal("sor-version-result.v2"), environment: z.literal("synthetic_demo"), versionId: z.guid({ error: "Invalid uuid" }), scheduleId: z.guid({ error: "Invalid uuid" }),
+  itemCount: z.number().int().positive(), includesCount: z.number().int().nonnegative(), effectiveFrom: z.string().date(), replayed: z.boolean(), realExternalActions: z.literal(0),
 }).strict();
 export const sorVersionListV1 = z.object({
   version: z.literal("sor-version-list.v1"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0),

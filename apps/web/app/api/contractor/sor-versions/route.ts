@@ -8,7 +8,7 @@ function failure(error: unknown) { const { status, body } = workOrderHttpFailure
 export async function GET() {
   try { return NextResponse.json(await (await workspaceApplication()).workOrders.sorVersions(), { headers }); } catch (error) { return failure(error); }
 }
-/** Imports an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required. Tenant administration, outside the job-lifecycle registry. */
+/** Imports an immutable schedule-of-rates version (sor-version-import.v1, or .v2 with optional per-item includes text); contract.manage required. Tenant administration, outside the job-lifecycle registry. */
 export async function POST(request: Request) {
   if (!isTrustedBrowserOrigin(request)) return NextResponse.json({ version: "work-order-error.v1", code: "NOT_FOUND", recoverable: false }, { status: 404, headers });
   try {

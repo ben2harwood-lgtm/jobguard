@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priceSorLine, priceWorkOrderLines, selectSorVersion, sorVersionImportV1 } from "./sor-pricing.js";
+import { SOR_ITEM_INCLUDES_MAX, priceSorLine, priceWorkOrderLines, selectSorVersion, sorItemIncludesV1, sorVersionImportAny, sorVersionImportV1, sorVersionImportV2 } from "./sor-pricing.js";
 const id = "11000000-0000-4000-8000-000000000001";
 const price = (quantity: string, ratePence: number, numerator = "0", denominator = "1000") =>
   priceSorLine({ version: "sor-line-pricing.v1", quantity, rate: { pence: ratePence, currency: "GBP" }, adjustment: { numerator, denominator } });
@@ -50,6 +50,26 @@ describe("ENT-2 exact SoR pricing (DW5)", () => {
     expect(sorVersionImportV1.safeParse({ ...command, tenantId: id }).success).toBe(false);
     expect(sorVersionImportV1.safeParse({ ...command, items: [command.items[0], command.items[0]] }).success).toBe(false);
     expect(sorVersionImportV1.safeParse({ ...command, items: [{ ...command.items[0], rate: { pence: 1000000000001, currency: "GBP" } }] }).success).toBe(false);
+  });
+  it("CC-I1: v2 takes an optional, bounded per-item includes text; v1 is unchanged and refuses it", () => {
+    const item = { code: "REPAIR", description: "Fictional repair", unit: "each", rate: { pence: 10000, currency: "GBP" } };
+    const v2 = { version: "sor-version-import.v2", environment: "synthetic_demo", commandId: id, scheduleId: id, reference: "Generated rates", effectiveFrom: "2026-01-01", items: [item] };
+    expect(sorVersionImportV2.safeParse(v2).success).toBe(true);
+    const withText = sorVersionImportV2.parse({ ...v2, items: [{ ...item, includes: "  Fictional: includes making good\nand removal of debris  " }, { ...item, code: "OTHER" }] });
+    expect(withText.items.map(i => i.includes)).toEqual(["Fictional: includes making good\nand removal of debris", undefined]);
+    expect(sorVersionImportV2.safeParse({ ...v2, items: [{ ...item, includes: "x".repeat(SOR_ITEM_INCLUDES_MAX) }] }).success).toBe(true);
+    for (const includes of ["x".repeat(SOR_ITEM_INCLUDES_MAX + 1), "", "   ", null, 7, "bell\u0007"]) expect(sorVersionImportV2.safeParse({ ...v2, items: [{ ...item, includes }] }).success, String(includes)).toBe(false);
+    expect(sorVersionImportV2.safeParse({ ...v2, tenantId: id }).success).toBe(false);
+    expect(sorVersionImportV2.safeParse({ ...v2, items: [item, item] }).success).toBe(false);
+    expect(sorVersionImportV2.safeParse({ ...v2, version: "sor-version-import.v1" }).success).toBe(false);
+    // v1 never carries the text: an includes field on a v1 item is an unknown field.
+    expect(sorVersionImportV1.safeParse({ ...v2, version: "sor-version-import.v1", items: [{ ...item, includes: "Fictional" }] }).success).toBe(false);
+    expect(sorVersionImportAny.parse({ ...v2, version: "sor-version-import.v1" }).version).toBe("sor-version-import.v1");
+    expect(sorVersionImportAny.parse(v2).version).toBe("sor-version-import.v2");
+    expect(sorVersionImportAny.safeParse({ ...v2, version: "sor-version-import.v3" }).success).toBe(false);
+    const read = { version: "sor-item-includes.v1", environment: "synthetic_demo", realExternalActions: 0, sorVersionId: id, code: "REPAIR", includes: null };
+    expect(sorItemIncludesV1.safeParse(read).success).toBe(true);
+    expect(sorItemIncludesV1.safeParse({ ...read, includes: "x".repeat(SOR_ITEM_INCLUDES_MAX + 1) }).success).toBe(false);
   });
 });
 describe("ENT-2 whole-order pricing from persisted items", () => {

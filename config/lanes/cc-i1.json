@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "cc-i1": {
+      "branches": [
+        "claude/ep-cc-i1"
+      ],
+      "note": "EP-CC-I1 (Enterprise R1, F1): rate-list import v2 with optional per-item includes text, read by rate-list version and code for the entitlement context. Migration 0785. Not RED. Made-up data only; Gate G1 stays closed.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/contractor/work-order.contracts.ts",
+        "apps/api/src/contractor/work-order.controller.ts",
+        "apps/web/app/api/contractor/sor-versions/route.ts",
+        "docs/contracts/sor-version-import-v2.md",
+        "packages/core/src/sor-pricing.test.ts",
+        "packages/core/src/sor-pricing.ts",
+        "packages/core/src/work-order.ts",
+        "packages/db/migration-notes/0785_sor_item_includes.md",
+        "packages/db/migrations/0785_sor_item_includes.sql",
+        "packages/db/src/sor-repository.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0785_sor_item_includes.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/sor-item-includes.integration.test.ts"
+      ]
+    }
+  }
+}
