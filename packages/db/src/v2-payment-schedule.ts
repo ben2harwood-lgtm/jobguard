@@ -37,7 +37,7 @@ export type PaymentScheduleSet = z.infer<typeof paymentScheduleSetV1>;
 export class PaymentScheduleError extends Error {
   constructor(readonly code: "SCHEDULE_INVALID" | "SCHEDULE_STALE" | "SCHEDULE_REPLAY_CONFLICT" |
     "SCHEDULE_ACCEPTANCE_REQUIRED" | "SCHEDULE_BUILDER_REQUIRED" | "STAGE_NOT_DUE" | "STAGE_DRAFT_LIVE" |
-    "STAGE_DRAFT_NOT_FOUND" | "STAGE_DRAFT_COMMAND_CONFLICT") { super(code); }
+    "STAGE_DRAFT_NOT_FOUND" | "STAGE_DRAFT_COMMAND_CONFLICT" | "V2_STAGE_DRAFT_OPEN" | "FINAL_ACCOUNT_LOCKED") { super(code); }
 }
 export const pounds = (pence: number) => {
   const exact = BigInt(money(pence).pence);

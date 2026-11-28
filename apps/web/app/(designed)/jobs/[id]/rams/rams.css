@@ -1,0 +1,33 @@
+.rams-page { max-width: 100%; overflow-wrap: anywhere; }
+.rams-page .rams-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+.rams-page button, .rams-page select { min-height: 44px; min-width: 44px; }
+.rams-page input:not([type="checkbox"]) { min-height: 44px; max-width: 100%; }
+.rams-page label { display: block; max-width: 100%; }
+.rams-page textarea { display: block; width: 100%; min-height: 130px; box-sizing: border-box; }
+.rams-page .rams-editor { display: block; }
+.rams-page input[type="checkbox"] { min-width: 44px; min-height: 44px; vertical-align: middle; }
+.rams-page :focus-visible { outline: 3px solid #06758e; outline-offset: 3px; }
+.rams-section-text { white-space: pre-wrap; }
+.rams-warning { font-weight: 700; }
+@media print {
+  /* Let the document flow across pages through the normally scrollable app shell. */
+  :has(#rams-document) {
+    display: block !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body:has(#rams-document) > :not(#rams-document):not(:has(#rams-document)),
+  body :has(#rams-document) > :not(#rams-document):not(:has(#rams-document)) { display: none !important; }
+  #rams-document { width: 100%; color: #000 !important; background: #fff !important; }
+  #rams-document .rams-controls, #rams-document button { display: none !important; }
+  #rams-document .card { background: #fff !important; color: #000 !important; box-shadow: none !important; border: 1px solid #aaa; break-inside: avoid; }
+  #rams-document p, #rams-document h1, #rams-document h2, #rams-document .tag { color: #000 !important; }
+  #rams-document h1 { font-size: 20pt; }
+  #rams-document h2 { font-size: 14pt; }
+  @page { size: A4; margin: 15mm; }
+}

@@ -79,6 +79,14 @@ BEGIN
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_stage_invoice_draft_withdrawal.tenant_id, v2_stage_invoice_draft_withdrawal.job_id)
     ));
+  -- FL: the standard firm lock, joining the job on (tenant_id, job_id) (Q83, as FL-6 did for V2 tables).
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_stage_invoice_draft;
+  CREATE POLICY v2_practice_firm ON app.v2_stage_invoice_draft AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_stage_invoice_draft.tenant_id, v2_stage_invoice_draft.job_id)));
+  -- FL: the standard firm lock, joining the job on (tenant_id, job_id) (Q83, as FL-6 did for V2 tables).
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_stage_invoice_draft_withdrawal;
+  CREATE POLICY v2_practice_firm ON app.v2_stage_invoice_draft_withdrawal AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_stage_invoice_draft_withdrawal.tenant_id, v2_stage_invoice_draft_withdrawal.job_id)));
   REVOKE ALL ON app.v2_stage_invoice_draft, app.v2_stage_invoice_draft_withdrawal FROM PUBLIC;
   GRANT SELECT, INSERT ON app.v2_stage_invoice_draft, app.v2_stage_invoice_draft_withdrawal TO jobguard_runtime;
   DROP TRIGGER IF EXISTS v2_stage_invoice_draft_immutable ON app.v2_stage_invoice_draft;

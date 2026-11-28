@@ -194,3 +194,5 @@ export * from "./merchant-reliability.js";
 export * from "./rate-baseline.js";
 export * from "./operative-view-models.js";
 export * from "./offline-upload-contract.js";
+// V2-G6: read-only close-out review (warnings, one blocking item).
+export * from "./v2-close-out.js";

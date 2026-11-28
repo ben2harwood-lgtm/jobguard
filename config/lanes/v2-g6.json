@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-g6": {
+      "branches": [
+        "claude/project-thread-trp08u-g6"
+      ],
+      "note": "RED money Q73 V2-G6. Mounts on main-owned files: packages/db/src/final-account-lock-repository.ts (one V2-only guard call first in lock(); a no-op unless JOBGUARD_LOCAL_V2=1 on the synthetic stack), apps/api/src/workspace/application.ts (closeOut wiring), packages/core/src/index.ts and packages/db/src/index.ts (exports), apps/web/app/(designed)/jobs/[id]/money/page.tsx (V2-only card), apps/api/src/final-account-lock.controller.ts (V2_STAGE_DRAFT_OPEN as 409). No migration.",
+      "allow": [
+        "apps/api/src/final-account-lock.controller.test.ts",
+        "apps/api/src/final-account-lock.controller.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/close-out.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/api/jobs/[id]/close-out/route.test.ts",
+        "apps/web/app/api/jobs/[id]/close-out/route.ts",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.test.ts",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.ts",
+        "apps/web/app/ui/v2-close-out.test.tsx",
+        "apps/web/app/ui/v2-close-out.tsx",
+        "packages/core/src/index.ts",
+        "packages/core/src/v2-close-out.test.ts",
+        "packages/core/src/v2-close-out.ts",
+        "packages/db/src/final-account-lock-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-close-out-repository.ts",
+        "packages/db/src/v2-payment-schedule-repository.ts",
+        "packages/db/src/v2-payment-schedule.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
