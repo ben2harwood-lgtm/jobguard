@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { csvCell, restoreCsvCell } from "./csv-cell.js";
+import { csvCell } from "./csv-cell.js";
 import { contractorPermits, type ContractorGrant, type ContractorTarget } from "./contractor.js";
 import { contractorResidentBoundaryV1 } from "./contractor-parties.js";
 import { assertSorQuantity, SorPricingError, sorMoneyV1, sorQuantityV1 } from "./sor-pricing.js";
@@ -149,7 +149,7 @@ export function parseWorkOrderCsv(csv: string): WorkOrderCsvRecord[] {
     const row: Record<string, unknown> = {};
     try {
       workOrderCsvColumns.forEach((column, position) => {
-        const value = restoreCsvCell(cells[position]!);
+        const value = cells[position]!;
         if (["resident", "assignedMembershipIds", "lines"].includes(column)) row[column] = value === "" && column === "resident" ? null : JSON.parse(value);
         else if (column === "expectedRevision") {
           if (!/^(?:0|[1-9]\d{0,9})$/u.test(value)) throw new WorkOrderError("INVALID_ROW");

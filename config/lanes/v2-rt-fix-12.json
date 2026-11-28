@@ -5,18 +5,14 @@
       "branches": [
         "codex/sandbox/rt-fix-12"
       ],
-      "note": "RT-FIX-12 repair round 1 option (a) (#1071): billing CSV preserves existing DB first-character parity; other exports retain space-aware protection. Migration 2028 and its dependent tests/proof are removed. Space-prefixed billing F008 remains open pending migration 2089 and Ben's go. Deleted migration/proof paths allow removal only. Own lane file is implicitly editable; no lane-register grant. Commit only.",
-      "test": "pnpm --filter @jobguard/ai test --maxWorkers=2 && pnpm --filter @jobguard/core test --maxWorkers=2 && pnpm --filter @jobguard/web test --maxWorkers=2",
+      "note": "RT-FIX-12 repair round 2, final (Codex review #1097), parent ddb340c8: work-order v1 import reads cells literally; export escaping is unchanged. Preserve literal apostrophe reference identity and document accepted export/re-import apostrophe retention. No migration or new web workflow. Own lane file is implicitly editable; no lane-register grant. Commit only; no push.",
+      "test": "pnpm --filter @jobguard/core exec vitest run src/csv-cell.test.ts src/work-order.test.ts src/contractor-billing.test.ts src/enterprise-baseline.test.ts --maxWorkers=2",
       "allow": [
         "docs/testing/spoken-quote-hardening/FINDINGS.md",
-        "packages/ai/src/redteam/rt07-boundaries.test.ts",
-        "packages/core/src/contractor-billing.test.ts",
-        "packages/core/src/contractor-billing.ts",
         "packages/core/src/csv-cell.test.ts",
         "packages/core/src/csv-cell.ts",
-        "packages/db/migrations/2028_rt12_csv_whitespace.sql",
-        "packages/db/test/contractor-billing-export.integration.test.ts",
-        "packages/db/test/migration-proofs/2028_rt12_csv_whitespace.proof.json"
+        "packages/core/src/work-order.test.ts",
+        "packages/core/src/work-order.ts"
       ]
     }
   }

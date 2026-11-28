@@ -1120,7 +1120,7 @@ Invariants touched: ambiguous money stays open with a question; conditional pric
 
 Base `cee5a86ed`, branch `codex/sandbox/rt-fix-12`, issue #1071. Commit only; no push, PR, merge, external send, paid API or deployment.
 
-The TypeScript CSV writers use one `packages/core/src/csv-cell.ts` helper module. In repair round 1 option (a), DB-checked `billing-export.v1` uses `billingCsvCell`: it follows the existing SQL first-character rule exactly (=, +, -, @, apostrophe, TAB or CR at position 0). Formula starters after leading spaces remain unprotected in billing artifacts. Work-order, baseline and billing-status CSV retain full space-aware protection through `csvCell`, including typed numeric columns staying numeric. Both modes share the prefix and quoting implementation. JSON retains exact source text; importers restore protected text through the same module.
+The TypeScript CSV writers use one `packages/core/src/csv-cell.ts` helper module. In repair round 1 option (a), DB-checked `billing-export.v1` uses `billingCsvCell`: it follows the existing SQL first-character rule exactly (=, +, -, @, apostrophe, TAB or CR at position 0). Formula starters after leading spaces remain unprotected in billing artifacts. Work-order, baseline and billing-status CSV retain full space-aware protection through `csvCell`, including typed numeric columns staying numeric. Both modes share the prefix and quoting implementation. JSON retains exact source text. Work-order v1 imports read text literally, including any leading apostrophe; other importers retain their existing restoration behavior.
 
 Migration `2028_rt12_csv_whitespace.sql`, its proof and migration-dependent integration-test additions are removed. No migration or DB function change is included. `app.cb_export` still validates exact bytes against `app.cb_csv(art)`, so adding space-aware billing protection requires its own approved migration. A deterministic test faithfully evaluates the existing 0727 SQL expression and compares it with billing mode for all eight requested inputs (including leading spaces, TAB, CR, apostrophe and an embedded quote), plus the remaining formula starters. This is expression parity evidence, not a PostgreSQL execution claim.
 
@@ -1169,6 +1169,23 @@ Round-1 validation (Node 24.17.0, pnpm 10.28.1):
 - `git diff --check` — pass. `.pnpm-store/` remains untracked and excluded.
 
 Invariants affected: frozen billing CSV remains byte-compatible with the existing independent DB validator; other CSV text protection and exact JSON source survive; the space-prefixed billing gap is explicitly open. No replacement migration, stored-artifact rewrite, schema/privilege change, provider action or new alert. Independent review against the committed head and release approval remain separate gates.
+### RT-FIX-12 repair round 2 (final) — Codex review #1097
+
+Parent `ddb340c8a92dd29f836dc256835a33f2f81b8fbf`, branch `codex/sandbox/rt-fix-12`. Removed only work-order import-side CSV restoration: v1 values are read literally again, so an existing literal reference `'=WO-123` retains its apostrophe and matches the same contract/reference identity. Export-side escaping is unchanged. The regression uses a hand-written v1 CSV, validates the parsed row, and checks the existing-order lookup identity (including a distinct `=WO-123` order), with no unmatched/new-order candidate. This is core boundary coverage, not a database import execution claim.
+
+An exported formula-like reference keeps its protective apostrophe on re-import. This is accepted: v1 has no marker that distinguishes a protective prefix from literal source text. **LATER:** a versioned escaped-format marker, if ever needed. No migration, schema, privilege, provider, UI or release-policy change.
+
+Round-2 validation (Node 24.17.0, pnpm 10.28.1):
+
+- Before the implementation change, `pnpm --filter @jobguard/core exec vitest run src/work-order.test.ts --maxWorkers=2` exited 1: both the literal-reference regression and the revised re-import expectation failed because the apostrophe was stripped; 23 other tests passed.
+- After the change, `pnpm --filter @jobguard/core exec vitest run src/csv-cell.test.ts src/work-order.test.ts src/contractor-billing.test.ts src/enterprise-baseline.test.ts --maxWorkers=2` exited 0: 4 files, 97 tests pass.
+- `pnpm typecheck --concurrency=2 --cache-dir=/tmp/rtfix12-r2-turbo` exited 0: all 8 package tasks pass.
+- `pnpm lint --concurrency=2 --cache-dir=/tmp/rtfix12-r2-turbo` exited 1 at the unchanged `config/lanes/v2-rt-12.json` lane-register grant; core purity passed. `pnpm exec turbo run lint --concurrency=2 --cache-dir=/tmp/rtfix12-r2-turbo` exited 0: all 8 package lint tasks pass. Separate `node tools/money-arithmetic-lint.mjs`, `node tools/commercial-boundary-lint.mjs`, `node tools/ai-provider-boundary-lint.mjs` and `node tools/plpgsql-case-in-if-lint.mjs` each exited 0. Isolated repair-lane schema, branch and all 4 changed paths pass, with no migrations; this does not pass the global lane gate.
+- `pnpm build --concurrency=2 --cache-dir=/tmp/rtfix12-r2-turbo` exited 0: all 8 package tasks pass, including web production build and mobile export (not a native device build).
+- `git diff --check` exited 0. No database, AI, browser or full-workspace test suite was rerun for this core-only literal-import correction; export behavior is covered by the four requested core suites.
+
+Commit only; no push. `.pnpm-store/` remains untracked and excluded. Independent review against the new head and existing release gates remain separate from these deterministic checks.
+
 ## RT-FIX-6 repair round 1 — merge-forward prerequisite
 
 Normal merge of `origin/codex/sandbox/rt-fix-5` (`34625ab6`) into `d0bd080a`.
