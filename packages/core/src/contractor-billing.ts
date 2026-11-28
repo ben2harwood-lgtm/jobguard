@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { billingCsvCell, csvCell, restoreCsvCell } from "./csv-cell.js";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
 import { sha256 } from "./evidence-pack.js";
 import {
@@ -148,14 +149,8 @@ export function stableBillingExportLineId(clientContractId: string, revisionId: 
   const digest = sha256(canonical(["billing-export-line.v1", read(uuid, clientContractId), read(uuid, revisionId)]));
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${["8", "9", "a", "b"][parseInt(digest[16]!, 16) % 4]}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
-const csvCell = (value: string | number) => {
-  const text = String(value);
-  // Escape leading apostrophes too, so the CSV reader can restore source text exactly.
-  const safe = /^[=+\-@']/u.test(text) ? `'${text}` : text;
-  return `"${safe.replace(/"/gu, '""')}"`;
-};
-function csvRows(header: readonly string[], rows: readonly (readonly (string | number)[])[]): string {
-  return `${header.join(",")}\r\n${rows.map(r => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
+function csvRows(header: readonly string[], rows: readonly (readonly (string | number)[])[], cell = csvCell): string {
+  return `${header.join(",")}\r\n${rows.map(r => r.map(cell).join(",")).join("\r\n")}\r\n`;
 }
 export function renderBillingExport(raw: unknown) {
   const input = read(billingExportV1, raw);
@@ -173,7 +168,7 @@ export function renderBillingExport(raw: unknown) {
     "price_provenance", "approved_net_pence", "currency", "batch_total_net_pence", "sandbox_label"],
   lines.map(l => [input.version, input.clientContractId, l.exportLineId, l.jobId, l.extraId, l.scopeItemId, l.revisionId,
     l.revisionHash, l.approvalBindingId, l.approvalSnapshotHash, l.description, l.quantity, l.unit, l.priceProvenance,
-    l.approvedNet.pence, "GBP", totalNet.pence, BILLING_SANDBOX_LABEL]));
+    l.approvedNet.pence, "GBP", totalNet.pence, BILLING_SANDBOX_LABEL]), billingCsvCell);
   return freeze({ lines, totalNet, json, csv, byteLength: new TextEncoder().encode(csv).length,
     jsonHash: sha256(json), csvHash: sha256(csv) });
 }
@@ -224,7 +219,7 @@ function readCsv(bytes: Uint8Array): string[][] {
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return invalid(); }
   if (text.includes("\u0000")) return invalid();
   const rows: string[][] = []; let row: string[] = [], cell = "", quoted = false, closed = false;
-  const endCell = () => { row.push(/^'[=+\-@']/u.test(cell) ? cell.slice(1) : cell); cell = ""; closed = false; };
+  const endCell = () => { row.push(restoreCsvCell(cell)); cell = ""; closed = false; };
   const endRow = () => { endCell(); rows.push(row); row = []; if (rows.length > MAX_ALLOCATION_LINES + 1) invalid(); };
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;

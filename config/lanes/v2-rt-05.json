@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-05": {
+      "branches": ["codex/sandbox/rt-05"],
+      "note": "RT-05 speech-realism attack corpus (#1071). HEAD_UNDER_TEST=ac8065af7305d9cc3db110eff4eb38d47248fa51. Synthetic transcripts only; no web workflow changes (C1). The lane checker automatically permits this lane's own config file.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-05-speech-realism.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}

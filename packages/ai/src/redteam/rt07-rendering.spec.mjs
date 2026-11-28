@@ -23,7 +23,12 @@ test.beforeAll(async () => {
   bundle = output.outputFiles[0].text;
 });
 const cases = JSON.parse(readFileSync(new URL('./corpus/RT-07-injection.v1.json', import.meta.url), 'utf8'));
-for (const id of ['RT-07-073', 'RT-07-075', 'RT-07-077']) test(`${id}: literal review, save and reopen; no HTML or dialog`, async ({ page }) => {
+for (const [id, editedDescription] of [
+  ['RT-07-073'], ['RT-07-075'], ['RT-07-077'],
+  // Isolate the render boundary from the separately open F005 parser defect.
+  ['RT-07-073', 'Fit panel labelled &lt;script&gt;'],
+  ['RT-07-073', 'Fit panel labelled &lt;script&gt;alert(1)&lt;/script&gt;'],
+]) test(`${id}${editedDescription ? ` edited: ${editedDescription}` : ''}: literal review, save and reopen; no HTML or dialog`, async ({ page }) => {
   const item = cases.find(item => item.id === id);
   const dialogs = [], errors = [], unexpectedRequests = [];
   page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
@@ -45,14 +50,17 @@ for (const id of ['RT-07-073', 'RT-07-075', 'RT-07-077']) test(`${id}: literal r
   saved = await page.evaluate(text => window.rt07Capture(text), item.transcript);
   const description = page.locator('input[aria-label^="Description "]');
   await expect(description).toHaveValue(item.expect.lines[0].descriptionIncludes);
+  if (editedDescription) await description.fill(editedDescription);
+  const expectedDescription = editedDescription ?? item.expect.lines[0].descriptionIncludes;
+  await expect(description).toHaveValue(expectedDescription);
   await expect(page.locator('.source pre')).toHaveText(item.transcript);
   await expect(page.locator('.review img, .review svg, .review iframe, .review script')).toHaveCount(0);
   await page.getByRole('button', { name: 'Save review', exact: true }).click();
   await expect.poll(() => saved.review?.revision).toBe(1);
-  expect(saved.review.lines[0].description).toBe(item.expect.lines[0].descriptionIncludes);
+  expect(saved.review.lines[0].description).toBe(expectedDescription);
   expect(saved.source.text).toBe(item.transcript);
   await page.evaluate(result => window.rt07Mount(result), saved);
-  await expect(description).toHaveValue(item.expect.lines[0].descriptionIncludes);
+  await expect(description).toHaveValue(expectedDescription);
   await expect(page.locator('.source pre')).toHaveText(item.transcript);
   await expect(page.locator('.review img, .review svg, .review iframe, .review script')).toHaveCount(0);
   expect(dialogs).toEqual([]);
