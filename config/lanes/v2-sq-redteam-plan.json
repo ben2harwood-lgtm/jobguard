@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-redteam-plan": {
+      "branches": [
+        "claude/project-thread-qck5xb"
+      ],
+      "note": "Docs only: spoken-quote hardening plan, red-team lanes RT-00..RT-14, six focused reviews and the full check before Tommy. Codex runs the lanes once the preview stack (Q77, Q75) is on #1061 and redeployed. No source, route, table or migration.",
+      "allow": [
+        "config/lanes/v2-sq-redteam-plan.json",
+        "docs/testing/spoken-quote-hardening/**"
+      ]
+    }
+  }
+}
