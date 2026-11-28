@@ -10,6 +10,8 @@ import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 // V2-G3
 import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
+// V2-G8
+import { ReviewRequestRepository } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
@@ -2204,6 +2206,190 @@ test("G4 migration 2084 reruns without changing policies, triggers, function bod
     (SELECT count(*)::int FROM app.v2_handover_release_stop) AS rows`)).rows[0];
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G8 (migration 2085): one polite review request a week after the handover release, only with the
+// builder's switch on, never repeated, none while the final invoice is unpaid or a recovery case is open.
+// Practice only: the send reaches the local catcher. A release eight days ago comes from G3's past clock.
+const g8 = {
+  get: f => request(`${f.path}/review-request`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/review-request`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  turn: (enabled, commandId = randomUUID()) => ({ version: "v2-review-request-switch.v1", commandId, enabled }),
+  send: (commandId = randomUUID()) => ({ version: "v2-review-request-send.v1", commandId }),
+  async ready({ daysAgo = 8 } = {}) {
+    const f = await g4.ready();
+    const { result } = await g3.direct(f, g3.release(1), () => Date.now() - daysAgo * 86_400_000);
+    return { ...f, releaseId: result.release.releaseId };
+  },
+  // In process, for the catcher count. The catcher logs metadata only, under local V2.
+  async direct(f, body) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new ReviewRequestRepository(practiceMaterialPool(runtime, auth.digest));
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.command(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  // Money and recovery rows are written only by main's money paths, never in practice mode, so they are
+  // placed directly with triggers off and removed afterwards. Only the review rule is under test.
+  async placed(sql, values = []) {
+    const fixture = await admin.connect();
+    try { await fixture.query("BEGIN"); await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query(sql, values); await fixture.query("COMMIT"); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+    finally { fixture.release(); }
+  },
+  rows: async f => (await admin.query("SELECT count(*)::int AS n FROM app.v2_review_request WHERE job_id=$1", [f.job])).rows[0].n,
+};
+
+test("G8 done when: off sends nothing, on a week after release sends one to the catcher, and it is never repeated", async () => {
+  const f = await g8.ready();
+  assert.deepEqual([(await g8.get(f)).state, (await g8.get(f)).enabled], ["off", false]);
+  const off = await g8.direct(f, g8.send());
+  assert.deepEqual([off.result.code, off.result.state, off.captured], ["REVIEW_REQUEST_NOT_DUE", "off", []]);
+  // The database refuses a request without the switch, whoever writes it.
+  const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  await assert.rejects(admin.query(`INSERT INTO app.v2_review_request (tenant_id, job_id, release_id, recipient_email, command_id, request_hash,
+    actor_membership_id) VALUES ($1, $2, $3, 'customer@jobguard-v2.invalid', $4, $5, $6)`,
+  [f.context.tenantId, f.job, f.releaseId, randomUUID(), "a".repeat(64), actor.id]), /V2_REVIEW_REQUEST_NOT_DUE/u);
+  assert.equal((await g8.post(f, g8.turn(true))).state, "due");
+  const body = g8.send();
+  const sent = await g8.direct(f, body);
+  assert.equal(sent.result.state, "sent");
+  assert.deepEqual(sent.captured, [{ event: "v2.delivery.captured", kind: "v2_review_request" }], "one catcher delivery, metadata only");
+  assert.equal((await admin.query("SELECT recipient_email FROM app.v2_review_request WHERE job_id=$1", [f.job])).rows[0].recipient_email,
+    "customer@jobguard-v2.invalid");
+  const replay = await g8.direct(f, body);
+  assert.deepEqual([replay.result.replayed, replay.captured], [true, []]);
+  assert.equal((await g8.post(f, body)).replayed, true, "the route replays too");
+  assert.equal((await g8.post(f, g8.send(), 409)).code, "REVIEW_REQUEST_ALREADY_SENT");
+  // Off and on again changes nothing: it is never sent twice.
+  await g8.post(f, g8.turn(false)); await g8.post(f, g8.turn(true));
+  const again = await g8.direct(f, g8.send());
+  assert.deepEqual([again.result.code, again.captured], ["REVIEW_REQUEST_ALREADY_SENT", []]);
+  assert.equal(await g8.rows(f), 1);
+  const events = (await admin.query(`SELECT event_type, payload FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.review_request.%'
+    ORDER BY occurred_at`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type).sort(), ["v2.review_request.sent", "v2.review_request.switched",
+    "v2.review_request.switched", "v2.review_request.switched"]);
+  assert.doesNotMatch(JSON.stringify(events), /customer@|jobguard-v2\.invalid|review would help/u, "no email and no message text");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G8 waits: too soon after release, a stopped link, and a changed customer send none", async () => {
+  const f = await g8.ready({ daysAgo: 2 });
+  await g8.post(f, g8.turn(true));
+  const soon = await g8.get(f);
+  assert.equal(soon.state, "too_soon");
+  assert.ok(Math.abs(Date.parse(soon.dueAt) - (Date.now() + 5 * 86_400_000)) < 3_600_000, "due a week after the release");
+  assert.deepEqual(await g8.post(f, g8.send(), 409), { code: "REVIEW_REQUEST_NOT_DUE", state: "too_soon", environment: "synthetic_demo" });
+  const old = await g8.ready();
+  await g8.post(old, g8.turn(true));
+  await g3.post(old, g4.stop(old.releaseId));
+  assert.equal((await g8.get(old)).state, "no_release");
+  const changed = await g8.ready();
+  await g8.post(changed, g8.turn(true));
+  await g4.customer(changed, "replacement@jobguard-v2.invalid");
+  assert.equal((await g8.get(changed)).state, "recipient_changed");
+  for (const job of [f, old, changed]) {
+    const { captured } = await g8.direct(job, g8.send());
+    assert.deepEqual(captured, []);
+    assert.equal(await g8.rows(job), 0);
+  }
+});
+
+test("G8 an unpaid final invoice or an open recovery case sends none", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  assert.equal((await g8.get(f)).state, "due");
+  const [invoice, payment, recovery, supplier] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const t = f.context.tenantId;
+  try {
+    await g8.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,
+      issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+      VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+    [invoice, t, f.job, randomUUID(), randomUUID(), `G8-${invoice.slice(0, 8)}`, "b".repeat(64)]);
+    assert.equal((await g8.get(f)).state, "unpaid_invoice");
+    assert.equal((await g8.post(f, g8.send(), 409)).state, "unpaid_invoice");
+    await g8.placed(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,
+      builder_attested,provenance) VALUES($1,$2,$3,$4,$5,'2026-12-02',12000,'GBP','bank_transfer','G8 fixture',true,'manual_builder_attestation')`,
+    [payment, t, f.job, invoice, randomUUID()]);
+    assert.equal((await g8.get(f)).state, "due", "paid in full");
+    await g8.placed(`INSERT INTO app.customer_payment_reversal(id,tenant_id,job_id,payment_id,authorization_id,reason)
+      VALUES($1,$2,$3,$4,$5,'G8 fixture')`, [randomUUID(), t, f.job, payment, randomUUID()]);
+    assert.equal((await g8.get(f)).state, "unpaid_invoice", "a reversed payment leaves it unpaid");
+    await g8.placed("DELETE FROM app.customer_payment_reversal WHERE payment_id=$1", [payment]);
+    // A supplier overcharge case is between the builder and a merchant: it does not hold the request.
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true)`, [supplier, t, f.job]);
+    assert.equal((await g8.get(f)).state, "due", "a supplier case is not a customer dispute");
+    await g8.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,5000,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [recovery, t, f.job]);
+    assert.equal((await g8.get(f)).state, "open_dispute");
+    const { result, captured } = await g8.direct(f, g8.send());
+    assert.deepEqual([result.code, result.state, captured], ["REVIEW_REQUEST_NOT_DUE", "open_dispute", []]);
+    // The workbench keeps the snapshot and appends events: the current state, not the snapshot, decides.
+    await g8.placed(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash)
+      VALUES($1,$2,$3,$4,1,5000,'GBP','G8 fixture',$5)`, [randomUUID(), t, f.job, recovery, "c".repeat(64)]);
+    const event = (sequence, type, from, to) => g8.placed(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,
+      event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'G8 fixture',$9,$10)`,
+    [randomUUID(), t, f.job, recovery, sequence, type, from, to, randomUUID(), "d".repeat(64)]);
+    await event(1, "assemble_evidence", "identified", "evidence_assembled");
+    assert.equal((await g8.get(f)).state, "open_dispute", "a case still being pursued holds the request");
+    await event(2, "close_no_recovery", "evidence_assembled", "closed_no_recovery");
+    assert.equal((await g8.get(f)).state, "due", "a closed case no longer holds it, though its snapshot still says active");
+    assert.equal(await g8.rows(f), 0);
+  } finally {
+    await g8.placed("DELETE FROM app.recovery_case_event WHERE case_id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.recovery_claim_revision WHERE case_id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.recovery_case WHERE id IN ($1, $2)", [recovery, supplier]);
+    await g8.placed("DELETE FROM app.customer_payment_reversal WHERE payment_id=$1", [payment]);
+    await g8.placed("DELETE FROM app.customer_payment WHERE id=$1", [payment]);
+    await g8.placed("DELETE FROM app.customer_invoice WHERE id=$1", [invoice]);
+  }
+});
+
+test("G8 other firm: 404 on read, switch and send; no review rows seen; UPDATE and DELETE refused", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  await g8.direct(f, g8.send());
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/review-request`, { cookies: second.cookies }), 404);
+  for (const body of [g8.turn(false), g8.send()])
+    await json(await request(`${f.path}/review-request`, { cookies: second.cookies, csrf: second.csrfToken, body }), 404);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no switch or request rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_review_request", "app.v2_review_request_switch"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0);
+  });
+  for (const table of ["app.v2_review_request", "app.v2_review_request_switch"]) {
+    for (const sql of [`UPDATE ${table} SET command_id=command_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+      await assert.rejects(admin.query(sql, [f.job]));
+    }
+    const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+  }
+  assert.equal((await g8.post(f, { ...g8.send(), recipient: "someone@example.com" }, 400)).code, "REVIEW_REQUEST_INVALID_COMMAND");
+});
+
+test("G8 migration 2085 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g8.ready();
+  await g8.post(f, g8.turn(true));
+  await g8.direct(f, g8.send());
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy
+      WHERE polrelid IN ('app.v2_review_request'::regclass, 'app.v2_review_request_switch'::regclass)) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_review_request'::regclass,
+      'app.v2_review_request_switch'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_review_request_due', 'v2_review_request_guard')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_review_request) + (SELECT count(*)::int FROM app.v2_review_request_switch) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2085_v2_review_request.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
