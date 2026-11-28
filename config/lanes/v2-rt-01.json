@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-01": {
+      "branches": ["codex/sandbox/rt-01"],
+      "note": "RT-01 money-words attack corpus (#1071). HEAD_UNDER_TEST=b25b5ee931ff7bb62bbaa34a47099fddadf514ed. Includes the unchanged staged RT-00 runner, seed corpus and plan files from codex/sandbox/rt-00, plus RT-01 findings. No parser source changes. The lane policy permits this lane's own config file without an explicit register grant.",
+      "allow": [
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/**"
+      ],
+      "test": "pnpm --filter @jobguard/ai test --maxWorkers=1"
+    }
+  }
+}
