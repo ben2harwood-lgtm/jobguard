@@ -103,10 +103,11 @@ BEGIN
           JOIN app.job_party_binding b ON (b.tenant_id, b.job_id, b.id) = (x.tenant_id, x.job_id, x.binding_id)
           JOIN app.customer_revision cr ON (cr.tenant_id, cr.id) = (b.tenant_id, b.customer_revision_id)
           WHERE lower(btrim(cr.payload->>'email')) = lower(btrim(r.recipient_email))) AS recipient_current,
-        -- Open dispute: a recovery case against the customer (book builder_customer) that has not landed
-        -- or been prevented. A supplier overcharge case is between the builder and a merchant and does not count.
-        EXISTS (SELECT FROM app.recovery_case c WHERE (c.tenant_id, c.job_id) = (t, j) AND c.book = 'builder_customer'
-          AND c.state IN ('identified', 'active', 'partially_landed')) AS disputed,
+        -- Open dispute: a recovery case against the customer (book builder_customer) whose current state
+        -- (recovery_case_current, 0097: the workbench's events, not the creation snapshot) is still open.
+        -- A supplier overcharge case is between the builder and a merchant and does not count.
+        EXISTS (SELECT FROM app.recovery_case_current c WHERE (c.tenant_id, c.job_id) = (t, j) AND c.book = 'builder_customer'
+          AND c.state IN ('identified', 'active', 'evidence_assembled', 'pursuing', 'negotiating', 'partially_landed')) AS disputed,
         -- Unpaid: any issued invoice whose total, less credit notes, is more than its payments less reversals
         -- (the balance rule of projectInvoiceBalance in @jobguard/core).
         EXISTS (SELECT FROM app.customer_invoice i WHERE (i.tenant_id, i.job_id) = (t, j)

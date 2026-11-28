@@ -2323,10 +2323,20 @@ test("G8 an unpaid final invoice or an open recovery case sends none", async () 
     assert.equal((await g8.get(f)).state, "open_dispute");
     const { result, captured } = await g8.direct(f, g8.send());
     assert.deepEqual([result.code, result.state, captured], ["REVIEW_REQUEST_NOT_DUE", "open_dispute", []]);
-    await g8.placed("UPDATE app.recovery_case SET state='landed' WHERE id=$1", [recovery]);
-    assert.equal((await g8.get(f)).state, "due", "a landed case is closed");
+    // The workbench keeps the snapshot and appends events: the current state, not the snapshot, decides.
+    await g8.placed(`INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash)
+      VALUES($1,$2,$3,$4,1,5000,'GBP','G8 fixture',$5)`, [randomUUID(), t, f.job, recovery, "c".repeat(64)]);
+    const event = (sequence, type, from, to) => g8.placed(`INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,
+      event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'G8 fixture',$9,$10)`,
+    [randomUUID(), t, f.job, recovery, sequence, type, from, to, randomUUID(), "d".repeat(64)]);
+    await event(1, "assemble_evidence", "identified", "evidence_assembled");
+    assert.equal((await g8.get(f)).state, "open_dispute", "a case still being pursued holds the request");
+    await event(2, "close_no_recovery", "evidence_assembled", "closed_no_recovery");
+    assert.equal((await g8.get(f)).state, "due", "a closed case no longer holds it, though its snapshot still says active");
     assert.equal(await g8.rows(f), 0);
   } finally {
+    await g8.placed("DELETE FROM app.recovery_case_event WHERE case_id=$1", [recovery]);
+    await g8.placed("DELETE FROM app.recovery_claim_revision WHERE case_id=$1", [recovery]);
     await g8.placed("DELETE FROM app.recovery_case WHERE id IN ($1, $2)", [recovery, supplier]);
     await g8.placed("DELETE FROM app.customer_payment_reversal WHERE payment_id=$1", [payment]);
     await g8.placed("DELETE FROM app.customer_payment WHERE id=$1", [payment]);
