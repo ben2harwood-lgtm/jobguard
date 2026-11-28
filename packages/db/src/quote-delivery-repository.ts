@@ -14,11 +14,14 @@ export type QuoteDeliveryView={documentId:string;reference?:string;documentVersi
 // V2-C6: on the local V2 launcher a line excluded with a reason reaches the document's exclusions, in the
 // editor's own wording ("description: reason"). The PDF prints each exclusion entry as one row of at most 84
 // characters (the width it wraps included work to), so the text is wrapped at word boundaries into as many entries
-// as it needs. No word is cut; joined with spaces the entries give back the full text. Main's preview is unchanged.
+// as it needs. A word longer than a row is split into row-sized pieces, so no entry passes the row width (and so
+// never the document's 500-character entry limit); other words are not cut. Main's preview is unchanged.
 export const V2_EXCLUSION_ROW_WIDTH=84;
 export function v2ExclusionEntries(description:string,reason:string):string[]{
  const out:string[]=[];let row="";
- for(const word of `${description}: ${reason}`.split(/\s+/u).filter(Boolean)){
+ const words=`${description}: ${reason}`.split(/\s+/u).filter(Boolean)
+  .flatMap(word=>word.length>V2_EXCLUSION_ROW_WIDTH?word.match(new RegExp(`.{1,${V2_EXCLUSION_ROW_WIDTH}}`,"gsu"))??[]:[word]);
+ for(const word of words){
   if(row&&`${row} ${word}`.length>V2_EXCLUSION_ROW_WIDTH){out.push(row);row=word;}else row=row?`${row} ${word}`:word;
  }
  if(row)out.push(row);
