@@ -14,8 +14,6 @@
     "app.scheduled_readiness_plan",
     "app.scheduled_readiness_proposal",
     "app.site_visit",
-    "app.stage_completion",
-    "app.stage_review_event",
     "app.commercial_integrity_activity_fact",
     "app.commercial_integrity_value_fact",
     "app.contractor_party_binding",

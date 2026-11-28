@@ -1991,6 +1991,216 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   assert.deepEqual(await policies(), before);
 });
 
+// V2-AUTH-1 (Q81, migration 2089): a linked builder reads job proof and adds a progress photo and site complete.
+// Main's ProofApplication, 0734's job_proof_requirement and lp6 are unchanged (the PX case above still pins that).
+const auth1Digest = sessionId => createHash("sha256").update(sessionId).digest("hex");
+const auth1Command = (action, fields = {}) => ({ version: "practice-proof-command.v1", action, commandId: randomUUID(), ...fields });
+const auth1Post = (jobId, session, body) => request(`/api/jobs/${jobId}/proof`, { cookies: session.cookies, body });
+const auth1V2Read = (session, context, jobId, digest = auth1Digest(session.sessionId)) => withTenant(runtime, context,
+  async db => (await db.$client.query("SELECT app.v2_job_proof_requirement($1,$2,NULL) AS r", [digest, jobId])).rows[0].r);
+// Main's own requirement body for the same job, taken from the live catalog: 0734's job_proof_requirement and
+// read_job_proof_statement, with only their authority lines removed (a test administrator can't hold a home
+// practice binding on the V2 database). If main's source changes, the replace checks below fail first.
+async function auth1MainRead(jobId) {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    const source = async name => (await client.query("SELECT prosrc FROM pg_proc WHERE oid = $1::regprocedure", [name])).rows[0].prosrc;
+    const strip = (text, line, replacement = "") => { assert.ok(text.includes(line), `main's source still has: ${line}`); return text.replace(line, replacement); };
+    const read = strip(await source("app.read_job_proof_statement(uuid,uuid)"), "PERFORM app.job_proof_authority(j,false);");
+    const requirement = strip(strip(await source("app.job_proof_requirement(uuid,uuid)"),
+      "IF app.job_proof_practice_bound() THEN PERFORM app.job_proof_authority(j,false); END IF;"),
+    "RETURN app.read_job_proof_statement(j,r);", "RETURN pg_temp.auth1_main_read(j,r);");
+    await client.query(`CREATE FUNCTION pg_temp.auth1_main_read(j uuid, r uuid) RETURNS jsonb LANGUAGE plpgsql SET timezone='UTC' AS $body$${read}$body$`);
+    await client.query(`CREATE FUNCTION pg_temp.auth1_main_requirement(j uuid, r uuid) RETURNS jsonb LANGUAGE plpgsql AS $body$${requirement}$body$`);
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [DEMO_TENANT_ID]);
+    return (await client.query("SELECT pg_temp.auth1_main_requirement($1, NULL) AS r", [jobId])).rows[0].r;
+  } finally { await client.query("ROLLBACK"); client.release(); }
+}
+// Test administrator fixtures only (replica role skips triggers): a recorded statement, as main's demo-only writer
+// would leave it, and a final-account lock row, as if main's lock had run.
+async function auth1Fixture(sql, params) {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query(sql, params);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+const auth1Statement = (jobId, revision, includes) => auth1Fixture(`INSERT INTO app.job_proof_statement
+  (tenant_id, job_id, id, revision, includes_electrical_work, membership_id) VALUES ($1, $2, gen_random_uuid(), $3, $4, $5)`,
+[DEMO_TENANT_ID, jobId, revision, includes, "d1500000-0000-4000-8000-000000000003"]);
+const auth1Lock = jobId => auth1Fixture(`INSERT INTO app.final_account_lock (tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,
+    capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,
+    onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
+  SELECT tenant_id,id,gen_random_uuid(),gen_random_uuid(),coalesce(baseline_quote_version_id,accepted_quote_version_id),
+    repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64),'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1',
+    'synthetic_final_check_terms.v1',gen_random_uuid(),clock_timestamp(),gen_random_uuid(),gen_random_uuid()
+  FROM app.job WHERE id=$1`, [jobId]);
+const auth1Proof = async (jobId, session, body) => json(await auth1Post(jobId, session, body));
+
+test("AUTH-1 parity: the V2 read gives main's requirement in every state, and main's own read still refuses the linked builder", async () => {
+  const { jobId, scopeItemId } = await pxLiveJob();
+  const builder = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, builder.sessionId);
+  const states = [];
+  const check = async name => {
+    const [v2, main] = [await auth1V2Read(builder, context, jobId), await auth1MainRead(jobId)];
+    assert.deepEqual(v2, main, `${name}: the V2 read matches main's`);
+    states.push([name, v2.requiredEvidenceType, v2.canChange, v2.statement?.includesElectricalWork ?? null]);
+  };
+  await check("no statement");
+  const started = await auth1Proof(jobId, builder, auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" }));
+  await check("upload");
+  const verified = await auth1Proof(jobId, builder, auth1Command("finalize", { uploadId: started.upload.id, objectVersionId: started.upload.objectVersionId }));
+  await auth1Proof(jobId, builder, auth1Command("complete", { evidenceId: verified.upload.evidenceId, scopeItemId }));
+  await check("completion");
+  await auth1Lock(jobId);
+  await check("final-account lock");
+  await auth1Statement(jobId, 1, true);
+  await check("statement answered: electrical work");
+  await auth1Statement(jobId, 2, false);
+  await check("statement answered: no electrical work");
+  assert.deepEqual(states, [
+    ["no statement", "electrical_certificate", true, null],
+    ["upload", "electrical_certificate", false, null],
+    ["completion", "electrical_certificate", false, null],
+    ["final-account lock", "electrical_certificate", false, null],
+    ["statement answered: electrical work", "electrical_certificate", false, true],
+    ["statement answered: no electrical work", "completion_photo", false, false],
+  ]);
+  // A fresh job, with a statement and nothing else: canChange stays true on both.
+  const { jobId: fresh } = await pxLiveJob();
+  await auth1Statement(fresh, 1, true);
+  const [v2, main] = [await auth1V2Read(builder, context, fresh), await auth1MainRead(fresh)];
+  assert.deepEqual(v2, main);
+  assert.equal(v2.canChange, true);
+  // Main's read is unchanged: it still refuses the linked builder (lp6), so V2 never calls it.
+  await assert.rejects(withTenant(runtime, context, db => db.$client.query("SELECT app.job_proof_requirement($1,NULL)", [fresh])),
+    error => error.code === "42501" && /REQUEST_BINDING_REFUSED/u.test(error.message));
+});
+
+test("AUTH-1 the linked builder adds a progress photo and completes the stage; replays return the same receipt", async () => {
+  const { jobId, scopeItemId } = await pxLiveJob();
+  const builder = await signIn("builder");
+  const read = await json(await request(`/api/jobs/${jobId}/proof`, { cookies: builder.cookies }));
+  assert.equal(read.version, "practice-proof-view.v1");
+  assert.equal(read.scopeItemId, scopeItemId);
+  assert.deepEqual([read.upload, read.completion, read.requiredEvidenceType, read.canChange], [null, null, "electrical_certificate", true]);
+
+  const select = auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" });
+  const started = await auth1Proof(jobId, builder, select);
+  assert.equal(started.upload.state, "pending");
+  assert.deepEqual(await auth1Proof(jobId, builder, select), started, "a replay returns the recorded answer");
+  const finalize = auth1Command("finalize", { uploadId: started.upload.id, objectVersionId: started.upload.objectVersionId });
+  const verified = await auth1Proof(jobId, builder, finalize);
+  assert.equal(verified.upload.state, "verified");
+  assert.ok(verified.upload.evidenceId);
+  const complete = auth1Command("complete", { evidenceId: verified.upload.evidenceId, scopeItemId });
+  const done = await auth1Proof(jobId, builder, complete);
+  assert.deepEqual([Boolean(done.completion), done.completion.reviewRequired, done.mandatoryDecisionCount], [true, false, 0]);
+  assert.deepEqual(await auth1Proof(jobId, builder, complete), done, "a replay of site complete returns the same receipt");
+  const conflict = await auth1Post(jobId, builder, { ...complete, evidenceId: randomUUID() });
+  assert.notEqual(conflict.status, 200, "the same command id with another request is not replayed");
+  const { rows } = await admin.query("SELECT stage FROM app.stage_completion WHERE job_id = $1", [jobId]);
+  assert.deepEqual(rows, [{ stage: "electrical-stage" }], "one completion, not two");
+
+  // The audit names the builder's real membership, not the shared practice membership.
+  const { rows: [credential] } = await admin.query("SELECT membership_id FROM control_plane.identity_practice_credential WHERE token_digest = $1",
+    [auth1Digest(builder.sessionId)]);
+  const { rows: events } = await admin.query(`SELECT event_type, actor_ref FROM app.audit_event
+    WHERE subject_type = 'job' AND subject_ref = $1 AND event_type LIKE 'v2.proof.%' ORDER BY sequence`, [jobId]);
+  assert.deepEqual(events, ["v2.proof.upload_started", "v2.proof.upload_finalized", "v2.proof.stage_recorded"]
+    .map(event_type => ({ event_type, actor_ref: `membership:${credential.membership_id}` })));
+  assert.notEqual(credential.membership_id, "d1500000-0000-4000-8000-000000000003");
+
+  // "No electrical work" stays refused on V2, with the message the builder sees.
+  const refused = await auth1Post(jobId, builder, auth1Command("answer_statement", { includesElectricalWork: false }));
+  assert.equal(refused.status, 409);
+  assert.deepEqual(await refused.json(), { code: "V2_PROOF_STATEMENT_UNAVAILABLE",
+    message: "On the practice V2 stack, record an electrical certificate photo instead." });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.job_proof_statement WHERE job_id = $1", [jobId])).rows[0].n, 0);
+});
+
+// Revocation and expiry are separate cases: linked_practice_authority checks both on the credential.
+for (const [name, column, broken, restored] of [
+  ["revoked", "revoked_at", () => new Date(), () => null],
+  ["expired", "expires_at", () => new Date(Date.now() - 60_000), original => original],
+]) test(`AUTH-1 a linked session that is ${name} is refused on read, write and replay, and nothing is written`, async () => {
+  const { jobId, scopeItemId } = await pxLiveJob();
+  const builder = await signIn("builder");
+  const select = auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" });
+  await auth1Proof(jobId, builder, select);
+  const v2Proof = createWorkspaceApplication({ pool: runtime, sessionId: builder.sessionId }).v2Proof;
+  const counts = async () => (await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.evidence_upload WHERE job_id = $1) AS uploads,
+    (SELECT count(*)::int FROM app.stage_completion WHERE job_id = $1) AS completions,
+    (SELECT count(*)::int FROM app.audit_event WHERE subject_ref = $1::text AND event_type LIKE 'v2.proof.%') AS events`, [jobId])).rows[0];
+  const before = await counts();
+  // Test administrator fixture: break the builder's linked credential, then restore it for the later cases.
+  const digest = auth1Digest(builder.sessionId);
+  const { rows: [credential] } = await admin.query(`SELECT ${column} AS value FROM control_plane.practice_session WHERE token_digest = $1`, [digest]);
+  const set = value => auth1Fixture(`UPDATE control_plane.practice_session SET ${column} = $2 WHERE token_digest = $1`, [digest, value]);
+  await set(broken());
+  try {
+    assert.ok([401, 403].includes((await request(`/api/jobs/${jobId}/proof`, { cookies: builder.cookies })).status), "the read is refused");
+    assert.ok([401, 403].includes((await auth1Post(jobId, builder, select)).status), "the replay is refused");
+    await assert.rejects(v2Proof.get(jobId), error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code));
+    await assert.rejects(v2Proof.command(jobId, select), error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code));
+    await assert.rejects(v2Proof.command(jobId, auth1Command("select_generated", { scopeItemId, fixture: "j3-drainage-photo" })),
+      error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code), "a new write is refused");
+    assert.deepEqual(await counts(), before, "nothing written");
+  } finally { await set(restored(credential.value)); }
+  assert.equal((await auth1Post(jobId, builder, select)).status, 200, "restored for the later cases");
+});
+
+test("AUTH-1 the other firm gets 404 on read and write, and the runtime can't reach the read or the completion rows directly", async () => {
+  const { jobId, scopeItemId } = await pxLiveJob();
+  const builder = await signIn("builder");
+  const started = await auth1Proof(jobId, builder, auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" }));
+  const verified = await auth1Proof(jobId, builder, auth1Command("finalize", { uploadId: started.upload.id, objectVersionId: started.upload.objectVersionId }));
+  await auth1Proof(jobId, builder, auth1Command("complete", { evidenceId: verified.upload.evidenceId, scopeItemId }));
+  const outsider = await signIn("second-builder");
+  assert.equal((await request(`/api/jobs/${jobId}/proof`, { cookies: outsider.cookies })).status, 404);
+  assert.equal((await auth1Post(jobId, outsider, auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" }))).status, 404);
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).v2Proof.get(jobId), { code: "NOT_FOUND" });
+
+  const { context: own } = await authenticatePracticeSession(runtime, builder.sessionId);
+  const { context: other } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  // The read: the other firm's own credential, a credential that isn't the bound one, and a made-up one.
+  await assert.rejects(auth1V2Read(outsider, other, jobId), error => error.code === "42501" && error.message === "NOT_FOUND");
+  await assert.rejects(auth1V2Read(builder, other, jobId), error => error.code === "42501" && error.message === "FORBIDDEN");
+  await assert.rejects(auth1V2Read(builder, own, jobId, "0".repeat(64)), error => error.code === "42501" && error.message === "FORBIDDEN");
+  const { rows: [grants] } = await admin.query(`SELECT has_function_privilege('jobguard_runtime', 'app.v2_job_proof_requirement(text,uuid,uuid)', 'EXECUTE') AS runtime,
+    has_function_privilege('jobguard_worker', 'app.v2_job_proof_requirement(text,uuid,uuid)', 'EXECUTE') AS worker,
+    has_function_privilege('jobguard_runtime', 'app.job_proof_authority(uuid,boolean)', 'EXECUTE') AS main_authority`);
+  assert.deepEqual(grants, { runtime: true, worker: false, main_authority: false });
+
+  // The completion rows: hidden from the other firm, and a direct runtime write for this job is refused.
+  const { rows: [completion] } = await admin.query("SELECT * FROM app.stage_completion WHERE job_id = $1", [jobId]);
+  const query = (sql, params) => withTenant(runtime, other, db => db.$client.query(sql, params));
+  assert.equal((await query("SELECT 1 FROM app.stage_completion WHERE job_id = $1", [jobId])).rowCount, 0);
+  assert.equal((await query("SELECT 1 FROM app.stage_review_event WHERE stage_completion_id = $1", [completion.id])).rowCount, 0);
+  await assert.rejects(query(`INSERT INTO app.stage_completion (id, tenant_id, job_id, scope_item_id, stage, evidence_link_id, command_id)
+    VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, gen_random_uuid())`,
+  [completion.tenant_id, jobId, completion.scope_item_id, completion.stage, completion.evidence_link_id]), { code: "42501" });
+  for (const sql of ["UPDATE app.stage_completion SET stage = stage WHERE job_id = $1", "DELETE FROM app.stage_completion WHERE job_id = $1"]) {
+    const result = await query(sql, [jobId]).catch(error => error);
+    assert.ok(result.code === "42501" || result.rowCount === 0, `${sql} must not reach the builder's rows`);
+  }
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.stage_completion WHERE job_id = $1", [jobId])).rows[0].n, 1);
+});
+
+test("AUTH-1 the 2089 migration is safe to run twice", async () => {
+  const policies = async () => (await admin.query(`SELECT polrelid::regclass::text AS relation FROM pg_policy WHERE polname = 'v2_practice_firm'
+    AND polrelid = ANY('{app.stage_completion,app.stage_review_event}'::regclass[]) ORDER BY 1`)).rows;
+  const before = await policies();
+  assert.deepEqual(before.map(row => row.relation), ["app.stage_completion", "app.stage_review_event"]);
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2089_v2_job_proof_requirement.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await policies(), before);
+});
+
 // must stay the last test: it signs the cached builder out
 // Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
 test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {

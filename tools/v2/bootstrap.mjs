@@ -74,6 +74,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2061_v2_site_attendance.sql", import.meta.url), "utf8"));
   // Q06 V2-K9: after the work-plan, photo lock, crew and site attendance migrations.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2068_v2_rams_draft.sql", import.meta.url), "utf8"));
+  // Q81 V2-AUTH-1: the linked builder's proof requirement read, and the firm lock on stage completions (2089).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2089_v2_job_proof_requirement.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
