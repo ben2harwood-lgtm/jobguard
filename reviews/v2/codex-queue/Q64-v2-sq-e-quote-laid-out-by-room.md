@@ -76,3 +76,9 @@ Target journey step 5: "The quote the customer sees is laid out by room, each ro
 ## Done when
 - On the practice job, the customer's quote and PDF are laid out by room, with the bathroom as one figure, and the total is unchanged. Reopening shows the same layout. A main-path quote is byte-identical to today.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS WITH CONDITIONS
+1. **Room order:** two rows share a room name if and only if they share a room order. That's 2087's guard `(s.room_name = NEW.room_name) <> (s.room_order = NEW.room_order)`, and it is what build step 1 means. Keep the guard and its seed test through the rebase.
+2. **Line order:** inside each section, `scopeItemIds` are in quote-line ordinal order. `create()` compares them in that order, so a client must send them in that order.
+3. **Room-total prices:** "One room total" hides line prices only on screen. `/api/customer-portal/quote` still returns each line's `netPence` to the customer's browser. Strip line `netPence` from `room_total` sections in the portal response, or write it in the PR as a known limit for Ben to see. The PDF is correct.
+4. Keep the three pinned no-`sections` hashes through every rebase.

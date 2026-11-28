@@ -52,3 +52,5 @@ On Tommy's demo (#918), the designed money tab shows the invoices card, the fina
 ## Done when
 - On V2's designed money tab, a builder goes from the final check to Paid, including a found extra's supplementary invoice, in designed controls at 1280 and 360. Every amount is unchanged.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS

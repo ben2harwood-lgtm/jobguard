@@ -47,3 +47,6 @@ Q62 found that no demo journey is fully on V2. The designed capture comes with S
 ## Done when
 - On V2, the review, quote and customer-and-site screens look like the designed demo at 1280 and 360, with SQ-E's rooms. An empty draft says "add the work details first". Nothing about money or behaviour changes.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS WITH CONDITIONS
+1. The empty-draft message is copy only and is shared with v1 through `WalkIt`. Readings 3 and 4 are amended: the message applies on v1 pages too. Say so in the PR, and confirm `WALK-stress.spec.ts` (line 194) still passes.

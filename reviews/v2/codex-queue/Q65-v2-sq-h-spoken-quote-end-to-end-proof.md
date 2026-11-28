@@ -44,3 +44,6 @@ Every step of the target journey in one browser run at 1280 and 360 px, through 
 - The report lists each step with its evidence.
 - A fresh Mac-tunnel preview from this head passes Run A once, and its address is in the PR for Ben to open.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS WITH CONDITIONS
+1. The base must include #1044 (Q68), as well as the SQ chain and v2/main, before any typed or recogniser-form step. Run A uses Q68's sha-pinned recogniser-form Smith fixture.

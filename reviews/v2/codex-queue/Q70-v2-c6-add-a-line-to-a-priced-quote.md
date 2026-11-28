@@ -63,3 +63,8 @@ Today a builder can add a line only on the review screen, before the scope is co
 ## Done when
 - On the practice job, a builder adds a line while pricing, from a prompt or by typing, prices or excludes it, and the totals change by exactly that line. An issued quote can't be edited this way.
 - CI1 is green, and the Codex check is clean or answered. Merge only on Ben's own card (RED money).
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS WITH CONDITIONS
+1. Reading 1 also covers the `app.scope_progress` row that review confirmation inserts (`review-repository.ts` line 80).
+2. **Guarantee:** an added line is never priced from `scope.unitRatePence`. Its `scope_revision` stores 0 only because the column is NOT NULL. The quote line starts with `unitRatePence: null`. Add a seed check that the added line reaches the editor unpriced and that `missing_scope` or the unconfirmed-price state blocks preview.
+3. The server's "editable" rule is job `status='quoting'`, no acceptance, and no `quote_send` row (`assertEditable`). That replaces reading 2's delivery wording.

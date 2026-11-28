@@ -47,3 +47,5 @@ After SQ-I-1, the review, quote and customer-and-site cards on V2 look like Tomm
 ## Done when
 - On V2, recording acceptance, starting, recording proof and approving an extra use designed controls outside the legacy block at 1280 and 360. Nothing about money or behaviour changes.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS

@@ -49,3 +49,7 @@ The typed path is the one Q66 makes the default look, so (1) is the first thing 
 ## Done when
 - Typed or punctuated text gets the same rooms as spoken text, a room-only sentence is never a row, and no per-unit price becomes a whole-line price.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Claude plan check, 28 Nov (stands in for Astra, no reply after 2 hours): PASS WITH CONDITIONS
+1. The dry-check line numbers are from the SQ-E chain. On SQ-RA they are: `readSpokenJob` 358, `understoodLabels` 514, and `capture.application.ts` `view()` 18.
+2. The `implementationSha256` pin for `capture-fixture-parser.ts` in `docs/fixtures/ai/golden-run.v1.json` is expected to change. It's an implementation hash, not a fixture label, so the "never edit a fixture" rule doesn't apply. Say so in the PR.
