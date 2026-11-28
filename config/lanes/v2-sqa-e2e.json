@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sqa-e2e": {
+      "branches": [
+        "claude/project-thread-trp08u-sqa-e2e"
+      ],
+      "note": "v2/main fix. SQ-A's Sent e2e runs the deterministic fake worker when the shared example firm queues the send. The validator includes config/lanes/v2-sqa-e2e.json implicitly. Compare against v2/main.",
+      "allow": [
+        "apps/web/e2e/V2-SQ-A-practice-sent.spec.ts"
+      ]
+    }
+  }
+}
