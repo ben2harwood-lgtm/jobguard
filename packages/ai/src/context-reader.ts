@@ -505,14 +505,16 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
  * The room and trade for lines already proposed from the same words (the review screen's rows), by where each
  * line's words start in the source. A line before any named room is "Whole job".
  */
-export function understoodLabels(sourceId: string, text: string, lines: { start: number | null; description: string }[]): { room: string; category: JobTrade }[] {
+export function understoodLabels(sourceId: string, text: string, lines: { start: number | null; description: string }[]): { room: string; category: JobTrade; roomInferred: boolean }[] {
   const { timeline, lines: understood, areas } = readSpokenJob(sourceId, text);
   const names = new Map(areas.map(area => [area.key, area.name.value]));
   return lines.map(line => {
     const same = line.start === null ? undefined : understood.find(item => item.description.provenance.kind === "extracted"
       && item.description.provenance.span.start <= line.start! && line.start! < item.description.provenance.span.end + 1);
-    if (same) return { room: names.get(same.areaKey) ?? "Whole job", category: same.trade.value };
+    // A room is "said" only when this line's own item sits in an area whose name the builder spoke.
+    const said = same && areas.find(area => area.key === same.areaKey)?.name.provenance.kind === "extracted";
+    if (same) return { room: names.get(same.areaKey) ?? "Whole job", category: same.trade.value, roomInferred: !said };
     const room = line.start === null ? null : [...timeline].reverse().find(entry => entry.start <= line.start!)?.name ?? null;
-    return { room: room ?? "Whole job", category: tradeOf(line.description, room).trade };
+    return { room: room ?? "Whole job", category: tradeOf(line.description, room).trade, roomInferred: true };
   });
 }

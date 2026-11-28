@@ -86,6 +86,73 @@ export function originNote<L extends Priced & { scopeItemId: string; parentScope
   if (!line.parentScopeItemIds.length) return null;
   const parents = lines.filter(other => line.parentScopeItemIds.includes(other.scopeItemId));
   if (parents.length === 1 && parents[0]!.disposition === "split") return splitBeforeLabel(lineTotalPence(parents[0]!));
+  const room = (line as L & { room?: string; description?: string }).room;
+  // A one-price room row says what the rows came to beside the room price, never "Combined from N rows · £sum".
+  if (parents.length > 1 && parents.every(parent => parent.disposition === "merged") && room !== undefined
+    && (line as L & { description?: string }).description === onePriceDescription(room) && line.unitPricePence !== null)
+    return onePriceNote(combinedPrice(parents), line.unitPricePence);
   if (parents.length > 1 && parents.every(parent => parent.disposition === "merged")) return combineLabel(parents.length, combinedPrice(parents));
   return null;
+}
+
+// V2-SQ-D: rooms on the review. Only `room` and `category` are stored; room order is derived from row order.
+export const WHOLE_JOB = "Whole job";
+type RoomRow = Priced & { id: string; scopeItemId: string; room: string; description: string; parentScopeItemIds: string[] };
+
+/** Rooms in the order they were first spoken (row order), with "Whole job" last; extra rooms (session only) after. */
+export function roomsOf(lines: readonly Pick<RoomRow, "room">[], extra: readonly string[] = []): string[] {
+  const seen: string[] = [];
+  for (const name of [...lines.map(line => line.room), ...extra]) if (name !== WHOLE_JOB && !seen.includes(name)) seen.push(name);
+  return lines.some(line => line.room === WHOLE_JOB) || extra.includes(WHOLE_JOB) ? [...seen, WHOLE_JOB] : seen;
+}
+
+/** A room's subtotal with the quote's own line rule; the job total is the sum of these to the penny. */
+export function roomTotal(lines: readonly (Priced & Pick<RoomRow, "room">)[], room: string) {
+  return runningTotal(lines.filter(line => line.room === room));
+}
+
+export function roomTotalLabel(total: ReturnType<typeof runningTotal>): string {
+  if (!total.counted) return "No rows yet";
+  return total.complete ? pounds(total.pence) : `${pounds(total.pence)} · incomplete: ${total.unpriced} ${total.unpriced === 1 ? "row needs" : "rows need"} a price`;
+}
+
+/** A room name as the review contract stores it: trimmed, 1 to 100 characters. */
+export function roomName(text: string): string | null {
+  const name = text.trim();
+  return name.length >= 1 && name.length <= 100 ? name : null;
+}
+
+/** Moving a row changes only its room. */
+export function moveToRoom<L extends Pick<RoomRow, "id" | "room">>(lines: readonly L[], id: string, room: string): L[] {
+  return lines.map(line => line.id === id ? { ...line, room } : line);
+}
+
+/** Renaming a room, or merging it into another, moves every row in it and keeps their order. */
+export function renameRoom<L extends Pick<RoomRow, "room">>(lines: readonly L[], from: string, to: string): L[] {
+  return lines.map(line => line.room === from ? { ...line, room: to } : line);
+}
+
+export const onePriceDescription = (room: string) => `${room}: all work as described`.slice(0, 500);
+
+/**
+ * "One price for the room". One counted row: its price is set in place, as one item, so the room comes to the
+ * typed figure. Two or more: the existing combine, then the typed figure, so there is one row and one price.
+ * The combined row records every row it absorbed as its parents (a merge).
+ */
+export function onePriceForRoom<L extends RoomRow & { origin: "proposal" | "human"; category: string; unit: string | null;
+  dismissalReason: string | null; sourceExcerpt: string | null }>(lines: readonly L[], room: string, pence: number, newId: () => string): L[] {
+  const absorbed = lines.filter(line => line.room === room && countsTowardTotal(line));
+  if (!absorbed.length) return [...lines];
+  if (absorbed.length === 1) return lines.map(line => line.id === absorbed[0]!.id
+    ? { ...line, quantity: "1", unit: "item", unitPricePence: pence, disposition: "accepted" } : line);
+  const first = absorbed[0]!;
+  const child = { ...first, id: newId(), scopeItemId: newId(), origin: "human" as const, description: onePriceDescription(room), room,
+    quantity: "1", unit: "item", unitPricePence: pence, disposition: "accepted", dismissalReason: null,
+    parentScopeItemIds: absorbed.map(line => line.scopeItemId), sourceExcerpt: null } as L;
+  return lines.map(line => absorbed.includes(line) ? { ...line, disposition: "merged" } : line).concat(child);
+}
+
+/** The note on a one-price room row: what the rows came to, beside the room price, never a second total. */
+export function onePriceNote(itemised: ReturnType<typeof combinedPrice>, pence: number): string {
+  return itemised.unitPricePence === null ? `Itemised incomplete · room price ${pounds(pence)}` : `Itemised came to ${pounds(itemised.unitPricePence)} · room price ${pounds(pence)}`;
 }

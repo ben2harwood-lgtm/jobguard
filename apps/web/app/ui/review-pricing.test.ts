@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 // The parser is not a package export; the test reads its source so the four examples run end to end.
 import { parseCaptureFixture } from "../../../../packages/ai/src/capture-fixture-parser";
-import { combinedPrice, combineLabel, lineTotalPence, mergeableRows, originNote, priceFromText, runningTotal, splitBeforeLabel,
-  totalLabel, wholeJobLabel, wholeJobWords } from "./review-pricing";
+import { combinedPrice, combineLabel, countsTowardTotal, lineTotalPence, mergeableRows, moveToRoom, onePriceForRoom, onePriceNote, originNote, priceFromText,
+  renameRoom, roomName, roomsOf, roomTotal, roomTotalLabel, runningTotal, splitBeforeLabel, totalLabel, wholeJobLabel, wholeJobWords } from "./review-pricing";
 
 type Row = { scopeItemId: string; quantity: string | null; unit: string | null; unitPricePence: number | null; disposition: string; parentScopeItemIds: string[] };
 // As review-proposal's fresh(): each parser line becomes a proposed review row.
@@ -94,5 +94,90 @@ describe("merge guard", () => {
     expect(mergeableRows(lines, ["a", "b"])?.map(line => line.id)).toEqual(["a", "b"]);
     expect(mergeableRows(lines, ["a"])).toBeNull();
     for (const away of ["c", "d", "e"]) expect(mergeableRows(lines, ["a", "b", away])).toBeNull();
+  });
+});
+
+// V2-SQ-D: rooms. A seeded generator keeps the "random row sets" repeatable.
+type RoomLine = Row & { id: string; room: string; description: string; origin: "proposal" | "human"; category: string;
+  dismissalReason: string | null; sourceExcerpt: string | null };
+function seeded(seed: number) { return () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648; }
+function randomRows(next: () => number, count: number): RoomLine[] {
+  const rooms = ["Kitchen", "Bathroom", "Landing", "Whole job"], dispositions = ["accepted", "proposed", "dismissed", "merged", "split"];
+  return Array.from({ length: count }, (_, i) => ({ id: `r${i}`, scopeItemId: `s${i}`, room: rooms[Math.floor(next() * rooms.length)]!,
+    description: `row ${i}`, origin: "proposal" as const, category: "Other", dismissalReason: null, sourceExcerpt: null, parentScopeItemIds: [],
+    quantity: next() < 0.15 ? null : ["1", "2", "2.5", "0.333", "12"][Math.floor(next() * 5)]!, unit: "item",
+    unitPricePence: next() < 0.2 ? null : Math.floor(next() * 250000), disposition: dispositions[Math.floor(next() * dispositions.length)]! }));
+}
+const sumRooms = (lines: RoomLine[]) => roomsOf(lines).reduce((all, room) => all + roomTotal(lines, room).pence, 0);
+
+describe("V2-SQ-D rooms", () => {
+  it("room subtotals add up to the job total, to the penny, for random row sets", () => {
+    const next = seeded(7);
+    for (let run = 0; run < 300; run++) {
+      const lines = randomRows(next, 1 + Math.floor(next() * 14));
+      const total = runningTotal(lines);
+      expect(sumRooms(lines)).toBe(total.pence);
+      expect(roomsOf(lines).reduce((all, room) => all + roomTotal(lines, room).unpriced, 0)).toBe(total.unpriced);
+    }
+  });
+  it("a move changes only the two room subtotals involved, and nothing on the row but its room", () => {
+    const next = seeded(11);
+    for (let run = 0; run < 200; run++) {
+      const lines = randomRows(next, 2 + Math.floor(next() * 10)), row = lines[Math.floor(next() * lines.length)]!;
+      const to = ["Kitchen", "Bathroom", "Landing", "Whole job", "Loft"].find(room => room !== row.room)!;
+      const moved = moveToRoom(lines, row.id, to);
+      expect(runningTotal(moved).pence).toBe(runningTotal(lines).pence);
+      for (const room of new Set([...roomsOf(lines), ...roomsOf(moved)])) {
+        if (room !== row.room && room !== to) expect(roomTotal(moved, room)).toEqual(roomTotal(lines, room));
+      }
+      const after = moved.find(line => line.id === row.id)!;
+      expect({ ...after, room: row.room }).toEqual(row);
+      expect(sumRooms(moved)).toBe(runningTotal(moved).pence);
+    }
+  });
+  it("one price for a room gives exactly one priced row, and the room comes to the typed figure", () => {
+    const next = seeded(13);
+    let ids = 0;
+    for (let run = 0; run < 200; run++) {
+      const lines = randomRows(next, 1 + Math.floor(next() * 10)), room = lines[0]!.room, pence = Math.floor(next() * 900000);
+      const before = lines.filter(line => line.room === room && countsTowardTotal(line));
+      const after = onePriceForRoom(lines, room, pence, () => `new${ids++}`);
+      const counted = after.filter(line => line.room === room && countsTowardTotal(line));
+      if (!before.length) { expect(after).toEqual(lines); continue; }
+      expect(counted).toHaveLength(1);
+      expect(counted[0]).toMatchObject({ quantity: "1", unit: "item", unitPricePence: pence, disposition: "accepted" });
+      expect(roomTotal(after, room)).toMatchObject({ pence, unpriced: 0, complete: true });
+      if (before.length > 1) {
+        expect(counted[0]!.parentScopeItemIds).toEqual(before.map(line => line.scopeItemId));
+        expect(before.every(row => after.find(line => line.id === row.id)!.disposition === "merged")).toBe(true);
+      }
+      for (const other of roomsOf(lines)) if (other !== room) expect(roomTotal(after, other)).toEqual(roomTotal(lines, other));
+      expect(sumRooms(after)).toBe(runningTotal(after).pence);
+    }
+  });
+  it("an unpriced row in a room never becomes £0", () => {
+    const lines: RoomLine[] = [
+      { ...row("a", "1", null), id: "a", room: "Bathroom", description: "Tile the floor", origin: "proposal", category: "Tiling", dismissalReason: null, sourceExcerpt: null },
+      { ...row("b", "2", 5000), id: "b", room: "Bathroom", description: "Fit two rails", origin: "proposal", category: "Plumbing", dismissalReason: null, sourceExcerpt: null },
+    ];
+    expect(roomTotalLabel(roomTotal(lines, "Bathroom"))).toBe("£100.00 · incomplete: 1 row needs a price");
+    const moved = moveToRoom(lines, "a", "Kitchen");
+    expect(moved.find(line => line.id === "a")!.unitPricePence).toBeNull();
+    expect(roomTotalLabel(roomTotal(moved, "Kitchen"))).toBe("£0.00 · incomplete: 1 row needs a price");
+    const renamed = renameRoom(lines, "Bathroom", "En-suite");
+    expect(renamed.map(line => [line.room, line.unitPricePence])).toEqual([["En-suite", null], ["En-suite", 5000]]);
+    expect(roomTotalLabel(roomTotal([], "Loft"))).toBe("No rows yet");
+  });
+  it("one price notes the itemised figure beside the room price, never a second total", () => {
+    expect(onePriceNote(combinedPrice([{ quantity: "1", unitPricePence: 30000 }, { quantity: "2", unitPricePence: 5000 }]), 35000))
+      .toBe("Itemised came to £400.00 · room price £350.00");
+    expect(onePriceNote(combinedPrice([{ quantity: "1", unitPricePence: null }]), 35000)).toBe("Itemised incomplete · room price £350.00");
+  });
+  it("rooms come in first-spoken order with the whole job last, and names follow the review contract", () => {
+    const named = (room: string) => ({ room });
+    expect(roomsOf([named("Whole job"), named("Kitchen"), named("Bathroom"), named("Kitchen")], ["Loft"])).toEqual(["Kitchen", "Bathroom", "Loft", "Whole job"]);
+    expect(roomName("  Loft  ")).toBe("Loft");
+    expect(roomName("   ")).toBeNull();
+    expect(roomName("x".repeat(101))).toBeNull();
   });
 });
