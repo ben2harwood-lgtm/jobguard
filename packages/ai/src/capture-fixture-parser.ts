@@ -74,7 +74,7 @@ const withdrawal = /\b(?:scratch|scrap|forget|cancel)\b/iu;
 export const spokenCorrection = new RegExp(
   `\\b(?:(?:no[\\s,]+)?make\\s+(?:that|it)(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])|a[\\s-]+${unreadNumber}))` +
   `|oh[\\s,]+it['’]?s|it['’]?s\\s+actually` +
-  `|actually|sorry|i\\s+mean(?:t)?|hang\\s+on|wait|nah|nope|no(?!\\s+(?:vat|more|less|charge)\\b)` +
+  `|actually|sorry|new\\s+price|revised|instead|i\\s+mean(?:t)?|hang\\s+on|wait|nah|nope|no(?!\\s+(?:vat|more|less|charge)\\b)` +
   `|${withdrawal.source}|start\\s+again|correction|not(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
   `|(?:change|revise|replace)\\s+(?:(?:that|the|first)\\s+)*(?:price|figure|amount|first\\s+item|room)\\b|change\\s+the\\s+first\\s+item|change\\s+that\\s+to|revise\\b[^.;!?\\r\\n]{0,60}?\\bprice|the\\b[^.;!?\\r\\n]{0,60}?\\bfigure\\s+was\\s+wrong` +
   `|that\\s+(?:should\\s+be|was\\s+euros|figure\\s+is\\s+a\\s+credit)` +
@@ -207,18 +207,20 @@ export function plainItemBoundary(text: string, i: number, start: number,
     if (room && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2 && isNext(next.slice(room[0].length))) return 1;
   }
   const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
+  if (!separator && !/\s/u.test(char)) return 0;
+  const next = visibleWorkText(text.slice(i + (separator?.length ?? 1)));
+  // Price revisions qualify the original item, even when "new" or "make" is also a work word.
+  // Keep this guard here so draft readers and numeric checks use the same clause.
+  if (spokenCorrection.exec(next)?.index === 0) return 0;
   if (!separator) {
     // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
-    if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && (spokenVerb.test(visibleWorkText(text.slice(i + 1)))
-        || workWord.test(visibleWorkText(text.slice(i + 1))) && amounts(text.slice(start, i)).some(amount => amount.index + amount.text.length === i - start))
+    if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && (spokenVerb.test(next)
+        || workWord.test(next) && amounts(text.slice(start, i)).some(amount => amount.index + amount.text.length === i - start))
       && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
       return 1;
     }
     return 0;
   }
-  const next = visibleWorkText(text.slice(i + separator.length));
-  // A condition qualifies this clause's price; an explicit next work item still starts a new clause.
-  if (spokenCorrection.exec(next)?.index === 0) return 0;
   // Keep the disposal phrase attached to the removal it describes.
   if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) return 0;
   // "supply and fit one door" is one item.

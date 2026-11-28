@@ -65,7 +65,8 @@ const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})
 /** One transcript can propose work for several jobs, but can never silently save it as one. */
 export function multipleJobQuestion(text: string): string | null {
   const distinct = (pattern: RegExp) => [...new Set([...text.matchAll(pattern)].map(match => match[0].trim().toLowerCase()))];
-  const customers = distinct(/\b(?:mr|mrs|ms|miss|dr)\.?\s+[\p{L}'’-]+|\b(?:first|second)\s+customer\s+[\p{L}'’-]+/giu);
+  // Coordinated titles sharing a surname name one household; distinct surnames still name separate customers.
+  const customers = distinct(/\b(?:mr|mrs|ms|miss|dr)\.?\s+(?:(?:and|&)\s+(?:mr|mrs|ms|miss|dr)\.?\s+)?[\p{L}'’-]+|\b(?:first|second)\s+customer\s+[\p{L}'’-]+/giu);
   for (const match of text.matchAll(/\b(?:[Ff]or|[Cc]ustomer|[Cc]lient)\s+(\p{Lu}[\p{L}'’-]*(?:\s+\p{Lu}[\p{L}'’-]*){0,2})(?=[\s,:]+(?:at|paint|fit|tile|plaster|repair|rewire|wants?|needs?)\b)/gu)) {
     const name = match[1]!.toLowerCase();
     if (!customers.includes(name)) customers.push(name);

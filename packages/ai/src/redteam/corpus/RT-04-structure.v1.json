@@ -5319,5 +5319,101 @@
     },
     "status": "open-finding",
     "finding": "RT-04-F149"
+  },
+  {
+    "id": "RT-04-150",
+    "lane": "RT-04",
+    "transcript": "Paint the walls for Mr and Mrs Smith. All in £500.",
+    "why": "Coordinated titles with one shared surname identify one household; keep the whole-job price instead of raising a job split.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 50000
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-151",
+    "lane": "RT-04",
+    "transcript": "Paint the walls for Mr & Mrs Smith. All in £500.",
+    "why": "Coordinated titles with one shared surname identify one household; keep the whole-job price instead of raising a job split.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 50000
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-152",
+    "lane": "RT-04",
+    "transcript": "Paint the walls for Dr and Mrs Smith. All in £500.",
+    "why": "Coordinated titles with one shared surname identify one household; keep the whole-job price instead of raising a job split.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 50000
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-153",
+    "lane": "RT-04",
+    "transcript": "Paint the walls for Ms and Mr Smith. All in £500.",
+    "why": "Coordinated titles with one shared surname identify one household; keep the whole-job price instead of raising a job split.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 50000
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-154",
+    "lane": "RT-04",
+    "transcript": "Mrs Jones, paint the lounge £300. Mr Smith, paint the hall £200",
+    "why": "Different titled surnames still require an explicit job-split question.",
+    "expect": {
+      "wholeJobPricePence": null,
+      "areaPrices": [],
+      "questionsInclude": [
+        "Split it before saving"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the lounge",
+          "unitPricePence": 30000
+        },
+        {
+          "descriptionIncludes": "paint the hall",
+          "unitPricePence": 20000
+        }
+      ]
+    },
+    "status": "pass"
   }
 ]

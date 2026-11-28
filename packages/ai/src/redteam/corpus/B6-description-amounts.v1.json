@@ -578,5 +578,235 @@
       "areaPrices": []
     },
     "status": "pass"
+  },
+  {
+    "id": "B6-026",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 new price £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-027",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 make that £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-028",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 actually £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-029",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 revised £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-030",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 instead £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-031",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 or £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-032",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 sorry £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-033",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 , new price £600",
+    "why": "A price revision stays with the original work clause; neither said amount is an agreed price or a second work item.",
+    "expect": {
+      "lineCount": 1,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000,
+        60000,
+        110000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-034",
+    "lane": "RT-08",
+    "transcript": "Paint walls £500 new skirting £600",
+    "why": "New work after a stated price still starts a distinct item; the revision guard must only keep price revisions together.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 50000
+        },
+        {
+          "descriptionIncludes": "new skirting",
+          "unitPricePence": 60000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "pass"
   }
 ]
