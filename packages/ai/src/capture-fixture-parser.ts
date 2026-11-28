@@ -106,17 +106,24 @@ const rateQualifier = /^\s+(?:(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])|(?:each|apiec
 export function rateAfter(after: string): RegExpExecArray | null {
   return rateQualifier.exec(after);
 }
-/**
- * The pair of said-amount guards every price passes, line prices and room and whole-job totals alike: the amount was
- * read in part (readInPart), or a rate qualifier follows it (rateAfter). A total with either is left open and asked about.
- */
-export function saidAmountOpen(before: string, after: string): boolean {
-  return readInPart(before, after) || rateAfter(after) !== null;
-}
 // The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
 const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
-// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
-const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*$)`, "iu");
+// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range. A bare number counts
+// at the end of the clause or before the total words ("five hundred pounds or six for the whole job").
+const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*(?:$|(?=(?:for|all in|in total|altogether)(?![\\p{L}]))))`, "iu");
+const hedge = /\b(?:about|around|roughly|approximately)\b/iu;
+/**
+ * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
+ * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
+ * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
+ * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
+ * a hedge word is in the clause (about, around, roughly, approximately); or a rate qualifier follows it (rateAfter).
+ * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
+ */
+export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
+  return readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+    || hedge.test(before) || hedge.test(after) || (rates === "open" && rateAfter(after) !== null);
+}
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
 const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
@@ -196,12 +203,10 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
 
 function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null {
   const matches = amounts(chunk.value);
-  if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)
-    || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
+  if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)) return null;
   const match = matches[0]!;
-  const rest = chunk.value.slice(match.index + match.text.length);
-  // Never keep part of an amount: unread pence or a trailing number leaves the price open for a question.
-  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest) || rangeAfter.test(rest)) return null;
+  // Never keep part of an amount: every said-amount guard, the same function totals call.
+  if (saidAmountOpen(chunk.value.slice(0, match.index), chunk.value.slice(match.index + match.text.length), "line")) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };

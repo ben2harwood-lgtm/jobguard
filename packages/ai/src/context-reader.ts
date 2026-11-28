@@ -324,10 +324,10 @@ function totals(text: string): TotalPrice[] {
     const unsure = !!price && (/\b(?:about|around|roughly|approximately|approx|say|call it|maybe|reckon)\s+$/iu.test(clause.slice(0, price.index))
       || /^[\s,]*(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b/iu.test(text.slice(clauseStart + priceEnd, clauseStart + priceEnd + 60)));
     const single = !!price && (prices.length === 1 || prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1);
-    // Totals pass the same guards as line prices: "a quarter of a thousand pounds" or "one million two hundred pounds"
-    // is never read as £1,000 or £200; the price stays open and is asked about with the whole phrase.
-    // The same pair of guards as line prices (saidAmountOpen): read in part, or a rate ("500 pounds per day", "a room", "each").
-    const partial = !!price && saidAmountOpen(text.slice(0, clauseStart + priceAt), text.slice(clauseStart + priceEnd));
+    // Totals call the same function as line prices (saidAmountOpen), with the words of the same clause either side:
+    // "a quarter of a thousand pounds", "five hundred pounds or six hundred", "500 pounds per day" all stay open and
+    // are asked about with the whole phrase. The unsure words and corrections above are extra, for totals only.
+    const partial = !!price && saidAmountOpen(clause.slice(0, priceAt), clause.slice(priceEnd));
     const pence = single && !unsure && !partial ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
       text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
