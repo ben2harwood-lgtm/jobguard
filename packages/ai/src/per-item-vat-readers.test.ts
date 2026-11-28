@@ -3,8 +3,9 @@
 // line's own counted thing; VAT words after a price add a VAT question and never change the number; anything else stays open.
 import { describe, expect, it } from "vitest";
 import { parseCaptureFixture } from "./capture-fixture-parser.js";
-import { readSpokenJob } from "./context-reader.js";
+import { checkSpokenNumbers, readSpokenJob } from "./context-reader.js";
 
+const readChecked = (text: string) => { const { timeline: _, ...job } = readSpokenJob("source", text); return checkSpokenNumbers(job, text); };
 const vat = (text: string) => `Confirm VAT: you said “${text}”. The price is kept as said; VAT is not added or taken off.`;
 const readers = {
   parser: (text: string) => { const p = parseCaptureFixture("source", text);
@@ -46,5 +47,19 @@ describe("Reader A per-item reads", () => {
     const job = readSpokenJob("source", rate);
     expect(job.lines[0]).toMatchObject({ quantity: { value: "30" }, unit: { value: "m²" }, unitPricePence: { value: 2500 }, priceBasis: "per_unit" });
     expect(job.questions.map(q => q.text)).toContain(vat(rate));
+  });
+  // Codex P2s on #1037.
+  it("leaves the price open when the count kept is not the thing the price names", () => {
+    const text = "fit six doors and two windows at fifty pounds a window";
+    const job = readSpokenJob("source", text);
+    expect(job.lines[0]).toMatchObject({ unitPricePence: { value: null }, priceBasis: "none" });
+    expect(job.questions.map(q => q.text)).toContain(`Confirm price: ${text}`);
+  });
+  it("keeps a per-item price for the line's own counted unit through the number check", () => {
+    const text = "fit six switches at fifty pounds a switch";
+    const checked = readChecked(text);
+    expect(checked.lines[0]).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
+    const other = "fit six switches at fifty pounds a day";
+    expect(readChecked(other).lines[0]!.unitPricePence.value).toBeNull();
   });
 });

@@ -104,8 +104,14 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     ...understanding.areaPrices.map(price => spanOf(price.provenance)), understanding.wholeJobPrice ? spanOf(understanding.wholeJobPrice.provenance) : null];
   const reused = (at: number) => moneySpans.some((other, index) => index !== at && overlaps(moneySpans[at]!, other));
   /** "each" and "per unit" multiply, so the per-item words must sit beside the cited price. */
-  const perItem = (said: { start: number; end: number } | null) => !!said
-    && (/^\s*(?:pounds?|quid)?\s*(?:each|apiece|a piece|per\s+\p{L}+|an?\s+(?:square\s+|linear\s+)?(?:met(?:re|er)|m2|m²|panel|door|unit|item|hour|day|sheet|roll|length|socket|radiator|window|one))(?![\p{L}])/iu.test(sourceText.slice(said.end, said.end + 40))
+  // "a switch" after the price also counts when "switch" is the line's own counted unit (V2-SQ-RA, Codex P2 on #1037).
+  const ownUnit = (said: { end: number }, unit: string | null) => {
+    const word = /^\s*(?:pounds?|quid)?\s*an?\s+(\p{L}+)(?![\p{L}])/iu.exec(sourceText.slice(said.end, said.end + 40))?.[1]?.toLowerCase();
+    const own = unit?.split(/\s+/u).at(-1)?.toLowerCase();
+    return !!word && !!own && ([own, `${own}s`, `${own}es`].includes(word) || [`${word}s`, `${word}es`].includes(own));
+  };
+  const perItem = (said: { start: number; end: number } | null, unit: string | null = null) => !!said
+    && (ownUnit(said, unit) || /^\s*(?:pounds?|quid)?\s*(?:each|apiece|a piece|per\s+\p{L}+|an?\s+(?:square\s+|linear\s+)?(?:met(?:re|er)|m2|m²|panel|door|unit|item|hour|day|sheet|roll|length|socket|radiator|window|one))(?![\p{L}])/iu.test(sourceText.slice(said.end, said.end + 40))
       || /(?:^|[^\p{L}])(?:each|apiece|per\s+\p{L}+)\s+(?:at\s+|for\s+)?£?\s*$/iu.test(sourceText.slice(Math.max(0, said.start - 30), said.start)));
   const lines = understanding.lines.map((line, lineIndex) => {
     const label = line.description.value.slice(0, 160);
@@ -120,7 +126,7 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
       priceBasis = "none";
       questions.push({ text: `Price needed for “${label}”: that amount was said for something else.`, lineIndex });
     }
-    if (unitPricePence.value !== null && (priceBasis === "each" || priceBasis === "per_unit") && !perItem(spanOf(unitPricePence.provenance))) priceBasis = "line";
+    if (unitPricePence.value !== null && (priceBasis === "each" || priceBasis === "per_unit") && !perItem(spanOf(unitPricePence.provenance), line.unit.value)) priceBasis = "line";
     if (quantity.value !== null && !(cites(quantity.provenance, Number(quantity.value), "count") && belongs(lineIndex, quantity.provenance))) {
       quantity = { value: null, provenance: { kind: "defaulted", note: "Quantity not said exactly; never invented" } };
       questions.push({ text: `How many for “${label}”?`, lineIndex });

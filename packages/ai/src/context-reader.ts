@@ -168,6 +168,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
   let unit: Field<string | null> = { value: null, provenance: { kind: "defaulted", note: "Not said; confirm before quoting" } };
   let price: Field<number | null> = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
   let priceBasis: JobUnderstanding["lines"][number]["priceBasis"] = "none";
+  let perWord: string | null = null, vatSaid = false;
   const label = () => value.slice(0, descriptionEnd).trim().replace(/[\s,]+$/u, "").slice(0, 160);
 
   const m = measure.exec(value);
@@ -187,7 +188,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
       else if (pence !== null) {
         price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit";
-        if (vat) questions.push(vatQuestion(value));
+        if (vat) vatSaid = true;
       }
     }
     // "14 square metres of vinyl at 32 a metre": words after the measure still name the work.
@@ -212,7 +213,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";
         descriptionEnd = found.at;
-        if (vatWords.test(after)) questions.push(vatQuestion(value));
+        // Checked again after the count is read: the count kept must be the thing "a <noun>" names.
+        if (each && per) perWord = per[1]!;
+        if (vatWords.test(after)) vatSaid = true;
       }
     } else if (candidates.length) questions.push(`Confirm price: ${value.slice(0, 450)}`);
     else {
@@ -258,8 +261,17 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       unit = { value: counted.slice(0, 40), provenance: cite(match.index + match[0].indexOf(counted, match[1]!.length), Math.min(counted.length, 40)) };
       break;
     }
+    // "six doors and two windows at fifty pounds a window": the count kept is not the priced thing, so the price stays open.
+    if (perWord && !(quantity.value !== null && unit.value && sameUnit(unit.value.split(/\s+/u).at(-1)!, perWord))) {
+      price = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
+      priceBasis = "none"; vatSaid = false;
+      questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      descriptionEnd = value.length;
+      description = value.replace(/(?:\s+(?:for|at)|[\s,]+)+$/iu, "").slice(0, 500);
+    }
     if (priceBasis === "each" && quantity.value === null) questions.push(`Confirm how many: “${label()}” is priced each.`);
   }
+  if (vatSaid) questions.push(vatQuestion(value));
   const { trade, word } = tradeOf(description, room);
   return {
     line: {
