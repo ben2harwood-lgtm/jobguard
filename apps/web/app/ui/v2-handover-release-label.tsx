@@ -47,7 +47,8 @@ export const acknowledgedLine = (iso: string) => `Receipt acknowledged ${when(is
 /** M3's CustomerPack: the released version exactly as saved, the newer-version note and the receipt-only text. */
 export function CustomerPack({ firmName, version, content, newer }: { firmName: string; version: number; content: HandoverContent; newer: boolean }) {
   return <div className="form">
-    {newer && <div role="status" className="note warning"><strong>{newerAvailable}</strong></div>}
+    {/* M3: an alert at the top of the pack. Each version has its own link, so there is no "Open newer version" here. */}
+    {newer && <div role="alert" className="note warning" data-testid="handover-newer"><strong>{newerAvailable}</strong></div>}
     <p>From {firmName} · version {version}</p>
     <HandoverPack content={content}/>
     <p>{receiptOnly}</p>

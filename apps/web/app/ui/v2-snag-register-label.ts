@@ -4,7 +4,10 @@ type Event = { sequence: number; kind: "fixed" | "checked" | "reopened" };
 
 export const snagFinalAccountNote = "Checking a snag does not approve the final account.";
 export const snagCheckerAlert = "Choose someone other than the person who fixed it.";
-export const snagEmpty = "No snags yet. Record one when you walk the job.";
+// M3's empty and problem wording (V2-G7).
+export const snagEmptyTitle = "No snags recorded yet";
+export const snagEmpty = "Add a snag with an owner, due date and photo when you find one.";
+export const snagLoadProblem = "Snags could not load. Sign in to the right practice firm and try again. Nothing new was recorded or sent.";
 export const snagProblem: Record<string, string> = {
   V2_SNAG_CHECKER_IS_FIXER: snagCheckerAlert,
   V2_SNAG_NOTHING_OUTSTANDING: "A checked snag has nothing left to agree.",

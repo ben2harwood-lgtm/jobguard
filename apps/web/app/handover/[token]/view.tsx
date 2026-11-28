@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { HandoverLinkView } from "@jobguard/api/workspace";
 import { Card, Head, Note } from "../../(designed)/designed-ui";
 import { CustomerPack, acknowledgedLine, linkProblem, linkRefused, newerReadOnly } from "../../ui/v2-handover-release-label";
+import styles from "../../ui/v2-tap.module.css";
 
 export function CustomerPackView({ token, view, failure }: { token: string; view: HandoverLinkView | null; failure: "refused" | "problem" | null }) {
   const [acknowledgedAt, setAcknowledgedAt] = useState(view?.acknowledgedAt ?? null);
@@ -23,7 +24,7 @@ export function CustomerPackView({ token, view, failure }: { token: string; view
 
   const refused = failure === "refused" || error === "refused";
   return <div className="jgd"><div className="rr-app rr-is-inner" data-persona="link">
-    <main className="content" id="main" data-testid="handover-pack-page"><div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 16px 32px", overflowWrap: "anywhere" }}>
+    <main className="content" id="main" data-testid="handover-pack-page"><div className={styles.tap} style={{ maxWidth: 720, margin: "0 auto", padding: "16px 16px 32px" }}>
       <Head kicker="HANDOVER · BY LINK" title="Your handover pack" text="Practice job: nothing real is sent. No amounts."/>
       {refused ? <div role="alert"><Note tone="warning"><strong>{linkRefused}</strong></Note></div>
         : failure === "problem" || !view ? <div role="alert"><Note tone="warning"><strong>{linkProblem}</strong></Note></div>
