@@ -3,7 +3,7 @@ import type {Pool} from "pg";
 import {attachCancellationKit,evaluateDraftQuote,quoteDocumentV1,renderQuotePdf,type QuoteLine} from "@jobguard/core";
 import {ActionExecutor,reconcileOutbox,type OutboundAction,type OutboundAdapter,type SafeTelemetry} from "./outbox.js";
 import {IssueQuoteMutation} from "./quote-document-repository.js";
-import {assertQuoteScopeCoverage} from "./quote-repository.js";
+import {assertQuoteScopeCoverage,lockQuoteScope} from "./quote-repository.js";
 import {UserCommandDispatcher} from "./commands.js";
 import {DEMO_MEMBERSHIP_ID} from "./demo-seed.js";
 import {withTenant,type VerifiedTenantContext} from "./tenant-context.js";import {firmProfileIssuer} from "./firm-profile-repository.js";
@@ -16,6 +16,7 @@ export class QuoteDeliveryRepository{
  async preview(context:VerifiedTenantContext,jobId:string,recipient:string){
   if(!recipient.endsWith(".invalid"))throw new Error("SYNTHETIC_RECIPIENT_REQUIRED");
   return withTenant(this.pool,context,async db=>{
+   await lockQuoteScope(db,jobId);
    // Bind credentials first, then let the allocator lock firm and job before any
    // party/replay/version read. Reservation and immutable preview commit together.
    const reference=(await db.$client.query<{reference:string}>(`SELECT app.allocate_quote_job_reference($1) AS reference`,[jobId])).rows[0]!.reference;

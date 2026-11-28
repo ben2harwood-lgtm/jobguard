@@ -1732,25 +1732,45 @@ test("C6 done when: a line added from a prompt is unpriced, blocks preview until
   await verifyTenantChain(DEMO_TENANT_ID);
 });
 
-// A preview made before the add is out of date by the editor's existing signature rule (the lines changed),
-// as for any edit; the browser case proves it. The server keeps that document as it was.
-test("C6 a preview made before the add stays the document it was; the next preview carries the new line", async () => {
-  const { draftJob, lines, save, quoteLines, preview } = await c6Quote();
+// A preview made before the add no longer covers every confirmed scope item, so the server refuses to send it
+// (missing_scope, the check main already runs at preview, document and send). Saving and previewing again sends.
+const sentRows = async jobRef => (await admin.query(`SELECT count(*)::int AS n FROM app.quote_send WHERE job_id=$1`, [jobRef])).rows[0].n;
+const sendCommand = view => ({ version: "quote-send-command.v1", commandId: randomUUID(), documentId: view.documentId,
+  contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+test("C6 a preview made before the add cannot be sent; revision 2 previews and sends with the new line", async () => {
+  const { draftJob, lines, save, quoteLines, preview, quote } = await c6Quote();
   const before = await preview();
   const receipt = await quoteLines.add(draftJob, addLine("Parking permit", { promptId: "parking" }));
+  await assert.rejects(quote.issue(draftJob, sendCommand(before.view)), error => error.code === "QUOTE_NOT_ISSUABLE"
+    && error.blockers.some(blocker => blocker.code === "missing_scope" && blocker.scopeItemId === receipt.scopeItemId));
+  assert.equal(await sentRows(draftJob), 0, "the refused send wrote nothing");
   await save(1, [...lines, pricedLine(receipt, { unitRatePence: 4500, rateProvenance: "entered" })]);
   const after = await preview();
   assert.notEqual(after.view.documentId, before.view.documentId);
-  assert.notEqual(after.view.contentHash, before.view.contentHash);
   assert.doesNotMatch(JSON.stringify(before.document), /Parking permit/u);
   assert.match(JSON.stringify(after.document), /Parking permit/u);
+  await quote.issue(draftJob, sendCommand(after.view));
+  assert.equal(await sentRows(draftJob), 1);
+});
+
+test("C6 an add racing a send: either the send goes without the line and the add refuses, or the add lands and the send refuses", async () => {
+  const { draftJob, quoteLines, preview, quote } = await c6Quote();
+  const { view } = await preview();
+  const [sent, added] = await Promise.allSettled([quote.issue(draftJob, sendCommand(view)), quoteLines.add(draftJob, addLine())]);
+  if (sent.status === "fulfilled") {
+    assert.equal(added.status, "rejected");
+    assert.equal(added.reason.code, "QUOTE_NOT_EDITABLE");
+    assert.equal(await sentRows(draftJob), 1);
+  } else {
+    assert.equal(added.status, "fulfilled");
+    assert.equal(sent.reason.code, "QUOTE_NOT_ISSUABLE");
+    assert.equal(await sentRows(draftJob), 0);
+  }
 });
 
 test("C6 after the quote is sent or accepted, add refuses QUOTE_NOT_EDITABLE and writes nothing", async () => {
   const { draftJob, quoteLines, preview, quote } = await c6Quote();
-  const { view: { documentId, contentHash } } = await preview();
-  await quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(), documentId, contentHash,
-    recipient: "customer@jobguard-v2.invalid" });
+  await quote.issue(draftJob, sendCommand((await preview()).view));
   const before = [await addedScope(draftJob), (await lineAddedEvents(draftJob)).length];
   await assert.rejects(quoteLines.add(draftJob, addLine()), { code: "QUOTE_NOT_EDITABLE" });
   const { cookies } = await signIn("builder");

@@ -5,6 +5,11 @@ import {withTenant,type TenantTransaction,type VerifiedTenantContext} from "./te
 import {appendAuditBatch} from "./audit.js";
 import { WorkPlanRepository } from "./v2-work-plan-repository.js";
 // Persisted issuable flags predate coverage validation and cannot authorize a new document/send.
+// V2-C6: one lock per job, shared by line adds and by every quote preview, document and send. Each takes it
+// first in its transaction, before any job row lock, so the coverage check below sees every line confirmed before
+// it, and an add waits for (then refuses after) a send. Only line adds contend for it, so elsewhere it never waits.
+export const QUOTE_SCOPE_LOCK_SQL="SELECT pg_advisory_xact_lock(hashtext('v2_quote_add_line:' || lower($1::text)))";
+export async function lockQuoteScope(db:TenantTransaction,jobId:string){await db.$client.query(QUOTE_SCOPE_LOCK_SQL,[jobId]);}
 export async function assertQuoteScopeCoverage(db:TenantTransaction,tenantId:string,jobId:string,quoteRevisionId:string){
  const missing=(await db.$client.query<{scope_item_id:string}>(`SELECT si.id AS scope_item_id FROM app.scope_identity si
   WHERE si.tenant_id=$1 AND si.job_id=$2 AND si.state='confirmed' AND NOT EXISTS(

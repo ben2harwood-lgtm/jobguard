@@ -2,12 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
+import { QUOTE_SCOPE_LOCK_SQL } from "./quote-repository.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 // V2-C6. The builder adds a line to a priced quote before it is sent. The line is a new confirmed
 // scope item, made the way review confirmation makes one (scope identity, first scope revision,
 // scope progress). It carries no price: it reaches the quote only through the builder's next
-// "Save draft revision", so totals, hashes and the missing_scope blocker work unchanged.
+// "Save draft revision", so totals, hashes and the missing_scope blocker work unchanged. A preview or send of
+// an older revision is refused on the server (missing_scope), because coverage is checked under the same job lock.
 export const quoteAddLineCommandV1 = z.object({
   version: z.literal("v2-quote-add-line.v1"),
   commandId: z.guid({ error: "Invalid uuid" }),
@@ -62,7 +64,8 @@ export class QuoteAddLineRepository {
       const editor = await this.editor(client, sessionId);
       // One command id at a time, then one add or save at a time on this job's quote.
       await client.query("SELECT pg_advisory_xact_lock(hashtext('v2_quote_add_line_command:' || $1))", [command.commandId]);
-      await client.query("SELECT pg_advisory_xact_lock(hashtext('v2_quote_add_line:' || $1))", [jobId.toLowerCase()]);
+      // The same job lock that every quote preview and send takes before it checks scope coverage.
+      await client.query(QUOTE_SCOPE_LOCK_SQL, [jobId]);
       await client.query("SELECT id FROM app.quote_draft WHERE tenant_id=$1 AND job_id=$2 FOR UPDATE", [context.tenantId, jobId]);
 
       const replay = await this.replay(client, context.tenantId, jobId, ids, command.description);

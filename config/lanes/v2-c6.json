@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-trp08u-c6"
       ],
-      "note": "RED money Q70 V2-C6: add an unpriced line to a priced quote before it is sent (V2 local practice only). New confirmed scope item (scope_identity, scope_revision 1, scope_progress) as review confirmation makes one; reaches the quote only through the next saveDraft, so totals and hashes are unchanged. Idempotent by digest-derived row ids (no table, no migration). Mounts on main-owned files: packages/db/src/index.ts (export), apps/api/src/workspace/application.ts and index.ts (quoteLines application), apps/web/app/ui/quote-editor.tsx (Add a line box, prompts onAdd, reload shows added scope; all gated on the V2 launcher flag), apps/web/app/ui/v2-quote-prompts-panel.tsx (onAdd may resolve to its notice), apps/web/e2e/v2-c5.spec.mts (quote prompts now offer Add a line), tools/v2/seed.integration.test.mjs (C6 cases appended). Base v2/main at 77ed320e7.",
+      "note": "RED money Q70 V2-C6: add an unpriced line to a priced quote before it is sent (V2 local practice only). New confirmed scope item (scope_identity, scope_revision 1, scope_progress) as review confirmation makes one; reaches the quote only through the next saveDraft, so totals and hashes are unchanged. Idempotent by digest-derived row ids (no table, no migration). Mounts on main-owned files: packages/db/src/index.ts (export), apps/api/src/workspace/application.ts and index.ts (quoteLines application), apps/web/app/ui/quote-editor.tsx (Add a line box, prompts onAdd, reload shows added scope; all gated on the V2 launcher flag), apps/web/app/ui/v2-quote-prompts-panel.tsx (onAdd may resolve to its notice), apps/web/e2e/v2-c5.spec.mts (quote prompts now offer Add a line), tools/v2/seed.integration.test.mjs (C6 cases appended). Plan-check condition: every quote preview, document and send takes the same per-job scope lock first (packages/db/src/quote-repository.ts lockQuoteScope, called from quote-delivery-repository.ts and quote-document-repository.ts), so the existing missing_scope coverage check refuses a pre-add revision and an add after a send refuses; no other path takes that lock. Base v2/main at 77ed320e7.",
       "allow": [
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/index.ts",
@@ -21,6 +21,9 @@
         "apps/web/e2e/v2-c6.spec.mts",
         "apps/web/playwright.v2-c6.config.ts",
         "packages/db/src/index.ts",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/src/quote-repository.ts",
         "packages/db/src/v2-quote-add-line-repository.ts",
         "tools/v2/seed.integration.test.mjs"
       ]
