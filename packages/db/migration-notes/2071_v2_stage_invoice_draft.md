@@ -15,3 +15,9 @@ A draft is a V2 record only. Nothing here touches `customer_invoice`, the ledger
 nothing is numbered, posted or sent. Issuing a stage invoice (VAT, numbering, send) is K5B-2.
 
 Renumbered 2064 -> 2071 on 27 Nov: 2064 is E1's open-fact firm lock in the V2 migration register.
+
+Firm lock (Q83, edited in place before merge): `app.v2_stage_invoice_draft` and
+`app.v2_stage_invoice_draft_withdrawal` also carry the restrictive
+`v2_practice_firm` policy (FOR ALL, TO jobguard_runtime, joined to `app.job`),
+the same as the other V2 tables, so v2/main's FL guard holds. Rerunning drops
+and re-creates the policies.

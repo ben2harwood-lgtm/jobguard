@@ -34,3 +34,8 @@ No backfill: K5A schedules saved before 2046 keep the time-ordered projection
 for their existing due stages. Shared catalogue proofs are empty because those
 databases have no V2 table; the V2 seed tests exercise grants and RLS.
 Forward-fix in a later migration. Do not drop frozen rows or audit history.
+
+Firm lock (Q83, edited in place before merge): `app.v2_payment_stage_due` also
+carries the restrictive `v2_practice_firm` policy (FOR ALL, TO jobguard_runtime,
+joined to `app.job`), the same as the other V2 tables, so v2/main's FL guard
+holds. Rerunning drops and re-creates the policy.
