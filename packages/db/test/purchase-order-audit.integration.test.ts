@@ -50,7 +50,8 @@ beforeAll(async () => {
         "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // V2-K5A: absent from the shared synthetic upgrade fixture; applied on the second pass.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") &&
-      (String(values?.[0]).endsWith("_v2_payment_schedule.sql") || String(values?.[0]).endsWith("_v2_payment_stage_due.sql"))) return { rows: [{}], rowCount: 1 };
+      (String(values?.[0]).endsWith("_v2_payment_schedule.sql") || String(values?.[0]).endsWith("_v2_payment_stage_due.sql") ||
+        String(values?.[0]).endsWith("_v2_stage_invoice_draft.sql"))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);

@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k5b1": {
+      "branches": [
+        "claude/project-thread-trp08u-k5b1"
+      ],
+      "note": "RED Q58 V2-K5B-1: a draft of a deposit or stage invoice from the stage's frozen row; never issued, numbered, posted or sent. Migration 2071 (reserved 2034, then 2064; renumbered to 2071 because 2064 is E1 in the register) (two new tables). Base claude/project-thread-trp08u-k5a1 (K5A-1 #992, on K5A-2 #961 and K5A #929). K5B-1 mount, owned by K5A: packages/db/src/v2-payment-schedule-repository.ts draftStage, withdrawDraft, drafts on read, and freeze() counts only approvals created before the due moment (plan-check condition 1). K5B-1 mount, owned by K5A: packages/db/src/v2-payment-schedule.ts two zod commands and four error codes. K5B-1 mount, owned by K5A: apps/api/src/workspace/payment-schedule.application.ts and its test, two command versions routed. K5B-1 mount, owned by K5A: apps/web/app/api/jobs/[id]/payment-schedule/route.ts and its test, STAGE_ codes mapped. K5B-1 mount, owned by K5A: apps/web/app/ui/v2-payment-schedule.tsx and its test, the draft card and Make draft invoice button, and the boundary line. K5B-1 mount, owned by core index: packages/db/src/index.ts one export line. K5B-1 mount, owned by V2 bootstrap: tools/v2/bootstrap.mjs one line after 2046. K5B-1 mount, owned by K5A-2: tools/v2/seed.integration.test.mjs four appended tests and helpers. K5B-1 mount, owned by main: packages/db/test/purchase-order-audit.integration.test.ts the 2071 stem on the deferred line.",
+      "allow": [
+        "apps/api/src/workspace/payment-schedule.application.test.ts",
+        "apps/api/src/workspace/payment-schedule.application.ts",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.test.ts",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.ts",
+        "apps/web/app/ui/v2-payment-schedule.test.tsx",
+        "apps/web/app/ui/v2-payment-schedule.tsx",
+        "apps/web/app/ui/v2-stage-draft.test.tsx",
+        "apps/web/app/ui/v2-stage-draft.tsx",
+        "packages/db/migration-notes/2071_v2_stage_invoice_draft.md",
+        "packages/db/migrations/2071_v2_stage_invoice_draft.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-payment-schedule-repository.ts",
+        "packages/db/src/v2-payment-schedule.ts",
+        "packages/db/test/migration-proofs/2071_v2_stage_invoice_draft.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

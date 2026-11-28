@@ -4,9 +4,14 @@ import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { initialStageAmounts, paymentScheduleSetV1, paymentScheduleTaskDoneV1, PaymentScheduleError, pounds, projectPaymentSchedule,
-  replayPaymentSchedule, type FrozenStage, type PaymentStage, type ScheduleFact } from "./v2-payment-schedule.js";
+  replayPaymentSchedule, stageDraftCommandV1, stageDraftWithdrawCommandV1, type FrozenStage, type PaymentStage,
+  type ScheduleFact } from "./v2-payment-schedule.js";
 import { WorkPlanRepository } from "./v2-work-plan-repository.js";
 import { approvedExtrasTotal } from "./v2-approved-extras.js";
+
+type DraftRow = { stageIndex: number; draftNo: number; commandId: string; amountPence: string; countedApprovalIds: string[];
+  requestDigest: string; recordedAt: Date; withdrawnAt: Date | null; withdrawReason: string | null; extras: string[] | null };
+const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
 type Saved = { tenant_id: string; command_id: string; quote_revision_id: string; job_id: string; stages: PaymentStage[];
   actor_membership_id: string; recorded_at: Date; recorded_order: string; expected_version: number };
@@ -34,8 +39,11 @@ export class PaymentScheduleRepository {
       const frozen = await this.frozenRows(client, context.tenantId, jobId, saved.quote_revision_id);
       const projected = projectPaymentSchedule(Number(head.net), saved.stages, facts, await this.clock(client), frozen);
       // A trigger task that left the effective plan stays visible; its amount stays in the total.
-      const stages = projected.stages.map(stage => ({ ...stage, triggerRemoved: stage.status === "planned" &&
-        stage.trigger.kind === "task" && !hasTask(tasks, stage.trigger.scopeItemId, stage.trigger.taskKey) }));
+      const drafts = await this.drafts(client, context.tenantId, jobId, saved.quote_revision_id);
+      const stages = projected.stages.map((stage, index) => ({ ...stage, triggerRemoved: stage.status === "planned" &&
+        stage.trigger.kind === "task" && !hasTask(tasks, stage.trigger.scopeItemId, stage.trigger.taskKey),
+        // K5B-1: drafts only, never an invoice.
+        drafts: drafts.filter(draft => draft.stageIndex === index).map(publicDraft) }));
       // V2-K5A-1 read-only check: the shared rule's total, which equals extras before plus since the schedule.
       const extrasTotal = pounds(await approvedExtrasTotal(client, context.tenantId, jobId));
       return { ...base, schedule: { ...projected, stages, extrasTotal,
@@ -67,8 +75,8 @@ export class PaymentScheduleRepository {
         if (!matches) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
         return this.receipt(existing);
       }
-      if ((await client.query("SELECT 1 FROM app.v2_payment_schedule_task_done WHERE tenant_id=$1 AND command_id=$2",
-        [context.tenantId,command.commandId])).rowCount) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
+      // A command id is tenant-wide: a task-done, draft or withdrawal command with this id refuses (K5B-1, both directions).
+      if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
       if (command.expectedVersion !== 0 || head.revision !== command.quoteRevisionId ||
         (await client.query(`SELECT 1 FROM app.v2_payment_schedule WHERE (tenant_id,job_id,quote_revision_id)=($1,$2,$3)`,
           [context.tenantId, jobId, head.revision])).rowCount) throw new PaymentScheduleError("SCHEDULE_STALE");
@@ -124,6 +132,7 @@ export class PaymentScheduleRepository {
         if (!replay.matches) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
         return {commandId:command.commandId,version:command.expectedVersion+1,recordedAt:replay.recordedAt.toISOString()};
       }
+      if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("SCHEDULE_REPLAY_CONFLICT");
       const schedule = await this.schedule(client, context.tenantId, jobId, command.quoteRevisionId);
       if (!schedule || head.revision !== command.quoteRevisionId ||
         await this.currentVersion(client,context.tenantId,jobId,head.revision) !== command.expectedVersion) {
@@ -159,6 +168,122 @@ export class PaymentScheduleRepository {
     });
   }
 
+  /**
+   * K5B-1: draft the stage's invoice from its frozen row. A due stage with no frozen row (a date stage, or a stage
+   * from before 2046) is frozen here, in this transaction, at the moment it became due. A stage not due is refused.
+   */
+  async draftStage(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: unknown) {
+    this.fence();
+    const parsed = stageDraftCommandV1.safeParse(raw);
+    if (!parsed.success) throw new PaymentScheduleError("SCHEDULE_INVALID");
+    const command = parsed.data;
+    return withTenant(this.pool, context, async db => {
+      const client = db.$client;
+      const actor = await this.actor(client, sessionId);
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`v2-schedule:${context.tenantId}`]);
+      const head = await this.head(client, context.tenantId, jobId);
+      const requestDigest = digest({ jobId, actor, command });
+      const prior = await this.draftByCommand(client, context.tenantId, command.commandId);
+      if (prior) {
+        if (prior.requestDigest !== requestDigest) throw new PaymentScheduleError("STAGE_DRAFT_COMMAND_CONFLICT");
+        return publicDraft(prior);
+      }
+      if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("STAGE_DRAFT_COMMAND_CONFLICT");
+      const saved = await this.schedule(client, context.tenantId, jobId, head.revision);
+      if (!saved || command.stageIndex >= saved.stages.length) throw new PaymentScheduleError("SCHEDULE_INVALID");
+      const key = [context.tenantId, jobId, saved.quote_revision_id] as const;
+      let frozen = (await this.frozenRows(client, ...key)).find(row => row.index === command.stageIndex);
+      if (!frozen) {
+        // Due by the same facts the screen projects (London midnight for a date, capped at the schedule start).
+        const { facts } = await this.facts(client, context.tenantId, jobId, saved);
+        const due = facts.find(fact => fact.kind === "due" && fact.index === command.stageIndex);
+        if (!due || due.at > await this.clock(client)) throw new PaymentScheduleError("STAGE_NOT_DUE");
+        await this.freeze(db, Number(head.net), saved, [command.stageIndex], due.at, command.commandId, actor);
+        frozen = (await this.frozenRows(client, ...key)).find(row => row.index === command.stageIndex)!;
+      }
+      const drafts = (await this.drafts(client, ...key)).filter(draft => draft.stageIndex === command.stageIndex);
+      if (drafts.some(draft => !draft.withdrawnAt)) throw new PaymentScheduleError("STAGE_DRAFT_LIVE");
+      const draftNo = drafts.length + 1;
+      // Only the frozen row's columns are copied; the trigger checks they still match it.
+      await client.query(`INSERT INTO app.v2_stage_invoice_draft (tenant_id,job_id,quote_revision_id,stage_index,draft_no,
+          command_id,amount_pence,counted_approval_ids,request_digest,actor_membership_id)
+        SELECT tenant_id,job_id,quote_revision_id,stage_index,$5,$6,amount_pence,counted_approval_ids,$7,$8
+        FROM app.v2_payment_stage_due WHERE (tenant_id,job_id,quote_revision_id,stage_index)=($1,$2,$3,$4)`,
+      [...key, command.stageIndex, draftNo, command.commandId, requestDigest, actor]);
+      await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+        eventType: "v2.billing_stage.draft_made", subjectType: "job", subjectRef: jobId,
+        payload: { references: { commandId: command.commandId, quoteRevisionId: key[2], stageIndex: String(command.stageIndex),
+          draftNo: String(draftNo), amountPence: String(frozen.amountPence) }, hashes: { request: requestDigest },
+        classifications: { action: "operational" } } }]);
+      return publicDraft((await this.draftByCommand(client, context.tenantId, command.commandId))!);
+    });
+  }
+
+  /** K5B-1: withdraw a live draft. The frozen amount never changes; a fresh draft can then be made. */
+  async withdrawDraft(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: unknown) {
+    this.fence();
+    const parsed = stageDraftWithdrawCommandV1.safeParse(raw);
+    if (!parsed.success) throw new PaymentScheduleError("SCHEDULE_INVALID");
+    const command = parsed.data;
+    return withTenant(this.pool, context, async db => {
+      const client = db.$client;
+      const actor = await this.actor(client, sessionId);
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`v2-schedule:${context.tenantId}`]);
+      const head = await this.head(client, context.tenantId, jobId);
+      const requestDigest = digest({ jobId, actor, command });
+      const { rows: [prior] } = await client.query<{ requestDigest: string; quoteRevisionId: string }>(`SELECT request_digest AS "requestDigest",
+        quote_revision_id AS "quoteRevisionId" FROM app.v2_stage_invoice_draft_withdrawal WHERE (tenant_id,command_id)=($1,$2)`,
+      [context.tenantId, command.commandId]);
+      if (prior) {
+        if (prior.requestDigest !== requestDigest) throw new PaymentScheduleError("STAGE_DRAFT_COMMAND_CONFLICT");
+      } else {
+        if (await this.commandUsed(client, context.tenantId, command.commandId)) throw new PaymentScheduleError("STAGE_DRAFT_COMMAND_CONFLICT");
+        const draft = (await this.drafts(client, context.tenantId, jobId, head.revision))
+          .find(row => row.stageIndex === command.stageIndex && row.draftNo === command.draftNo);
+        if (!draft) throw new PaymentScheduleError("STAGE_DRAFT_NOT_FOUND");
+        if (draft.withdrawnAt) throw new PaymentScheduleError("SCHEDULE_STALE");
+        await client.query(`INSERT INTO app.v2_stage_invoice_draft_withdrawal (tenant_id,job_id,quote_revision_id,stage_index,draft_no,
+            command_id,reason,request_digest,actor_membership_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [context.tenantId, jobId, head.revision, command.stageIndex, command.draftNo, command.commandId, command.reason, requestDigest, actor]);
+        await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+          eventType: "v2.billing_stage.draft_withdrawn", subjectType: "job", subjectRef: jobId,
+          payload: { references: { commandId: command.commandId, quoteRevisionId: head.revision, stageIndex: String(command.stageIndex),
+            draftNo: String(command.draftNo) }, hashes: { request: requestDigest, reason: digest(command.reason) },
+          classifications: { action: "operational" } } }]);
+      }
+      const draft = (await this.drafts(client, context.tenantId, jobId, prior?.quoteRevisionId ?? head.revision))
+        .find(row => row.stageIndex === command.stageIndex && row.draftNo === command.draftNo)!;
+      return publicDraft(draft);
+    });
+  }
+
+  private async actor(client: PoolClient, sessionId: string) {
+    const { rows: [actor] } = await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id",
+      [createHash("sha256").update(sessionId).digest("hex")]);
+    if (!actor?.id) throw new PaymentScheduleError("SCHEDULE_BUILDER_REQUIRED");
+    return actor.id;
+  }
+
+  /** A command id is tenant-wide across the schedule and draft commands. */
+  private async commandUsed(client: PoolClient, tenantId: string, commandId: string) {
+    const drafts = (await client.query<{ ok: boolean }>("SELECT to_regclass('app.v2_stage_invoice_draft') IS NOT NULL AS ok")).rows[0]?.ok;
+    return Boolean((await client.query(`SELECT 1 FROM app.v2_payment_schedule WHERE tenant_id=$1 AND command_id=$2
+      UNION ALL SELECT 1 FROM app.v2_payment_schedule_task_done WHERE tenant_id=$1 AND command_id=$2${drafts ? `
+      UNION ALL SELECT 1 FROM app.v2_stage_invoice_draft WHERE tenant_id=$1 AND command_id=$2
+      UNION ALL SELECT 1 FROM app.v2_stage_invoice_draft_withdrawal WHERE tenant_id=$1 AND command_id=$2` : ""}`,
+    [tenantId, commandId])).rowCount);
+  }
+
+  private async drafts(client: PoolClient, tenantId: string, jobId: string, revision: string) {
+    if (!(await client.query<{ ok: boolean }>("SELECT to_regclass('app.v2_stage_invoice_draft') IS NOT NULL AS ok")).rows[0]?.ok) return [];
+    return (await client.query<DraftRow>(`${draftSelect} WHERE (d.tenant_id,d.job_id,d.quote_revision_id)=($1,$2,$3)
+      ORDER BY d.stage_index, d.draft_no`, [tenantId, jobId, revision])).rows;
+  }
+
+  private async draftByCommand(client: PoolClient, tenantId: string, commandId: string) {
+    return (await client.query<DraftRow>(`${draftSelect} WHERE d.tenant_id=$1 AND d.command_id=$2`, [tenantId, commandId])).rows[0];
+  }
+
   private receipt(saved: Saved) {
     return { commandId: saved.command_id, quoteRevisionId: saved.quote_revision_id, version: 1,
       actorMembershipId: saved.actor_membership_id, recordedAt: saved.recorded_at.toISOString(),
@@ -181,6 +306,7 @@ export class PaymentScheduleRepository {
     const start = saved.recorded_order;
     const facts: ScheduleFact[] = [];
     const approvalIds: string[] = [];
+    const approvalTimes: { id: string; at: string }[] = [];
     for (const [index, stage] of saved.stages.entries()) {
       let at: string | undefined;
       if (stage.trigger.kind === "acceptance") at = start;
@@ -214,6 +340,7 @@ export class PaymentScheduleRepository {
     for (const approval of approvals) {
       approvalIds.push(approval.id);
       const at = approval.at;
+      approvalTimes.push({ id: approval.id, at });
       if (at < start) {
         initial.set(approval.variation_id, Number(approval.pence));
         facts.push({ kind: "prior_extra", at, variationId: approval.variation_id, pence: Number(approval.pence) });
@@ -221,7 +348,7 @@ export class PaymentScheduleRepository {
       else facts.push({ kind: "extra", at, variationId: approval.variation_id, approvalId: approval.id,
         pence: Number(approval.pence) - (initial.get(approval.variation_id) ?? 0) });
     }
-    return { facts, approvalIds };
+    return { facts, approvalIds, approvalTimes };
   }
 
   private async schedule(client: PoolClient, tenantId: string, jobId: string, revision: string) {
@@ -258,7 +385,11 @@ export class PaymentScheduleRepository {
     if (!indexes.length) return;
     const client = db.$client;
     const key = [saved.tenant_id, saved.job_id, saved.quote_revision_id] as const;
-    const { facts, approvalIds } = await this.facts(client, key[0], key[1], saved);
+    const { facts, approvalTimes } = await this.facts(client, key[0], key[1], saved);
+    // K5B-1 plan-check condition 1: count only approvals created before the due moment, as the projection does
+    // (an approval at the same instant comes after the stage). For a stage frozen as it becomes due that is every
+    // visible approval; for a date stage frozen later by a draft it leaves out the extras approved since.
+    const approvalIds = approvalTimes.filter(approval => approval.at < at).map(approval => approval.id);
     const pending = indexes.map(index => ({ index, at, countedApprovalIds: approvalIds }));
     const { amounts } = replayPaymentSchedule(total, saved.stages, facts, await this.clock(client),
       [...await this.frozenRows(client, ...key), ...pending]);
@@ -275,6 +406,20 @@ export class PaymentScheduleRepository {
   }
 }
 
+const draftSelect = `SELECT d.stage_index AS "stageIndex", d.draft_no AS "draftNo", d.command_id AS "commandId",
+    d.amount_pence AS "amountPence", d.counted_approval_ids::text[] AS "countedApprovalIds", d.request_digest AS "requestDigest",
+    d.recorded_at AS "recordedAt", w.recorded_at AS "withdrawnAt", w.reason AS "withdrawReason",
+    (SELECT array_agg(r.description ORDER BY a.created_at, a.id) FROM app.variation_approval a
+      JOIN app.variation_revision r ON (r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
+      JOIN app.v2_payment_schedule s ON (s.tenant_id,s.job_id,s.quote_revision_id)=(d.tenant_id,d.job_id,d.quote_revision_id)
+      -- Only extras approved since the schedule are shared into its stages; earlier ones belong to a later invoice.
+      WHERE (a.tenant_id,a.job_id)=(d.tenant_id,d.job_id) AND a.id = ANY(d.counted_approval_ids) AND a.created_at >= s.recorded_at) AS extras
+  FROM app.v2_stage_invoice_draft d LEFT JOIN app.v2_stage_invoice_draft_withdrawal w
+    ON (w.tenant_id,w.job_id,w.quote_revision_id,w.stage_index,w.draft_no)=(d.tenant_id,d.job_id,d.quote_revision_id,d.stage_index,d.draft_no)`;
+const publicDraft = (row: DraftRow) => ({ stageIndex: row.stageIndex, draftNo: row.draftNo, commandId: row.commandId,
+  amount: pounds(Number(row.amountPence)), countedApprovalIds: row.countedApprovalIds, madeAt: row.recordedAt.toISOString(),
+  withdrawnAt: row.withdrawnAt?.toISOString() ?? null, withdrawReason: row.withdrawReason, extras: row.extras ?? [], basis: "net" as const,
+  label: "Draft · not an invoice · not sent" as const });
 const hasTask = (tasks: {scopeItemId: string; taskKey: string}[], scopeItemId: string, taskKey: string) =>
   tasks.some(task => task.scopeItemId === scopeItemId && task.taskKey === taskKey);
 export type PaymentScheduleView = Awaited<ReturnType<PaymentScheduleRepository["read"]>>;

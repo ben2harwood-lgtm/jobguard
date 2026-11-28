@@ -23,3 +23,10 @@ it("requires an authenticated session before reading or writing", async () => {
   await expect(app.set("irrelevant", {})).rejects.toMatchObject({code:"UNAUTHENTICATED"});
   expect(pool.query).not.toHaveBeenCalled();
 });
+it.each(["v2-stage-draft-command.v1", "v2-stage-draft-withdraw-command.v1"])("K5B-1 %s keeps the schedule's gates", async version => {
+  vi.stubEnv("JOBGUARD_LOCAL_V2", undefined); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  await expect(new PaymentScheduleApplication(pool, "session").set("irrelevant", { version })).rejects.toMatchObject({code:"SYNTHETIC_MODE_REQUIRED"});
+  vi.stubEnv("JOBGUARD_LOCAL_V2", "1");
+  await expect(new PaymentScheduleApplication(pool).set("irrelevant", { version })).rejects.toMatchObject({code:"UNAUTHENTICATED"});
+  expect(pool.query).not.toHaveBeenCalled();
+});
