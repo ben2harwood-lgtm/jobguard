@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-11": {
+      "branches": [
+        "codex/sandbox/rt-fix-11"
+      ],
+      "note": "RT-FIX-11 (#1071): spoken injection, ITEM qualifier safety and exact compound numbers. RT-07 corpus/test edits are status flips only; golden-run edits are hash only. Pure parser change; no web workflow (C1). Commit only; independent exact-head review remains separate. Own lane is implicitly editable, never a directory grant.",
+      "allow": [
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/core/src/job-understanding.ts",
+        "packages/ai/src/redteam/corpus/RT-07-injection.v1.json",
+        "packages/ai/src/redteam/rt07-boundaries.test.ts",
+        "packages/ai/src/redteam/rt07-rendering.spec.mjs",
+        "packages/ai/src/redteam/corpus/RT-EXT-numbers.v1.json",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}
