@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/rt-03"
       ],
-      "note": "RT-03 attack only: correction corpus, focused semantic tests and findings. HEAD_UNDER_TEST a44f5d35b363a5182b166ff724d2d09ca5c1060f. Own config/lanes/v2-rt-03.json is implicitly editable under the lane-register rule. No production source changes.",
+      "note": "RT-03 attack only: correction corpus, focused semantic tests and findings. RT-03-CATCHUP tested merge 04d88f74780ff27ebe84813693f2539c760f93d9 onto sqpv 718be9f51; preserves PR #1082 quantity assertions and closes RT-FIX-6 fixes RT-03-F080-F087. Ordinary test failures were stale compiled core output, resolved by rebuilding the dependency; no new findings or source restorations. Own config/lanes/v2-rt-03.json is implicitly editable under the lane-register rule. No production source changes.",
       "allow": [
         "packages/ai/src/redteam/corpus/RT-03-corrections.v1.json",
         "packages/ai/src/redteam/**",
