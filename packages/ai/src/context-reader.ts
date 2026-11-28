@@ -1,7 +1,7 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
 import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
-import { roomLead, roomOnly, roomPart } from "./room-words.js";
+import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
  * V2-SQ-C Reader A, the context reader. Code only: no model, no network, no spend. It reads one spoken
@@ -306,7 +306,9 @@ function totals(text: string): TotalPrice[] {
     const clause = text.slice(clauseStart, clauseEnd);
     const phraseAt = phrase.index - clauseStart, phraseEnd = phraseAt + phrase[0].length;
     // A measure or a count ("12 square metres", "6 doors") is never a total price.
-    const prices = [...clause.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
+    // "Bedroom 2 £500": the room's ordinal is never one of the clause's prices (V2-SQ-L). Same length, same indexes.
+    const read = hideRoomNumbers(clause);
+    const prices = [...read.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
       && !/^\s*(?:square|sq\b|m2|m²|met(?:re|er)s?|linear|mm|cm|coats?|days?|weeks?|hours?|units?|doors?|items?|rooms?)/iu.test(clause.slice(match.index + match[0].length)));
     // The price said with the total words: the one nearest them.
     const price = prices.length ? prices.reduce((best, match) => Math.min(Math.abs(match.index - phraseEnd), Math.abs(match.index + match[0].length - phraseAt))
@@ -327,7 +329,7 @@ function totals(text: string): TotalPrice[] {
     // Totals call the same function as line prices (saidAmountOpen), with the words of the same clause either side:
     // "a quarter of a thousand pounds", "five hundred pounds or six hundred", "500 pounds per day" all stay open and
     // are asked about with the whole phrase. The unsure words and corrections above are extra, for totals only.
-    const partial = !!price && saidAmountOpen(clause.slice(0, priceAt), clause.slice(priceEnd));
+    const partial = !!price && saidAmountOpen(read.slice(0, priceAt), read.slice(priceEnd));
     const pence = single && !unsure && !partial ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
       text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-l": {
+      "branches": [
+        "claude/project-thread-trp08u-sql"
+      ],
+      "note": "T2 Q75 V2-SQ-L: a numbered room's ordinal ('Bedroom two £500', 'bedroom 2 £500') is never part of an amount nor beside one. One helper, hideRoomNumbers in room-words.ts, blanks the ordinal (same length) only when a stated amount (£ or digits) follows; amounts(), plainPrice and totals() read through it; saidAmountOpen is unchanged. Core's span check treats a number word that ends one of the job's own room names as the room. Base SQ-K #1049 at 179a8e674. No route, table or migration. Golden record: parser hash only.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/room-words.ts",
+        "packages/core/src/job-understanding.ts"
+      ]
+    }
+  }
+}

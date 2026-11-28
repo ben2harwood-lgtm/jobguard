@@ -75,7 +75,11 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     // A cited span must be a whole number as said: "5k" inside "4.5k" or "200" inside "1,200" is not what was said.
     if (/\d[.,]?$/u.test(sourceText.slice(Math.max(0, start - 2), start)) || /^[.,]?\d/u.test(sourceText.slice(end, end + 2))) return false;
     // … nor "five" inside "twenty five", or "twenty" inside "twenty five" or "two hundred".
-    if (NUMBER_WORD_BEFORE.test(sourceText.slice(Math.max(0, start - 40), start)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
+    // A number word that ends one of the job's own room names ("Bedroom two £500") names the room (V2-SQ-L).
+    const before = sourceText.slice(Math.max(0, start - 40), start);
+    const roomBefore = understanding.areas.some(area => /\p{N}|\b(?:one|two|three|four|five)$/iu.test(area.name.value)
+      && new RegExp(`(?<![\\p{L}])${area.name.value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/\s+/gu, "\\s+")}\\s*$`, "iu").test(before));
+    if ((!roomBefore && NUMBER_WORD_BEFORE.test(before)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
     return read[kind](sourceText.slice(start, end)) === expected;
   };
   const spanOf = (provenance: z.infer<typeof provenanceV1>) => provenance.kind === "extracted" ? provenance.span : null;
