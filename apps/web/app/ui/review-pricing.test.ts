@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 // The parser is not a package export; the test reads its source so the four examples run end to end.
 import { parseCaptureFixture } from "../../../../packages/ai/src/capture-fixture-parser";
-import { combinedPrice, combineLabel, lineTotalPence, originNote, priceFromText, runningTotal, splitBeforeLabel,
+import { combinedPrice, combineLabel, lineTotalPence, mergeableRows, originNote, priceFromText, runningTotal, splitBeforeLabel,
   totalLabel, wholeJobLabel, wholeJobWords } from "./review-pricing";
 
 type Row = { scopeItemId: string; quantity: string | null; unit: string | null; unitPricePence: number | null; disposition: string; parentScopeItemIds: string[] };
@@ -84,5 +84,15 @@ describe("price box and rounding", () => {
     for (const typed of ["12,50", "1,25", "1,2345", ",500", "1,000,00"]) expect(priceFromText(typed)).toEqual({ pence: null, error: "Use commas only between thousands, for example 1,250.50." });
     expect(priceFromText("12,500").pence).toBe(1250000);
     expect(priceFromText(String(MAX_MONEY_PENCE)).error).toBe("Price exceeds the application limit.");
+  });
+});
+
+describe("merge guard", () => {
+  const row = (id: string, disposition: string) => ({ id, disposition });
+  it("combines only proposed or accepted rows, two or more", () => {
+    const lines = [row("a", "proposed"), row("b", "accepted"), row("c", "dismissed"), row("d", "split"), row("e", "merged")];
+    expect(mergeableRows(lines, ["a", "b"])?.map(line => line.id)).toEqual(["a", "b"]);
+    expect(mergeableRows(lines, ["a"])).toBeNull();
+    for (const away of ["c", "d", "e"]) expect(mergeableRows(lines, ["a", "b", away])).toBeNull();
   });
 });

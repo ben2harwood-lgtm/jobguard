@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-j": {
+      "branches": [
+        "claude/project-thread-trp08u-sqj"
+      ],
+      "note": "T2 Q68 V2-SQ-J: typed or punctuated quote text gets the same rooms as spoken text. A clause that only names a room is never a capture-parser row; Reader A labels the rows after it. Mounts: packages/ai/src/capture-fixture-parser.ts (one filter on the plain draft's chunks, using Reader A's roomOnly), packages/ai/src/context-reader.ts (the room patterns move to room-words.ts, unchanged, so the parser can read roomOnly without an import cycle). docs/fixtures/ai/golden-run.v1.json: the parser source hash only; no prediction changed. Base claude/project-thread-trp08u-sqra (#1037) at f27ad8a0a, which already carries #1033's three commits (cherry-picked as 3e7bdd79b, 6b7443511, f2af1dcd6). No route, table or migration.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/README.md",
+        "docs/fixtures/ai/spoken-quote-understanding/capture-typed-rooms.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-typed-rooms.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/room-words.ts"
+      ]
+    }
+  }
+}

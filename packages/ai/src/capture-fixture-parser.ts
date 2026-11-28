@@ -1,6 +1,7 @@
 import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
+import { roomOnly } from "./room-words.js";
 
-export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/2" as const;
+export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/3" as const;
 const MAX_PENCE = 1_000_000_000_000n;
 export class CaptureFixtureError extends Error {
   readonly code: "INVALID_FIXTURE_SOURCE" | "FIXTURE_STRUCTURE_REQUIRED";
@@ -8,7 +9,7 @@ export class CaptureFixtureError extends Error {
     super(code); this.code = code; this.name = "CaptureFixtureError";
   }
 }
-type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
+export type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
 function cells(raw: string, start: number): Cell[] {
   let offset = 5;
   return raw.slice(5).split("|").map(part => {
@@ -34,15 +35,15 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 }
 
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
-const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
+export const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
-const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
-const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
+export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 
 // Spoken amounts ("two hundred pounds", "a thousand and fifty quid"): the words are the cited price.
-const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
@@ -66,8 +67,8 @@ export function spokenPounds(words: string): number | null {
   }
   return last === null ? null : totalValue + group;
 }
-type Amount = { text: string; index: number; pence: number | null };
-function amounts(value: string): Amount[] {
+export type Amount = { text: string; index: number; pence: number | null };
+export function amounts(value: string): Amount[] {
   const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
     pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
   for (const match of value.matchAll(spokenAmount)) {
@@ -80,11 +81,31 @@ function amounts(value: string): Amount[] {
     found.push({ text: match[0], index: match.index,
       pence: partial || pounds === null || pence === null || pence > 99 ? null : pounds * 100 + pence });
   }
+  // "half a thousand pounds", "between 400 and 500 pounds", "four to five hundred pounds": only part of what was said is an amount.
+  // Unread number guard: "one thousand and a hundred pounds", "fifty pounds and five": a number said next to the amount
+  // but outside it means the amount was read in part, so it has no price.
+  for (const amount of found) {
+    if (fractionOrRange.test(value.slice(0, amount.index)) || unreadBefore.test(value.slice(0, amount.index))
+      || unreadAfter.test(value.slice(amount.index + amount.text.length))) amount.pence = null;
+  }
   return found.sort((a, b) => a.index - b.index);
 }
+// A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
+const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|to|or))\\s*$`, "iu");
+// A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
+const unreadNumber = `(?:\\d|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|point|half|halves|quarters?|thirds?|couple|few|dozen)(?![\\p{L}]))`;
+const unreadBefore = new RegExp(`${unreadNumber}(?:[\\s-]+(?:and|a|an|of))*[\\s-]*$`, "iu");
+const unreadAfter = new RegExp(`^(?:[\\s-]+(?:and|a|an|of)(?![\\p{L}]))*[\\s-]+${unreadNumber}`, "iu");
+// The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
+const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
+// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
+const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*$)`, "iu");
+// "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
+const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
+const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
 // Continuous speech has no punctuation, so a new work item also starts at one of these verbs
 // unless the word before it ties it to the clause (for example "the", "to" or "and").
-const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
+export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
 const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
@@ -92,7 +113,9 @@ const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${nu
  * every line. Offsets always refer to the untouched source, including prices.
  * ITEM: records never enter this path. No source text is executed or fetched.
  */
-function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cell | null } {
+// `isWork` lets the context reader (SQ-C) also treat "in the kitchen rip out …" as work; the v1 parser passes the default.
+export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
+  isTiming: (value: string) => boolean = value => timing.test(value)): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
@@ -100,7 +123,7 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
     if (!value) return;
     const at = start + raw.length - raw.trimStart().length;
     const tail = wholeJobTail.exec(value);
-    if (tail && tail.index > 0 && workClause(value.slice(0, tail.index).trim())) {
+    if (tail && tail.index > 0 && isWork(value.slice(0, tail.index).trim())) {
       const head = value.slice(0, tail.index).trimEnd();
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
@@ -128,7 +151,7 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
       // "supply and fit one door" is one item.
       if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) continue;
-      if (workClause(next) || timing.test(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
+      if (isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
         add(start, i); start = i + separator.length; i = start - 1;
       }
     }
@@ -138,11 +161,11 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
   const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
   const title = first && titleText ? { value: titleText, start: first.start } : null;
   const work = chunks.filter((chunk, index) => {
-    if (timing.test(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
-    if (!workClause(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
+    if (isTiming(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
+    if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
-    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !workClause(chunk.value));
+    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !isWork(chunk.value));
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
   const cleaned = work.map(chunk => {
@@ -161,16 +184,16 @@ function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null 
   const match = matches[0]!;
   const rest = chunk.value.slice(match.index + match.text.length);
   // Never keep part of an amount: unread pence or a trailing number leaves the price open for a question.
-  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest)) return null;
+  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest) || rangeAfter.test(rest)) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };
 }
 
-const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+export const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, twenty: 20 };
 /** "fit six base units": the stated count and what it counts. Only right after the item's verb. */
-function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
+export function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
   const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(description);
   if (!match || !spokenVerb.test(description)) return null;
   const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];
@@ -220,11 +243,16 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   let plainTitle: Cell | null = null;
   if (!items.length) {
     const draft = plainDraft(text);
+    // V2-SQ-J: a clause that only names a room ("In the kitchen", "Upstairs bathroom") opens that room for the rows
+    // after it (Reader A labels them); it is never a work row itself.
+    // The row decision below still counts the room clause, so "Jones flat. In the kitchen. Fit six doors …" keeps its parsed row.
+    const said = draft.chunks.length;
+    draft.chunks = draft.chunks.filter(chunk => chunk.inferred || !roomOnly.test(chunk.value));
     if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
     // One spoken item with a stated price ("supply and fit one door for three hundred pounds") is a line too; an unclear price stays open.
     const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
       && amounts(draft.chunks[0]!.value).length > 0;
-    if (draft.chunks.length >= 2 || single) {
+    if ((said >= 2 && draft.chunks.length > 0) || single) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
       questions.push(...draft.notes.map(question));
@@ -233,12 +261,18 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         const after = found ? chunk.value.slice(found.at + found.value.length) : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
         // "per door" or "a door" only when it names the counted thing; "per pair" or "a day" leaves the price open.
-        const per = /^\s+(?:per|an?)\s+([\p{L}-]+)$/iu.exec(after);
+        // VAT words after the per-item word ("a door plus VAT") do not hide it.
+        // Rate qualifier guard: "a/an/per <noun>" right after the amount is a rate whatever follows it.
+        const whole = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu").exec(after);
+        const per = whole ?? /^\s+(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])/iu.exec(after);
         const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
-        const each = /^\s+(?:each|apiece|a piece)$/iu.test(after) || (!!per && !!perCount && sameUnit(perCount.unit, per[1]!));
+        const each = new RegExp(`^\\s+(?:each|apiece|a piece)${vatTail}?\\.?$`, "iu").test(after) || (!!per && !!perCount && !!per[1] && sameUnit(perCount.unit, per[1]));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
         const rate = found && (each || (!per && !/\b(?:each|apiece|per)\b/iu.test(chunk.value))) ? found : null;
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
+        // "a door including hinges": per door, but the words after it are not part of the line, so they are asked about.
+        if (rate && each && per && !whole) questions.push(question(`Check “${chunk.value.slice(0, 400)}”: the words after the price were not read into this line.`));
+        if (rate && vatWords.test(after)) questions.push(question(`Confirm VAT: you said “${chunk.value.slice(0, 400)}”. The price is kept as said; VAT is not added or taken off.`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
         const description = rate && (each || !after)

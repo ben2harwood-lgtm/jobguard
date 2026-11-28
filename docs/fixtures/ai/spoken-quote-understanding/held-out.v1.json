@@ -1,0 +1,578 @@
+{
+  "version": "spoken-quote-understanding-cases.v1",
+  "author": "planner, 27 Nov 2026",
+  "status": "seen: the first run (commit d0444c341) was unseen; the reader was then fixed against these, so later scores here are not held-out. The planner writes a fresh unseen set for the next score.",
+  "note": "Held out: written by the planner without seeing Reader A's code or word lists (/mnt/project-files/jobguard-v2/packets/v2-sq-c-held-out-transcripts.md), encoded as written. Where the planner allows either of two answers, the field is a list of the accepted values; null in a number list means open is accepted. Room names the planner wrote one way may list the same room said the other way round. Hard floor: no wrong or invented number, no invented work. Room and trade are reported, not gated. Planner correction (set 2 packet): a bare number after a work item with no price word may be open with a question, so those lines accept open or the stated figure.",
+  "cases": [
+    {
+      "id": "ho-1-kitchen-run-on",
+      "unpunctuated": true,
+      "text": "right so the kitchen first take out the old units and worktops skip it all away fit the new units thats two thousand eight hundred then tile the splashback four hundred and fifty and the sparky needs to add four double sockets no price on that yet",
+      "lines": [
+        {
+          "words": "take out the old units and worktops",
+          "room": "Kitchen",
+          "trade": "Strip-out",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "fit the new units",
+          "room": "Kitchen",
+          "trade": "Kitchen fitting",
+          "quantity": null,
+          "unit": null,
+          "pence": 280000,
+          "basis": "line"
+        },
+        {
+          "words": "tile the splashback",
+          "room": "Kitchen",
+          "trade": "Tiling",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            45000,
+            null
+          ],
+          "basis": "line"
+        },
+        {
+          "words": "four double sockets",
+          "room": "Kitchen",
+          "trade": "Electrics",
+          "quantity": "4",
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": []
+    },
+    {
+      "id": "ho-2-bathroom-upstairs-wc",
+      "text": "Bathroom upstairs. Rip out the suite, board and skim the ceiling, new suite supply and fit for 3,600, tile floor and walls 18 square metres at 55 a metre. Downstairs WC just a new toilet and basin, 900.",
+      "lines": [
+        {
+          "words": "Rip out the suite",
+          "room": [
+            "Upstairs bathroom",
+            "Bathroom upstairs"
+          ],
+          "trade": "Strip-out",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "board and skim the ceiling",
+          "room": [
+            "Upstairs bathroom",
+            "Bathroom upstairs"
+          ],
+          "trade": "Plastering",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "new suite",
+          "room": [
+            "Upstairs bathroom",
+            "Bathroom upstairs"
+          ],
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": 360000,
+          "basis": "line"
+        },
+        {
+          "words": "tile floor and walls",
+          "room": [
+            "Upstairs bathroom",
+            "Bathroom upstairs"
+          ],
+          "trade": "Tiling",
+          "quantity": "18",
+          "unit": "m²",
+          "pence": 5500,
+          "basis": "per_unit"
+        },
+        {
+          "words": "new toilet and basin",
+          "room": "Downstairs WC",
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            90000,
+            null
+          ],
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": []
+    },
+    {
+      "id": "ho-3-two-bedrooms-each",
+      "unpunctuated": true,
+      "text": "front bedroom and back bedroom both need painting walls and ceilings three fifty each room and the landing woodwork in gloss two hundred",
+      "lines": [
+        {
+          "words": "painting walls and ceilings",
+          "room": "Front bedroom",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            35000,
+            null
+          ],
+          "basis": "none"
+        },
+        {
+          "words": "painting walls and ceilings",
+          "room": "Back bedroom",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            35000,
+            null
+          ],
+          "basis": "none"
+        },
+        {
+          "words": "woodwork in gloss",
+          "room": "Landing",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            20000,
+            null
+          ],
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "painting walls and ceilings"
+        }
+      ]
+    },
+    {
+      "id": "ho-4-lounge",
+      "text": "Lounge: take up the old carpet, lay laminate, about 22 square metres, 38 a metre. Fit new skirting all round. Hang two new doors at 120 each. All the decorating in there, 600.",
+      "lines": [
+        {
+          "words": "take up the old carpet",
+          "room": "Lounge",
+          "trade": [
+            "Strip-out",
+            "Flooring"
+          ],
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "lay laminate",
+          "room": "Lounge",
+          "trade": "Flooring",
+          "quantity": "22",
+          "unit": "m²",
+          "pence": 3800,
+          "basis": "per_unit"
+        },
+        {
+          "words": "Fit new skirting",
+          "room": "Lounge",
+          "trade": "Carpentry",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "Hang two new doors",
+          "room": "Lounge",
+          "trade": "Carpentry",
+          "quantity": "2",
+          "unit": null,
+          "pence": 12000,
+          "basis": "each"
+        },
+        {
+          "words": "decorating",
+          "room": "Lounge",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": 60000,
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "lay laminate",
+          "contains": "about"
+        }
+      ]
+    },
+    {
+      "id": "ho-5-bathroom-all-in-hallway",
+      "unpunctuated": true,
+      "text": "the whole bathroom all in four and a half grand that's strip out new suite tiling and the electrics then the hallway just a paint six hundred",
+      "lines": [
+        {
+          "words": "strip out",
+          "room": "Bathroom",
+          "trade": "Strip-out",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "new suite",
+          "room": "Bathroom",
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "tiling",
+          "room": "Bathroom",
+          "trade": "Tiling",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "electrics",
+          "room": "Bathroom",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "paint",
+          "room": "Hallway",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            60000,
+            null
+          ],
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [
+        {
+          "room": "Bathroom",
+          "pence": 450000,
+          "orOpenWithQuestion": true
+        }
+      ],
+      "wholeJobPence": null,
+      "questions": []
+    },
+    {
+      "id": "ho-6-out-the-back-garage",
+      "text": "Out the back, take down the old fence and put up six new panels at 95 a panel. Lay a patio, roughly 20 square metres, price to follow. In the garage fit a new consumer unit 650.",
+      "lines": [
+        {
+          "words": "take down the old fence",
+          "room": [
+            "Back",
+            "Garden"
+          ],
+          "trade": "Strip-out",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "six new panels",
+          "room": [
+            "Back",
+            "Garden"
+          ],
+          "trade": [
+            "Carpentry",
+            "Other"
+          ],
+          "quantity": "6",
+          "unit": null,
+          "pence": 9500,
+          "basis": "each"
+        },
+        {
+          "words": "Lay a patio",
+          "room": [
+            "Back",
+            "Garden"
+          ],
+          "trade": "Groundworks",
+          "quantity": "20",
+          "unit": "m²",
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "consumer unit",
+          "room": "Garage",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            65000,
+            null
+          ],
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "Lay a patio",
+          "contains": "roughly"
+        }
+      ]
+    },
+    {
+      "id": "ho-7-kitchen-corrections",
+      "unpunctuated": true,
+      "text": "kitchen replaster the walls eight hundred no make that nine hundred then fit three no four wall units and paint it all two coats",
+      "lines": [
+        {
+          "words": "replaster the walls",
+          "room": "Kitchen",
+          "trade": "Plastering",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            90000,
+            null
+          ],
+          "basis": "none"
+        },
+        {
+          "words": "wall units",
+          "room": "Kitchen",
+          "trade": "Kitchen fitting",
+          "quantity": [
+            "4",
+            null
+          ],
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "paint it all",
+          "room": "Kitchen",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "replaster the walls"
+        },
+        {
+          "line": "wall units"
+        }
+      ]
+    },
+    {
+      "id": "ho-8-loft-same-again",
+      "text": "Loft: board it out, 30 square metres at 25 a square metre, fit a loft ladder 350, and run a light and a socket up there. Same again for the lighting in the garage.",
+      "lines": [
+        {
+          "words": "board it out",
+          "room": "Loft",
+          "trade": [
+            "Carpentry",
+            "Flooring"
+          ],
+          "quantity": "30",
+          "unit": "m²",
+          "pence": 2500,
+          "basis": "per_unit"
+        },
+        {
+          "words": "loft ladder",
+          "room": "Loft",
+          "trade": "Carpentry",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            35000,
+            null
+          ],
+          "basis": "line"
+        },
+        {
+          "words": "a light and a socket",
+          "room": "Loft",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "Same again",
+          "room": "Garage",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "Same again"
+        }
+      ]
+    },
+    {
+      "id": "ho-9-patel-rewire-lot",
+      "text": "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred, replaster where we chase, and decorate throughout, 8,750 for the lot",
+      "lines": [
+        {
+          "words": "rewire",
+          "room": "Whole job",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            520000,
+            null
+          ],
+          "basis": "line"
+        },
+        {
+          "words": "replaster where we chase",
+          "room": "Whole job",
+          "trade": "Plastering",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        },
+        {
+          "words": "decorate throughout",
+          "room": "Whole job",
+          "trade": "Decorating",
+          "quantity": null,
+          "unit": null,
+          "pence": null,
+          "basis": "none"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": 875000,
+      "questions": []
+    },
+    {
+      "id": "ho-10-en-suite-utility",
+      "unpunctuated": true,
+      "text": "en suite new shower tray and enclosure supply and fit 1450 extractor fan 180 then the utility plumb in a washing machine and a sink sixty quid for the machine and a hundred and forty for the sink",
+      "lines": [
+        {
+          "words": "shower tray and enclosure",
+          "room": "En suite",
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            null,
+            145000
+          ],
+          "basis": "none"
+        },
+        {
+          "words": "extractor fan",
+          "room": "En suite",
+          "trade": "Electrics",
+          "quantity": null,
+          "unit": null,
+          "pence": [
+            null,
+            18000
+          ],
+          "basis": "none"
+        },
+        {
+          "words": "washing machine",
+          "room": [
+            "Utility",
+            "Utility room"
+          ],
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": 6000,
+          "basis": "line"
+        },
+        {
+          "words": "sink",
+          "room": [
+            "Utility",
+            "Utility room"
+          ],
+          "trade": "Plumbing",
+          "quantity": null,
+          "unit": null,
+          "pence": 14000,
+          "basis": "line"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPence": null,
+      "questions": [
+        {
+          "line": "shower tray and enclosure",
+          "ifOpen": true
+        },
+        {
+          "line": "extractor fan",
+          "ifOpen": true
+        }
+      ]
+    }
+  ]
+}
