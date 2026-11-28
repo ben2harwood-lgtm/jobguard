@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-trp08u-g2"
       ],
-      "note": "RED Q56 V2-G2 handover pack versions: the builder ticks what goes in, previews it and saves frozen numbered versions; no amounts. Migration 2043 (number final at merge). Base claude/project-thread-trp08u-g1 (G1 #996). G2 mount, owned by core index: packages/core/src/index.ts, packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G2 mount, owned by main: packages/core/src/watchdog.ts one registry line. G2 mount, owned by G1 #996: apps/web/app/(designed)/jobs/[id]/records/page.tsx one Handover link beside G1's Snags link. G2 mount, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2042; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_version.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs own appended cases.",
+      "note": "RED Q56 V2-G2 handover pack versions: the builder ticks what goes in, previews it and saves frozen numbered versions; no amounts. Migration 2082 (number from the V2 register). Base claude/project-thread-trp08u-g1 (G1 #996). G2 mount, owned by core index: packages/core/src/index.ts, packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G2 mount, owned by main: packages/core/src/watchdog.ts one registry line. G2 mount, owned by G1 #996: apps/web/app/(designed)/jobs/[id]/records/page.tsx one Handover link beside G1's Snags link. G2 mount, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2081; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_version.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs own appended cases.",
       "allow": [
         "apps/api/src/workspace/handover.application.test.ts",
         "apps/api/src/workspace/handover.application.ts",
@@ -21,11 +21,11 @@
         "packages/core/src/v2-handover-pack.test.ts",
         "packages/core/src/v2-handover-pack.ts",
         "packages/core/src/watchdog.ts",
-        "packages/db/migration-notes/2043_v2_handover_version.md",
-        "packages/db/migrations/2043_v2_handover_version.sql",
+        "packages/db/migration-notes/2082_v2_handover_version.md",
+        "packages/db/migrations/2082_v2_handover_version.sql",
         "packages/db/src/index.ts",
         "packages/db/src/v2-handover-repository.ts",
-        "packages/db/test/migration-proofs/2043_v2_handover_version.proof.json",
+        "packages/db/test/migration-proofs/2082_v2_handover_version.proof.json",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/handover.browser.test.mjs",

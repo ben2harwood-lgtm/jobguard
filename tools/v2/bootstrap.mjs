@@ -70,12 +70,16 @@ try {
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
+  // V2-F8 who was on site today (2061), after the crew records it checks. Rule 30: stays above FL-6's 2054 line.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2061_v2_site_attendance.sql", import.meta.url), "utf8"));
+  // V2-FL-1 firm lock on the V2 core tables (2047).
+  await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-SYNC-1 (2056): main's snag fence retargeted and its new job tables firm-locked.
   await client.query(readFileSync(new URL("./migrations/2056_v2_sync1_fences_and_locks.sql", import.meta.url), "utf8"));
-  // V2-G1 snag register (2042), after 2056 brings main's snag list into V2.
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2042_v2_snag_register.sql", import.meta.url), "utf8"));
-  // V2-G2 handover pack versions (2043).
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  // V2-G1 snag register (2081), after 2056 brings main's snag list into V2.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
+  // V2-G2 handover pack versions (2082).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
   // V2-G3 handover release by link and acknowledgement (2058), after 2043.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2058_v2_handover_release.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);

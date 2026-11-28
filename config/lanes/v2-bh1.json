@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-bh1": {
+      "branches": ["codex/sandbox/v2-bh1"],
+      "note": "Q20 V2-BH1 T1: shared browser test sign-in from K5A #929, based on v2/main.",
+      "allow": [
+        "tools/v2/test/browser-session.mjs",
+        "tools/v2/test/browser-session.browser.test.mjs",
+        "tools/v2-browser-session.test.mjs"
+      ]
+    }
+  }
+}

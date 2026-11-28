@@ -13,12 +13,17 @@ import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool }
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
+// V2-F8
+import { SiteAttendanceRepository } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
 import { joineryTemplate } from "./fixtures/joinery-template.mjs";
 // V2-PX
 import { uploadPracticePhoto } from "./test/practice-photo.mjs";
+// V2-FL
+import { readdirSync } from "node:fs";
+import { firmLockCatalog, firmLockFailures, lockProblems, pendingTables } from "./firm-lock/guard.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -107,6 +112,47 @@ before(async () => {
   jobId = proposals.rows[0].job_id;
 });
 after(async () => Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]));
+
+// V2-SX revision 5: fixed GET boundaries, using this suite's existing cache.
+// Pilot gate: these tests do not prove main's MON-5/MON-8 real-role refusals.
+import { assertBuilderPositive, assertBuilderRouteRefuses, assertSignedOutBuilderRefuses,
+  bindBuilderRoutes, guardCachedSignIn } from "./test/refusals.mjs";
+const sxCachedSignIn = signIn;
+signIn = guardCachedSignIn(sxCachedSignIn);
+let sxRoutes;
+async function sxRequest(path, { transport, method, body, cookies, csrf, tenantId } = {}) {
+  const target = transport === "api" ? settings.NEXT_PUBLIC_API_URL : origin;
+  return fetch(target + path, {
+    method: method ?? (body === undefined ? "GET" : "POST"), redirect: "manual",
+    headers: { origin, "content-type": "application/json", ...(cookies && { cookie: cookies }),
+      ...(csrf && { "x-csrf-token": csrf }), ...(tenantId && { "x-tenant-id": tenantId }) },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  });
+}
+test("SX fixed GET list has working positive controls before checking refusals", async t => {
+  const routes = bindBuilderRoutes({ jobId, tenantId: DEMO_TENANT_ID });
+  sxRoutes = [];
+  // Finish ALL mandatory positives first. In particular 2, 6 and 9 must not
+  // be mistaken for refusals if this seed cannot read them (planner stop).
+  for (const route of routes) {
+    if (await assertBuilderPositive({ request: sxRequest, signIn, route })) sxRoutes.push(route);
+    else t.diagnostic(`SX dropped optional route 10: ${route.path}; no 200 illustration source`);
+  }
+  const second = await signIn("second-builder");
+  assert.notEqual(second.realContext.tenantId, DEMO_TENANT_ID);
+  const { context: practice } = await authenticatePracticeSession(runtime, second.sessionId);
+  assert.equal(practice.tenantId, DEMO_TENANT_ID);
+  for (const context of [second.realContext, practice]) {
+    await withTenant(runtime, context, async db => {
+      assert.equal((await db.$client.query("SELECT id FROM app.job WHERE id=$1", [jobId])).rowCount, 0);
+    });
+  }
+  for (const route of sxRoutes) {
+    const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
+    for (const result of observed) t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} ${result.case}: ${result.status} ${result.code}`);
+  }
+});
+// End V2-SX positive and refusal block.
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
   const { cookies } = await signIn("builder");
@@ -1107,7 +1153,7 @@ test("a snag is recorded, revised and marked fixed on the V2 practice job, and t
   }
 });
 
-// V2-G1 (Q53, migration 2042): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
+// V2-G1 (Q53, migration 2081): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
 const g1Tables = ["app.v2_snag_owner", "app.v2_snag_event_person", "app.v2_snag_agreed"];
 const g1 = {
   path: () => `/api/jobs/${jobId}/snag-register`,
@@ -1233,7 +1279,7 @@ test("G1 tables are forced, append only, firm-locked; person rows bind their own
   await assert.rejects(admin.query(`INSERT INTO app.v2_snag_event_person (tenant_id, job_id, snag_id, event_sequence, person_kind, firm_key, command_id)
     SELECT tenant_id, job_id, $2, event_sequence, person_kind, firm_key, $3 FROM app.v2_snag_event_person WHERE snag_id = $1`,
   [snagId, other, randomUUID()]));
-  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2042 rerun.
+  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2081 rerun.
   const catalog = async () => (await admin.query(`SELECT
     (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname) FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname LIKE 'snag\\_%') functions,
     (SELECT jsonb_agg(c.relname || '.' || a.attname || ':' || format_type(a.atttypid, a.atttypmod) ORDER BY c.relname, a.attnum)
@@ -1243,8 +1289,8 @@ test("G1 tables are forced, append only, firm-locked; person rows bind their own
     (SELECT count(*)::int FROM pg_trigger WHERE tgname LIKE 'v2_snag_%') triggers`)).rows[0];
   const before = await catalog();
   assert.ok(before.functions.length >= 4 && !before.functions.some(text => /v2_snag/u.test(text)), "no main snag routine names the V2 register");
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2042_v2_snag_register.sql", import.meta.url), "utf8"));
-  assert.deepEqual(await catalog(), before, "2042 reruns without change and never touches main's snag schema");
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before, "2081 reruns without change and never touches main's snag schema");
   assert.ok(!before.columns.some(column => column.startsWith("v2_")), "no V2 column on main's snag tables");
   // Rule 29: GET refuses no session, an invalid session and the second firm.
   const typed = async cookies => { const response = await request(g1.path(), cookies ? { cookies } : {});
@@ -1649,7 +1695,7 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   assert.equal(await policyCount(), before);
 });
 
-// V2-G2 (Q56, migration 2043): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
+// V2-G2 (Q56, migration 2082): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
 const g2 = {
   async job() {
     const { jobId: job, scopeItemId, sessionId } = await pxLiveJob();
@@ -1780,6 +1826,20 @@ test("G2 saves only the previewed text: a note changed after the preview refuses
   assert.match(g2Text(saved.content), /Visit moved to Friday\./u);
 });
 
+test("G2 the pack reads a snag's latest revision, and a revision after the preview refuses the save", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  await json(await request(`/api/jobs/${f.job}/snags`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken,
+    body: { version: "snag.v1", action: "revise", commandId: randomUUID(), snagId: f.snagId, expectedRevision: 1,
+      title: "Refit the hall door stop and buffer", location: null, assigneeLabel: null, dueOn: null } }));
+  assert.equal((await f.post({ ...g2.save(choice), previewHash: first.contentHash }, 409)).code, "HANDOVER_SOURCE_CHANGED");
+  const again = (await f.post({ version: "v2-handover-preview.v1", choice })).preview;
+  assert.match(g2Text(again.content), /Refit the hall door stop and buffer/u);
+  assert.doesNotMatch(g2Text(again.content), /2026-12-04|4 Dec/u, "the revision cleared the due date");
+  await f.post({ ...g2.save(choice), previewHash: again.contentHash });
+});
+
 test("G2 replay and conflict, append-only, firm A/B read check and route refusals", async () => {
   const f = await g2.job();
   const choice = { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] };
@@ -1805,14 +1865,14 @@ test("G2 replay and conflict, append-only, firm A/B read check and route refusal
   await verifyTenantChain(f.context.tenantId);
 });
 
-test("G2 migration 2043 reruns without changing policies, triggers or rows", async () => {
+test("G2 migration 2082 reruns without changing policies, triggers or rows", async () => {
   const catalog = async () => (await admin.query(`SELECT
     (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid='app.v2_handover_version'::regclass) AS policies,
     (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_version'::regclass AND NOT tgisinternal) AS triggers,
     (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_version'::regclass) AS acl,
     (SELECT count(*)::int FROM app.v2_handover_version) AS rows`)).rows[0];
   const before = await catalog();
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2082_v2_handover_version.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
@@ -1991,4 +2051,288 @@ test("G3 firm A/B read check, and migration 2058 reruns without changing policie
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2058_v2_handover_release.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
+});
+
+// V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
+const attendanceTable = "app.v2_site_attendance";
+const attendanceApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).siteAttendance;
+const attendanceQuery = { version: "v2-site-attendance-query.v1" };
+const londonToday = async () => (await admin.query(
+  "SELECT (clock_timestamp() AT TIME ZONE 'Europe/London')::date::text AS today")).rows[0].today;
+const tapCommand = (day, changes = {}) => ({ version: "v2-site-attendance-command.v1", commandId: randomUUID(), day,
+  person: { kind: "builder" }, expectedVersion: 0, onSite: true, note: null, ...changes });
+const attendanceEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, subject_type, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2.site_attendance.recorded' ORDER BY sequence`, [jobRef])).rows;
+
+test("F8: the attendance table stores no location, IP, device or user agent, and the runtime can only read and insert", async () => {
+  const { rows } = await admin.query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'app' AND table_name = 'v2_site_attendance' ORDER BY ordinal_position`);
+  const names = rows.map(row => row.column_name);
+  assert.deepEqual(names, ["tenant_id", "job_id", "day", "person_kind", "crew_id", "builder_membership_id", "person_ref",
+    "revision", "expected_version", "previous_revision", "command_id", "on_site", "note", "tapped_by_membership_id", "recorded_at"]);
+  assert.equal(names.flatMap(name => name.split("_"))
+    .filter(part => /^(lat|latitude|lon|lng|longitude|geo|location|coords?|ip|address|device|agent|gps|position)$/u.test(part)).length, 0);
+  const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read, has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid=$1::regclass`, [attendanceTable]);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  // A request that carries a location (or any other extra field) is refused before anything is read or written.
+  const { sessionId } = await signIn("builder");
+  const today = await londonToday();
+  for (const extra of [{ latitude: 51.5 }, { location: { lat: 51.5, lon: -0.1 } }, { userAgent: "phone" }, { ip: "192.0.2.1" }]) {
+    await assert.rejects(attendanceApp(sessionId).record(jobId, tapCommand(today, extra)), { code: "SITE_ATTENDANCE_INVALID" });
+  }
+  await assert.rejects(attendanceApp(sessionId).record(jobId, tapCommand(today, { person: { kind: "builder", lat: 1 } })),
+    { code: "SITE_ATTENDANCE_INVALID" });
+});
+
+test("F8: a replayed tap counts once, an edit is the next revision, and the day window is today and six days back", async () => {
+  const { sessionId } = await signIn("builder");
+  const attendance = attendanceApp(sessionId);
+  const sam = await crewApp(sessionId).record(crewCommand({ displayName: "Sam Attendance" }));
+  const today = await londonToday();
+  const first = tapCommand(today, { person: { kind: "crew", crewId: sam.crewId } });
+  const saved = await attendance.record(jobId, first);
+  assert.equal(saved.revision, 1);
+  assert.deepEqual(await attendance.record(jobId, first), saved, "an exact replay returns the first receipt");
+  await Promise.all([attendance.record(jobId, first), attendance.record(jobId, first)]);
+  const count = async () => (await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable}
+    WHERE job_id = $1 AND crew_id = $2 AND day = $3::date`, [jobId, sam.crewId, today])).rows[0].count;
+  assert.equal(await count(), 1, "a replayed tap counts once");
+  await assert.rejects(attendance.record(jobId, { ...first, onSite: false }), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  // One command id names one tap: reused on another of the firm's jobs, even concurrently, only one saves.
+  const { draftJob } = await draftForPlan();
+  await assert.rejects(attendance.record(draftJob, first), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  const shared = tapCommand(today);
+  const raced = await Promise.allSettled([attendance.record(jobId, shared), attendance.record(draftJob, shared),
+    attendance.record(draftJob, { ...shared, note: "Changed" })]);
+  assert.equal(raced.filter(result => result.status === "fulfilled").length, 1);
+  for (const result of raced.filter(result => result.status === "rejected")) {
+    assert.equal(result.reason.code, "SITE_ATTENDANCE_COMMAND_CONFLICT");
+  }
+  assert.equal((await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable} WHERE command_id = $1`,
+    [shared.commandId])).rows[0].count, 1);
+  const savedOn = raced.find(result => result.status === "fulfilled").value;
+  // A second, different tap at the same version is stale; an edit names the current revision.
+  await assert.rejects(attendance.record(jobId, tapCommand(today, { person: first.person })),
+    { code: "SITE_ATTENDANCE_VERSION_CONFLICT" });
+  const undo = await attendance.record(jobId, tapCommand(today, { person: first.person, expectedVersion: 1, onSite: false,
+    note: "Went to another job" }));
+  assert.equal(undo.revision, 2);
+  assert.equal(await count(), 2, "the first revision is kept unchanged");
+  const me = (await attendance.list(jobId, attendanceQuery)).records.some(entry => entry.personKind === "builder" &&
+    entry.day === today) ? savedOn : await attendance.record(jobId, tapCommand(today));
+  const view = await attendance.list(jobId, attendanceQuery);
+  assert.equal(view.today, today);
+  assert.equal(view.days.length, 7);
+  assert.equal(view.days[0], today);
+  const mine = view.records.filter(entry => entry.day === today);
+  // Astra's conditions: one row per person per job and London day, from the latest revision, which keeps the undo.
+  assert.equal(mine.filter(entry => entry.crewId === sam.crewId).length, 1);
+  assert.deepEqual(mine.find(entry => entry.crewId === sam.crewId), { ...undo, recordedAt: undo.recordedAt });
+  assert.equal(mine.find(entry => entry.crewId === sam.crewId).onSite, false);
+  assert.equal(mine.find(entry => entry.personKind === "builder").personRef, view.me);
+  assert.equal(me.personRef, view.me);
+  assert.ok(view.crew.some(crew => crew.crewId === sam.crewId && crew.displayName === "Sam Attendance"));
+  assert.equal(JSON.stringify(view.crew).includes("07700"), false, "crew phone numbers stay off the screen");
+  // Six days back is allowed; a week back, tomorrow and a non-date are refused, also past the app check.
+  const back = (await admin.query("SELECT ($1::date - 6)::text AS d, ($1::date - 7)::text AS w, ($1::date + 1)::text AS t",
+    [today])).rows[0];
+  assert.equal((await attendance.record(jobId, tapCommand(back.d))).revision, 1);
+  for (const day of [back.w, back.t]) {
+    await assert.rejects(attendance.record(jobId, tapCommand(day)), { code: "SITE_ATTENDANCE_DAY_OUT_OF_RANGE" });
+  }
+  await assert.rejects(attendance.record(jobId, tapCommand("2026-02-30")), { code: "SITE_ATTENDANCE_INVALID" });
+});
+
+test("F8: the second firm sees none of the builder's taps and can't tap on the job, and another firm's crew id is refused", async () => {
+  const owner = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const today = await londonToday();
+  await attendanceApp(owner.sessionId).record(jobId, tapCommand(today, { expectedVersion:
+    (await attendanceApp(owner.sessionId).list(jobId, attendanceQuery)).records
+      .find(entry => entry.personKind === "builder" && entry.day === today)?.revision ?? 0 }));
+  const { rows: [row] } = await admin.query(`SELECT * FROM ${attendanceTable} WHERE job_id = $1 ORDER BY recorded_at DESC LIMIT 1`, [jobId]);
+  // Firm A/B read check (rule 30) in the shared practice tenant and the second firm's real tenant.
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(shared.tenantId, DEMO_TENANT_ID);
+  for (const scope of [shared, outsider.realContext]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    assert.equal((await query(`SELECT * FROM ${attendanceTable} WHERE job_id = $1`, [jobId])).rowCount, 0);
+    assert.equal((await query(`SELECT * FROM ${attendanceTable}`)).rows.filter(r => r.job_id === jobId).length, 0);
+    await assert.rejects(query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, builder_membership_id,
+      revision, expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'builder', $4, 1, 0, $5, true, $4)`,
+    [row.tenant_id, jobId, today, randomUUID(), randomUUID()]), { code: "42501" });
+    await assert.rejects(query(`UPDATE ${attendanceTable} SET note = 'x' WHERE job_id = $1`, [jobId]), { code: "42501" });
+    await assert.rejects(query(`DELETE FROM ${attendanceTable} WHERE job_id = $1`, [jobId]), { code: "42501" });
+  }
+  await assert.rejects(attendanceApp(outsider.sessionId).list(jobId, attendanceQuery), { code: "NOT_FOUND" });
+  await assert.rejects(attendanceApp(outsider.sessionId).record(jobId, tapCommand(today)), { code: "NOT_FOUND" });
+  // The owner's own firm cannot change a saved row either.
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await assert.rejects(withTenant(runtime, context, db => db.$client.query(
+    `UPDATE ${attendanceTable} SET on_site = false WHERE job_id = $1`, [jobId])), { code: "42501" });
+
+  // Another firm's crew record, or an unknown id, can't be tapped on this job, even past the app check.
+  const theirs = await crewApp(outsider.sessionId).record(crewCommand({ displayName: "Their crew" }));
+  for (const crewId of [theirs.crewId, randomUUID()]) {
+    await assert.rejects(attendanceApp(owner.sessionId).record(jobId, tapCommand(today, { person: { kind: "crew", crewId } })),
+      { code: "CREW_CONTACT_UNAVAILABLE" });
+  }
+  await assert.rejects(admin.query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, crew_id, revision,
+    expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'crew', $4, 1, 0, $5, true, $6)`,
+  [row.tenant_id, jobId, today, theirs.crewId, randomUUID(), row.tapped_by_membership_id]),
+  { code: "23503", message: /CREW_CONTACT_UNAVAILABLE/u });
+  // "Me" is always the person who tapped it.
+  await assert.rejects(admin.query(`INSERT INTO ${attendanceTable} (tenant_id, job_id, day, person_kind, builder_membership_id,
+    revision, expected_version, command_id, on_site, tapped_by_membership_id) VALUES ($1, $2, $3::date, 'builder', $4, 1, 0, $5, true, $6)`,
+  [row.tenant_id, jobId, today, randomUUID(), randomUUID(), row.tapped_by_membership_id]), { code: "23514" });
+});
+
+test("audit-chain: packages/db/src/v2-site-attendance-repository.ts#SiteAttendanceRepository.record", async () => {
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const attendance = attendanceApp(sessionId);
+  const sam = await crewApp(sessionId).record(crewCommand({ displayName: "Sam Audit" }));
+  const today = await londonToday();
+  const before = (await attendanceEvents(jobId)).length;
+  const command = tapCommand(today, { person: { kind: "crew", crewId: sam.crewId }, note: "Tiling the splashback" });
+  const saved = await attendance.record(jobId, command);
+  const events = (await attendanceEvents(jobId)).slice(before);
+  assert.equal(events.length, 1, "audit-chain: event");
+  const [event] = events;
+  assert.equal(event.tenant_id, DEMO_TENANT_ID);
+  assert.equal(event.actor_ref, `membership:${saved.tappedByMembershipId}`);
+  assert.deepEqual(event.payload.references, { ...event.payload.references, commandId: command.commandId, jobId, day: today, personKind: "crew",
+    personRef: sam.crewId, expectedVersion: "0", revision: "1", onSite: "true" });
+  assert.equal("version" in event.payload.references, false);
+  assert.match(event.payload.hashes.note, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /Tiling|Sam|07700/u, "references only: no note or crew details");
+
+  assert.deepEqual(await attendance.record(jobId, command), saved);
+  await Promise.all([attendance.record(jobId, command), attendance.record(jobId, command)]);
+  assert.equal((await attendanceEvents(jobId)).length, before + 1, "audit-chain: replay");
+
+  const next = tapCommand(today, { person: command.person, expectedVersion: 1, onSite: false });
+  await assert.rejects(new SiteAttendanceRepository(failingAuditPool(runtime)).record(context, jobId, sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable} WHERE command_id = $1`,
+    [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.equal((await attendanceEvents(jobId)).length, before + 1, "audit-chain: rollback");
+  assert.equal((await attendance.record(jobId, next)).revision, 2);
+  assert.equal((await attendanceEvents(jobId)).length, before + 2);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("F8: the attendance route answers the signed-in builder and refuses typed codes to everyone else", async () => {
+  const { cookies } = await signIn("builder");
+  const path = `/api/v2-backend/jobs/${jobId}/attendance`;
+  const view = await json(await request(path, { cookies }));
+  assert.equal(view.version, "v2-site-attendance.v1");
+  assert.equal(view.days.length, 7);
+  assert.equal((await json(await request(path), 401)).code, "UNAUTHENTICATED");
+  for (const fake of ["not-a-session", randomUUID()]) {
+    const response = await request(path, { cookies: `jg_session=${fake}` });
+    assert.ok([401, 403].includes(response.status));
+    assert.ok(["UNAUTHENTICATED", "FORBIDDEN", "TENANT_FORBIDDEN"].includes((await response.json()).code));
+  }
+  const outsider = await signIn("second-builder");
+  assert.equal((await json(await request(path, { cookies: outsider.cookies }), 404)).code, "NOT_FOUND");
+  const posted = await json(await request(path, { cookies, body: tapCommand(view.today, {
+    expectedVersion: view.records.find(entry => entry.personKind === "builder" && entry.day === view.today)?.revision ?? 0 }) }), 201);
+  assert.equal(posted.personKind, "builder");
+  assert.equal((await json(await request(path, { cookies, body: { ...tapCommand(view.today), latitude: 51.5 } }), 400)).code,
+    "SITE_ATTENDANCE_INVALID");
+  assert.equal((await json(await request(path, { cookies: outsider.cookies, body: tapCommand(view.today) }), 404)).code,
+    "NOT_FOUND");
+  assert.equal((await request(`/jobs/${jobId}/records`, { cookies })).status, 200);
+});
+
+// V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
+
+test("FL guard: every job-bound table runtime can touch is firm-locked or named in a pending slice", async () => {
+  const failures = await firmLockFailures(admin);
+  assert.deepEqual(failures, [], "not firm-locked:\n" +
+    failures.map(row => `  ${row.relation} (${row.kind}): ${row.problems.join("; ")}`).join("\n"));
+});
+
+test("FL guard: every pending table is still in the catalog and still unlocked", async () => {
+  const catalog = new Map((await firmLockCatalog(admin)).map(row => [row.relation, row]));
+  const stale = [...pendingTables()].filter(([table]) => !catalog.has(table) || catalog.get(table).firm_policy)
+    .map(([table, slice]) => `${slice}: ${table}`);
+  assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
+});
+
+test("FL guard: a lock must be mandatory joins on every job-bound parent's full key", async () => {
+  const catalog = await firmLockCatalog(admin);
+  const locked = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
+  const jobBound = new Set(catalog.map(row => row.relation));
+  const check = (relation, using) => {
+    const row = catalog.find(entry => entry.relation === relation);
+    return lockProblems(using ? { ...row, firm_policy: { ...row.firm_policy, using } } : row, locked, jobBound);
+  };
+  assert.deepEqual(check("app.finding_suppression"), [], "the real 2047 policy passes");
+  assert.deepEqual(check("app.job_link"), [], "the real 2047 policy passes");
+  // Codex r1: a tenant-only EXISTS on the real parent.
+  assert.match(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE (f.tenant_id = finding_suppression.tenant_id)))")
+    .join(), /app\.job_finding\(tenant_id, finding_id\)/u);
+  // Codex r3: a job link must check both bindings; drop each in turn.
+  const binding = side => `(EXISTS ( SELECT\n   FROM app.job_party_binding b\n  WHERE ((b.tenant_id = job_link.tenant_id) AND (b.job_id = job_link.${side}_job_id) AND (b.id = job_link.${side}_binding_id))))`;
+  assert.match(check("app.job_link", binding("predecessor")).join(), /successor_job_id, successor_binding_id/u);
+  assert.match(check("app.job_link", binding("successor")).join(), /predecessor_job_id, predecessor_binding_id/u);
+  // Codex r4: an OR alternative makes the join optional, so it doesn't lock anything.
+  const optional = "v2_practice_firm is not only mandatory EXISTS joins on column equalities (an OR or extra condition)";
+  const diary = check("app.job_diary_entry").length === 0 && catalog.find(entry => entry.relation === "app.job_diary_entry").firm_policy.using;
+  assert.ok(diary, "the real 2047 direct policy passes");
+  assert.ok(check("app.job_diary_entry", `(${diary} OR true)`).includes(optional));
+  assert.ok(check("app.job_link", `(${binding("predecessor")} OR ${binding("successor")})`).includes(optional));
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "((j.id = job_diary_entry.job_id) OR true)")).includes(optional));
+  // Codex r5: a repeated equality in place of the job key must fail.
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "(j.tenant_id = job_diary_entry.tenant_id)"))
+    .includes("v2_practice_firm does not join app.job on (tenant_id, job_id)"));
+  assert.ok(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE ((f.tenant_id = finding_suppression.tenant_id) AND (f.tenant_id = finding_suppression.tenant_id))))")
+    .join().includes("app.job_finding(tenant_id, finding_id)"));
+  assert.notDeepEqual(lockProblems(catalog.find(entry => entry.relation === "app.finding_suppression"), new Set(), jobBound), [],
+    "a parent without its own firm lock doesn't count");
+});
+
+let firmContexts;
+const firmLockHelpers = {
+  test, assert, admin, runtime, withTenant,
+  contexts: () => firmContexts ??= (async () => {
+    await pxLiveJob(); // a fresh live job for firm A, so quote, party and activation rows exist
+    const builder = await signIn("builder");
+    const outsider = await signIn("second-builder");
+    return {
+      firmA: (await authenticatePracticeSession(runtime, builder.sessionId)).context,
+      firmB: (await authenticatePracticeSession(runtime, outsider.sessionId)).context,
+      firmBReal: outsider.realContext,
+    };
+  })(),
+};
+for (const file of readdirSync(new URL("./firm-lock/", import.meta.url)).filter(name => /^FL-.*\.checks\.mjs$/u.test(name)).sort()) {
+  (await import(`./firm-lock/${file}`)).register(firmLockHelpers);
+}
+
+test("FL-1: the core firm lock migration is safe to run twice", async () => {
+  const policies = async () => (await admin.query(
+    "SELECT polrelid::regclass::text AS t, pg_get_expr(polqual, polrelid) AS q FROM pg_policy WHERE polname = 'v2_practice_firm' ORDER BY 1")).rows;
+  const before = await policies();
+  await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await policies(), before);
+});
+
+// must stay the last test: it signs the cached builder out
+// Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
+test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
+  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
+  await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
+    record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
+  });
 });

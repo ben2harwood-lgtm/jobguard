@@ -88,6 +88,15 @@ BEGIN
   CREATE POLICY v2_handover_acknowledgement_runtime ON app.v2_handover_acknowledgement FOR SELECT TO jobguard_runtime
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_handover_acknowledgement.tenant_id, v2_handover_acknowledgement.job_id)));
+  -- FL: the same restrictive firm lock as every V2 table.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_handover_release;
+  CREATE POLICY v2_practice_firm ON app.v2_handover_release AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_handover_release.tenant_id, v2_handover_release.job_id)))
+    WITH CHECK (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_handover_release.tenant_id, v2_handover_release.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_handover_acknowledgement;
+  CREATE POLICY v2_practice_firm ON app.v2_handover_acknowledgement AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_handover_acknowledgement.tenant_id, v2_handover_acknowledgement.job_id)))
+    WITH CHECK (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_handover_acknowledgement.tenant_id, v2_handover_acknowledgement.job_id)));
   REVOKE ALL ON app.v2_handover_release, app.v2_handover_acknowledgement
     FROM PUBLIC, jobguard_runtime, jobguard_identity, jobguard_worker, jobguard_shadow, jobguard_infrastructure;
   GRANT SELECT, INSERT ON app.v2_handover_release TO jobguard_runtime;

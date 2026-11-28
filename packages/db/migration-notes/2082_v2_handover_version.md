@@ -1,6 +1,8 @@
-# 2043 · V2 handover pack versions
+# 2082 · V2 handover pack versions
 
-The checked V2 bootstrap applies 2043 after 2042. The shared runner leaves
+The table carries the same restrictive `v2_practice_firm` lock as every V2 table, joined to `app.job`.
+
+The checked V2 bootstrap applies 2082 after 2081 (G1). The shared runner leaves
 databases without the dedicated V2 database name or the firm policy untouched.
 
 It adds `app.v2_handover_version`: one row per saved handover pack version
