@@ -47,6 +47,8 @@ export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, th
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
+// One correction marker guard for splitting, price safety and the builder's question. Never choose between said values.
+const spokenCorrection = new RegExp(`\\b(?:(?:no[\\s,]+)?make\\s+that|actually|sorry[\\s,]+i\\s+mean|scratch\\s+that|not(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))|change\\s+that\\s+to|or\\s+rather|call\\s+it\\s+[^;!?\\r\\n]{1,100}?\\binstead)\\b`, "iu");
 const spokenAmount = new RegExp(`(?<![\\p{L}\\p{N}])(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid)(?:\\s+(?:and\\s+)?${numberWord}(?:[\\s-]+${numberWord})?\\s+(?:pence|p))?(?![\\p{L}\\p{N}])`, "giu");
 // Pence left over once every amount is read ("£20 and 50p"), or a number right after an amount ("20 pounds 50").
 const loosePence = new RegExp(`(?:^|[^\\p{L}])(?:pence|p)(?![\\p{L}\\p{N}])|\\d+p(?![\\p{L}\\p{N}])`, "iu");
@@ -127,11 +129,11 @@ const limitAfter = /^\s*(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|a
  * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
  * a hedge word qualifies it ("about 500", "500 or so"); a limit, floor or credit word qualifies it ("up to £200",
- * "£200 minimum", "minus fifty pounds", "-£50", "£50 off the bill"); or a rate qualifier follows it (rateAfter).
+ * "£200 minimum", "minus fifty pounds", "-£50", "£50 off the bill"); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
-  return readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+  return spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
@@ -163,12 +165,19 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     } else chunks.push({ value, start: at });
   };
   const party = suggestCapturePartyClause(text);
+  const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
+    .map(match => [match.index, match.index + match[0].length]));
   let start = 0;
   for (let i = 0; i < text.length; i++) {
     if (party && i === party.start) { i = party.end - 1; continue; }
+    // "make that" is a correction, never a new "make" item; its internal commas stay with the same source span.
+    const correctionEnd = correctionEnds.get(i);
+    if (correctionEnd !== undefined) { i = correctionEnd - 1; continue; }
     const char = text[i]!;
     // A decimal point or thousands separator belongs to the amount.
     if (/[.!?;\r\n]/u.test(char) && !(char === "." && /\d/u.test(text[i - 1] ?? "") && /\d/u.test(text[i + 1] ?? ""))) {
+      // A correction may follow a pause or sentence end: it still retracts the preceding item's price.
+      if (spokenCorrection.exec(text.slice(i + 1).trimStart())?.index === 0) continue;
       add(start, i); start = i + 1;
     } else {
       const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
@@ -181,6 +190,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
         continue;
       }
       const next = text.slice(i + separator.length).trimStart();
+      if (spokenCorrection.exec(next)?.index === 0) continue;
       // Keep the disposal phrase attached to the removal it describes.
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
       // "supply and fit one door" is one item.
@@ -276,6 +286,9 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   let plainTitle: Cell | null = null;
   if (!items.length) {
     const draft = plainDraft(text);
+    for (const chunk of draft.chunks) if (spokenCorrection.test(chunk.value)) {
+      questions.push(question(`Check this line: a spoken correction was made. Confirm the price for “${chunk.value.slice(0, 380)}”.`));
+    }
     // V2-SQ-J: a clause that only names a room ("In the kitchen", "Upstairs bathroom") opens that room for the rows
     // after it (Reader A labels them); it is never a work row itself.
     // The row decision below still counts the room clause, so "Jones flat. In the kitchen. Fit six doors …" keeps its parsed row.
