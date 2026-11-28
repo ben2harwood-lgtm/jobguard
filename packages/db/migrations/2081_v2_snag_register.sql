@@ -130,6 +130,19 @@ BEGIN
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_agreed.tenant_id, v2_snag_agreed.job_id)))
     WITH CHECK (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_agreed.tenant_id, v2_snag_agreed.job_id)));
+  -- FL: the same restrictive firm lock as every V2 table.
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_snag_owner;
+  CREATE POLICY v2_practice_firm ON app.v2_snag_owner AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_owner.tenant_id, v2_snag_owner.job_id)))
+    WITH CHECK (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_owner.tenant_id, v2_snag_owner.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_snag_event_person;
+  CREATE POLICY v2_practice_firm ON app.v2_snag_event_person AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_event_person.tenant_id, v2_snag_event_person.job_id)))
+    WITH CHECK (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_event_person.tenant_id, v2_snag_event_person.job_id)));
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_snag_agreed;
+  CREATE POLICY v2_practice_firm ON app.v2_snag_agreed AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_agreed.tenant_id, v2_snag_agreed.job_id)))
+    WITH CHECK (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_snag_agreed.tenant_id, v2_snag_agreed.job_id)));
   REVOKE ALL ON app.v2_snag_owner, app.v2_snag_event_person, app.v2_snag_agreed
     FROM PUBLIC, jobguard_identity, jobguard_worker, jobguard_shadow, jobguard_infrastructure;
   GRANT SELECT, INSERT ON app.v2_snag_owner, app.v2_snag_event_person, app.v2_snag_agreed TO jobguard_runtime;
