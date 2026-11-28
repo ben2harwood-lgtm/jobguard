@@ -6,7 +6,7 @@ import { after, before, test } from "node:test";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
-import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
+import { M1_QUOTE_POLICY, noAmounts } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 // V2-G3
 import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
@@ -2195,6 +2195,138 @@ test("G4 migration 2084 reruns without changing policies, triggers, function bod
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
+});
+
+// V2-G5: hidden findings stay hidden. The handover pack, its preview and the customer's link page read the same
+// before and after hidden findings are planted on the job, and match a clean twin job. Test only: no migration.
+const g5 = {
+  async placed(sql, values = []) {
+    const fixture = await admin.connect();
+    try { await fixture.query("BEGIN"); await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query(sql, values); await fixture.query("COMMIT"); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+    finally { fixture.release(); }
+  },
+  // What the builder and the customer can see of the pack: the sources, a preview of v1's choice, the releases and the link page.
+  async seen(f, token, choice) {
+    const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+    const { preview } = await f.post({ version: "v2-handover-preview.v1", choice });
+    const page = (await (await g3.open(token)).text()).replace(/\snonce="[^"]*"/gu, "");
+    return { sources: view.sources, versions: view.versions, preview, releases: await g3.releases(f), page };
+  },
+  // Every hidden finding V2 keeps about a job: commercial integrity facts, an overcharge case against a merchant, a customer
+  // recovery case, and an unpaid invoice. None may reach the pack. Each id is returned so the rows can be removed again.
+  async plant(f) {
+    const t = f.context.tenantId, ids = { value: randomUUID(), activity: randomUUID(), supplier: randomUUID(), customer: randomUUID(), invoice: randomUUID() };
+    await g5.placed(`INSERT INTO app.commercial_integrity_value_fact (id, tenant_id, job_id, value_kind, net_value_pence, currency, source_ref,
+      occurred_at, synthetic) VALUES ($1, $2, $3, 'final', 1, 'GBP', $4, now(), true)`, [ids.value, t, f.job, randomUUID()]);
+    await g5.placed(`INSERT INTO app.commercial_integrity_activity_fact (id, tenant_id, job_id, activity_kind, occurred_at, synthetic)
+      VALUES ($1, $2, $3, 'outside_app_settlement', now(), true)`, [ids.activity, t, f.job]);
+    await g5.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)
+      VALUES($1,$2,$3,4321,'GBP','active',0,true)`, [ids.supplier, t, f.job]);
+    await g5.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,8765,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [ids.customer, t, f.job]);
+    await g5.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,
+      issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+      VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+    [ids.invoice, t, f.job, randomUUID(), randomUUID(), `G5-${ids.invoice.slice(0, 8)}`, "e".repeat(64)]);
+    return ids;
+  },
+  // Every delete is tried even if one fails, and each id is a fresh random key, so nothing else is touched.
+  async unplant(ids) {
+    const results = await Promise.allSettled([
+      g5.placed("DELETE FROM app.customer_invoice WHERE id=$1", [ids.invoice]),
+      g5.placed("DELETE FROM app.recovery_case WHERE id IN ($1, $2)", [ids.supplier, ids.customer]),
+      g5.placed("DELETE FROM app.commercial_integrity_activity_fact WHERE id=$1", [ids.activity]),
+      g5.placed("DELETE FROM app.commercial_integrity_value_fact WHERE id=$1", [ids.value]),
+      g5.placed("DELETE FROM app.quote_line WHERE id=$1", [ids.excludedLine ?? randomUUID()]),
+      g5.placed("DELETE FROM app.evidence_object WHERE id=$1", [ids.receipt ?? randomUUID()]),
+    ]);
+    const failed = results.find(result => result.status === "rejected");
+    if (failed) throw failed.reason;
+  },
+  // The composer's own sources, with rows it must leave out: a receipt image (only site, completion, snag and variation
+  // photos are offered), a line excluded from the quote, and an unapproved variation with a price.
+  async plantInSources(f, quoteRevisionId) {
+    const ids = { excludedLine: randomUUID(), receipt: randomUUID(), proposal: randomUUID() };
+    await g5.placed(`INSERT INTO app.quote_line(id,tenant_id,job_id,quote_revision_id,scope_item_id,scope_revision_id,origin,description,included,
+        exclusion_reason,quantity_decimal,unit,unit_rate_pence,discount_decimal,tax_treatment,rate_provenance,category,region,ordinal)
+      SELECT $1,tenant_id,job_id,quote_revision_id,$3,scope_revision_id,origin,'G5 excluded line costing 120.00',false,'Kept back by the builder',
+        quantity_decimal,unit,unit_rate_pence,discount_decimal,tax_treatment,rate_provenance,category,region,999
+      FROM app.quote_line WHERE quote_revision_id=$2 ORDER BY ordinal LIMIT 1`, [ids.excludedLine, quoteRevisionId, randomUUID()]);
+    await g5.placed(`INSERT INTO app.evidence_object(id, tenant_id, job_id, scope_item_id, upload_id, kind, evidence_type, object_key, object_version_id,
+        sha256, byte_length, content_type, retention_class, server_received_at, server_verified_at)
+      SELECT $1, tenant_id, job_id, scope_item_id, $2, 'original', 'receipt', 'g5-receipt/' || $1, 'g5-receipt', $3, 1, 'image/png',
+        retention_class, now(), now() FROM app.evidence_object WHERE id=$4`, [ids.receipt, randomUUID(), "b".repeat(64), f.photo.evidenceId]);
+    const app = createWorkspaceApplication({ pool: runtime, sessionId: f.sessionId });
+    await app.variation.command(f.job, { version: "variation-command.v1", action: "propose", proposalId: ids.proposal,
+      scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+      description: "G5 unapproved change", captureText: "Proposed but never agreed",
+      price: { quantity: "1", unit: "item", unitRatePence: 12345, direction: "addition" } });
+    return ids;
+  },
+};
+// The no-amounts rule from core, over every line of the pack text and every line of a page's visible text.
+const g5AmountFree = text => text.replace(/<(style|script)\b[\s\S]*?<\/\1>/giu, "\n").split(/\n|<[^>]+>/u).map(line => line.trim()).filter(Boolean).filter(line => !noAmounts(line));
+
+test("G5 done when: planted hidden findings leave the handover pack, its preview and the link page unchanged, and a clean twin reads the same", async () => {
+  const f = await g3.ready();
+  const choice = { sections: ["done", "snags", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const { result } = await g3.direct(f, g3.release(1));
+  const before = await g5.seen(f, result.token, choice);
+  let ids = {};
+  try {
+    ids = await g5.plant(f);
+    assert.deepEqual(await g5.seen(f, result.token, choice), before, "nothing the builder or the customer sees changes");
+    // A version saved now, with the same choice, holds exactly the text of the version saved before the findings.
+    const { saved: v2 } = await f.post(g2.save(choice, 1));
+    assert.deepEqual(v2.content, f.v1.content);
+    assert.equal(v2.contentHash, f.v1.contentHash);
+    const after = await g5.seen(f, result.token, choice);
+    const text = [g2Text(v2.content), after.page].join("\n");
+    assert.deepEqual(g5AmountFree(text), [], "no line of the pack or the page after planting carries an amount");
+    assert.doesNotMatch(text, /4321|8765|12000|outside|settlement|recovery|overcharge|dispute|invoice|G5-/iu);
+    // The twin: a second job built the same way with no findings saves the same pack text.
+    const twin = await g3.ready();
+    assert.equal(g2Text(twin.v1.content), g2Text(v2.content));
+  } finally { await g5.unplant(ids); }
+});
+
+test("G5 the composer's own sources: a receipt, an excluded line and an unapproved priced change never reach any section", async () => {
+  const f = await g3.ready();
+  const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+  // Every section, and every row the builder is offered.
+  const choice = { sections: ["done", "changes", "photos", "certificates", "snags", "contacts"],
+    lineIds: view.sources.lines.map(row => row.id), variationIds: view.sources.variations.map(row => row.variationId),
+    photoIds: view.sources.photos.map(row => row.id), snagIds: view.sources.snags.map(row => row.id),
+    certificates: [{ text: "Tile adhesive data sheet", status: "included" }] };
+  const { result } = await g3.direct(f, g3.release(1));
+  const before = await g5.seen(f, result.token, choice);
+  assert.deepEqual(before.preview.refused, []);
+  const { saved: clean } = await f.post(g2.save(choice, 1));
+  let ids = {};
+  try {
+    ids = await g5.plantInSources(f, view.sources.quoteRevisionId);
+    const after = await g5.seen(f, result.token, choice);
+    assert.deepEqual(after.sources, before.sources, "the receipt, the excluded line and the unapproved change are not offered");
+    assert.deepEqual(after.preview, before.preview);
+    assert.equal(after.page, before.page);
+    const { saved } = await f.post(g2.save(choice, 2));
+    assert.deepEqual(saved.content, clean.content);
+    const text = [g2Text(saved.content), after.page].join("\n");
+    assert.deepEqual(g5AmountFree(text), [], "no line of the pack or the page carries an amount, including the approved change's price");
+    assert.doesNotMatch(text, /G5 |Kept back|12345/iu);
+  } finally { await g5.unplant(ids); }
+  // Money typed by the builder into a snag or its agreed note is refused, never saved.
+  const snagId = randomUUID();
+  await json(await request(`/api/jobs/${f.job}/snags`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken,
+    body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title: "Settle the extra 120.00 before the visit", dueOn: "2026-12-05" } }));
+  await f.register({ version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "Customer owes £40." });
+  const money = { ...choice, sections: ["snags"], certificates: [], snagIds: [snagId] };
+  const { preview } = await f.post({ version: "v2-handover-preview.v1", choice: money });
+  assert.deepEqual(preview.refused.map(row => [row.section, row.reason]), [["snags", "amount"]]);
+  const refusal = await f.post(g2.save(money, 3), 409);
+  assert.equal(refusal.code, "HANDOVER_LINE_REFUSED");
 });
 
 // V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
