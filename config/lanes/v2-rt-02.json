@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-02": {
+      "branches": ["codex/sandbox/rt-02"],
+      "note": "RT-02 qualifier attack corpus (#1071). HEAD_UNDER_TEST=a44f5d35b363a5182b166ff724d2d09ca5c1060f. Corpus, tests and findings only. The lane checker automatically permits config/lanes/v2-rt-02.json as this lane's own file; explicit lane-register grants are forbidden.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-02-qualifiers.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
