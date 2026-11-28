@@ -1,0 +1,6 @@
+{
+  "migration": "2087_v2_quote_section.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

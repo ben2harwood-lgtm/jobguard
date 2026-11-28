@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-e": {
+      "branches": [
+        "claude/project-thread-trp08u-sqe"
+      ],
+      "note": "RED (money: the customer's quote document and its frozen hash; new table) V2-SQ-E: the quote laid out by room, each room itemised or as one room total. Migration 2087 app.v2_quote_section (firm lock, insert-only). quoteDocumentV1 gains optional sections; documents without sections render byte-identical PDFs (pinned). Mounts on main-owned files: packages/core/src/quote-document.ts (optional sections, roomTotals, PDF rows only when sections exist), packages/db/src/quote-document-repository.ts (QUOTE_LAYOUT_MISMATCH), packages/db/src/quote-repository.ts (optional sections, local V2 only), packages/db/src/quote-delivery-repository.ts (preview carries the stored rooms), apps/api/src/quote/contracts.ts and quote.application.ts (optional sections, roomLayout flag), apps/web/app/ui/quote-editor.tsx (room grouping and Show as, only when roomLayout), apps/web/app/customer/quote/quote.tsx (grouped list; unchanged without sections). On SQ-D's review-proposal.tsx: one prop (room). Base claude/project-thread-trp08u-sqd (#1019). Rule 29: no route added. Integrity baselines: tools/commercial-integrity-boundary.unresolved.json and tools/commercial-integrity-current-source-guard.unresolved.json re-fingerprint the two existing ActionExecutor.execute sites in QuoteDeliveryRepository (same lines 86 and 87, same reasons); the fingerprint hashes the whole class, which the preview's room read changes.",
+      "allow": [
+        "apps/api/src/quote/contracts.ts",
+        "apps/api/src/quote/quote.application.ts",
+        "apps/web/app/customer/quote/quote.tsx",
+        "apps/web/app/ui/quote-editor-rooms-off.test.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/quote-rooms.test.tsx",
+        "apps/web/app/ui/quote-rooms.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/V2-SQ-E-rooms-quote.spec.ts",
+        "packages/core/src/quote-document-sections.test.ts",
+        "packages/core/src/quote-document.ts",
+        "packages/db/migration-notes/2087_v2_quote_section.md",
+        "packages/db/migrations/2087_v2_quote_section.sql",
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/src/quote-document-repository.ts",
+        "packages/db/src/quote-repository.ts",
+        "packages/db/test/migration-proofs/2087_v2_quote_section.proof.json",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
