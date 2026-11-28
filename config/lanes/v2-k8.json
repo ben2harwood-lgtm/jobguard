@@ -4,7 +4,8 @@
     "v2-k8": {
       "branches": [
         "codex/sandbox/v2-k8",
-        "claude/project-thread-trp08u-k8"
+        "claude/project-thread-trp08u-k8",
+        "claude/project-thread-trp08u-k8fix"
       ],
       "note": "RED Q05. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only, owned by main (live Work tab). One import plus one V2-only element; other c2/c3 sources remain unchanged.",
       "allow": [
