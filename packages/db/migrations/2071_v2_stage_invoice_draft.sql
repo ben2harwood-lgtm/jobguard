@@ -17,8 +17,7 @@ BEGIN
     PRIMARY KEY (tenant_id, job_id, quote_revision_id, stage_index, draft_no),
     UNIQUE (tenant_id, command_id),
     FOREIGN KEY (tenant_id, job_id, quote_revision_id, stage_index)
-      REFERENCES app.v2_payment_stage_due (tenant_id, job_id, quote_revision_id, stage_index),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+      REFERENCES app.v2_payment_stage_due (tenant_id, job_id, quote_revision_id, stage_index)
   );
   CREATE TABLE IF NOT EXISTS app.v2_stage_invoice_draft_withdrawal (
     tenant_id uuid NOT NULL, job_id uuid NOT NULL, quote_revision_id uuid NOT NULL,
@@ -30,9 +29,13 @@ BEGIN
     PRIMARY KEY (tenant_id, job_id, quote_revision_id, stage_index, draft_no),
     UNIQUE (tenant_id, command_id),
     FOREIGN KEY (tenant_id, job_id, quote_revision_id, stage_index, draft_no)
-      REFERENCES app.v2_stage_invoice_draft (tenant_id, job_id, quote_revision_id, stage_index, draft_no),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+      REFERENCES app.v2_stage_invoice_draft (tenant_id, job_id, quote_revision_id, stage_index, draft_no)
   );
+  -- A linked V2 builder's membership lives in the identity tenant, not the practice tenant, so a membership FK
+  -- refused every draft. Like 2012's schedule rows, the actor is the verified v2_work_plan_editor id, unkeyed.
+  -- Dropped here too for a local database that already ran the first version of this file.
+  ALTER TABLE app.v2_stage_invoice_draft DROP CONSTRAINT IF EXISTS v2_stage_invoice_draft_tenant_id_actor_membership_id_fkey;
+  ALTER TABLE app.v2_stage_invoice_draft_withdrawal DROP CONSTRAINT IF EXISTS v2_stage_invoice_draft_withdr_tenant_id_actor_membership_i_fkey;
 
   -- The copied amount and counted ids equal the frozen row; draft numbers run 1, 2, … and a new
   -- draft waits until every earlier draft of the stage is withdrawn.
