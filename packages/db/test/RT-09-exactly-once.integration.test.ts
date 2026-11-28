@@ -114,17 +114,25 @@ describe("RT-09 API exactly-once paths", () => {
     expect((await app.view(view.jobId)).status).toBe("lost");
     expect(await scopeCount(view.jobId)).toBe(0);
   });
-  it.fails("RT-09-A10 [RT-09-F003] stale discard after confirmation returns a clear typed conflict", async () => {
-    const view = await saved();
-    await confirm(view);
-    // Order the two requests deliberately: confirmation has committed, but the
-    // old draft screen still holds revision 0 when its Discard request arrives.
-    // This pins the stale side of the race rather than depending on scheduling.
-    const refusal = await app.discard(view.jobId, { contractVersion: "draft_discard_v1", commandId: randomUUID(), expectedRevision: 0 })
-      .then(() => null, error => error as { code: string; message: string });
-    const final = await app.view(view.jobId);
-    expect(final.status).toBe("quoting"); expect(final.source.text).toBe(words);
-    expect(await scopeCount(view.jobId)).toBe(1);
-    expect(refusal).toMatchObject({ code: "REVIEW_REVISION_CONFLICT" });
+  describe("RT-09-A10 stale discard after confirmation", () => {
+    let view: CaptureWorkspaceResponse;
+    let refusal: { code: string; message: string } | null;
+    beforeAll(async () => {
+      view = await saved();
+      await confirm(view);
+      // Order the two requests deliberately: confirmation has committed, but the
+      // old draft screen still holds revision 0 when its Discard request arrives.
+      // This pins the stale side of the race rather than depending on scheduling.
+      refusal = await app.discard(view.jobId, { contractVersion: "draft_discard_v1", commandId: randomUUID(), expectedRevision: 0 })
+        .then(() => null, error => error as { code: string; message: string });
+    });
+    it("preserves the confirmed scope and source", async () => {
+      const final = await app.view(view.jobId);
+      expect(final.status).toBe("quoting"); expect(final.source.text).toBe(words);
+      expect(await scopeCount(view.jobId)).toBe(1);
+    });
+    it.fails("[RT-09-F003] returns a clear typed conflict", () => {
+      expect(refusal).toMatchObject({ code: "REVIEW_REVISION_CONFLICT" });
+    });
   });
 });

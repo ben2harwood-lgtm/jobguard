@@ -170,3 +170,22 @@ retains an inline `reviewing` branch although Check and edit navigates to the sa
 and no handler sets that flag true. A later cleanup can remove that obsolete branch
 after checking callers, leaving one review entry path and reducing stale state ownership.
 Non-blocking; no simplification or product-source change is part of this attack.
+
+## RT-09 A10 review repair — PR #1100, 28 November 2026
+
+Base: `2e59ff733d53b0cd0c00e7f414d73340e2a12401`. A10 now uses a shared
+`beforeAll` for capture/save/confirm/stale-discard setup, an ordinary test for quoting
+status, preserved source and one scope revision, and an `it.fails` containing only the
+RT-09-F003 typed-conflict assertion. Setup and preservation failures fail the suite;
+RT-09-F003 remains open. The original 40 attack scenarios now have 41 test checks.
+
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/RT-09-exactly-once.integration.test.ts` — **12 passed, 1 expected failure** on real PostgreSQL.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=1 src/RT-09-offline-exactly-once.test.ts` — **10 passed**.
+- `pnpm --filter @jobguard/web exec playwright test -c e2e/RT-09.playwright.config.ts` — exit 0; **14 ordinary passes, 4 existing expected failures**.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/ui/walk-it-retry.test.tsx app/ui/review-proposal.test.tsx -t RV4` — **6 passed, 55 outside the filter skipped**.
+- `git diff --check` — passed.
+
+Initial sandbox runs could not initialize PostgreSQL or launch Chromium (Mach-port
+permission denied); both passed when rerun outside the sandbox. No dependency repair,
+product-source change, deployment or push. Next's generated files and `.pnpm-store/`
+are excluded from the commit.
