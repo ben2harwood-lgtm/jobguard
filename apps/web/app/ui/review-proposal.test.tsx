@@ -73,6 +73,18 @@ it("keeps full accessible names and walkthrough Accept text with one-word visibl
   expect(all(tree, n => n.props["aria-label"] === `Description ${description}`)[0]!.props.value).toBe(description);
   expect(text(all(tree, n => n.type === "blockquote")[0])).toContain(line.sourceExcerpt);
 });
+it("adds a human line to the whole job with trade Other, and shows old fixed labels the same way", async () => {
+  const fetch = vi.fn(async () => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }) }));
+  vi.stubGlobal("fetch", fetch);
+  const old = { ...line, room: "Practice job", category: "Work" };
+  const p = panel({ ...fixture, review: { ...fixture.review!, lines: [old] } } as ReviewCaptureResult);
+  p.button(p.render(), "Add omitted line").props.onClick();
+  await p.button(p.render(), "Save review").props.onClick();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const lines = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).review.lines;
+  expect(lines.map((saved: { room: string; category: string }) => [saved.room, saved.category])).toEqual([["Whole job", "Other"], ["Whole job", "Other"]]);
+});
+
 it("announces Split, focuses the first adjacent editable child, and saves the unchanged lineage payload", async () => {
   const fetch = vi.fn(async () => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }) }));
   vi.stubGlobal("fetch", fetch);
