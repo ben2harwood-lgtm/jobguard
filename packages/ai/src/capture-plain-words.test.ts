@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseCaptureFixture, CaptureFixtureError } from "./capture-fixture-parser.js";
+import { parseCaptureFixture, CaptureFixtureError, spokenPounds } from "./capture-fixture-parser.js";
 
 const walk = "Bathroom refit for Mrs Sample at 4 Madeup Lane. Rip out the old suite and take it away, fit a new bath, basin and toilet, tile the walls and floor, new extractor fan. About 4800 pounds all in, should take two weeks.";
 function citations(text: string) {
@@ -142,4 +142,119 @@ it("keeps an all-in amount attached to work unallocated and questioned", () => {
   const result = citations("Fit bath £900 all in; paint walls");
   expect(result.lines.every(line => line.unitPricePence.value === null)).toBe(true);
   expect(result.questions.some(q => q.question.value.includes("£900 all in"))).toBe(true);
+});
+
+// Spoken quote intake (26 Nov 2026): continuous speech with no punctuation, the way Tommy dictates a job.
+describe("continuous spoken quotes", () => {
+  const rows = (text: string) => citations(text).lines.map(line => [line.description.value, line.quantity.value, line.unit.value, line.unitPricePence.value]);
+  const cited = (text: string, line: { unitPricePence: { provenance: { kind: string; span?: { start: number; end: number } } } }) => {
+    const provenance = line.unitPricePence.provenance;
+    return provenance.kind === "extracted" && provenance.span ? text.slice(provenance.span.start, provenance.span.end) : null;
+  };
+  it("splits four spoken items in order, keeps six base units and leaves every price blank", () => {
+    const text = "strip out the old kitchen fit six base units hang the new doors paint the walls";
+    expect(rows(text)).toEqual([["strip out the old kitchen", "1", "item", null], ["fit six base units", "6", "base units", null],
+      ["hang the new doors", "1", "item", null], ["paint the walls", "1", "item", null]]);
+    const unit = citations(text).lines[1]!.unit.provenance;
+    expect(unit.kind === "extracted" ? text.slice(unit.span.start, unit.span.end) : null).toBe("base units");
+  });
+  it("puts spoken amounts on their own rows and keeps the last price open", () => {
+    const text = "strip out the old kitchen for two hundred pounds fit the new units for six hundred pounds paint the walls";
+    const result = citations(text);
+    expect(rows(text)).toEqual([["strip out the old kitchen", "1", "item", 20000], ["fit the new units", "1", "item", 60000],
+      ["paint the walls", "1", "item", null]]);
+    expect(result.lines.map(line => cited(text, line))).toEqual(["two hundred pounds", "six hundred pounds", null]);
+    expect(result.lines.reduce((sum, line) => sum + (line.unitPricePence.value ?? 0), 0)).toBe(80000);
+  });
+  it.each(["paint the walls two hundred pounds and fit the door sixty pounds", "paint the walls £200 and fit the door £60"])(
+    "reads spoken and written amounts alike: %s", text => {
+      expect(rows(text)).toEqual([["paint the walls", "1", "item", 20000], ["fit the door", "1", "item", 6000]]);
+    });
+  it("keeps supply and fit one door as one £300 line", () => {
+    const text = "supply and fit one door for three hundred pounds";
+    expect(rows(text)).toEqual([["supply and fit one door", "1", "door", 30000]]);
+    expect(cited(text, citations(text).lines[0]!)).toBe("three hundred pounds");
+  });
+  it("keeps a whole-job figure for review, never as a line price or split across rows", () => {
+    const text = "strip out the old kitchen fit the new units paint the walls eight hundred pounds for the whole job";
+    const result = citations(text);
+    expect(rows(text)).toEqual([["strip out the old kitchen", "1", "item", null], ["fit the new units", "1", "item", null],
+      ["paint the walls", "1", "item", null]]);
+    expect(result.questions.map(q => q.question.value)).toContain("You said “eight hundred pounds for the whole job”. Add a price to each line, or put it on one line.");
+  });
+  it("keeps a price for several items as the line price and asks about it", () => {
+    const text = "strip out the old kitchen fit six base units for six hundred pounds";
+    const result = citations(text);
+    expect(rows(text)).toEqual([["strip out the old kitchen", "1", "item", null], ["fit six base units", "1", "item", 60000]]);
+    expect(result.questions.map(q => q.question.value)).toContain("Check “fit six base units”: six hundred pounds is kept as the price for the whole line, not for each.");
+  });
+  // Independent check, 26 Nov: these two read as £50 and £20 before, with no question.
+  it("reads a price each as the unit price for the spoken count", () => {
+    const text = "fit six doors at fifty pounds each";
+    const result = citations(text);
+    expect(rows(text)).toEqual([["fit six doors", "6", "doors", 5000]]);
+    expect(cited(text, result.lines[0]!)).toBe("fifty pounds");
+    const line = result.lines[0]!;
+    expect(Number(line.quantity.value) * line.unitPricePence.value!).toBe(30000);
+  });
+  it("keeps spoken pence with the pounds in one amount", () => {
+    const text = "supply and fit one door at twenty pounds and fifty pence";
+    expect(rows(text)).toEqual([["supply and fit one door", "1", "door", 2050]]);
+    expect(cited(text, citations(text).lines[0]!)).toBe("twenty pounds and fifty pence");
+  });
+  it.each(["supply and fit one door at £20 and 50p", "supply and fit one door at twenty pounds 50", "fit the door at twenty pounds and fifty five hundred pence"])(
+    "leaves a partly read amount open with a price question: %s", text => {
+      const result = citations(text);
+      expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null]);
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+    });
+  it("leaves a per-item price open when the count or the price position is not clear", () => {
+    const noCount = citations("strip out the old kitchen hang the doors at fifty pounds each");
+    expect(noCount.lines[1]!.quantity.value).toBeNull();
+    expect(noCount.lines[1]!.unitPricePence.value).toBe(5000);
+    expect(noCount.questions.map(q => q.question.value)).toContain("Confirm how many: “hang the doors” is priced at fifty pounds each.");
+    const middle = citations("strip out the old kitchen fit six doors at fifty pounds each side");
+    expect(middle.lines[1]!.unitPricePence.value).toBeNull();
+    expect(middle.questions.some(q => q.question.value.startsWith("Confirm price: fit six doors"))).toBe(true);
+  });
+  it("does not split where the verb belongs to the clause, and refuses malformed spoken amounts", () => {
+    expect(rows("paint the walls and then paint the ceiling")).toEqual([["paint the walls", "1", "item", null], ["paint the ceiling", "1", "item", null]]);
+    expect(rows("clear the loft ready to fit the boards paint the walls").map(row => row[0])).toEqual(["clear the loft ready to fit the boards", "paint the walls"]);
+    expect(rows("strip out the old kitchen two two pounds paint the walls").map(row => row[3])).toEqual([null, null]);
+  });
+  // Codex review on #1001: each of these read a wrong figure with no question.
+  it.each(["paint the walls for one point five pounds fit the door", "paint the walls for one million two hundred pounds fit the door"])(
+    "leaves an amount open when only its end was read: %s", text => {
+      const result = citations(text);
+      expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
+      expect(result.questions.some(q => q.question.value.startsWith("Confirm price: paint the walls"))).toBe(true);
+    });
+  it("keeps a material after old or new with its verb", () => {
+    expect(rows("remove old paint £200 fit the door")).toEqual([["remove old paint", "1", "item", 20000], ["fit the door", "1", "item", null]]);
+  });
+  it.each(["fit twenty one doors paint the walls", "fit one hundred doors paint the walls"])("does not read part of a count: %s", text => {
+    expect(rows(text)[0]!.slice(1, 3)).toEqual(["1", "item"]);
+  });
+  it("reads per only for the counted thing", () => {
+    expect(rows("fit six doors at fifty pounds per door")).toEqual([["fit six doors", "6", "doors", 5000]]);
+    for (const text of ["fit six doors at fifty pounds per pair", "fit six doors at fifty pounds per day"]) {
+      const result = citations(text);
+      expect(result.lines[0]!.unitPricePence.value).toBeNull();
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+    }
+  });
+  it("reads a door like per door, and leaves a day open", () => {
+    expect(rows("fit six doors at fifty pounds a door")).toEqual([["fit six doors", "6", "doors", 5000]]);
+    const text = "fit six doors at fifty pounds a day", result = citations(text);
+    expect(result.lines[0]!.unitPricePence.value).toBeNull();
+    expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+  });
+  it("keeps a leading decorate, render or rehang clause as a line", () => {
+    expect(rows("decorate the bedroom for two hundred pounds fit the door for fifty pounds paint the ceiling for sixty pounds")).toEqual([
+      ["decorate the bedroom", "1", "item", 20000], ["fit the door", "1", "item", 5000], ["paint the ceiling", "1", "item", 6000]]);
+  });
+});
+it.each([["two hundred pounds", 200], ["sixty quid", 60], ["a thousand pounds", 1000], ["one thousand two hundred and fifty pounds", 1250],
+  ["twenty five pounds", 25], ["two two pounds", null], ["hundred pounds", null], ["fifteen hundred pounds", 1500], ["two hundred three hundred pounds", null]])("reads spoken pounds: %s", (words, value) => {
+  expect(spokenPounds(words)).toBe(value);
 });
