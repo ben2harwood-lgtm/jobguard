@@ -108,6 +108,9 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D48 | Q83 | V2-TRAIN-1 C6 done-when QUOTE_NOT_ISSUABLE; K5 firm-lock policies on 2046/2071; K5A-1 helper backed by a real signal | **Opus** | #1047; K5 line | none (in place) | RED money |
 | D49 | Q84 | V2-B1B2 launcher: customer link opens for V2 jobs; default practice recipient on the catcher list; B1 done #1095; B2 moved to Q85; default-view change dropped 15:40 (panels load only inside the editor) | **Opus** | v2/main + #1057 | none | T2 |
 | D50 | Q85 | V2-LINK-1 V2-owned quote-acceptance link definer (no main demo DB-name lock); parity test; settles Q81-2 rule | **Opus** | v2/main + #1057 (+Q81) | one V2 number | T3 RED |
+| D51 | Q86 | V2-C3C-UI "Your crew" screen + route over the existing C3C repository; picker lists new crew; dry-check whether G1 snags need part 2 (H1 B5) | **Opus** | v2/main + #1057 | none | T2 |
+
+> **K5 canonical line (planner, 28 Nov 15:58 UK):** trp08u-k5a1 (2012/2046/2071 → #1059, #1060, #1098, #1099) is the K5 line that lands. The sandbox line (codex/sandbox/v2-k5, #1031, 2070/2080) is not landed and nothing is ported from it; SYNC-1's renumber sets final numbers. Q83 built as #1047 (C6), #1098 (K5 FL + K5A-1), #1099 (catch-up); seed 74/74 with #1057.
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
