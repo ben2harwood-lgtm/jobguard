@@ -66,14 +66,18 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   // V2-K5A: payment schedule working records only.
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2012_v2_payment_schedule.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2070_v2_payment_schedule.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
-  // V2-K5A-2: custom-task triggers and frozen due amounts.
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8"));
+  // V2-F8 who was on site today (2061), after the crew records it checks. Rule 30: stays above FL-6's 2054 line.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2061_v2_site_attendance.sql", import.meta.url), "utf8"));
+  // V2-FL-1 firm lock on the V2 core tables (2047).
+  await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-K5A-2 custom-task stages and frozen due amounts (2080), after the payment schedule (2070) it alters.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2080_v2_payment_stage_due.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

@@ -93,11 +93,11 @@ export function useJobDetail(jobId: string, tenantId: string) {
 }
 
 /** One job, any tab: the design's job header and tabs, with the tab's content below. */
-export function DesignedJob({ jobId, tab, children }: { jobId: string; tab: JobTab; children?: ReactNode }) {
-  return <Screen title="Your job" active="jobs">{workspace => <JobFrame key={`${workspace.tenantId}:${jobId}`} workspace={workspace} jobId={jobId} tab={tab}>{children}</JobFrame>}</Screen>;
+export function DesignedJob({ jobId, tab, plan, children }: { jobId: string; tab: JobTab; plan?: ReactNode; children?: ReactNode }) {
+  return <Screen title="Your job" active="jobs">{workspace => <JobFrame key={`${workspace.tenantId}:${jobId}`} workspace={workspace} jobId={jobId} tab={tab} plan={plan}>{children}</JobFrame>}</Screen>;
 }
 
-function JobFrame({ workspace, jobId, tab, children }: { workspace: Workspace; jobId: string; tab: JobTab; children?: ReactNode }) {
+function JobFrame({ workspace, jobId, tab, plan, children }: { workspace: Workspace; jobId: string; tab: JobTab; plan?: ReactNode; children?: ReactNode }) {
   const router = useRouter();
   const { detail: loadedDetail, failed } = useJobDetail(jobId, workspace.tenantId);
   const facts = useJobFacts(workspace.tenantId, [jobId]);
@@ -114,7 +114,7 @@ function JobFrame({ workspace, jobId, tab, children }: { workspace: Workspace; j
     <div className="job-header"><Head kicker={`JOB ${job.id.slice(0, 8).toUpperCase()}`} title={job.title} text={[site || "Site details needed", customer || "Customer details needed"].join(" · ")}/></div>
     <div className="job-caption" style={{ margin: "-12px 0 19px" }} data-testid={`designed-job-${tab}`} data-job-id={job.id}>{statusTag(job.status)} {detail.attentionReasons.length ? <Tag tone="amber">Needs attention</Tag> : detail.attentionComplete ? <Tag tone="green">No current alerts</Tag> : <Tag>{detail.attentionFailed ? "Some job checks could not be loaded" : "Loading job checks…"}</Tag>} <span>Updated {shortDate(job.updatedAt)}</span></div>
     <nav className="job-tabs" aria-label="Job sections">{tabs.map(([id, label]) => <button key={id} type="button" className={id === tab ? "active" : ""} aria-current={id === tab ? "page" : undefined} onClick={() => router.push(`/jobs/${job.id}/${id}`)}>{label}</button>)}</nav>
-    {tab === "overview" ? <Overview detail={detail} site={site}/> : tab === "work" ? <WorkTab>{children}</WorkTab> : tab === "money" ? <MoneyTab value={detail.value} status={job.status} facts={detail.facts}>{children}</MoneyTab> : <RecordsTab jobId={job.id}>{children}</RecordsTab>}
+    {tab === "overview" ? <Overview detail={detail} site={site}/> : tab === "work" ? <WorkTab plan={plan}>{children}</WorkTab> : tab === "money" ? <MoneyTab value={detail.value} status={job.status} facts={detail.facts}>{children}</MoneyTab> : <RecordsTab jobId={job.id}>{children}</RecordsTab>}
   </Shell>;
 }
 
@@ -218,9 +218,10 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
   </>;
 }
 
-function WorkTab({ children }: { children?: ReactNode }) {
+function WorkTab({ plan, children }: { plan?: ReactNode; children?: ReactNode }) {
   return <>
     <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
+    {plan}
     <Legacy label="Job workspace" cards>{children}</Legacy>
   </>;
 }

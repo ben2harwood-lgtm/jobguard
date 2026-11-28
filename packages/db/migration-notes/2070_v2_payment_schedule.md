@@ -1,4 +1,4 @@
-# 2012 V2-K5A payment schedule
+# 2070 V2-K5A payment schedule
 
 Working planning data only; this table has no invoice, approval, payment or send
 consumer. M4-18 and a separately approved K5B remain responsible for invoicing.
@@ -24,7 +24,7 @@ rounding; the last takes the remainder. Extras outside the remaining stages are
 shown separately, including omissions too large to reduce only planned stages.
 Hidden JobGuard catches are excluded at the source query by origin.
 
-The shared migration runner discovers 2012, but changes nothing outside the
+The shared migration runner discovers 2070, but changes nothing outside the
 checked V2 database and firm-policy fence. Bootstrap applies it after 2001–2004.
 No backfill. Shared catalogue proofs are empty because those databases have no
 V2 table; the appended full V2 seed tests exercise the actual grants and RLS.
@@ -32,3 +32,7 @@ The purchase-order upgrade fixture defers this V2-only migration with the other
 V2 entries. Reapplying is idempotent. Forward-fix in a later allocated migration;
 for local rollback retain the existing rehearsal database and provision fresh
 state from the preceding checkout. Do not drop schedules or audit history.
+
+Renumbered 2012 -> 2070 above v2/main (2061 F8) and the claimed V2 numbers (2067 is E7 in the register). Both tables carry the
+standard restrictive `v2_practice_firm` lock (a mandatory app.job join on tenant_id and job_id), so the
+FL guard covers them with no pending file.

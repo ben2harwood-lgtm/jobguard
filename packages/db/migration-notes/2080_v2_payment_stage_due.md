@@ -1,4 +1,4 @@
-# 2046 V2-K5A-2 custom-task stages and frozen due amounts
+# 2080 V2-K5A-2 custom-task stages and frozen due amounts
 
 Working planning data only, like 2012. Nothing here drafts, issues or sends an
 invoice or moves money. K5B stays responsible for invoices.
@@ -6,11 +6,11 @@ invoice or moves money. K5B stays responsible for invoices.
 Fix 1. c2 keeps custom-scope-item tasks only in the effective plan (edits over
 the stored template tasks), so 2012's foreign key from
 `app.v2_payment_schedule_task_done` to `app.v2_work_plan_task` refused them.
-2046 drops that one foreign key and adds a foreign key to the job's scope
+2080 drops that one foreign key and adds a foreign key to the job's scope
 identity `app.scope_identity (tenant_id, job_id, id)`. That covers accepted
 lines, custom scope items and approved extras, which have their own scope
 identity but no line in the immutable accepted quote. An earlier local draft of
-2046 keyed to `app.quote_line`; a rerun drops that key too. The set and task-done commands check the
+2080 keyed to `app.quote_line`; a rerun drops that key too. The set and task-done commands check the
 trigger against the effective plan, read in their own transaction after the
 existing per-tenant advisory lock. Grants and policies on the task table are not
 touched.
@@ -25,14 +25,14 @@ K5B freezes every stage, date stages too, when it drafts an invoice.
 
 Runtime grants: SELECT and INSERT only. UPDATE, DELETE and TRUNCATE are never
 granted. RLS is enabled and forced with the same tenant helper and parent-job
-visibility as 2012. Each frozen row appends one `v2.billing_stage.due_frozen`
+visibility as 2070, plus the same restrictive `v2_practice_firm` lock to the job's firm. Each frozen row appends one `v2.billing_stage.due_frozen`
 tenant-chain event carrying references only, in the command's transaction; a
 replay appends nothing.
 
-Same V2-only `DO $v2$` wrapper and database-name and firm-policy fence as 2012,
-so the shared runner changes nothing elsewhere. Bootstrap applies it after 2012.
+Same V2-only `DO $v2$` wrapper and database-name and firm-policy fence as 2070,
+so the shared runner changes nothing elsewhere. Bootstrap applies it after 2070 and 2047.
 Idempotent: rerunning finds no old foreign key, keeps the new one and the table.
-No backfill: K5A schedules saved before 2046 keep the time-ordered projection
+No backfill: K5A schedules saved before 2080 keep the time-ordered projection
 for their existing due stages. Shared catalogue proofs are empty because those
 databases have no V2 table; the V2 seed tests exercise grants and RLS.
 Forward-fix in a later migration. Do not drop frozen rows or audit history.

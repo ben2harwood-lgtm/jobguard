@@ -65,7 +65,7 @@ type Placed = { slot: number; frozenEvent: boolean; fact: ScheduleFact | { kind:
 /**
  * Order the facts. Frozen rows come first: each approval goes just before the first frozen row that counted it
  * (condition 2), and an approval no frozen row counted goes after every frozen due fact, whatever its created_at.
- * Only approvals no frozen row counts, and unfrozen due facts (date stages, or K5A rows from before 2046), use time.
+ * Only approvals no frozen row counts, and unfrozen due facts (date stages, or K5A rows from before 2080), use time.
  */
 function orderFacts(facts: ScheduleFact[], frozen: FrozenStage[], now: string) {
   const rows = [...frozen].sort((a, b) => a.at.localeCompare(b.at) || a.index - b.index);
