@@ -1,0 +1,7 @@
+/* V2-C3C-UI: 44 px touch targets for the crew list, the add form and the plan's crew picker. */
+.jgd .crew-panel .btn:not(.jgd-legacy *),.jgd .crew-panel input:not(.jgd-legacy *),.jgd .crew-panel select:not(.jgd-legacy *),
+.jgd .crew-picker .btn:not(.jgd-legacy *),.jgd .crew-picker select:not(.jgd-legacy *){min-height:44px}
+.jgd .crew-panel{min-width:0;max-width:100%}
+.jgd .crew-panel input:not(.jgd-legacy *),.jgd .crew-picker select:not(.jgd-legacy *){width:100%;max-width:100%;box-sizing:border-box}
+.jgd .crew-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.jgd .crew-list li{display:flex;flex-wrap:wrap;gap:4px 12px;overflow-wrap:anywhere}
