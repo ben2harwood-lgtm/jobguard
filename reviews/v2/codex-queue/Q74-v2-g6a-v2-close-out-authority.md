@@ -48,3 +48,10 @@ The builder's dry-check (`/mnt/project-files/jobguard-v2/notes/q74-dry-check-202
 - Main's close-out is gated to the demo database: 167 functions check `current_database()='jobguard_synthetic_demo'`, including the Final Check worker (`lp11_bind_shadow_job`) and `answer_job_proof_statement`.
 - The proof session digest goes through lp6.
 Renaming the V2 database was refused, because it would switch on main's demo-only shortcuts, such as generated proof, on V2 and would clash with the Mac demo database. Opening main's gates is a RED main change. Decision: park until after the 3 Dec hosting decision. G6 part 1 (the review card and stage-draft guards) ships. 2088 stays reserved for this piece.
+
+## Codex design reply while parked (#3 7237808230, 28 Nov 10:18 UK), for the restart
+- A wrapper and body split is fine for shared calculation with no side effects. A write keeps one authenticated command boundary, and a runtime or worker role can't call the body directly. Any privileged function needed still goes through FL-F review, with restricted execution and a trusted search path.
+- Keep a current, unexpired, unrevoked actor binding to the exact firm, membership, job and transaction. Recheck it on retries before returning an earlier receipt. Return an earlier invoice only for the same authorised command.
+- Record the real membership in the money audit.
+- Tests: normal success, a refusal for the same tenant with a different firm, and a stage draft racing the close.
+- An issued invoice and its digest survive a later supplement.

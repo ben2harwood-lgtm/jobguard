@@ -33,3 +33,6 @@ In the recogniser-form Smith text, "upstairs bathroom strip out new suite supply
 ## Done when
 - Bathroom suite work is Plumbing in typed and spoken text, and nothing about rows or money changes.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Plan check (Claude stand-in, 28 Nov 11:25 UK, on #1049 @ eb52456ac)
+Passed. The trade rule is labels only, and the scores in the PR don't change. Codex's separate price-limit finding on #3 (7238163638: "up to £200" read as a fixed £200, "minus £50" read as +£50) is not this packet's. It is Q77 V2-SQ-M, stacked on this branch.

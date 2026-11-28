@@ -72,3 +72,10 @@ This piece adds one V2 screen and one V2 guard in front of that path, and change
 ## Done when
 - On the practice job, a builder sees what's still open, closes the account through main's lock and Final Check, and gets a final invoice that equals quote plus approved extras to the penny. No stage draft can become a second bill.
 - CI1 is green, and the Codex check is clean or answered. Merge only on Ben's own card (RED money).
+
+## Plan check (Claude stand-in, 28 Nov 11:25 UK, on #1060 @ 9f804b8da, with Codex's design reply on #3 7237808230)
+Passed for part 1, with three conditions. The lock and the draft both take the same `v2-schedule:<tenant>` advisory lock before anything else, so they are serialised. The draft replay compares the request digest, which includes the actor, so an earlier draft only comes back for the same authorised command. That matches Codex's condition.
+1. **A race test (Codex: "check concurrent stage-draft creation against close").** In the seed suite, start a stage draft and a final-account lock on two connections at the same time, and repeat it a few times. Exactly one succeeds: either the draft exists and the lock is refused with `V2_STAGE_DRAFT_OPEN`, or the lock exists and the draft is refused with `FINAL_ACCOUNT_LOCKED`. Never both rows, never neither. The test seeds the lock row the same way the existing G6 test does, so note that main's lock still refuses V2 sessions until Q74.
+2. **Lock wait.** `assertNoLiveStageDraft` takes the advisory lock before `lock_timeout` is set, so it can wait without a limit. Set the same `lock_timeout` before the guard (move the `set_config` line up by one). That is still a one-line edit to main's file.
+3. **Another firm.** Add one case: a same-tenant, different-firm session asking for a stage draft on this job gets 404, the same as the review route.
+Q74 is still parked. Codex's design notes for it (one command boundary for the write, an actor binding rechecked on retry, membership in the audit, an invoice and its digest kept after a supplement) are recorded in Q74 for when it restarts.

@@ -21,3 +21,6 @@
 ## Done when
 - No approved extra silently disappears from the work plan, and an old form can't save against a newer approval.
 - CI1 is green, and the Codex check is clean or answered.
+
+## Plan check (Claude stand-in, 28 Nov 11:25 UK, on #1051 @ a9085ce95)
+Passed with no conditions. The GET adds one field passed straight through. `notPlannedReason` is labels only. The stale-revision refusal stays on the server, and the two new tests fail without the fix.
