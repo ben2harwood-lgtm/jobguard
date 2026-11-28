@@ -24,6 +24,6 @@ export class WorkOrderController {
   revisions(@Param("workOrderId") workOrderId: string, @Headers("cookie") cookie?: string) { return this.call(() => this.application.revisions(principal(cookie), workOrderId)); }
   @Get("sor-versions") @Header("Cache-Control", "no-store") @ApiOperation({ summary: "Immutable schedule-of-rates versions; contract.read required" })
   sorVersions(@Headers("cookie") cookie?: string) { return this.call(() => this.application.sorVersions(principal(cookie))); }
-  @Post("sor-versions") @ApiOperation({ summary: "Import an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required" })
+  @Post("sor-versions") @ApiOperation({ summary: "Import an immutable schedule-of-rates version (sor-version-import.v1, or .v2 with optional per-item includes text); contract.manage required" })
   importSor(@Headers("cookie") cookie: string | undefined, @Headers("origin") origin: string | undefined, @Body() body: unknown) { this.origin(origin); return this.call(() => this.application.importSorVersion(principal(cookie), body)); }
 }

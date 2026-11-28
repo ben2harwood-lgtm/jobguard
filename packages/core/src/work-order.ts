@@ -116,6 +116,12 @@ export const sorVersionAuditPayloadV1 = z.object({
   hashes: z.object({ document: z.string().regex(/^[a-f0-9]{64}$/u) }).strict(),
   classifications: z.object({ action: z.literal("operational") }).strict(),
 }).strict();
+/** sor-version-import.v2's audit payload: v1's plus the hash of the per-item includes texts (never the text itself). */
+export const sorVersionAuditPayloadV2 = z.object({
+  references: z.object({ commandId: uuid, versionId: uuid, scheduleId: uuid, environment: z.literal("synthetic_demo"), importVersion: z.literal("sor-version-import.v2") }).strict(),
+  hashes: z.object({ document: z.string().regex(/^[a-f0-9]{64}$/u), includes: z.string().regex(/^[a-f0-9]{64}$/u) }).strict(),
+  classifications: z.object({ action: z.literal("operational") }).strict(),
+}).strict();
 
 export const workOrderCsvColumns = ["version", "clientId", "contractId", "workOrderReference", "issuedOn", "dueOn", "priority", "status", "expectedRevision", "siteRevisionId", "resident", "teamId", "assignedMembershipIds", "lines"] as const;
 export type WorkOrderCsvRecord = { rowNumber: number; input: unknown; error?: never } | { rowNumber: number; error: "INVALID_ROW"; input?: never };

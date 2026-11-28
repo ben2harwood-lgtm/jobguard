@@ -1,0 +1,213 @@
+{
+  "migration": "0785_sor_item_includes.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-sor-item-includes",
+        "title": "Rate item includes text",
+        "description": "CC-I1 rate-list import v2: an optional per-item 'what this rate includes' text of up to 1,000 characters, stored once against one rate item of one rate-list version in a tenant table under forced RLS. The runtime may only read the table; the only write is app.import_sor_version_v2, a SECURITY DEFINER routine with v1's authority (contract.manage), practice-database refusal, MON-8 work_orders feature check, tenant lock, binding prologue and replay/conflict rules, which computes each text's hash itself. Rows are immutable and the version cannot commit without its audit event, whose payload carries only hashes. v1 (app.import_sor_version) is unchanged. A forward migration can drop the routine while keeping the rows.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep includes reads and the v2 import bound to the request's tenant and bound actor.",
+          "LP-12": "Keep includes rows immutable and written only by the checked v2 import routine."
+        },
+        "sources": [
+          "packages/db/migrations/0785_sor_item_includes.sql",
+          "packages/db/src/sor-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/sor-item-includes.integration.test.ts",
+          "packages/core/src/sor-pricing.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-sor-item-includes",
+        "title": "Rate item includes text",
+        "kind": "evidence",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep includes writes inside the checked v2 import routine and the runtime read-only."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep includes reads and the v2 import bound to the request's tenant and bound actor.",
+          "LP-12": "Keep includes rows immutable and written only by the checked v2 import routine."
+        },
+        "downstream": "CC-I1 rate-list import v2: an optional per-item 'what this rate includes' text of up to 1,000 characters, stored once against one rate item of one rate-list version in a tenant table under forced RLS. The runtime may only read the table; the only write is app.import_sor_version_v2, a SECURITY DEFINER routine with v1's authority (contract.manage), practice-database refusal, MON-8 work_orders feature check, tenant lock, binding prologue and replay/conflict rules, which computes each text's hash itself. Rows are immutable and the version cannot commit without its audit event, whose payload carries only hashes. v1 (app.import_sor_version) is unchanged. A forward migration can drop the routine while keeping the rows.",
+        "path": "ap-sor-item-includes",
+        "sources": [
+          "packages/db/migrations/0785_sor_item_includes.sql",
+          "packages/db/src/sor-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/sor-item-includes.integration.test.ts",
+          "packages/core/src/sor-pricing.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.sor_item_includes|jobguard_runtime|SELECT|-",
+        "group": "a-sor-item-includes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.import_sor_version_v2(uuid,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-sor-item-includes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.sor_item_includes|jobguard_migration",
+        "group": "a-sor-item-includes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.import_sor_version_v2(uuid,jsonb)|jobguard_migration",
+        "group": "a-sor-item-includes"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.import_sor_version_v2(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.schedule_of_rates",
+          "app.sor_item",
+          "app.sor_item_includes",
+          "app.sor_version"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.mon8_require_feature",
+          "app.sor_import_permitted",
+          "public.digest"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.sor_item_includes|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.sor_item_includes|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.sor_item_includes|sor_item_includes_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.sor_item_includes|sor_item_includes_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "sor_item_includes",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "sor_item_includes_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "import_sor_version_v2",
+        "args": "actor uuid, payload jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "sor_item_includes",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "sor_item_includes",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

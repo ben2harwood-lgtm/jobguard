@@ -5559,7 +5559,7 @@
             "description": ""
           }
         },
-        "summary": "Import an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required",
+        "summary": "Import an immutable schedule-of-rates version (sor-version-import.v1, or .v2 with optional per-item includes text); contract.manage required",
         "tags": [
           "contractor-work-orders"
         ]

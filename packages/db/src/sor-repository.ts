@@ -2,10 +2,29 @@ import type { AuthenticatedMembership } from "./tenant-context.js";
 import { requireContractorRequestContext } from "./contractor-repository.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { WorkOrderError, sorVersionAuditPayloadV1, sorVersionImportV1, sorVersionListV1, sorVersionResultV1 } from "@jobguard/core";
+import { WorkOrderError, sorItemIncludesV1, sorVersionAuditPayloadV1, sorVersionAuditPayloadV2, sorVersionImportAny, sorVersionListV1, sorVersionResultV1, sorVersionResultV2, type SorItemIncludes, type SorVersionImportV2 } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, canonicalJson, sha256Hex, workOrderFailure } from "./work-order-repository.js";
-import { withTenant } from "./tenant-context.js";
+import { withTenant, type TenantTransaction } from "./tenant-context.js";
+
+/**
+ * CC-I1: one rate item's includes text, read inside the caller's tenant transaction and keyed by rate-list version and code, so the text
+ * shown is only ever that version's (a later or earlier version of the same code has its own, or none). Null when the item has none:
+ * every v1 item and every item imported before 0785. An unknown version or code is NOT_FOUND. The caller owns the read authority.
+ */
+export async function readSorItemIncludes(db: TenantTransaction, versionId: string, code: string): Promise<SorItemIncludes> {
+  const query = sorItemIncludesV1.pick({ sorVersionId: true, code: true }).safeParse({ sorVersionId: versionId, code });
+  if (!query.success) throw new WorkOrderError("NOT_FOUND");
+  const row = (await db.$client.query<{ includes_text: string | null }>(
+    "SELECT n.includes_text FROM app.sor_item i LEFT JOIN app.sor_item_includes n ON(n.tenant_id,n.version_id,n.code)=(i.tenant_id,i.version_id,i.code) WHERE i.tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid AND i.version_id=$1 AND i.code=$2",
+    [query.data.sorVersionId, query.data.code])).rows[0];
+  if (!row) throw new WorkOrderError("NOT_FOUND");
+  return sorItemIncludesV1.parse({ version: "sor-item-includes.v1", environment: "synthetic_demo", realExternalActions: 0, sorVersionId: query.data.sorVersionId, code: query.data.code, includes: row.includes_text });
+}
+/** Hash of a v2 command's includes texts, per code (null where an item has none). The audit payload carries this, never the text. */
+export function sorIncludesHash(items: SorVersionImportV2["items"]): string {
+  return sha256Hex(canonicalJson([...items].sort((a, b) => a.code.localeCompare(b.code)).map(item => ({ code: item.code, includes: item.includes === undefined ? null : sha256Hex(item.includes) }))));
+}
 
 /**
  * Schedule-of-rates versions: immutable, imported by a member holding contract.manage (owner, admin, commercial_manager - Ben, 9 Oct 2026,
@@ -13,10 +32,12 @@ import { withTenant } from "./tenant-context.js";
  */
 export class SorRepository {
   constructor(private readonly pool: Pool) {}
+  /** sor-version-import.v1 (unchanged) or sor-version-import.v2 (adds optional per-item includes text), chosen by `version`. */
   async importVersion(principal: AuthenticatedMembership, raw: unknown) {
-    const parsed = sorVersionImportV1.safeParse(raw);
+    const parsed = sorVersionImportAny.safeParse(raw);
     if (!parsed.success) throw new WorkOrderError("INVALID_COMMAND");
     const command = parsed.data;
+    if (command.version === "sor-version-import.v2") return this.importVersionV2(principal, command);
     const contentHash = sha256Hex(canonicalJson({ reference: command.reference, effectiveFrom: command.effectiveFrom, items: [...command.items].sort((a, b) => a.code.localeCompare(b.code)) }));
     const requestHash = sha256Hex(canonicalJson(command));
     try {
@@ -37,16 +58,51 @@ export class SorRepository {
       });
     } catch (error) { throw workOrderFailure(error); }
   }
+  private async importVersionV2(principal: AuthenticatedMembership, command: SorVersionImportV2) {
+    const sorted = [...command.items].sort((a, b) => a.code.localeCompare(b.code));
+    const contentHash = sha256Hex(canonicalJson({ reference: command.reference, effectiveFrom: command.effectiveFrom, items: sorted }));
+    const includesHash = sorIncludesHash(command.items);
+    const requestHash = sha256Hex(canonicalJson(command));
+    try {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
+        await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
+        await assertContractorGate(db, principal, "sor");
+        const row = (await db.$client.query<{ result: { versionId: string; scheduleId: string; itemCount: number; includesCount: number; effectiveFrom: string; replayed: boolean } }>("SELECT app.import_sor_version_v2($1,$2::jsonb) result", [principal.membershipId, JSON.stringify({
+          version: "sor-version-record.v2", environment: "synthetic_demo", commandId: command.commandId, versionId: randomUUID(), scheduleId: command.scheduleId, scheduleReference: command.reference, reference: command.reference, effectiveFrom: command.effectiveFrom,
+          contentHash, requestHash, items: command.items.map(item => ({ code: item.code, description: item.description, unit: item.unit, ratePence: item.rate.pence, standardMinutes: item.standardMinutes ?? null, includes: item.includes ?? null })),
+        })])).rows[0]!;
+        const result = row.result;
+        if (!result.replayed) {
+          // Same event type and deferred audit binding as v1; the payload adds the includes hash and never the text (§3).
+          await appendAuditBatch(db, [{ id: result.versionId, version: "audit.v1", actorRef: `membership:${principal.membershipId}`, eventType: "contractor.sor_version.imported", subjectType: "sor-version", subjectRef: result.versionId,
+            payload: sorVersionAuditPayloadV2.parse({ references: { commandId: command.commandId, versionId: result.versionId, scheduleId: result.scheduleId, environment: "synthetic_demo", importVersion: "sor-version-import.v2" }, hashes: { document: contentHash, includes: includesHash }, classifications: { action: "operational" } }) }]);
+        }
+        return sorVersionResultV2.parse({ version: "sor-version-result.v2", environment: "synthetic_demo", ...result, effectiveFrom: String(result.effectiveFrom).slice(0, 10), realExternalActions: 0 });
+      });
+    } catch (error) { throw workOrderFailure(error); }
+  }
+  /** Reading price lists needs a contract-level read grant (owner, admin, commercial_manager, supervisor, surveyor, finance, read_only): the same members who can read contracts. */
+  private async assertRateRead(db: TenantTransaction, principal: AuthenticatedMembership) {
+    await assertContractorGate(db, principal, "retained_member");
+    // Client approvers read approval packs only; a client contract grant cannot unlock the general schedule list.
+    const member = (await db.$client.query<{ role: string }>("SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2", [principal.tenantId, principal.membershipId])).rows[0];
+    if (!member || member.role === "client_approver") throw new WorkOrderError("NOT_FOUND");
+    const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.contractor_allowed($1,'contract.read',nullif(current_setting('app.tenant_id',true),'')::uuid) OR EXISTS(SELECT 1 FROM app.client_organisation c WHERE app.contractor_allowed($1,'contract.read',c.id)) allowed", [principal.membershipId])).rows[0]!.allowed;
+    if (!allowed) throw new WorkOrderError("NOT_FOUND");
+  }
+  /** CC-I1: one rate item's includes text for one rate-list version, under the same read grant as the version list. */
+  async itemIncludes(principal: AuthenticatedMembership, versionId: string, code: string) {
+    try {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
+        await this.assertRateRead(db, principal);
+        return await readSorItemIncludes(db, versionId, code);
+      });
+    } catch (error) { throw workOrderFailure(error); }
+  }
   async list(principal: AuthenticatedMembership) {
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
-        // Reading price lists needs a contract-level read grant (owner, admin, commercial_manager, supervisor, surveyor, finance, read_only): the same members who can read contracts.
-        await assertContractorGate(db, principal, "retained_member");
-        // Client approvers read approval packs only; a client contract grant cannot unlock the general schedule list.
-        const member = (await db.$client.query<{ role: string }>("SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2", [principal.tenantId, principal.membershipId])).rows[0];
-        if (!member || member.role === "client_approver") throw new WorkOrderError("NOT_FOUND");
-        const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.contractor_allowed($1,'contract.read',nullif(current_setting('app.tenant_id',true),'')::uuid) OR EXISTS(SELECT 1 FROM app.client_organisation c WHERE app.contractor_allowed($1,'contract.read',c.id)) allowed", [principal.membershipId])).rows[0]!.allowed;
-        if (!allowed) throw new WorkOrderError("NOT_FOUND");
+        await this.assertRateRead(db, principal);
         const versions = (await db.$client.query<{ id: string; schedule_id: string; schedule_reference: string; reference: string; effective_from: string; item_count: number; created_at: Date }>(
           "SELECT v.id,v.schedule_id,s.reference schedule_reference,v.reference,v.effective_from::text,v.item_count,v.created_at FROM app.sor_version v JOIN app.schedule_of_rates s ON(s.tenant_id,s.id)=(v.tenant_id,v.schedule_id) ORDER BY v.effective_from DESC,v.id")).rows;
         return sorVersionListV1.parse({ version: "sor-version-list.v1", environment: "synthetic_demo", realExternalActions: 0,
