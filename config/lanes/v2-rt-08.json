@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-08": {
+      "branches": ["codex/sandbox/rt-08"],
+      "note": "RT-08 tenant-and-job attack tests (#1071). HEAD_UNDER_TEST=bfac404e2058da7759001cc0321c859f393a7ca1. Tests and findings only. The lane checker automatically permits config/lanes/v2-rt-08.json as this lane's own file; explicit lane-register grants are forbidden.",
+      "allow": [
+        "apps/api/src/capture/rt08-invalid-session.test.ts",
+        "apps/api/src/capture/rt08-tenant-and-job.integration.test.ts",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
