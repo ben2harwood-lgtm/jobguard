@@ -36,15 +36,15 @@
   },
   {
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 86,
-    "fingerprint": "ae7aca791ee76f9558c531fff8705b2fd9cbc88abbcd1e4f2ab331af72a9ca36",
+    "line": 107,
+    "fingerprint": "474bbe476a2917f777a5f9c974383a63615715bb55af6dfea3e88ff1dece75d6",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
   {
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 87,
-    "fingerprint": "3da1ca4d0927f19050352d9ff4d924cc3d34554e488633e46635d903f2e8f5b3",
+    "line": 108,
+    "fingerprint": "762a440d3346200712d3a75503ba40de69687f1dc75ef2f12aac462c42184218",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
@@ -57,8 +57,8 @@
   },
   {
     "file": "packages/db/src/quote-document-repository.ts",
-    "line": 9,
-    "fingerprint": "a03814ad97eb55bfe1dca02eca37c87717afeb72090091c8703d5a9d14d1222d",
+    "line": 11,
+    "fingerprint": "b59e688c9b544cfb8e3316e6b9b06a726ff168f821858ea4628c5c943bc18885",
     "reason": "Receipt result->>'outboxActionId' only joins the first authorization grant to return its expiry; no advisory result reaches money.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
