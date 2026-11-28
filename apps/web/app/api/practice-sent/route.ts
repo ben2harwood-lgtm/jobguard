@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { authenticatePracticeSession, PracticeSentRepository } from "@jobguard/db";
+import { enforcePracticePair } from "../../lib/linked-practice-entry";
 import { practiceFailure, syntheticPool } from "../../lib/synthetic-server";
 
 const headers = { "Cache-Control": "no-store" };
@@ -10,7 +11,10 @@ const headers = { "Cache-Control": "no-store" };
 export async function GET() {
   try {
     const pool = syntheticPool();
-    const { context, digest } = await authenticatePracticeSession(pool, (await cookies()).get("jg_session")?.value);
+    const sessionId = (await cookies()).get("jg_session")?.value;
+    // V2-PAIR-1: a linked practice session must carry its exact browser pairing.
+    await enforcePracticePair(pool, sessionId);
+    const { context, digest } = await authenticatePracticeSession(pool, sessionId);
     // Only this session's own jobs: a shared practice tenant holds other sessions' jobs.
     return NextResponse.json({ items: await new PracticeSentRepository(pool).list(context, digest) }, { headers });
   } catch (error) {

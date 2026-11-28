@@ -3968,6 +3968,67 @@ test("C6 the second firm gets 404 and sees none of the added rows; off local V2 
   delete process.env.JOBGUARD_LOCAL_V2;
   try { await assert.rejects(quoteLines.add(draftJob, addLine()), { code: "SYNTHETIC_MODE_REQUIRED" }); }
   finally { if (local !== undefined) process.env.JOBGUARD_LOCAL_V2 = local; }
+
+test("V2-PAIR-1: a linked session without its exact browser pairing is refused on every V2 route, and nothing is written", async () => {
+  const { draftJob, read } = await draftForPlan();
+  const { cookies } = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const jar = value => Object.fromEntries(value.split("; ").map(pair => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]));
+  const mine = jar(cookies);
+  const theirs = jar(outsider.cookies);
+  assert.ok(mine.jobguard_session && mine.jg_session && mine.jg_practice_pair, "the builder is a linked practice session");
+  const join = entries => Object.entries(entries).filter(([, value]) => value !== undefined).map(([name, value]) => `${name}=${value}`).join("; ");
+  const tampered = mine.jg_practice_pair.slice(0, -1) + (mine.jg_practice_pair.endsWith("0") ? "1" : "0");
+  const unpaired = {
+    "session only": join({ jg_session: mine.jg_session }),
+    "no pairing receipt": join({ ...mine, jg_practice_pair: undefined }),
+    "no identity sign-in": join({ ...mine, jobguard_session: undefined }),
+    "another firm's receipt": join({ ...mine, jg_practice_pair: theirs.jg_practice_pair }),
+    "another firm's identity": join({ ...mine, jobguard_session: theirs.jobguard_session }),
+    "a stale or altered receipt": join({ ...mine, jg_practice_pair: tampered }),
+  };
+  const reads = [`/api/v2-backend/jobs/${draftJob}/work-plan`, `/api/v2-backend/jobs/${draftJob}/attendance`,
+    `/api/v2-backend/jobs/${draftJob}/quote-prompts`, "/api/practice-sent", `/api/jobs/${draftJob}/final-account/lock`];
+  // Positive control: the paired builder reads each of them.
+  for (const path of reads) assert.notEqual((await request(path, { cookies })).status, 401, path);
+  const plan = await read();
+  const day = await londonToday();
+  const edits = async () => (await admin.query("SELECT count(*)::int AS n FROM app.v2_work_plan_edit WHERE job_id = $1", [draftJob])).rows[0].n;
+  const before = { edits: await edits(), effects: await effectCounts() };
+  for (const [label, bad] of Object.entries(unpaired)) {
+    for (const path of reads) {
+      const response = await request(path, { cookies: bad });
+      assert.equal(response.status, 401, `${label}: ${path}`);
+      assert.equal((await response.json()).code, "UNAUTHENTICATED", `${label}: ${path}`);
+    }
+    const edit = await request(`/api/v2-backend/jobs/${draftJob}/work-plan`, { cookies: bad,
+      body: planEdit(plan, plan.tasks[0], { durationMinutes: 45 }) });
+    assert.equal(edit.status, 401, `${label}: work-plan edit`);
+    const tap = await request(`/api/v2-backend/jobs/${draftJob}/attendance`, { cookies: bad, body: tapCommand(day) });
+    assert.equal(tap.status, 401, `${label}: attendance tap`);
+    const live = await request(`/api/v2-backend/jobs/${draftJob}/quotes/activation`, { cookies: bad,
+      body: { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" } });
+    assert.equal(live.status, 401, `${label}: switch live`);
+  }
+  // Every V2 save also needs a configured origin (rule 21); a foreign or missing origin writes nothing.
+  const posts = [[`/api/v2-backend/jobs/${draftJob}/work-plan`, planEdit(plan, plan.tasks[0], { durationMinutes: 45 })],
+    [`/api/v2-backend/jobs/${draftJob}/attendance`, tapCommand(day)],
+    [`/api/v2-backend/jobs/${draftJob}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" }]];
+  for (const [path, body] of posts) {
+    for (const headers of [{ origin: "https://other.example.invalid" }, {}]) {
+      const response = await fetch(`${origin}${path}`, { method: "POST",
+        headers: { "content-type": "application/json", cookie: cookies, ...headers }, body: JSON.stringify(body) });
+      assert.equal(response.status, 403, path);
+      assert.equal((await response.json()).code, "ORIGIN_FORBIDDEN", path);
+    }
+  }
+  assert.deepEqual({ edits: await edits(), effects: await effectCounts() }, before, "nothing written");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_site_attendance WHERE job_id = $1", [draftJob])).rows[0].n, 0,
+    "no attendance tap");
+  assert.notEqual((await admin.query("SELECT status FROM app.job WHERE id = $1", [draftJob])).rows[0].status, "live", "not switched live");
+  // And the paired builder's own save still goes through.
+  await json(await request(`/api/v2-backend/jobs/${draftJob}/work-plan`, { cookies, body: planEdit(plan, plan.tasks[0], { durationMinutes: 45 }) }));
+  assert.equal(await edits(), before.edits + 1);
 });
 
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
