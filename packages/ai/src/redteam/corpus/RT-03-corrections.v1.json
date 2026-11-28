@@ -3372,5 +3372,185 @@
       ]
     },
     "status": "pass"
+  },
+  {
+    "id": "RT-03-222",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a hundred and twenty pounds",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a hundred and twenty pounds"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-223",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a grand",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a grand"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-224",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a couple of hundred",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a couple of hundred"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-225",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make it a thousand and fifty quid",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it a thousand and fifty quid"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-226",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, cancel that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "cancel that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-227",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, scrap that and paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "scrap that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-228",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, forget that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "forget that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
   }
 ]

@@ -67,12 +67,15 @@ export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, th
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
+// A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
+const unreadNumber = `(?:\\d[\\d,.]*k?|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|k|point|half|halves|quarters?|thirds?|couple|few|dozen|score)(?![\\p{L}]))`;
+const withdrawal = /\b(?:scratch|scrap|forget|cancel)\b/iu;
 // One correction marker guard for splitting, price safety and the builder's question. Never choose between said values.
 export const spokenCorrection = new RegExp(
-  `\\b(?:(?:no[\\s,]+)?make\\s+(?:that|it)(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
+  `\\b(?:(?:no[\\s,]+)?make\\s+(?:that|it)(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])|a[\\s-]+${unreadNumber}))` +
   `|oh[\\s,]+it['’]?s|it['’]?s\\s+actually` +
   `|actually|sorry|i\\s+mean(?:t)?|hang\\s+on|wait|nah|nope|no(?!\\s+(?:vat|more|less|charge)\\b)` +
-  `|(?:scratch|scrap|forget|cancel)\\b|start\\s+again|correction|not(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
+  `|${withdrawal.source}|start\\s+again|correction|not(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
   `|(?:change|revise|replace)\\s+(?:(?:that|the|first)\\s+)*(?:price|figure|amount|first\\s+item|room)\\b|change\\s+the\\s+first\\s+item|change\\s+that\\s+to|revise\\b[^.;!?\\r\\n]{0,60}?\\bprice|the\\b[^.;!?\\r\\n]{0,60}?\\bfigure\\s+was\\s+wrong` +
   `|that\\s+(?:should\\s+be|was\\s+euros|figure\\s+is\\s+a\\s+credit)` +
   `|(?:do\\s+not|don't)\\s+(?:use|bother)|we\\s+are\\s+not\\s+doing|leave\\b[^.;!?\\r\\n]{0,60}?\\bout|cannot\\s+give\\s+a\\s+figure` +
@@ -124,8 +127,6 @@ export function amounts(said: string): Amount[] {
 }
 // A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
 const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|—|to|or))\\s*$`, "iu");
-// A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
-const unreadNumber = `(?:\\d[\\d,.]*k?|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|k|point|half|halves|quarters?|thirds?|couple|few|dozen|score)(?![\\p{L}]))`;
 const unreadBefore = new RegExp(`${unreadNumber}(?:[\\s-]+(?:and|a|an|of))*[\\s-]*$`, "iu");
 const unreadAfter = new RegExp(`^(?:[\\s-]+(?:and|a|an|of)(?![\\p{L}]))*[\\s-]+${unreadNumber}`, "iu");
 /**
@@ -246,14 +247,19 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   const party = suggestCapturePartyClause(text);
   const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
     .map(match => [match.index, match.index + match[0].length]));
-  let start = 0, correctionInChunkEnd = -1;
+  let start = 0, correctionInChunkEnd = -1, correctionNeedsAmount = false;
   for (let i = 0; i < text.length; i++) {
     if (party && i === party.start) { i = party.end - 1; continue; }
     // A correction marker stays with its source span, including internal commas.
     const correctionEnd = correctionEnds.get(i);
-    if (correctionEnd !== undefined) { correctionInChunkEnd = correctionEnd; i = correctionEnd - 1; continue; }
+    if (correctionEnd !== undefined) {
+      correctionInChunkEnd = correctionEnd;
+      correctionNeedsAmount = !withdrawal.test(text.slice(i, correctionEnd));
+      i = correctionEnd - 1; continue;
+    }
     const char = text[i]!;
-    const awaitingCorrection = correctionInChunkEnd >= start && !amounts(text.slice(correctionInChunkEnd, i)).length;
+    // Withdrawals are complete without a replacement number; the next work item can start after them.
+    const awaitingCorrection = correctionNeedsAmount && correctionInChunkEnd >= start && !amounts(text.slice(correctionInChunkEnd, i)).length;
     // A decimal point or thousands separator belongs to the amount.
     if ((/[.!?;\r\n]/u.test(char) || char === "—" && spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) && !points.has(i)) {
       if (char === "." && /\bapprox$/iu.test(text.slice(start, i)) && /^\s*£?\d/u.test(text.slice(i + 1))) continue;

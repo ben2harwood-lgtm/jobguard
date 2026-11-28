@@ -1186,3 +1186,58 @@ parser implementation hash changes in the golden record.
 exit 0, 935 tests / 3 files passed. This includes every RV-01, RT-02 and RT-03
 corpus case with its existing expectations; RT-01 410 pass / 101 open, RT-02
 127 / 48, RT-03 145 / 0. Existing open findings remain open. No push.
+
+## RT-FIX-6 repair round 2 (last) — Codex review of PR #1089 at 819c2c7e
+
+Base `819c2c7e`, normal prerequisite merge `0482dd943` (RT-FIX-5 repair 2,
+`bfac404e2`); branch `codex/sandbox/rt-fix-6`. Both requested issues are repaired:
+
+- P1: the make-that/make-it lookahead reuses the existing `unreadNumber` spoken
+  number/fraction/multiplier recognizer after “a”, including hundred, grand and
+  couple. There is no second amount-word list. These corrections keep one open
+  item and a targeted question; ordinary “Make that wall good” work still passes.
+- P2: the existing withdrawal words share one recognizer between the correction
+  marker and its pending-amount state. Cancel/scrap/forget withdrawals no longer
+  wait for a replacement number; the shared item-boundary helper closes them
+  before independent comma/and-led work. The sink is open with a withdrawal
+  question, and the wall retains its own cited £200.
+- Added seven pass corpus cases, `RT-03-222`–`RT-03-228`: the supplied spoken
+  amount and cancel examples, grand/couple/make-it variants, scrap-and and
+  forget-comma withdrawals. Every existing corpus entry, status and expectation,
+  `rt03-corrections.test.ts`, and `capture-qualified-price.test.ts` is unchanged.
+  The only golden-record change is the parser implementation SHA-256.
+
+Commands actually run (Node 24.17.0, pnpm 10.28.1; Vitest capped at two workers):
+
+| Check | Result |
+| --- | --- |
+| Before merge/fix: `pnpm eval --maxWorkers=2` | exit 0; 29 files / 1,405 tests passed |
+| New cases on merged, unrepaired source: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2` | expected exit 1; exactly seven new failures / 883 passes |
+| Repaired: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts src/redteam/rt03-corrections.test.ts src/capture-qualified-price.test.ts --maxWorkers=2` | exit 0; 3 files / 942 tests passed |
+| After: `pnpm eval --maxWorkers=2` | exit 0; 29 files / 1,420 tests passed |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai typecheck` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai lint` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai build` | exit 0 |
+| Node assertion using fresh compiled evaluation and golden-record verification | exit 0; entire pre-merge and final golden records equal except parser hash |
+| Node probes of both LATER cases below, across capture / reader / checked reader | both reproduced; one open combined line on every path |
+| Corpus preservation, finding-ID uniqueness, allowed-path / golden hash-only assertions and `git diff --check` | exit 0 |
+
+No golden score drop: 32/32 cases, scope recall 41/41, valid citations 119/119,
+unsupported monetary facts 0, ambiguity checks 63/63. Shared corpus: RT-00
+3 pass / 2 open; RT-01 (including RV-01) 410 / 101; RT-02 127 / 48; RT-03
+152 / 0. Existing open corpus findings remain open. The following adjacent P2
+coverage gaps were observed and deliberately left for later, as requested:
+
+| ID | Severity | Status | Location and reproducer | Expected / observed |
+| --- | --- | --- | --- | --- |
+| RT-FIX-6-L01 | P2 | LATER | `capture-fixture-parser.ts`, `plainDraft` pending amount; “Fit the door £100, make that a grand, paint the wall £200” | Keep the wall separately priced; `amounts()` does not read “a grand”, so the correction still absorbs the wall into one open line. No extra charge; not fixed here. |
+| RT-FIX-6-L02 | P2 | LATER | `capture-fixture-parser.ts`, `plainDraft` pending amount; “Fit the sink £100, do not bother with that, paint the wall £200” | Keep the wall separately priced; the longer withdrawal cue still waits for a number and absorbs the wall into one open line. No extra charge; not fixed here. |
+
+Invariants touched: corrections retract superseded money without creating work;
+withdrawal questions stay with the affected item; independent work and original
+source citations survive. No migration, interface, prompt/model/provider,
+commercial-policy or alert change. Database, browser/native and live-model checks
+are inapplicable to this deterministic parser-only repair. These are executed
+checks, not independent review, merge acceptance or release approval; exact-head
+review remains pending. The initial LATER / SIMPLICITY note is retained. Commit
+only, no push; `.pnpm-store/` is excluded.
