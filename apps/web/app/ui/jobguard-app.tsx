@@ -117,11 +117,21 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
       fixtureId:"deterministic-local-v1"
     };
     const snapshot=JSON.stringify(input);
-    let captureId=captureIds.current.get(snapshot);
-    if(!captureId){captureId=crypto.randomUUID();captureIds.current.set(snapshot,captureId);}
     // The ref closes the same-tick double-click window before React renders disabled controls.
     submitting.current=true;setBusy(true);setMessage("Making your draft…");
     try {
+      let captureId=captureIds.current.get(snapshot);
+      if(!captureId){
+        // Survive a reload after an unknown outcome without storing source words.
+        // The digest includes tenant, exact text and dictation provenance.
+        const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(snapshot));
+        const key=`jobguard-capture-v1:${tenantId}:${Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("")}`;
+        const stored=sessionStorage.getItem(key);
+        captureId=stored===null?crypto.randomUUID():z.uuid().parse(stored);
+        // Fail before sending if retry identity cannot be retained for a reload.
+        sessionStorage.setItem(key,captureId);
+        captureIds.current.set(snapshot,captureId);
+      }
       const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
       if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
       const captured=await response.json() as CaptureResult;

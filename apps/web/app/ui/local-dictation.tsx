@@ -76,7 +76,7 @@ export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk throu
   function stopLoading(){stopped.current=true;cancelLocalSpeech(engine.current);setLoading(false);setMessage("")}
   function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");failed(listeningFailure(code))},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);failed("failed")}}
   function stop(){session.current?.stop();setInterim("")}
-  function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("");setFinalText("");raw.current=[]}
+  function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("")}
   const buttonClass=designed?"btn":undefined;
   return <section className={designed?"dictation card card-body form":"dictation"} aria-label="On-device dictation">
     <h2>Say the job out loud</h2>

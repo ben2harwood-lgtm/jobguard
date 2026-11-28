@@ -68,16 +68,20 @@ function captureServer() {
   vi.stubGlobal("fetch", fetcher);
   return { saved, requests, fetcher };
 }
-function panel() {
+function panel(tenantId = "tenant") {
   const captured = vi.fn();
-  const render = () => { hooks.render(); return WalkIt({ tenantId: "tenant", initialText: firstSource, close: vi.fn(), onCaptured: captured }); };
+  const render = () => { hooks.render(); return WalkIt({ tenantId, initialText: firstSource, close: vi.fn(), onCaptured: captured }); };
   const source = (tree: React.ReactNode) => all(tree, node => node.type === "textarea")[0]!;
   const button = (tree: React.ReactNode) => all(tree, node => node.type === "button" && text(node.props.children) === "Make my draft")[0]!;
   const edit = (value: string) => source(render()).props.onChange({ target: { value } });
-  const submit = async () => { button(render()).props.onClick(); await flush(); };
+  const submit = async () => { button(render()).props.onClick(); await vi.waitFor(() => expect(button(render()).props.disabled).toBe(false)); };
   return { render, source, button, edit, submit, captured };
 }
-beforeEach(() => { hooks.reset(); vi.stubGlobal("React", React); });
+beforeEach(() => {
+  hooks.reset(); vi.stubGlobal("React", React);
+  const stored = new Map<string, string>();
+  vi.stubGlobal("sessionStorage", { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) });
+});
 afterEach(() => { hooks.cleanup(); vi.unstubAllGlobals(); });
 
 it("makes a new draft from edited source, preserves earlier drafts, and reuses each exact submitted snapshot", async () => {
@@ -113,6 +117,42 @@ it("reuses the full request after a lost response without making another saved d
   expect(p.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-1" }));
 });
 
+it("RV4-01: reload after a lost capture response retries the original identity and recovers one job", async () => {
+  const server = captureServer(), p = panel();
+  const persist = server.fetcher.getMockImplementation()!;
+  server.fetcher.mockImplementationOnce(async (...args) => { await persist(...args); throw new Error("Connection lost after save"); });
+  await p.submit();
+  expect(server.saved.size).toBe(1);
+  hooks.reset(); // Reload loses all React state, while browser session storage survives.
+  const reloaded = panel();
+  await reloaded.submit();
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(1);
+  expect(reloaded.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-1" }));
+});
+
+it("keeps persisted capture identities separate for another business and edited source after reload", async () => {
+  const server = captureServer();
+  await panel().submit();
+  hooks.reset();
+  const edited = panel(); edited.edit(editedSource); await edited.submit();
+  hooks.reset(); await panel("another-tenant").submit();
+  expect(new Set(server.requests.map(request => request.captureId)).size).toBe(3);
+  hooks.reset(); await panel().submit();
+  expect(server.requests[3]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(3);
+});
+
+it("does not send a capture until its retry identity can survive reload", async () => {
+  const server = captureServer();
+  vi.stubGlobal("sessionStorage", { getItem: () => null, setItem: () => { throw new Error("Storage unavailable"); } });
+  const p = panel(); await p.submit();
+  expect(server.fetcher).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+  expect(text(p.render())).toContain("Your original text is still here");
+  expect(p.button(p.render()).props.disabled).toBe(false);
+});
+
 it("suppresses same-tick double clicks while the first draft request is pending", async () => {
   const server = captureServer(), p = panel();
   const persist = server.fetcher.getMockImplementation()!;
@@ -121,6 +161,8 @@ it("suppresses same-tick double clicks while the first draft request is pending"
   server.fetcher.mockImplementationOnce(async (...args) => { await pending; return persist(...args); });
   const button = p.button(p.render());
   button.props.onClick(); button.props.onClick();
+  expect(p.button(p.render()).props.disabled).toBe(true);
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(1));
   expect(server.fetcher).toHaveBeenCalledTimes(1);
   expect(p.button(p.render()).props.disabled).toBe(true);
   expect(p.source(p.render()).props.disabled).toBe(true);
@@ -170,6 +212,7 @@ it.each(["Stop listening", "Cancel dictation"])("keeps %s usable during a pendin
   callbacks.final(editedSource, "fictional-speech-1");
   expect(adapter.start).toHaveBeenCalledTimes(1);
   p.button(p.render()).props.onClick();
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(1));
   expect(server.fetcher).toHaveBeenCalledTimes(1);
   expect(p.source(p.render()).props.disabled).toBe(true);
   // Native fieldset disabling overrides each child's own disabled prop.
@@ -253,6 +296,29 @@ function fakeAdapter(availability: LocalAvailability, install: LocalSpeechAdapte
     start: vi.fn(() => ({ stop: vi.fn(), cancel: vi.fn() })),
   } satisfies LocalSpeechAdapter;
 }
+
+it("RV4-04: cancelling a second dictation keeps the completed transcript and its raw provenance", async () => {
+  let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
+  const cancel = vi.fn(), onUse = vi.fn();
+  const adapter: LocalSpeechAdapter = {
+    ...fakeAdapter("installed"),
+    start: vi.fn(next => { callbacks = next; return { stop: () => callbacks.end(), cancel }; }),
+  };
+  const solo = soloDictation(adapter, { onUse });
+  solo.render(); await flush();
+  solo.button()!.props.onClick(); await flush();
+  callbacks.final("Paint walls", "first"); callbacks.end();
+  solo.button()!.props.onClick(); await flush();
+  callbacks.interim("and fit shelves");
+  expect(text(solo.render())).toContain("and fit shelves");
+  solo.button("Cancel dictation")!.props.onClick();
+  expect(cancel).toHaveBeenCalledTimes(1);
+  const tree = solo.render();
+  expect(text(tree)).not.toContain("and fit shelves");
+  expect(all(tree, node => node.type === "textarea")[0]?.props.value).toBe("Paint walls");
+  solo.button("Use these words")!.props.onClick();
+  expect(onUse).toHaveBeenCalledExactlyOnceWith("Paint walls", "Paint walls");
+});
 
 it("gives each microphone failure its own message, and says how to allow a refused one", () => {
   expect(dictationMessage("denied")).toBe("JobGuard can't use your microphone. To allow it, open this site's settings from the address bar, allow Microphone, then press Talk through a quote again. You can type the job below instead.");
