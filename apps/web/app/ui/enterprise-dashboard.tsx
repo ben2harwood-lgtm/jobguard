@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { BASELINE_METHOD_V1, dashboardDimensions, type dashboardQueryV1 } from "@jobguard/core";
 import { z } from "zod";
 import type { EnterpriseDashboardApplication, EnterpriseBaselineApplication } from "@jobguard/api/workspace";
@@ -26,29 +26,49 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   if (!response.ok) throw new Error(value.code ?? "DASHBOARD_UNAVAILABLE");
   return value as T;
 }
-export function DashboardView({ activity, billing }: { activity: Activity; billing: Billing }) {
+/** One figure's drill-down: a total (no group) or one group's figure. */
+type Figure = { resource: "activity" | "billing"; stage: string; group?: string | null };
+type Drill = { key: string; offset: number; total: number; rows: unknown[] };
+const drillPage = 200;
+const figureKey = (f: Figure) => `${f.resource}|${f.stage}|${f.group === undefined ? "*" : f.group ?? "~"}`;
+/** A figure's sources: its first page from the report, or the page last requested for it, with its own page controls. */
+function Sources<T>({ figure, first, total, drill, onPage, render }: { figure: Figure; first: T[]; total: number; drill?: Drill | null | undefined;
+  onPage?: ((figure: Figure, offset: number) => void) | undefined; render: (row: T, index: number) => ReactNode }) {
+  const own = drill?.key === figureKey(figure) ? drill : null, rows = own ? own.rows as T[] : first, offset = own?.offset ?? 0;
+  return <>{rows.length > 0 && <ul>{rows.map(render)}</ul>}
+    {total > rows.length && <p>Sources {offset + 1}–{offset + rows.length} of {total}{onPage && <>{" "}
+      <button type="button" disabled={offset === 0} onClick={() => onPage(figure, Math.max(0, offset - drillPage))}>Previous sources</button>{" "}
+      <button type="button" disabled={offset + rows.length >= total} onClick={() => onPage(figure, offset + rows.length)}>Next sources</button></>}</p>}</>;
+}
+export function DashboardView({ activity, billing, drill, onPage }: { activity: Activity; billing: Billing; drill?: Drill | null; onPage?: (figure: Figure, offset: number) => void }) {
   const { report } = activity, signals = "observations" in activity.signals ? activity.signals : null;
   const partial = !report.contributionPage.complete || report.groups.some(g => !g.contributionPage.complete) || !billing.contributionPage.complete;
   return <>
     <h2>Captured and approved extras</h2>
     <p>Activity and billing are separate server reads. Reload to refresh both. Group pages show a subset; each total below has its complete source drill-down.</p>
-    {partial && <p role="status">Long lists show their first {report.contributionPage.limit} sources per total ({report.groups[0]?.contributionPage.limit ?? 20} per group figure). Every total still counts all of its sources.</p>}
+    {partial && <p role="status">Long lists show their first {report.contributionPage.limit} sources per total ({report.groups[0]?.contributionPage.limit ?? 20} per group figure); use Next sources to see the rest. Every total still counts all of its sources.</p>}
     {Object.entries(report.totals).filter(([, value]) => value !== null).map(([stage, total]) => total && <details key={stage}>
       <summary>{stageLabels[stage]}: {total.count}{(stage === "captured" || stage === "approved") && <> · known net {pounds(total.known.pence)} · unknown values {total.unknownCount}</>}</summary>
-      <ul>{report.contributions.filter(c => c.stage === stage).map((c, i) => <li key={i}>Job {c.jobId} · extras {c.extraIds.join(", ") || "none"} · {c.value ? pounds(c.value.pence) : "Value unknown / not applicable"} · sources {c.sourceIds.join(", ")}</li>)}</ul>
+      <Sources figure={{ resource: "activity", stage }} first={report.contributions.filter(c => c.stage === stage)} total={total.count} drill={drill} onPage={onPage}
+        render={(c: Activity["report"]["contributions"][number], i) => <li key={i}>Job {c.jobId} · extras {c.extraIds.join(", ") || "none"} · {c.value ? pounds(c.value.pence) : "Value unknown / not applicable"} · sources {c.sourceIds.join(", ")}</li>}/>
     </details>)}
     <p>Close-out yes / answered: {report.closeoutRate.status === "computed" ? `${report.closeoutRate.numerator}/${report.closeoutRate.denominator}` : "Not computable"}.</p>
     <h3>Activity groups ({report.groupCount} total)</h3>
-    {report.groups.map(g => <details key={g.id ?? "unattributed"}><summary>{g.id ?? "Unattributed"}</summary><ul>{Object.entries(g.totals).map(([stage, total]) => <li key={stage}>{stageLabels[stage]}: {total.count}{(stage === "captured" || stage === "approved") && <> · known net {pounds(total.known.pence)} · unknown values {total.unknownCount}</>}</li>)}</ul><ul>{g.contributions.map((c, i) => <li key={i}>{stageLabels[c.stage]} · job {c.jobId} · extras {c.extraIds.join(", ") || "none"} · sources {c.sourceIds.join(", ")}</li>)}</ul></details>)}
+    {report.groups.map(g => <details key={g.id ?? "unattributed"}><summary>{g.id ?? "Unattributed"}</summary><ul>{Object.entries(g.totals).map(([stage, total]) => <li key={stage}>{stageLabels[stage]}: {total.count}{(stage === "captured" || stage === "approved") && <> · known net {pounds(total.known.pence)} · unknown values {total.unknownCount}</>}
+      <Sources figure={{ resource: "activity", stage, group: g.id }} first={g.contributions.filter(c => c.stage === stage)} total={total.count} drill={drill} onPage={onPage}
+        render={(c: Activity["report"]["contributions"][number], i) => <li key={i}>{stageLabels[c.stage]} · job {c.jobId} · extras {c.extraIds.join(", ") || "none"} · sources {c.sourceIds.join(", ")}</li>}/></li>)}</ul></details>)}
     <h2>Billed and paid</h2>
     <p>Latest imported balances for the capture cohort, including credits and reversals. These are observations, not fee entitlement.</p>
     {!billing.complete && <p role="alert">Incomplete allocation runs: {billing.held.map(h => `${h.extraId} (run ${h.runId})`).join(", ")}. Figures are partial.</p>}
     {(["billed", "paid"] as const).map(stage => <details key={stage}><summary>{stage}: {billing.totals[stage].count} extras · net {exactPounds(billing.totals[stage].exactPence)}</summary>
-      <ul>{billing.contributions.filter(c => c.stage === stage).map((c, i) => <li key={i}>Job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)} · export line {c.exportLineId} · revision {c.revisionId} · fact {c.factId} · run {c.runId} · allocations {c.allocationIds.join(", ") || "none"} · input hash {c.inputHash}</li>)}</ul>
+      <Sources figure={{ resource: "billing", stage }} first={billing.contributions.filter(c => c.stage === stage)} total={billing.totals[stage].count} drill={drill} onPage={onPage}
+        render={(c: Billing["contributions"][number], i) => <li key={i}>Job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)} · export line {c.exportLineId} · revision {c.revisionId} · fact {c.factId} · run {c.runId} · allocations {c.allocationIds.join(", ") || "none"} · input hash {c.inputHash}</li>}/>
     </details>)}
     <h3>Billing groups ({billing.groupCount} total)</h3>
     {billing.groups.map(g => <details key={g.id ?? "unattributed"}><summary>{g.id ?? "Unattributed"} · billed {exactPounds(g.totals.billed.exactPence)} · paid {exactPounds(g.totals.paid.exactPence)}</summary>
-      <ul>{billing.contributions.filter(c => c.group === g.id).map((c, i) => <li key={i}>{c.stage} · job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)}</li>)}</ul></details>)}
+      {(["billed", "paid"] as const).filter(stage => g.totals[stage].count > 0).map(stage => <Sources key={stage} figure={{ resource: "billing", stage, group: g.id }}
+        first={g.contributions.filter(c => c.stage === stage)} total={g.totals[stage].count} drill={drill} onPage={onPage}
+        render={(c: Billing["contributions"][number], i) => <li key={i}>{c.stage} · job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)}</li>}/>)}</details>)}
     {signals ? <><h2>Advisory signals</h2><p>Advisory only. These observations never change prices, counts, states, fees or statements.</p>
     <p>Unmatched “other” invoice lines may be variations; review the cited invoice fact and allocation run. They do not prove a variation or fee entitlement. Unattributed invoice lines are excluded from operative views and filters. “No” close-out outliers: {signals.outliers.status}. {signals.outliers.status === "supplied_synthetic_policy" ? signals.outliers.policy?.text : "No answered visits in the selected population."}</p>
     {signals.observations.length ? <ul>{signals.observations.map(s => <li key={s.id}>{signalLabels[s.kind]} · job {s.jobId} · extras {s.extraIds.join(", ") || "none"} · sources {s.sourceIds.join(", ")}</li>)}</ul> : <p>No observations from the available sources.</p>}</> : <p role="status">Advisory signals were not computed: this selection has more than {"bound" in activity.signals ? activity.signals.bound : 0} source rows. Narrow the period or filter.</p>}
@@ -90,10 +110,11 @@ export function EnterpriseDashboard() {
   }, []);
   const [activity, setActivity] = useState<Activity | null>(null), [billing, setBilling] = useState<Billing | null>(null), [baseline, setBaseline] = useState<Baseline | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [batchId, setBatchId] = useState("");
+  const [lastQuery, setLastQuery] = useState<Query | null>(null), [drill, setDrill] = useState<Drill | null>(null);
   async function run(work: () => Promise<void>) {
     setBusy(true); setMessage("");
     // Clear previously authorized data even if the next request fails after a membership change.
-    setActivity(null); setBilling(null); setBaseline(null);
+    setActivity(null); setBilling(null); setBaseline(null); setDrill(null);
     try { await work(); } catch (e) { setMessage(`Request refused (${e instanceof Error ? e.message : "DASHBOARD_UNAVAILABLE"}). Reload after checking your company session and scope.`); }
     finally { setBusy(false); }
   }
@@ -103,8 +124,22 @@ export function EnterpriseDashboard() {
       const query = { version: "enterprise-dashboard-query.v1", from: `${data.get("from")}T00:00:00Z`, until: `${data.get("until")}T00:00:00Z`, dimension: data.get("dimension"),
         filters: data.get("filterId") ? { [String(data.get("filterDimension"))]: data.get("filterId") } : {}, offset: Number(data.get("offset")), limit: 20 } as Query;
       const [a, b] = await Promise.all([post<Activity>("dashboard", { version: "enterprise-dashboard-request.v1", resource: "activity", query }), post<Billing>("dashboard", { version: "enterprise-dashboard-request.v1", resource: "billing", query })]);
-      setActivity(a); setBilling(b);
+      setActivity(a); setBilling(b); setLastQuery(query);
     });
+  }
+  /** Pages one figure through its own drill-down; every request rechecks the session and scope on the server. */
+  function pageFigure(figure: Figure, offset: number) {
+    if (!lastQuery) return;
+    const query = { ...lastQuery, drilldown: { stage: figure.stage, ...(figure.group === undefined ? {} : { group: figure.group }), offset, limit: drillPage } } as Query;
+    setBusy(true); setMessage("");
+    void post<Activity | Billing>("dashboard", { version: "enterprise-dashboard-request.v1", resource: figure.resource, query }).then(result => {
+      const page = figure.resource === "activity" ? (result as Activity).report.drilldown : (result as Billing).drilldown;
+      setDrill(page ? { key: figureKey(figure), offset, total: page.total, rows: page.contributions } : null);
+    }).catch((e: unknown) => {
+      // As for a full reload, a refused page clears every previously authorized figure.
+      setActivity(null); setBilling(null); setDrill(null);
+      setMessage(`Request refused (${e instanceof Error ? e.message : "DASHBOARD_UNAVAILABLE"}). Reload after checking your company session and scope.`);
+    }).finally(() => setBusy(false));
   }
   function importHistory(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget);
@@ -143,6 +178,6 @@ export function EnterpriseDashboard() {
       <label htmlFor="baseline-output-format">Export format</label> <select id="baseline-output-format" name="outputFormat"><option value="json">JSON</option><option value="csv">CSV</option></select><button>Compare baseline</button>
     </form></fieldset>
     {busy && <p role="status">Loading…</p>}{message && <p role="status">{message}</p>}
-    {activity && billing && <DashboardView activity={activity} billing={billing}/>}{baseline && <BaselineView baseline={baseline}/>}
+    {activity && billing && <DashboardView activity={activity} billing={billing} drill={drill} onPage={pageFigure}/>}{baseline && <BaselineView baseline={baseline}/>}
   </main>;
 }

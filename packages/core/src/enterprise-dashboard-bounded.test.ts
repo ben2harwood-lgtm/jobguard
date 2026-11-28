@@ -32,7 +32,7 @@ it("refuses a short page that is not the last page, and drill-down replies that 
 
 it("builds the database selection only from the parsed query", () => {
   const parsed = dashboardQueryV1.parse({ ...query, filters: { team: id(9).toUpperCase(), operative: null }, drilldown: { stage: "approved", offset: 4, limit: 2 } });
-  expect(dashboardSelectionParams(parsed)).toEqual({ from: query.from, until: query.until, filters: { team: id(9), operative: null }, dimension: "team",
+  expect(dashboardSelectionParams(parsed)).toEqual({ resource: "activity", from: query.from, until: query.until, filters: { team: id(9), operative: null }, dimension: "team",
     periodLabel: `${query.from}/${query.until}`, groupOffset: 0, groupLimit: 20, pageLimit: 200, groupPageLimit: 20,
     drill: { stage: "approved", hasGroup: false, group: null, offset: 4, limit: 2 } });
   for (const extra of [{ sql: "x" }, { drilldown: { stage: "captured", offset: 0, limit: 201 } }, { drilldown: { stage: "fee", offset: 0, limit: 1 } }])

@@ -58,3 +58,24 @@ it("binds the first two practice teams in the given order", () => {
   expect(practiceTeamBindings(teams.slice(0, 1))).toBe("");
   expect(renderToStaticMarkup(<EnterpriseDashboard/>)).not.toContain("Use two practice teams");
 });
+
+it("gives each figure its own source pages: a partial group figure offers Next, and a requested page replaces only that figure's list", () => {
+  const rows = Array.from({ length: 21 }, (_, i) => ({ ...captured, extraIds: [id(100 + i)], sourceIds: [id(200 + i)] }));
+  const totals = { captured: { count: 21, known: "0", unknownCount: 21 } };
+  const report = assembleEnterpriseDashboardReport({ version: "enterprise-dashboard-aggregate.v1", cutoff: facts.cutoff, sourceHash: "b".repeat(64), totals, groupCount: 1,
+    groups: [{ id: id(4), totals, contributions: rows.slice(0, 20) }], contributions: rows, drilldown: null }, query);
+  const billing = projectStoredDashboardBilling(facts, query, [row]), onPage = () => undefined;
+  const first = renderToStaticMarkup(<DashboardView activity={{ report, signals }} billing={billing} onPage={onPage}/>);
+  expect(first).toContain("Sources 1–20 of 21");
+  expect(first).toMatch(/<button type="button">Next sources<\/button>/u);
+  expect(first.split(`extras ${id(120)}`).length).toBe(2); // the 21st source: in the complete total, not the group's first page
+  // Billing groups list their own sources, not a slice of the global first page.
+  expect(first).toContain(`billed · job ${id(1)} · extra ${id(2)}`);
+  const paged = renderToStaticMarkup(<DashboardView activity={{ report, signals }} billing={billing} onPage={onPage}
+    drill={{ key: `activity|captured|${id(4)}`, offset: 20, total: 21, rows: [rows[20]] }}/>);
+  expect(paged).toContain("Sources 21–21 of 21");
+  expect(paged).toContain(`extras ${id(120)} · sources ${id(220)}`);
+  expect(paged).toMatch(/<button type="button">Previous sources<\/button> <button type="button" disabled="">Next sources<\/button>/u);
+  // The total's own list is unchanged by the group's page.
+  expect(paged.split(`extras ${id(119)}`).length).toBe(2);
+});

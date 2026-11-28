@@ -17,6 +17,7 @@
         "packages/core/src/enterprise-dashboard.ts",
         "packages/db/src/enterprise-dashboard-queries.ts",
         "packages/db/src/enterprise-dashboard-repository.ts",
+        "packages/db/test/enterprise-dashboard-bounded-billing.integration.test.ts",
         "packages/db/test/enterprise-dashboard-bounded-fixtures.ts",
         "packages/db/test/enterprise-dashboard-bounded.integration.test.ts",
         "packages/db/test/enterprise-dashboard-plan.integration.test.ts",

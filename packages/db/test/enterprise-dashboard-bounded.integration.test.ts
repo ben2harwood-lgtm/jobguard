@@ -85,7 +85,13 @@ async function compare(session: string, query: Query) {
   if (!has([...ref.facts.extras, ...ref.facts.closeouts, ...ref.billed.rows])) await expect(read(session, query)).rejects.toMatchObject({ code: "NOT_FOUND" });
   else { const { report } = await read(session, query); expectSameAsReference(report, projectEnterpriseDashboard({ ...ref.facts, cutoff: report.cutoff }, query)); }
   if (!has(ref.facts.extras)) await expect(readBilling(session, query)).rejects.toMatchObject({ code: "NOT_FOUND" });
-  else expect(await readBilling(session, query)).toEqual(projectStoredDashboardBilling(ref.facts, query, ref.billing));
+  else {
+    // Billing hashes bind the database's own source hash (EP-F6 repair 1); every other field must be equal.
+    const { inputHash, outputHash, ...bounded } = await readBilling(session, query);
+    const { inputHash: _i, outputHash: _o, ...expected } = projectStoredDashboardBilling(ref.facts, query, ref.billing);
+    expect(bounded).toEqual(expected);
+    expect([inputHash, outputHash].every(h => /^[a-f0-9]{64}$/u.test(h))).toBe(true);
+  }
 }
 const dims = async () => (await reference(w.finance)).facts.extras.map(e => e.dimensions);
 

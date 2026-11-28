@@ -111,7 +111,7 @@ const dashboardBilledSignalSelect = ` SELECT f.id, jsonb_build_object('jobId',f.
  -- A newly imported fact without a successor run must never reuse a stale balance.
  AND NOT EXISTS(SELECT 1 FROM app.billing_fact newer WHERE(newer.tenant_id,newer.job_id,newer.source,newer.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
   AND newer.server_recorded_at>r.server_recorded_at)`;
-const dashboardBillingRows = (source: string) => ` coalesce((SELECT jsonb_agg(jsonb_build_object(
+const dashboardBillingRowObject = `jsonb_build_object(
   'jobId',e.job_id,'extraId',e.variation_id,'exportLineId',l.id,'revisionId',l.revision_id,'runId',r.id,
   'factId',f.id,'inputHash',r.input_hash,'lineId',m.external_invoice_line_id,
   'billedNet',coalesce(summary->'billedNet','{"numerator":"0","denominator":"1"}'::jsonb),
@@ -120,14 +120,17 @@ const dashboardBillingRows = (source: string) => ` coalesce((SELECT jsonb_agg(js
   'rejected',coalesce(summary->'rejected','false'::jsonb),'complete',summary IS NOT NULL AND jsonb_array_length(r.projection->'held')=0,
   'allocations',coalesce((SELECT jsonb_agg(a.id ORDER BY a.id) FROM app.contractor_receipt_line_allocation a
    WHERE(a.tenant_id,a.run_id,a.export_line_id)=(r.tenant_id,r.id,l.id)),'[]'::jsonb)
- ) ORDER BY l.id)
+ )`;
+/** Matched export lines of canonical extras in `source`, at their latest allocation run. */
+const dashboardBillingRowsFrom = (source: string) => `
  FROM ${source} e JOIN app.billing_export_line l ON(l.tenant_id,l.job_id,l.extra_id)=(e.tenant_id,e.job_id,e.variation_id)
  JOIN app.billing_line_match m ON(m.tenant_id,m.line_job_id,m.export_line_id)=(l.tenant_id,l.job_id,l.id)
  JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id) AND f.payload->>'factType'='invoiced'
  JOIN app.billing_allocation_run r ON(r.tenant_id,r.job_id,r.source,r.invoice_number)=(f.tenant_id,f.job_id,f.source,f.invoice_number)
  LEFT JOIN LATERAL jsonb_array_elements(r.projection->'lines') summary ON summary->>'lineId'=m.external_invoice_line_id
  WHERE e.canonical_id=e.variation_id
- AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE(n.tenant_id,n.predecessor_id)=(r.tenant_id,r.id))
+ AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE(n.tenant_id,n.predecessor_id)=(r.tenant_id,r.id))`;
+const dashboardBillingRows = (source: string) => ` coalesce((SELECT jsonb_agg(${dashboardBillingRowObject} ORDER BY l.id)${dashboardBillingRowsFrom(source)}
  ),'[]'::jsonb)`;
 export const enterpriseDashboardSourceSql = `${dashboardAuthorityCtes}), requests AS MATERIALIZED (
  SELECT q.* FROM app.extra_approval_request q JOIN extras e ON(e.tenant_id,e.job_id,e.variation_id)=(q.tenant_id,q.job_id,q.variation_id)
@@ -174,13 +177,25 @@ const contributionJson = (c: string) => `jsonb_build_object('stage',${c}.stage,'
   'value',CASE WHEN ${c}.value IS NOT NULL THEN jsonb_build_object('pence',${c}.value,'currency','GBP') END,'group',${c}.grp)`;
 /** The reference projection's order: extras by id (capture, approval, steps by id), then close-outs by source. */
 const order = (c: string) => `${c}.family,${c}.k1 COLLATE "C",${c}.seq,${c}.k2 COLLATE "C",${c}.sub`;
+/** The figure a row belongs to under the requested grouping (period = the requested interval). */
+const groupOf = (x: string) => `CASE sel.p->>'dimension' WHEN 'region' THEN ${x}.region_id::text WHEN 'team' THEN ${x}.team_id::text WHEN 'operative' THEN ${x}.operative_id::text
+  WHEN 'client' THEN ${x}.client_id::text WHEN 'contract' THEN ${x}.contract_id::text ELSE sel.p->>'periodLabel' END`;
+const resourceIs = (resource: "activity" | "billing") => `(SELECT sel.p->>'resource' FROM sel)='${resource}'`;
+const fraction = (json: string, part: "numerator" | "denominator") => `(${json}->>'${part}')::numeric`;
+const billingRowJson = (c: string) => `jsonb_build_object('stage',${c}.stage,'jobId',${c}.content->'jobId','extraId',${c}.content->'extraId','group',${c}.grp,
+  'exportLineId',${c}.content->'exportLineId','revisionId',${c}.content->'revisionId','runId',${c}.content->'runId','factId',${c}.content->'factId',
+  'inputHash',${c}.content->'inputHash','allocationIds',${c}.content->'allocations','exactPence',jsonb_build_object('numerator',${c}.num::text,'denominator',${c}.den::text))`;
+/** Exact fraction sums: every numerator is scaled to one common denominator (the lcm in billing_scale). */
+const billingTotalsJson = (where: string) => `coalesce((SELECT jsonb_object_agg(t.stage,jsonb_build_object('count',t.n,'numerator',t.total::text))
+  FROM (SELECT c.stage,count(*) n,sum(c.num*div(s.l,c.den)) total FROM billing_contributions c CROSS JOIN billing_scale s WHERE ${where} GROUP BY c.stage) t),'{}'::jsonb)`;
 const totalsJson = (where: string) => `coalesce((SELECT jsonb_object_agg(t.stage,jsonb_build_object('count',t.n,'known',t.known::text,'unknownCount',t.unknown))
   FROM (SELECT c.stage,count(*) n,coalesce(sum(c.value),0) known,count(*) FILTER(WHERE c.value IS NULL) unknown FROM contributions c WHERE ${where} GROUP BY c.stage) t),'{}'::jsonb)`;
 /**
  * EP-F6 bounded read. The authority CTEs are the SAME text as `enterpriseDashboardSourceSql`; period and dimension
  * filters apply only after them, to canonical captures and completed visits. Totals, groups and close-out counts are
- * aggregated here over every selected row, with exact bigint sums. Only one page of groups and one page of each
- * drill-down leave the database. Facts/signal/billing inputs are built only when within `dashboardInputBound`;
+ * aggregated here over every selected row, with exact bigint sums; stored billed/paid balances are grouped and summed
+ * here as exact fractions over one common denominator. Only one page of groups and one page of each drill-down leave
+ * the database. `$3.resource` selects activity or billing, so a read builds only its own figures. Facts/signal/billing inputs are built only when within `dashboardInputBound`;
  * otherwise their counts are returned so the caller can say so. $3 is the server-built selection (never client SQL).
  */
 export const enterpriseDashboardSelectionSql = `${dashboardAuthorityCtes}), sel AS MATERIALIZED (
@@ -214,8 +229,7 @@ export const enterpriseDashboardSelectionSql = `${dashboardAuthorityCtes}), sel 
 ), selected_visits AS MATERIALIZED (
  SELECT v.* FROM visits v CROSS JOIN sel WHERE ${inPeriod("v.completed_at")}${matchesFilters(jobColumns("v", "v.operative_id"))}
 ), contributions AS MATERIALIZED (
- SELECT x.*,CASE sel.p->>'dimension' WHEN 'region' THEN x.region_id::text WHEN 'team' THEN x.team_id::text WHEN 'operative' THEN x.operative_id::text
-  WHEN 'client' THEN x.client_id::text WHEN 'contract' THEN x.contract_id::text ELSE sel.p->>'periodLabel' END grp
+ SELECT x.*,${groupOf("x")} grp
  FROM sel CROSS JOIN (
   SELECT 'captured'::text stage,0 family,0 seq,0 sub,b.job_id,b.variation_id::text k1,''::text k2,b.extra_ids,${sortedText("b.commands||b.price_id")} source_ids,b.price_net value,
    b.region_id,b.team_id,b.operative_id,b.client_id,b.contract_id FROM base b
@@ -264,9 +278,39 @@ ${dashboardOrderLineSelect}
 ), selected_billed_signals AS MATERIALIZED (
  SELECT b.* FROM billed_signal_json b CROSS JOIN sel
  WHERE ${inPeriod("(b.content->>'at')::timestamptz")}${matchesFilters(jsonColumns("b.content"))}
+), billing_rows AS MATERIALIZED (
+ -- EP-F6: stored ENT-6 balances for the selected canonical extras only; grouped and paged below, never collected whole.
+ SELECT e.region_id,e.team_id,e.operative_id,e.client_id,e.contract_id,e.variation_id extra_id,l.id::text export_line_id,${dashboardBillingRowObject} content
+ ${dashboardBillingRowsFrom("selected")}
+), billing_contributions AS MATERIALIZED (
+ SELECT x.*,${groupOf("x")} grp FROM sel CROSS JOIN (
+  SELECT 'billed'::text stage,b.*,${fraction("b.content->'billedNet'", "numerator")}*${fraction("b.content->'creditedNet'", "denominator")}
+   -${fraction("b.content->'creditedNet'", "numerator")}*${fraction("b.content->'billedNet'", "denominator")} num,
+   ${fraction("b.content->'billedNet'", "denominator")}*${fraction("b.content->'creditedNet'", "denominator")} den
+  FROM billing_rows b WHERE NOT (b.content->>'rejected')::boolean
+  UNION ALL
+  SELECT 'paid',b.*,${fraction("b.content->'paidNet'", "numerator")},${fraction("b.content->'paidNet'", "denominator")}
+  FROM billing_rows b WHERE NOT (b.content->>'rejected')::boolean
+ ) x WHERE x.num>0 AND x.den>0
+), billing_scale AS MATERIALIZED (
+ WITH RECURSIVE d AS (SELECT u.den,row_number() OVER(ORDER BY u.den) n FROM (SELECT DISTINCT den FROM billing_contributions) u),
+  f(n,l) AS (SELECT 0::bigint,1::numeric UNION ALL SELECT f.n+1,lcm(f.l,d.den) FROM f JOIN d ON d.n=f.n+1)
+ SELECT l FROM f ORDER BY n DESC LIMIT 1
+), billing_ranked AS MATERIALIZED (
+ SELECT c.*,row_number() OVER(PARTITION BY c.stage ORDER BY c.export_line_id COLLATE "C") stage_rank,
+  row_number() OVER(PARTITION BY c.grp,c.stage ORDER BY c.export_line_id COLLATE "C") group_rank
+ FROM billing_contributions c
+), billing_group_page AS MATERIALIZED (
+ SELECT g.grp,g.n FROM (SELECT d.grp,row_number() OVER(ORDER BY coalesce(d.grp,'') COLLATE "C") n FROM (SELECT DISTINCT grp FROM billing_contributions) d) g CROSS JOIN sel
+ WHERE g.n>(sel.p->>'groupOffset')::bigint AND g.n<=(sel.p->>'groupOffset')::bigint+(sel.p->>'groupLimit')::bigint
+), billing_drill AS MATERIALIZED (
+ SELECT r.*,CASE WHEN (sel.p->'drill'->>'hasGroup')::boolean THEN r.group_rank ELSE r.stage_rank END drill_rank FROM billing_ranked r CROSS JOIN sel
+ WHERE jsonb_typeof(sel.p->'drill')='object' AND r.stage=sel.p->'drill'->>'stage'
+  AND (NOT (sel.p->'drill'->>'hasGroup')::boolean OR r.grp IS NOT DISTINCT FROM sel.p->'drill'->>'group')
 ), counts AS MATERIALIZED (
- SELECT (SELECT count(*) FROM members) members,(SELECT count(*) FROM selected_visits) visits,(SELECT count(*) FROM order_json) order_lines,
-  (SELECT count(*) FROM selected_billed_signals) billed_signals
+ -- Signal inputs exist only for activity reads; billing reads never build them.
+ SELECT a.* FROM (SELECT 1) one LEFT JOIN LATERAL (SELECT (SELECT count(*) FROM members) members,(SELECT count(*) FROM selected_visits) visits,
+  (SELECT count(*) FROM order_json) order_lines,(SELECT count(*) FROM selected_billed_signals) billed_signals WHERE ${resourceIs("activity")}) a ON true
 )
 SELECT EXISTS(SELECT 1 FROM grants) authorized,
  NOT EXISTS(SELECT 1 FROM extras d JOIN extras c ON(c.tenant_id,c.job_id,c.variation_id)=(d.tenant_id,d.job_id,d.canonical_id) WHERE c.canonical_id<>c.variation_id)
@@ -278,7 +322,7 @@ SELECT EXISTS(SELECT 1 FROM grants) authorized,
    (CASE f.key WHEN 'region' THEN e.region_id WHEN 'team' THEN e.team_id WHEN 'operative' THEN ${operativeOf("e")} WHEN 'client' THEN e.client_id ELSE e.contract_id END)
     IS NOT DISTINCT FROM (f.value #>> '{}')::uuid)) FROM sel) billing_visible,
  (SELECT to_jsonb(k) FROM counts k) counts,
- jsonb_build_object('version','enterprise-dashboard-aggregate.v1','cutoff',to_char((SELECT cutoff FROM sel) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+ CASE WHEN ${resourceIs("activity")} THEN jsonb_build_object('version','enterprise-dashboard-aggregate.v1','cutoff',to_char((SELECT cutoff FROM sel) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'sourceHash',encode(sha256(coalesce((SELECT string_agg(sha256(convert_to(concat_ws('|',c.stage,c.job_id,c.k1,c.k2,array_to_string(c.extra_ids,','),
     array_to_string(c.source_ids,','),coalesce(c.value::text,'-'),coalesce(c.grp,'-')),'UTF8')),'' ORDER BY c.stage COLLATE "C",${order("c")}) FROM contributions c),''::bytea)),'hex'),
   'totals',${totalsJson("true")},
@@ -291,18 +335,37 @@ SELECT EXISTS(SELECT 1 FROM grants) authorized,
   'drilldown',(SELECT CASE WHEN jsonb_typeof(sel.p->'drill')='object' THEN jsonb_build_object('total',(SELECT count(*) FROM drill),
    'contributions',coalesce((SELECT jsonb_agg(${contributionJson("d")} ORDER BY d.drill_rank) FROM drill d
     WHERE d.drill_rank>(sel.p->'drill'->>'offset')::bigint AND d.drill_rank<=(sel.p->'drill'->>'offset')::bigint+(sel.p->'drill'->>'limit')::bigint),'[]'::jsonb)) END FROM sel)
- ) report,
- CASE WHEN k.members<=${dashboardInputBound} AND k.visits<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-dashboard-facts.v1',
+ ) END report,
+ CASE WHEN ${resourceIs("billing")} THEN (SELECT count(*)=count(DISTINCT extra_id) FROM billing_rows) AND NOT EXISTS(SELECT 1 FROM billing_rows b WHERE
+  ${fraction("b.content->'billedNet'", "denominator")}<=0 OR ${fraction("b.content->'creditedNet'", "denominator")}<=0 OR ${fraction("b.content->'paidNet'", "denominator")}<=0) END billing_integrity,
+ CASE WHEN ${resourceIs("billing")} THEN jsonb_build_object('version','enterprise-dashboard-billing-aggregate.v1',
+  'sourceHash',encode(sha256(coalesce((SELECT string_agg(sha256(convert_to(concat_ws('|',b.content::text,coalesce(b.region_id::text,'-'),b.team_id,coalesce(b.operative_id::text,'-'),
+    b.client_id,b.contract_id),'UTF8')),'' ORDER BY b.export_line_id COLLATE "C") FROM billing_rows b),''::bytea)),'hex'),
+  'scale',(SELECT l::text FROM billing_scale),
+  'totals',${billingTotalsJson("true")},
+  'groupCount',(SELECT count(*) FROM (SELECT DISTINCT grp FROM billing_contributions) d),
+  'groups',coalesce((SELECT jsonb_agg(jsonb_build_object('id',g.grp,'totals',${billingTotalsJson("c.grp IS NOT DISTINCT FROM g.grp")},
+    'contributions',coalesce((SELECT jsonb_agg(${billingRowJson("r")} ORDER BY r.stage,r.export_line_id COLLATE "C") FROM billing_ranked r CROSS JOIN sel
+     WHERE r.grp IS NOT DISTINCT FROM g.grp AND r.group_rank<=(sel.p->>'groupPageLimit')::bigint),'[]'::jsonb)) ORDER BY g.n) FROM billing_group_page g),'[]'::jsonb),
+  'contributions',coalesce((SELECT jsonb_agg(${billingRowJson("r")} ORDER BY r.stage,r.export_line_id COLLATE "C") FROM billing_ranked r CROSS JOIN sel
+   WHERE r.stage_rank<=(sel.p->>'pageLimit')::bigint),'[]'::jsonb),
+  'drilldown',(SELECT CASE WHEN jsonb_typeof(sel.p->'drill')='object' THEN jsonb_build_object('total',(SELECT count(*) FROM billing_drill),
+   'contributions',coalesce((SELECT jsonb_agg(${billingRowJson("d")} ORDER BY d.drill_rank) FROM billing_drill d
+    WHERE d.drill_rank>(sel.p->'drill'->>'offset')::bigint AND d.drill_rank<=(sel.p->'drill'->>'offset')::bigint+(sel.p->'drill'->>'limit')::bigint),'[]'::jsonb)) END FROM sel),
+  'heldCount',(SELECT count(*) FROM billing_rows b WHERE NOT (b.content->>'complete')::boolean),
+  'held',(SELECT CASE WHEN count(*)<=${dashboardInputBound} THEN coalesce(jsonb_agg(jsonb_build_object('extraId',b.extra_id,'runId',b.content->'runId') ORDER BY b.export_line_id COLLATE "C"),'[]'::jsonb) END
+   FROM billing_rows b WHERE NOT (b.content->>'complete')::boolean)
+ ) END billing_report,
+ CASE WHEN ${resourceIs("activity")} AND k.members<=${dashboardInputBound} AND k.visits<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-dashboard-facts.v1',
   'cutoff',to_char((SELECT cutoff FROM sel) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
   'extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM extra_rows),'[]'::jsonb),
   'closeouts',coalesce((SELECT jsonb_agg(jsonb_build_object('jobId',v.job_id,'sourceId',v.source_id,'at',to_char(v.completed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
    'dimensions',jsonb_build_object('region',v.region_id,'team',v.team_id,'operative',v.operative_id,'client',v.client_id,'contract',v.contract_id),'answer',v.answer) ORDER BY v.id) FROM selected_visits v),'[]'::jsonb),
   'billing',jsonb_build_object('status','held','prerequisite','ENT-6B')) END facts,
- CASE WHEN k.members<=${dashboardInputBound} AND k.order_lines<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-signal-facts.v1',
+ CASE WHEN ${resourceIs("activity")} AND k.members<=${dashboardInputBound} AND k.order_lines<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-signal-facts.v1',
   'extras',coalesce((SELECT jsonb_agg(content ORDER BY variation_id) FROM signal_extra),'[]'::jsonb),
   'orderLines',coalesce((SELECT jsonb_agg(content ORDER BY id) FROM order_json),'[]'::jsonb),'billedVariations','[]'::jsonb,'closeouts','[]'::jsonb,'outlierPolicy',NULL) END signals,
- CASE WHEN k.billed_signals<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-billed-signal-rows.v1',
-  'rows',coalesce((SELECT jsonb_agg(content ORDER BY id,content->'line'->>'externalInvoiceLineId') FROM selected_billed_signals),'[]'::jsonb)) END signal_billing,
- CASE WHEN k.members<=${dashboardInputBound} THEN ${dashboardBillingRows("selected")} END billing
+ CASE WHEN ${resourceIs("activity")} AND k.billed_signals<=${dashboardInputBound} THEN jsonb_build_object('version','enterprise-billed-signal-rows.v1',
+  'rows',coalesce((SELECT jsonb_agg(content ORDER BY id,content->'line'->>'externalInvoiceLineId') FROM selected_billed_signals),'[]'::jsonb)) END signal_billing
 FROM counts k
 `;

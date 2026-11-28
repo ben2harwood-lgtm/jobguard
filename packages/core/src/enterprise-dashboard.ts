@@ -127,9 +127,9 @@ export function projectEnterpriseDashboard(raw: unknown, rawQuery: unknown) {
 export const dashboardPageLimits = Object.freeze({ contributions: 200, groupContributions: 20 });
 type DashboardQuery = z.infer<typeof dashboardQueryV1>;
 /** Server-built selection for the bounded database read. Values come only from the parsed query. */
-export function dashboardSelectionParams(query: DashboardQuery) {
+export function dashboardSelectionParams(query: DashboardQuery, resource: "activity" | "billing" = "activity") {
   const d = query.drilldown;
-  return { from: query.from, until: query.until, filters: query.filters, dimension: query.dimension, periodLabel: `${query.from}/${query.until}`,
+  return { resource, from: query.from, until: query.until, filters: query.filters, dimension: query.dimension, periodLabel: `${query.from}/${query.until}`,
     groupOffset: query.offset, groupLimit: query.limit, pageLimit: dashboardPageLimits.contributions, groupPageLimit: dashboardPageLimits.groupContributions,
     drill: d ? { stage: d.stage, hasGroup: d.group !== undefined, group: d.group ?? null, offset: d.offset, limit: d.limit } : null };
 }
