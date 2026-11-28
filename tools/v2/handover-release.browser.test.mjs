@@ -1,0 +1,84 @@
+// V2-G3 (Q57): release a handover version and acknowledge it as the customer, at 360px. Run against the
+// checked V2 seed, using the launcher's web or HTTPS phone origin.
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { after, before, test } from "node:test";
+import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
+import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
+import { migrationUrl } from "./settings.mjs";
+
+const origin = process.env.V2_TEST_ORIGIN;
+assert.ok(origin, "Set V2_TEST_ORIGIN to the V2 launcher's web or HTTPS phone origin");
+let browser, ownerState, admin;
+before(async () => {
+  admin = new Pool({ connectionString: migrationUrl, max: 1 });
+  browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
+  const owner = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    // Copied from the G2 browser test until BH1's shared helper is on this base.
+    const page = await owner.newPage();
+    await page.goto(origin + "/sign-in");
+    await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
+    await page.getByLabel("What do you want to do?").selectOption("signin");
+    await page.getByRole("button", { name: "Request code", exact: true }).click();
+    const code = page.getByTestId("fixture-code");
+    await expect(code).toHaveText(/^[0-9]{8}$/u);
+    await page.getByLabel("Eight-digit code").fill(await code.textContent());
+    await page.getByRole("button", { name: "Verify code", exact: true }).click();
+    await expect(page).toHaveURL(origin + "/practice-company");
+    ownerState = await owner.storageState();
+  } finally { await owner.close(); }
+});
+after(async () => { await browser?.close(); await admin?.end(); });
+
+test("V2-G3 at 360px: release v1, the customer acknowledges, release v2, and v1's link says a newer version is available", { timeout: 120000 }, async () => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
+  const customer = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true });
+  try {
+    const jobId = (await (await context.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")).json()).jobs[0].id;
+    await context.request.post(`${origin}/api/jobs/${jobId}/quotes/activation`, { headers: { origin },
+      data: { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" } });
+    // No V2 command completes site work yet; the fixture marks every scope item complete.
+    await admin.query("UPDATE app.scope_progress SET stage='complete', revision=revision+1 WHERE job_id=$1 AND stage<>'complete'", [jobId]);
+    const save = async () => {
+      const versions = (await (await context.request.get(`${origin}/api/jobs/${jobId}/handover`)).json()).versions;
+      const response = await context.request.post(`${origin}/api/jobs/${jobId}/handover`, { headers: { origin }, data: {
+        version: "v2-handover-save-command.v1", commandId: randomUUID(), expectedVersion: versions.at(-1)?.version ?? 0,
+        choice: { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] } } });
+      assert.equal(response.status(), 200);
+      return (await response.json()).saved.version;
+    };
+    const v1 = await save();
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/handover`);
+    const releases = page.getByTestId("handover-releases");
+    await expect(releases).toContainText("Release is independent of the financial lock.");
+    await releases.getByRole("button", { name: `Release this version · version ${v1}` }).click();
+    const first = await releases.getByTestId("handover-link").getAttribute("href");
+    await expect(releases).toContainText(`Version ${v1} released to customer@jobguard-v2.invalid`);
+    await expect(releases).toContainText("acknowledgement pending");
+
+    const pack = await customer.newPage();
+    await pack.goto(first);
+    const view = pack.getByTestId("handover-pack-page");
+    await expect(view).toContainText("Receipt only: acknowledging this pack does not agree the account or sign off any snag.");
+    await view.getByRole("button", { name: "Acknowledge receipt" }).click();
+    await expect(view.getByRole("status")).toContainText("Receipt acknowledged");
+    for (const button of await view.getByRole("button").all()) assert.ok((await button.boundingBox()).height >= 44, "44px buttons");
+    assert.ok(await pack.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no sideways scroll at 360px");
+
+    const v2 = await save();
+    await page.reload();
+    await page.getByTestId("handover-releases").getByRole("button", { name: `Release this version · version ${v2}` }).click();
+    await expect(page.getByTestId("handover-releases")).toContainText("a newer version was released");
+    await pack.reload();
+    await expect(pack.getByTestId("handover-pack-page")).toContainText("Newer version available");
+    await expect(pack.getByTestId("handover-pack-page")).toContainText(`version ${v1}`);
+    if (process.env.V2_TEST_SCREENSHOTS) {
+      await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
+      await pack.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, "g3-handover-pack-360.png"), fullPage: true });
+    }
+  } finally { await customer.close(); await context.close(); }
+});
