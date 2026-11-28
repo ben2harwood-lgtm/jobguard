@@ -21,3 +21,86 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
    The outer paint leaves its text position and the workspace layout unchanged. */
 .jgd .work-heading>.page-head{background:var(--white);border-radius:10px;box-shadow:0 0 0 12px var(--white)}
 .jgd .work-heading .kicker{color:var(--teal2)}
+
+/* Capture, scope review and customer/site use the reference form and card classes.
+   Reset the shared classic layout only for these instances. */
+.jgd .designed-workspace.workspace-page{width:100%;max-width:none;margin:0;padding:0}
+.jgd :is(.designed-capture,.designed-review,.designed-parties){max-width:none;min-width:0;overflow-wrap:anywhere}
+.jgd :is(.designed-capture,.designed-review) h1{margin:6px 0;font:500 clamp(25px,4vw,36px)/1.2 Georgia,serif;color:var(--ink)}
+.jgd :is(.designed-capture,.designed-review) .back{padding-inline:0;margin-bottom:8px}
+.jgd :is(.designed-capture,.designed-review,.designed-parties) .btn:focus-visible,
+.jgd :is(.designed-capture,.designed-review,.designed-parties) :is(input,select,textarea,summary,a):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd :is(.designed-capture,.designed-review,.designed-parties) .btn:disabled{opacity:.62;cursor:not-allowed}
+.jgd .designed-capture .dictation{align-items:start;gap:8px;margin:18px 0 0}
+.jgd .designed-capture .dictation button{margin:0}
+.jgd .designed-capture .walk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px;margin-top:16px}
+.jgd .designed-capture .walk-grid > .card{margin-top:0}
+.jgd .designed-capture .walk-input{gap:10px}
+.jgd .designed-capture .walk-input label{margin:0}
+.jgd .designed-capture .walk-input textarea{margin:0;height:205px;min-height:150px}
+.jgd .designed-capture .result-message:empty{display:none}
+.jgd .capture-proposal li{padding:8px 0;border-bottom:1px solid var(--line)}
+.jgd .capture-proposal li span{margin-inline-start:8px;white-space:nowrap}
+.jgd .capture-proposal details{margin-bottom:12px}
+.jgd :is(.capture-proposal,.designed-review) pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.jgd .designed-parties{margin-bottom:18px}
+.jgd .designed-parties > * + *{margin-top:10px}
+.jgd .designed-parties form fieldset{grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr));align-items:start}
+.jgd .designed-parties form fieldset > :is(p,button){grid-column:1/-1;justify-self:start}
+.jgd .designed-parties dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;padding:12px;background:#f0f8fa;border-radius:7px}
+.jgd .designed-parties dd{margin:0;font-weight:650}
+.jgd .designed-review .review-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(245px,1fr);gap:16px;margin-top:16px}
+.jgd .designed-review .review-line-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.jgd .designed-review .review-line-head strong{font-size:12px}
+.jgd .designed-review .review-line{gap:8px}
+.jgd .designed-review .review-line label{margin:0}
+.jgd .designed-review .review-line blockquote{margin:0;padding:8px 12px;border-color:#bfd5de;background:#f0f8fa}
+.jgd .designed-review .review-line .line-actions .btn{padding-inline:6px}
+.jgd .designed-review .review-side{position:sticky;top:60px;align-self:start}
+.jgd .designed-review .review-side > .card + .card{margin-top:12px}
+.jgd .designed-review .review-side > .btn{margin-top:8px}
+.jgd .designed-review .review-side .confirm{width:auto}
+.jgd .designed-review.confirmed-scope > :is(p,button){margin-top:10px}
+@media(max-width:760px){
+  .jgd .designed-capture .walk-grid,.jgd .designed-review .review-layout{grid-template-columns:minmax(0,1fr)}
+  .jgd .designed-review .review-side{position:static}
+}
+.jgd .designed-review .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Fit the reference cards and form to the saved quote's editable lines and document facts. */
+.jgd .designed-quote.quote-editor{max-width:none;min-width:0;overflow-wrap:anywhere}
+.jgd .designed-quote[hidden]{display:none}
+.jgd .designed-quote>h1{margin:6px 0;font:500 clamp(25px,4vw,36px)/1.2 Georgia,serif}
+.jgd .designed-quote>.back{padding-inline:0}
+.jgd .designed-quote>details>summary{padding:10px 0;color:var(--teal2);cursor:pointer}
+.jgd .designed-quote .quote-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(275px,1fr);gap:16px;margin-top:0;align-items:start}
+.jgd .designed-quote .quote-layout>.card{margin:0}
+.jgd .designed-quote .quote-layout h2:not(.jgd-legacy *){margin:0 0 8px;font-size:16px}
+.jgd .designed-quote .quote-layout>.form{gap:12px}
+.jgd .designed-quote .quote-layout>.form>:is(h2,label){margin:0;max-width:none}
+.jgd .designed-quote .quote-line{background:var(--pale);border-radius:8px;margin:0;padding:12px}
+.jgd .designed-quote .quote-line-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.jgd .designed-quote .quote-line-head label{align-items:center;margin:0}
+.jgd .designed-quote .price-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.jgd .designed-quote .price-grid label{min-width:0;margin:0}
+.jgd .designed-quote .quote-side{display:grid;gap:12px;position:static;min-width:0}
+.jgd .designed-quote .quote-side>:is(.card,.btn,.note,p){margin:0}
+.jgd .designed-quote .coverage .btn{width:auto;max-width:100%;white-space:normal}
+.jgd .designed-quote .quote-blockers.note{display:block}
+.jgd .designed-quote .quote-actions.form{gap:10px}
+.jgd .designed-quote .quote-recipient{display:flex;flex-direction:column;gap:5px;color:#33566d;font-size:12px;font-weight:650}
+.jgd .designed-quote .document-preview.form{gap:8px}
+.jgd .designed-quote .document-preview .btn{margin:0}
+.jgd .designed-quote [aria-label="Delivery facts"]{display:grid;gap:6px}
+.jgd .designed-quote [aria-label="Delivery facts"]>p{margin:0}
+.jgd .designed-quote .quote-delivery-state{grid-row:2;padding:8px 10px;border-radius:7px;background:#f0f8fa;color:#33566d;font-weight:650}
+.jgd .designed-quote fieldset fieldset{min-width:0}
+.jgd .designed-quote fieldset fieldset>.btn{margin:4px 4px 4px 0;max-width:100%;white-space:normal}
+.jgd .designed-quote :is(.btn,input,select,summary,a):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd .designed-quote .btn:disabled{opacity:.62;cursor:not-allowed}
+@media(max-width:760px){.jgd .designed-quote .quote-layout{display:grid;grid-template-columns:minmax(0,1fr)}}
+.jgd .designed-quote .totals dl{display:grid;gap:8px;margin:10px 0 0}
+.jgd .designed-quote .totals dl>div{display:flex;justify-content:space-between;gap:10px}
+.jgd .designed-quote .totals dd{margin:0;font-weight:750}
+.jgd .designed-quote .totals .grand{padding-top:8px;border-top:1px solid var(--line)}
+.jgd .designed-quote .quote-line small{color:var(--muted)}
