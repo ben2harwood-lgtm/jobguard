@@ -44,6 +44,8 @@ export type CrewBriefContent = {
     durationMinutes: number;
     visit: string | null;
     owner: string | null;
+    // C3C's linked crew record, only when the task is assigned to one (older briefs stay byte-identical).
+    ownerRef?: string;
     proofNeeded: string[];
   }[];
   photos: { evidenceId: string; scopeItemId: string | null; contentType: string }[];
@@ -202,8 +204,8 @@ export class CrewBriefRepository {
     return row;
   }
 
-  // The accepted plan's tasks with every builder edit applied. This reads only
-  // identifiers, scope wording and edits: never the agreement's money.
+  // The accepted plan's tasks, approved extras included, with every builder edit applied. This reads only
+  // identifiers, scope wording, edits and whether an approved change adds work: never an amount.
   private async planTasks(client: PoolClient, tenantId: string, jobId: string) {
     const { rows: [head] } = await client.query<{ quoteRevisionId: string | null; templateKey: string | null }>(`
       SELECT q.quote_revision_id AS "quoteRevisionId", p.template_key AS "templateKey"
@@ -240,6 +242,35 @@ export class CrewBriefRepository {
       return [{ ...details, position: index + 1, scopeItemId: row.scope_item_id,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) }];
     });
+    // Approved extras on their own scope items join the plan after the quote lines, by the plan's own rule.
+    // Only the sign of an approved change decides whether it is work to plan; no amount leaves the query.
+    const { rows: approved } = await client.query<{ scopeItemId: string; source: WorkPlanScopeRow["source"];
+      addition: boolean; onQuote: boolean; createdAt: Date; variationId: string }>(`
+      SELECT DISTINCT ON (a.variation_id) r.scope_item_id AS "scopeItemId", r.signed_delta_pence > 0 AS addition,
+        jsonb_build_object('description', r.description, 'category', p.category,
+          'quantity', r.quantity_decimal, 'unit', r.unit) AS source,
+        EXISTS (SELECT FROM app.quote_line q WHERE (q.tenant_id, q.job_id, q.quote_revision_id, q.scope_item_id)
+          = ($1, $2, $3, r.scope_item_id)) AS "onQuote",
+        v.created_at AS "createdAt", a.variation_id AS "variationId"
+      FROM app.variation_approval a JOIN app.variation_revision r
+        ON (r.tenant_id, r.job_id, r.variation_id, r.id, r.revision, r.content_hash)
+         = (a.tenant_id, a.job_id, a.variation_id, a.revision_id, a.revision, a.content_hash)
+      JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (a.tenant_id, a.job_id, a.variation_id)
+      LEFT JOIN app.quote_line p ON (p.tenant_id, p.job_id, p.quote_revision_id, p.scope_item_id)
+        = (v.tenant_id, v.job_id, $3, v.lineage_parent_scope_item_id)
+      WHERE (a.tenant_id, a.job_id) = ($1, $2) AND r.signed_delta_pence = a.signed_delta_pence
+      ORDER BY a.variation_id, a.revision DESC
+    `, key);
+    const seen = new Set<string>();
+    const extras: WorkPlanScopeRow[] = approved.filter(row => !row.onQuote)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.variationId < b.variationId ? -1 : 1))
+      .filter(row => !seen.has(row.scopeItemId) && seen.add(row.scopeItemId))
+      .filter(row => row.addition)
+      .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
+    const extraTasks = extras.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
+      .map(({ category: _category, ...task }): WorkPlanTask => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
+        dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) })))
+      .map((task, index) => ({ ...task, position: base.length + index + 1 }));
     const { rows: edits } = await client.query<WorkPlanEditRow>(`
       WITH RECURSIVE history AS (
         SELECT quote_revision_id, previous_plan_revision_id, 0 AS distance FROM app.v2_work_plan
@@ -249,15 +280,21 @@ export class CrewBriefRepository {
         FROM history h JOIN app.v2_work_plan p ON (p.tenant_id, p.job_id, p.quote_revision_id)
           = ($1, $2, h.previous_plan_revision_id)
       )
-      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes,
-        jsonb_build_object('description', l.description, 'category', l.category,
-          'quantity', l.quantity_decimal, 'unit', l.unit) AS source
+      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes, CASE WHEN e.variation_revision_id IS NULL
+        THEN jsonb_build_object('description', l.description, 'category', l.category, 'quantity', l.quantity_decimal, 'unit', l.unit)
+        ELSE jsonb_build_object('description', r.description, 'category', p.category, 'quantity', r.quantity_decimal, 'unit', r.unit)
+        END AS source
       FROM history h JOIN app.v2_work_plan_edit e ON (e.tenant_id, e.job_id, e.quote_revision_id) = ($1, $2, h.quote_revision_id)
-      JOIN app.quote_line l ON (l.tenant_id, l.job_id, l.quote_revision_id, l.scope_item_id)
+      LEFT JOIN app.quote_line l ON e.variation_revision_id IS NULL AND (l.tenant_id, l.job_id, l.quote_revision_id, l.scope_item_id)
         = (e.tenant_id, e.job_id, e.quote_revision_id, e.scope_item_id)
+      LEFT JOIN app.variation_revision r ON (r.tenant_id, r.job_id, r.id) = (e.tenant_id, e.job_id, e.variation_revision_id)
+      LEFT JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (r.tenant_id, r.job_id, r.variation_id)
+      LEFT JOIN app.quote_line p ON (p.tenant_id, p.job_id, p.quote_revision_id, p.scope_item_id)
+        = (e.tenant_id, e.job_id, e.quote_revision_id, v.lineage_parent_scope_item_id)
+      WHERE l.scope_item_id IS NOT NULL OR r.id IS NOT NULL
       ORDER BY h.distance DESC, e.expected_version
     `, key);
-    const { tasks, sources } = applyWorkPlanEdits(scope, base, edits);
+    const { tasks, sources } = applyWorkPlanEdits([...scope, ...extras], [...base, ...extraTasks], edits);
     return { tenantId, jobId, quoteRevisionId: head.quoteRevisionId, tasks, sources };
   }
 
@@ -291,6 +328,7 @@ export class CrewBriefRepository {
         return { position: index + 1, scopeItemId: task.scopeItemId, taskKey: task.key, title: task.title,
           scope: { description: source.description, quantity: source.quantity, unit: source.unit },
           durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: owner(task),
+          ...(task.assigneeRef && { ownerRef: task.assigneeRef }),
           proofNeeded: [...task.proofPoints] };
       }),
       photos: photos as CrewBriefContent["photos"],

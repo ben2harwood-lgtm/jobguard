@@ -765,6 +765,21 @@ async function verifyTenantChain(tenantId) {
   assert.doesNotThrow(() => verifyAuditChain(rows));
 }
 
+// Generates a crew brief and rolls it back, so a test can check the brief mid-way and leave nothing stored.
+async function previewBrief(sessionId, trade) {
+  const rollingBack = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client);
+    client.query = (sql, ...rest) => query(sql === "COMMIT" ? "ROLLBACK" : sql, ...rest);
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  return new CrewBriefRepository(rollingBack).generate(context, jobId, sessionId, { version: "v2-crew-brief-command.v1",
+    commandId: randomUUID(), trade, expectedVersion: 0, accessWindow: "Any weekday", photoIds: [] });
+}
+
 test("existing Switch live activates a plan once and only approved variation revisions regenerate money scope", async () => {
   const { cookies, sessionId, csrfToken } = await signIn("builder");
   const { workPlan, variation, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
@@ -849,6 +864,12 @@ test("existing Switch live activates a plan once and only approved variation rev
     scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
   assert.deepEqual(updated.unplanned, live.unplanned);
   assert.deepEqual(updated.agreement, expected);
+  // The joiner's crew brief carries the planned extra with its edits, and still no money.
+  const joinerBrief = await previewBrief(sessionId, "joiner");
+  assert.deepEqual(joinerBrief.content.tasks.map(task => [task.scopeItemId, task.taskKey, task.title, task.scope, task.visit,
+    task.owner]), [[scopeItemId, customTaskKey, "Add trim", { description: "Add trim", quantity: "1", unit: "item" },
+    "2026-12-10", "Fictional Jo Joiner"]]);
+  assert.doesNotMatch(JSON.stringify(joinerBrief.content), /12500|pence|price/iu);
   const { rows: saved } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
     WHERE (job_id, scope_item_id) = ($1, $2)`, [jobId, scopeItemId]);
   assert.deepEqual(saved, [{ variation_revision_id: revisionId }, { variation_revision_id: revisionId }]);
@@ -950,6 +971,12 @@ test("existing Switch live activates a plan once and only approved variation rev
     { scopeItemId, title: "Trim no longer needed", reason: "omission", planningDropped: true });
   assert.equal(flipped.agreement.approvedVariations.find(item => item.scopeItemId === scopeItemId).signedDeltaPence, -12500);
   assert.equal(flipped.version, replanned.version, "removal by approval records no plan edit");
+  // Omitted and no-charge extras are not crew work either.
+  await assert.rejects(previewBrief(sessionId, "joiner"), { code: "CREW_BRIEF_TRADE_NOT_FOUND" });
+  assert.deepEqual((await previewBrief(sessionId, "tiler")).content.tasks.map(task => task.scopeItemId),
+    flipped.tasks.filter(task => task.trade === "tiler").map(task => task.scopeItemId));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_crew_brief WHERE job_id = $1", [jobId])).rows[0].n, 0,
+    "previews leave no brief behind");
   assert.deepEqual(await effectCounts(), beforeApproval, "omissions schedule, send, book, order and charge nothing");
 
   const state = await workState.get(jobId);
@@ -1439,7 +1466,9 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
     [quoteRevisionId]);
   for (const brief of [first, decorator]) {
-    const text = JSON.stringify(brief.content);
+    // Random ids can hold "fee" or a rate's digits (e.g. "…45bfeeed…"), so blank ids before the money checks.
+    const text = JSON.stringify(brief.content)
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu, "<id>");
     assert.doesNotMatch(text, /pence|price|rate|total|£|cost|fee/iu);
     for (const { rate } of rates) assert.ok(!text.includes(rate), rate);
   }
@@ -1986,6 +2015,26 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+test("D4: a task assigned to a crew record shows the record's current name in the brief", async () => {
+  const { owner, crewBriefs, workPlan, command } = await briefSetup();
+  const crew = await crewApp(owner.sessionId).record(crewCommand({ displayName: "Dee Fictional", trade: "decorator" }));
+  const plan = await workPlan.read(jobId, planQuery);
+  const task = plan.tasks.find(item => item.trade === "decorator");
+  await workPlan.edit(jobId, planEdit(plan, task, { assigneeRef: crew.crewId }));
+  const latest = async () => (await crewBriefs.read(jobId, { ...briefQuery, trade: "decorator" }))[0];
+  assert.equal((await latest()).current, false, "a new crew assignment makes the brief out of date");
+  const generate = async () => crewBriefs.generate(jobId, command("decorator", { expectedVersion: (await latest()).version }));
+  const assigned = (await generate()).content.tasks.find(item => item.taskKey === task.key);
+  assert.deepEqual([assigned.owner, assigned.ownerRef], ["Dee Fictional", crew.crewId]);
+  assert.doesNotMatch(JSON.stringify(await latest()), /07700|jobguard-v2\.invalid/u, "the brief keeps no crew contact details");
+
+  await crewApp(owner.sessionId).record(crewCommand({ crewId: crew.crewId, expectedRevision: 1, displayName: "Dee Renamed",
+    trade: "decorator" }));
+  assert.equal((await latest()).current, false, "renaming the crew record makes the brief out of date");
+  const renamed = (await generate()).content.tasks.find(item => item.taskKey === task.key);
+  assert.deepEqual([renamed.owner, renamed.ownerRef], ["Dee Renamed", crew.crewId]);
 });
 
 // V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
