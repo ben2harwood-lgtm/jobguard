@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-train-guard": {
+      "branches": [
+        "claude/v2-train-guard"
+      ],
+      "note": "Let the lane lint's train check accept v2/main as a train base, as well as main (Ben approved 27 Nov 2026). Guard change, RED.",
+      "allow": [
+        "tools/agent-lane-boundary-lint.mjs",
+        "tools/agent-lane-boundary-train.test.mjs"
+      ]
+    }
+  }
+}
