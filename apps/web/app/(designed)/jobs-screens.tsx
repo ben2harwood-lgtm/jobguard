@@ -234,7 +234,8 @@ export function MoneyTab({ value, facts, children }: { value: JobValue | null; s
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>
-    <div style={{ marginTop: 19 }}><Legacy label="Job money trail" cards>{children}</Legacy></div>
+    {/* V2-SQ-I-3 (copied from #918): the money panels sit outside the legacy block; the money page wraps the mapped value receipt in its own. */}
+    <div className="designed-money-stack">{children}</div>
   </>;
 }
 

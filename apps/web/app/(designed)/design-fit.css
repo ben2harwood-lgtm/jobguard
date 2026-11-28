@@ -183,7 +183,8 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
   padding:10px 12px;border:1px solid #e3ac98;border-radius:7px;background:#fff2eb;color:#832d1b
 }
 
-.jgd .designed-money-card .card-body{display:grid;gap:16px;min-width:0}
+.jgd :is(.designed-money-stack,.designed-money-card .card-body){display:grid;gap:16px;min-width:0}
+.jgd .designed-money-stack{margin-top:19px}
 .jgd .designed-money-card{min-width:0;overflow-wrap:anywhere;scroll-margin-top:96px}
 .jgd .designed-money-card :is(.customer-invoice,.customer-receipts,[data-testid="lock-bound-invoices"],.value-grid){
   display:grid;gap:12px;min-width:0
