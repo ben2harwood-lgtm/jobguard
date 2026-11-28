@@ -1,6 +1,52 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/rams": {
+      "get": {
+        "operationId": "RamsController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted RAMS drafts; no prices or certification"
+          }
+        },
+        "summary": "Read rams-screen.v1: V2-only synthetic safety drafts and immutable signed versions",
+        "tags": [
+          "v2-rams"
+        ]
+      },
+      "post": {
+        "operationId": "RamsController_command",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Typed stale-plan, revision, replay or incomplete-section conflict"
+          }
+        },
+        "summary": "Execute rams-command.v1: generate, edit a section or sign a checked synthetic draft",
+        "tags": [
+          "v2-rams"
+        ]
+      }
+    },
     "/privacy-rehearsal/commands": {
       "post": {
         "operationId": "PrivacyOperationsController_command",
