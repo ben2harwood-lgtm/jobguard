@@ -275,3 +275,47 @@ Executed locally with at most two Vitest workers:
   ambiguities 63/63). Existing open findings remain open.
 
 Deterministic local verification only. No push, merge, release or independent review claimed.
+
+### RT-FIX-3 review repair round 2, final allowed (#1077, 28 Nov 2026)
+
+Fixed the single-item start comparison: the prefix before the original chunk must contain only
+whitespace/format/default-ignorable characters. It no longer compares a preserved chunk offset
+against `trimStart()`'s BOM-stripped offset. Recognition copies are shared for clause starts,
+timing, titles, room checks and work/trade checks; offset-bearing matches stay on the original
+text with the original leading-prefix length. Source-facing trimming preserves BOMs consistently
+in titles, cells, fallbacks and total-price tokens. No source text is normalized for citations or
+amount parsing, and no parser/policy version changes.
+
+The amount guard ignores a leading invisible prefix only when actual clause text follows it,
+including a title/room before work. The numeric checker can supply that whole clause for late work;
+a BOM before the title must not clear the later intact price. A format character directly beside
+or inside an amount, or inside the clause, still opens the price. Existing deduction, bracket,
+trailing-minus and malformed-amount checks remain enforced.
+
+Added RT-01-273–302: no-prefix controls plus BOM, zero-width space, non-joiner, joiner and word-joiner
+variants for the requested single item, title, room-led and two-item notes, plus a late-work title.
+The corpus checks both parsers and the checked reader, including line counts and original-source
+span invariants. No existing expectations or open-finding statuses were weakened.
+
+Parity means each reader keeps its no-invisible behavior: the single item is 15000 pence on all
+paths and the two items are 15000/20000. Capture retains its existing unpriced fallback for the
+single title/room-led notes; Reader A retains 20000/90000. Those differing baselines are unchanged.
+A compiled-AI matrix also explicitly compares line descriptions, prices, quantities, units, titles,
+rooms and trades against each path's control, including a mixed whitespace/invisible prefix.
+It passed 35 inputs, 105 path comparisons and 301 citation checks. Its checker excludes Reader A's
+internal timeline before revalidating the public understanding contract.
+
+Executed final validation with at most two Vitest workers:
+- `pnpm --filter @jobguard/ai test --maxWorkers=2`: 28 files / 834 tests pass.
+- `pnpm eval --maxWorkers=2`: 28 files / 834 tests pass.
+- `pnpm --filter @jobguard/ai typecheck`, `lint` and `build`: pass.
+- `node /tmp/rt-fix-3-round2-parity.mjs`: passes the matrix described above.
+- Regenerated the golden record through `runCaptureEvaluation` / `createGoldenRunRecord`:
+  only the parser implementation SHA-256 changes. All 32 predictions and totals are unchanged:
+  recall 41/41, citations 119/119, unsupported money 0, ambiguity checks 63/63.
+- Corpus: RT-01 201 pass / 101 open; RT-00 and RT-03 unchanged. Existing open findings remain open.
+- `git diff --check`: pass. Generated pnpm cache preserved under `/tmp`, outside the worktree.
+
+Deterministic local verification only. Five requested files changed; no database, web, provider,
+commercial-policy or release change. Commit only; no push, merge, acceptance or independent review
+claimed. This exhausts the two allowed review-repair rounds for this piece.

@@ -6842,5 +6842,557 @@
       "lineCount": 2
     },
     "status": "pass"
+  },
+  {
+    "id": "RT-01-273",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-274",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-275",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-276",
+    "lane": "RT-01",
+    "transcript": "‌Fit the door for £150",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-277",
+    "lane": "RT-01",
+    "transcript": "‍Fit the door for £150",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-278",
+    "lane": "RT-01",
+    "transcript": "⁠Fit the door for £150",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-279",
+    "lane": "RT-01",
+    "transcript": "Jones flat. Paint the hall £200",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-280",
+    "lane": "RT-01",
+    "transcript": "﻿Jones flat. Paint the hall £200",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-281",
+    "lane": "RT-01",
+    "transcript": "​Jones flat. Paint the hall £200",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-282",
+    "lane": "RT-01",
+    "transcript": "‌Jones flat. Paint the hall £200",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-283",
+    "lane": "RT-01",
+    "transcript": "‍Jones flat. Paint the hall £200",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-284",
+    "lane": "RT-01",
+    "transcript": "⁠Jones flat. Paint the hall £200",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-285",
+    "lane": "RT-01",
+    "transcript": "Kitchen: fit units £900",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-286",
+    "lane": "RT-01",
+    "transcript": "﻿Kitchen: fit units £900",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-287",
+    "lane": "RT-01",
+    "transcript": "​Kitchen: fit units £900",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-288",
+    "lane": "RT-01",
+    "transcript": "‌Kitchen: fit units £900",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-289",
+    "lane": "RT-01",
+    "transcript": "‍Kitchen: fit units £900",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-290",
+    "lane": "RT-01",
+    "transcript": "⁠Kitchen: fit units £900",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-291",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150. Paint the wall for £200",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-292",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. Paint the wall for £200",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-293",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150. Paint the wall for £200",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-294",
+    "lane": "RT-01",
+    "transcript": "‌Fit the door for £150. Paint the wall for £200",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-295",
+    "lane": "RT-01",
+    "transcript": "‍Fit the door for £150. Paint the wall for £200",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-296",
+    "lane": "RT-01",
+    "transcript": "⁠Fit the door for £150. Paint the wall for £200",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-297",
+    "lane": "RT-01",
+    "transcript": "Jones flat full rewire £900",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-298",
+    "lane": "RT-01",
+    "transcript": "﻿Jones flat full rewire £900",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-299",
+    "lane": "RT-01",
+    "transcript": "​Jones flat full rewire £900",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-300",
+    "lane": "RT-01",
+    "transcript": "‌Jones flat full rewire £900",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-301",
+    "lane": "RT-01",
+    "transcript": "‍Jones flat full rewire £900",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-302",
+    "lane": "RT-01",
+    "transcript": "⁠Jones flat full rewire £900",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
   }
 ]
