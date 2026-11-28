@@ -95,6 +95,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D35 | Q70 | V2-C6 add a line to a priced quote before it is sent (quote editor + prompt onAdd); new confirmed scope item, totals via existing saveDraft | **Opus** | v2/main | none | RED money |
 | D36 | Q71 | V2-SQ-K bathroom suite work gets the Plumbing trade (labels only) | **Opus** | Q68 #1044 | none | T2 |
 | D37 | Q72 | V2-WP-FIX work plan shows extras it can't plan (extrasNotPlanned), and an open task form keeps its opened variation revision | **Opus** | v2/main | none | T2 |
+| D38 | Q73 | V2-G6 close the account: read-only final review, then main's lock, Final Check and invoice unchanged; no live stage draft at lock | **Opus** | K5 line top `claude/project-thread-trp08u-k5a1` | none (2088 if needed) | RED money |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
