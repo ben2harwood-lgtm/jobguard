@@ -7,7 +7,8 @@ import { earlierContact, linkStoppable, releaseBlocked, releaseIndependent, rele
 
 type View = { siteComplete: boolean; releases: HandoverRelease[] };
 
-export function HandoverReleases({ jobId, versions }: { jobId: string; versions: number[] }) {
+/** onChanged (V2-G8): told after a release or a stop is saved, so the review request re-reads its state. */
+export function HandoverReleases({ jobId, versions, onChanged }: { jobId: string; versions: number[]; onChanged?: () => void }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover/releases`;
   const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [link, setLink] = useState<{ version: number; url: string } | null>(null);
@@ -33,6 +34,7 @@ export function HandoverReleases({ jobId, versions }: { jobId: string; versions:
       if (!response.ok) { if (response.status !== 503) pending.current = null; setNotice(releaseProblemText(result.code)); return; }
       pending.current = null;
       if (result.token) setLink({ version, url: `${window.location.origin}/handover/${result.token}` });
+      onChanged?.();
       await load().catch(() => undefined);
     } catch { setNotice("Result unknown. Reload before trying again."); }
     finally { setBusy(false); }
@@ -47,6 +49,7 @@ export function HandoverReleases({ jobId, versions }: { jobId: string; versions:
       const result = await response.json().catch(() => ({})) as { code?: string };
       if (!response.ok) { if (response.status !== 503) stopCommand.current = null; setNotice(stopProblemText(result.code)); return; }
       stopCommand.current = null; setStopping(null);
+      onChanged?.();
       await load().catch(() => undefined);
     } catch { setNotice("Result unknown. Reload before trying again."); }
     finally { setBusy(false); }

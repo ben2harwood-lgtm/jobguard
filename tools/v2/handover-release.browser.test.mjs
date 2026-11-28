@@ -120,6 +120,9 @@ test("V2-G8 at 360px: switch the review request on after a release; it waits a w
     if (await toggle.isChecked()) { await toggle.uncheck(); await expect(review.getByRole("status")).toContainText("Off."); }
     await page.reload();
     await review.getByLabel("Ask the customer for a review a week after the handover release").check();
+    // A new release on the same screen refreshes the panel without a reload (Codex P2 on #1035).
+    await page.getByTestId("handover-releases").getByRole("button", { name: /^Release this version · version \d+$/u }).click();
+    await expect(page.getByTestId("handover-link")).toBeVisible();
     // The shared seed job may already hold money rows, so only the switch itself is asserted here; the rule is in the seed cases.
     await expect(review.getByRole("status")).not.toContainText("Off.");
     await expect(review).toContainText("a short review would help");

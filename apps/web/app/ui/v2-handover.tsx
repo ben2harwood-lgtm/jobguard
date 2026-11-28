@@ -29,6 +29,8 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover`;
   const [view, setView] = useState<View | null>(null), [problem, setProblem] = useState(false), [busy, setBusy] = useState(false);
   const [choice, setChoice] = useState<HandoverChoice>(blank), [notice, setNotice] = useState(""), [status, setStatus] = useState("");
+  // V2-G8: bumped after a release or stop, so the review request re-reads its state.
+  const [released, setReleased] = useState(0);
   const [preview, setPreview] = useState<{ content: HandoverContent; contentHash: string } | null>(null), [refused, setRefused] = useState<HandoverRefusal[]>([]);
   const [opened, setOpened] = useState<number | null>(null);
   // One command id per chosen content until a response arrives, so a retried save makes one version.
@@ -130,9 +132,9 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
           {opened === row.version ? "Close" : `Open version ${row.version}`}</button>
         {opened === row.version && <HandoverPack content={row.content}/>}
       </div>) : <p>No version saved yet.</p>}
-      {versions.length > 0 && <HandoverReleases jobId={jobId} versions={versions.map(row => row.version)}/>}
-      {versions.length > 0 && <ReviewRequest jobId={jobId}/>}
-      {versions.length > 0 && <Aftercare jobId={jobId}/>}
+      {versions.length > 0 && <HandoverReleases jobId={jobId} versions={versions.map(row => row.version)} onChanged={() => setReleased(n => n + 1)}/>}
+      {versions.length > 0 && <ReviewRequest jobId={jobId} refresh={released}/>}
+      {versions.length > 0 && <Aftercare jobId={jobId} refresh={released}/>}
     </div></Card>
   </div>;
 }

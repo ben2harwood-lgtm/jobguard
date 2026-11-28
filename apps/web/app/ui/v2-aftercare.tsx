@@ -6,7 +6,7 @@ import { aftercareMessage, aftercareProblemText, aftercareSend, aftercareSentLin
 
 type View = { enabled: boolean; state: AftercareState; months: 6 | 12 | null; nextAt: string | null; offers: { months: 6 | 12; sentAt: string }[] };
 
-export function Aftercare({ jobId }: { jobId: string }) {
+export function Aftercare({ jobId, refresh = 0 }: { jobId: string; refresh?: number }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover/aftercare`;
   const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   // One command id per intent until a response arrives, so a retry records it once.
@@ -16,7 +16,8 @@ export function Aftercare({ jobId }: { jobId: string }) {
     if (!response.ok) throw new Error();
     setView(await response.json() as View);
   }, [endpoint]);
-  useEffect(() => { void load().catch(() => setNotice("Aftercare could not load. Reload to try again.")); }, [load]);
+  // refresh changes after a release or a stop on the same screen, as G8's review request does.
+  useEffect(() => { void load().catch(() => setNotice("Aftercare could not load. Reload to try again.")); }, [load, refresh]);
 
   async function post(key: string, body: Record<string, unknown>) {
     if (pending.current?.key !== key) pending.current = { key, commandId: crypto.randomUUID() };

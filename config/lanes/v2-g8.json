@@ -5,13 +5,14 @@
       "branches": [
         "claude/project-thread-trp08u-g8"
       ],
-      "note": "RED V2-G8 review request after handover: one polite request a week after the G3 release, only with the builder's switch on for that job, never repeated, none while the final invoice is unpaid or a customer recovery case is open; practice mode reaches only the local catcher. Migration 2085 (number from the V2 register). Base claude/project-thread-trp08u-g4 (G4 #1008). G8 mounts, owned by core index: packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G8 mount, owned by main: packages/core/src/watchdog.ts one registry line. G8 mount, owned by G2 #998: apps/web/app/ui/v2-handover.tsx one import and the ReviewRequest mount under the releases. G8 mounts, owned by G3 #999: tools/v2/handover-release.browser.test.mjs one appended 360 px case. G8 mounts, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2084; packages/db/test/purchase-order-audit.integration.test.ts the _v2_review_request.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs one import line and own appended cases.",
+      "note": "RED V2-G8 review request after handover: one polite request a week after the G3 release, only with the builder's switch on for that job, never repeated, none while the final invoice is unpaid or a customer recovery case is open; practice mode reaches only the local catcher. Migration 2085 (number from the V2 register). Base claude/project-thread-trp08u-g4 (G4 #1008). G8 mounts, owned by core index: packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G8 mount, owned by main: packages/core/src/watchdog.ts one registry line. G8 mount, owned by G2 #998: apps/web/app/ui/v2-handover.tsx one import and the ReviewRequest mount under the releases. G8 mounts, owned by G3 #999: tools/v2/handover-release.browser.test.mjs one appended 360 px case; apps/web/app/ui/v2-handover-release.tsx an optional onChanged callback after a saved release or stop (Codex P2). G8 mounts, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2084; packages/db/test/purchase-order-audit.integration.test.ts the _v2_review_request.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs one import line and own appended cases.",
       "allow": [
         "apps/api/src/workspace/index.ts",
         "apps/api/src/workspace/review-request.application.test.ts",
         "apps/api/src/workspace/review-request.application.ts",
         "apps/web/app/api/jobs/[id]/handover/review-request/route.test.ts",
         "apps/web/app/api/jobs/[id]/handover/review-request/route.ts",
+        "apps/web/app/ui/v2-handover-release.tsx",
         "apps/web/app/ui/v2-handover.tsx",
         "apps/web/app/ui/v2-review-request-label.test.ts",
         "apps/web/app/ui/v2-review-request-label.ts",

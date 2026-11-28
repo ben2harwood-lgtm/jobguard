@@ -5,7 +5,7 @@ import { reviewMessage, reviewProblemText, reviewSend, reviewStateLine, reviewSw
 
 type View = { enabled: boolean; state: ReviewRequestState; dueAt: string | null; sentAt: string | null };
 
-export function ReviewRequest({ jobId }: { jobId: string }) {
+export function ReviewRequest({ jobId, refresh = 0 }: { jobId: string; refresh?: number }) {
   const endpoint = `/api/jobs/${encodeURIComponent(jobId)}/handover/review-request`;
   const [view, setView] = useState<View | null>(null), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   // One command id per intent until a response arrives, so a retry records it once.
@@ -15,7 +15,8 @@ export function ReviewRequest({ jobId }: { jobId: string }) {
     if (!response.ok) throw new Error();
     setView(await response.json() as View);
   }, [endpoint]);
-  useEffect(() => { void load().catch(() => setNotice("The review request could not load. Reload to try again.")); }, [load]);
+  // refresh changes after a release or a stop on the same screen (Codex P2 on #1035).
+  useEffect(() => { void load().catch(() => setNotice("The review request could not load. Reload to try again.")); }, [load, refresh]);
 
   async function post(key: string, body: Record<string, unknown>) {
     if (pending.current?.key !== key) pending.current = { key, commandId: crypto.randomUUID() };
