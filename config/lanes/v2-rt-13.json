@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-13": {
+      "branches": [
+        "codex/sandbox/rt-13"
+      ],
+      "note": "RT-13 seeded fuzz and metamorphic attack (#1071). HEAD_UNDER_TEST=ac8065af7305d9cc3db110eff4eb38d47248fa51. Corpus, tests and findings only. The checker permits this lane file automatically.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-13-fuzz-metamorphic.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
