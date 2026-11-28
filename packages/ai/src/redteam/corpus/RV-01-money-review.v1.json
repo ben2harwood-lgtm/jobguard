@@ -1,0 +1,3811 @@
+[
+  {
+    "id": "RV1-01",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for zero thousand pounds",
+    "why": "RV-1 row 1: £0 or leave open; never £1,000.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": [
+            0,
+            null
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        100000
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-01"
+  },
+  {
+    "id": "RV1-02",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £2m.",
+    "why": "RV-1 row 2: Leave unsupported amount open; never truncate to £2.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-02"
+  },
+  {
+    "id": "RV1-03",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200½.",
+    "why": "RV-1 row 3: £200.50 or leave open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-03"
+  },
+  {
+    "id": "RV1-04",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for no greater than £200",
+    "why": "RV-1 row 4: Leave ceiling open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-04"
+  },
+  {
+    "id": "RV1-05",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for maybe £200",
+    "why": "RV-1 row 5: Leave hedged price open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-05"
+  },
+  {
+    "id": "RV1-06",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for a discount of £200",
+    "why": "RV-1 row 6: Leave discount open; never make it a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-06"
+  },
+  {
+    "id": "RV1-07-1",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus materials",
+    "why": "RV-1 row 7: Leave each qualified amount open. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-07"
+  },
+  {
+    "id": "RV1-07-2",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 if dry",
+    "why": "RV-1 row 7: Leave each qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-07"
+  },
+  {
+    "id": "RV1-07-3",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200/day",
+    "why": "RV-1 row 7: Leave each qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-07"
+  },
+  {
+    "id": "RV1-07-4",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 percent",
+    "why": "RV-1 row 7: Leave each qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-07"
+  },
+  {
+    "id": "RV1-08-1",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, plus materials",
+    "why": "RV-1 row 8: Leave qualified amount open. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-08"
+  },
+  {
+    "id": "RV1-08-2",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, if dry",
+    "why": "RV-1 row 8: Leave qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-08"
+  },
+  {
+    "id": "RV1-08-3",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, per day",
+    "why": "RV-1 row 8: Leave qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-08"
+  },
+  {
+    "id": "RV1-09-1",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 plus materials.",
+    "why": "RV-1 row 9: Leave qualified total open. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-09"
+  },
+  {
+    "id": "RV1-09-2",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 if dry.",
+    "why": "RV-1 row 9: Leave qualified total open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-09"
+  },
+  {
+    "id": "RV1-09-3",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200/day.",
+    "why": "RV-1 row 9: Leave qualified total open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-09"
+  },
+  {
+    "id": "RV1-10",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in €200.",
+    "why": "RV-1 row 10: Reject non-GBP price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-10"
+  },
+  {
+    "id": "RV1-11",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in 200%.",
+    "why": "RV-1 row 11: Leave percentage open; never treat it as pounds.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-11"
+  },
+  {
+    "id": "RV1-12",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200—six hundred.",
+    "why": "RV-1 row 12: Leave range open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-12"
+  },
+  {
+    "id": "RV1-13",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus",
+    "why": "RV-1 row 13: Leave incomplete addition open. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-13"
+  },
+  {
+    "id": "RV1-14",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, actually £300.",
+    "why": "RV-1 row 14: Leave corrected total open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-14"
+  },
+  {
+    "id": "RV1-15",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 plus VAT.",
+    "why": "RV-1 row 15: Leave VAT-qualified total open under RV-1. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-15"
+  },
+  {
+    "id": "RV1-16",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200. Actually £300.",
+    "why": "RV-1 row 16: One work item; corrected price left open and queried.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        20000,
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-16"
+  },
+  {
+    "id": "RV1-17",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in all in £200",
+    "why": "RV-1 row 17: Finish within 1 second or reject promptly.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": []
+    },
+    "status": "pass",
+    "finding": "RV1-17"
+  },
+  {
+    "id": "RV1-18",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus VAT",
+    "why": "RV-1 row 18: Leave qualified price open under RV-1. M2: keep the said amount and ask; never infer additions or VAT.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-18"
+  },
+  {
+    "id": "RV1-19",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 per day",
+    "why": "Core supplied understanding: clear an unsupported daily rate; exact supplied-understanding probe recorded in FINDINGS.md",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass",
+    "finding": "RV1-19"
+  },
+  {
+    "id": "RV1-20",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200",
+    "why": "Core supplied understanding: clear mismatched price with 200 questions and return a valid schema; exact supplied-understanding probe recorded in FINDINGS.md",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "questionsInclude": []
+    },
+    "status": "pass",
+    "finding": "RV1-20"
+  },
+  {
+    "id": "RV1-G001",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for about £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G002",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in about £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G003",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for roughly £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G004",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in roughly £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G005",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for around £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G006",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in around £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G007",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for maybe £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G008",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in maybe £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G009",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for give or take £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G010",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in give or take £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G011",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for call it £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G012",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in call it £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G013",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for ballpark £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G014",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in ballpark £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G015",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for somewhere near £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G016",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in somewhere near £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G017",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for in the region of £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G018",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in in the region of £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G019",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for circa £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G020",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in circa £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G021",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for probably £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G022",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in probably £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G023",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for an estimate of £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G024",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in an estimate of £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G025",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for estimated £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G026",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in estimated £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G027",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for a budget of £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G028",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in a budget of £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G029",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for allow £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G030",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in allow £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G031",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for allowance of £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G032",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in allowance of £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G033",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for provisionally £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G034",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in provisionally £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G035",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for no greater than £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G036",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in no greater than £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G037",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for no more than £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G038",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in no more than £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G039",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for not more than £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G040",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in not more than £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G041",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for max £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G042",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in max £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G043",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for at most £200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G044",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in at most £200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G045",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200ish",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G046",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200ish.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G047",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, ish",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G048",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, ish.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G049",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 if dry",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G050",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 if dry.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G051",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  if dry",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G052",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  if dry.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G053",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 unless dry",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G054",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 unless dry.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G055",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  unless dry",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G056",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  unless dry.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G057",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 provided access is clear",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G058",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 provided access is clear.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G059",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  provided access is clear",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G060",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  provided access is clear.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G061",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 subject to survey",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G062",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 subject to survey.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G063",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  subject to survey",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G064",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  subject to survey.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G065",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 depending on access",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G066",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 depending on access.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G067",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  depending on access",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G068",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  depending on access.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G069",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 assuming no rot",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G070",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 assuming no rot.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G071",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  assuming no rot",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G072",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  assuming no rot.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G073",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 conditional on access",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G074",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 conditional on access.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G075",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  conditional on access",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G076",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  conditional on access.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G077",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200/day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G078",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200/day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G079",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, /day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G080",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, /day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G081",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 per day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G082",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 per day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G083",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  per day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G084",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  per day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G085",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 a day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G086",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 a day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G087",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  a day",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G088",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  a day.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G089",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 per hour",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G090",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 per hour.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G091",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  per hour",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G092",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  per hour.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G093",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 percent",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G094",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 percent.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G095",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  percent",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G096",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  percent.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G097",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200%",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G098",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200%.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G099",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, %",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G100",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, %.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G101",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200—six hundred",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G102",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200—six hundred.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G103",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, —six hundred",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G104",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, —six hundred.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G105",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200–six hundred",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G106",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200–six hundred.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G107",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, –six hundred",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G108",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, –six hundred.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G109",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 with twenty percent off",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G110",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 with twenty percent off.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G111",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  with twenty percent off",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G112",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  with twenty percent off.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G113",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 with a 20% discount",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G114",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 with a 20% discount.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G115",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  with a 20% discount",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G116",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  with a 20% discount.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G117",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 less ten percent",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G118",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 less ten percent.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G119",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  less ten percent",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G120",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  less ten percent.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G121",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 minus the deposit",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G122",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 minus the deposit.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G123",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  minus the deposit",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G124",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  minus the deposit.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G125",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 cashback",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G126",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 cashback.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G127",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200,  cashback",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G128",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200,  cashback.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G129",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for €200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G130",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in €200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G131",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for $200",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G132",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in $200.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G133",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for 200 euro",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G134",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in 200 euro.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G135",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for 200 dollars",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G136",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in 200 dollars.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G137",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £2m",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G138",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £2m.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G139",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £2k",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G140",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £2k.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G141",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200½",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G142",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200½.",
+    "why": "Shared qualifier guard leaves money open and asks",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G143",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus VAT",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G144",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 plus VAT.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G145",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, plus VAT",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G146",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, plus VAT.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G147",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 inc VAT",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G148",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 inc VAT.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G149",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, inc VAT",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G150",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, inc VAT.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "VAT"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G151",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus materials",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G152",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 plus materials.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G153",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, plus materials",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G154",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, plus materials.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G155",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 labour only",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G156",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 labour only.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G157",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, labour only",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G158",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, labour only.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G159",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200 plus",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G160",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200 plus.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G161",
+    "lane": "RT-01",
+    "transcript": "Paint the walls for £200, plus",
+    "why": "M2: keep the number as said and ask about its qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-G162",
+    "lane": "RT-01",
+    "transcript": "Paint the walls. All in £200, plus.",
+    "why": "M2: totals preserve the said number and ask about the qualifier",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 20000,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  }
+]

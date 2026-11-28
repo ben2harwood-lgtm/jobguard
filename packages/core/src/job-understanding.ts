@@ -56,7 +56,7 @@ export type UnderstoodLine = JobUnderstanding["lines"][number];
  */
 export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null;
   /** True when the words of the same sentence either side of a cited amount leave it open ("up to £200", "-£50"). */
-  open?(before: string, after: string): boolean };
+  open?(before: string, after: string, unit?: string | null): boolean };
 
 const NUMBER_WORDS = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|half|point";
 const NUMBER_WORD_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NUMBER_WORDS})(?:[\\s-]+and)?[\\s-]+$`, "iu");
@@ -70,7 +70,18 @@ const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})
  */
 export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourceText: string, read: SpokenNumberReader): JobUnderstanding {
   const questions = [...understanding.questions];
-  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: "money" | "count") => {
+  const ask = (question: JobUnderstanding["questions"][number]) => {
+    if (questions.length < 200) { questions.push(question); return; }
+    const existing = questions.findIndex(item => question.lineIndex !== undefined && item.lineIndex === question.lineIndex);
+    if (existing >= 0) {
+      questions[existing] = { ...questions[existing]!, text: `${question.text} ${questions[existing]!.text}`.slice(0, 500) };
+    } else {
+      const generic = questions.findIndex(item => item.lineIndex === undefined && item.areaKey === undefined);
+      const at = generic >= 0 ? generic : 0;
+      questions[at] = { ...question, text: `${question.text} ${questions[at]!.text}`.slice(0, 500) };
+    }
+  };
+  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: "money" | "count", unit?: string | null) => {
     if (provenance.kind !== "extracted") return false;
     const { start, end } = provenance.span;
     if (start < 0 || end > sourceText.length || start >= end) return false;
@@ -89,10 +100,10 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     // The room's own name is left out, so its number is not read as a second number.
     if (kind === "money" && read.open) {
       // A currency sign just outside a digits-only citation ("up to £" + "200") is part of the amount, not of the words before it.
-      let near = sourceText.slice(Math.max(0, start - 80), start).replace(/[£$€][^\S\uFEFF]*$/u, "");
+      let near = sourceText.slice(Math.max(0, start - 80), start).replace(/£[^\S\uFEFF]*$/u, "");
       if (ownRoom) near = near.replace(ownRoom, "");
       const after = sourceText.slice(end, end + 80);
-      if (read.open(near.slice(near.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)))) return false;
+      if (read.open(near.slice(near.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)), unit)) return false;
     }
     return read[kind](sourceText.slice(start, end)) === expected;
   };
@@ -138,22 +149,22 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if ((quantity.value !== null || unitPricePence.value !== null) && sharedWords.has(lineIndex)) {
       if (quantity.value !== null) quantity = { value: null, provenance: { kind: "defaulted", note: "Line words overlap another line; never invented" } };
       if (unitPricePence.value !== null) { unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Line words overlap another line; never invented" } }; priceBasis = "none"; }
-      questions.push({ text: `Check “${label}”: its words are shared with another line.`, lineIndex });
+      ask({ text: `Check “${label}”: its words are shared with another line.`, lineIndex });
     }
     if (unitPricePence.value !== null && reused(lineIndex)) {
       unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Price words already price something else" } };
       priceBasis = "none";
-      questions.push({ text: `Price needed for “${label}”: that amount was said for something else.`, lineIndex });
+      ask({ text: `Price needed for “${label}”: that amount was said for something else.`, lineIndex });
     }
     if (unitPricePence.value !== null && (priceBasis === "each" || priceBasis === "per_unit") && !perItem(spanOf(unitPricePence.provenance), line.unit.value)) priceBasis = "line";
     if (quantity.value !== null && !(cites(quantity.provenance, Number(quantity.value), "count") && belongs(lineIndex, quantity.provenance))) {
       quantity = { value: null, provenance: { kind: "defaulted", note: "Quantity not said exactly; never invented" } };
-      questions.push({ text: `How many for “${label}”?`, lineIndex });
+      ask({ text: `How many for “${label}”?`, lineIndex });
     }
-    if (unitPricePence.value !== null && !(cites(unitPricePence.provenance, unitPricePence.value, "money") && belongs(lineIndex, unitPricePence.provenance))) {
+    if (unitPricePence.value !== null && !(cites(unitPricePence.provenance, unitPricePence.value, "money", quantity.value === null ? null : line.unit.value) && belongs(lineIndex, unitPricePence.provenance))) {
       unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
       priceBasis = "none";
-      questions.push({ text: read.open ? `Confirm price: ${label}` : `Price needed for “${label}”.`, lineIndex });
+      ask({ text: read.open ? `Confirm price: ${label}` : `Price needed for “${label}”.`, lineIndex });
     }
     return { ...line, quantity, unitPricePence, priceBasis };
   });
@@ -185,13 +196,13 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
   };
   const areaPrices = understanding.areaPrices.filter((price, index) => {
     if (cites(price.provenance, price.pence, "money") && ownsArea(price.areaKey, spanOf(price.provenance)!) && !reused(understanding.lines.length + index)) return true;
-    questions.push({ text: "Price needed for this room.", areaKey: price.areaKey });
+    ask({ text: "Price needed for this room.", areaKey: price.areaKey });
     return false;
   });
   let wholeJobPrice = understanding.wholeJobPrice;
   if (wholeJobPrice && (!cites(wholeJobPrice.provenance, wholeJobPrice.pence, "money") || reused(moneySpans.length - 1))) {
     wholeJobPrice = null;
-    questions.push({ text: "Check the whole-job price; it was not read exactly." });
+    ask({ text: "Check the whole-job price; it was not read exactly." });
   }
   return jobUnderstandingV1.parse({ ...understanding, lines, areaPrices, wholeJobPrice, questions });
 }
