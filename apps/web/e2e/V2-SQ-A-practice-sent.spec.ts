@@ -15,6 +15,9 @@ async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "o
     // The shared example tenant: every "Look around an example firm" session shares it, so ownership must filter.
     expect((await page.request.post("/api/session")).ok()).toBe(true);
     await page.goto("/classic");
+    // The shared example firm opens its quick tour; on a phone it covers "Make my draft", so skip it when it shows.
+    const skip = page.getByRole("button", { name: "Skip tour", exact: true });
+    if (await skip.waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false)) await skip.click();
   }
   await click(page, "＋ Start a new job");
   await page.getByLabel("Work details").fill("JOB: Fictional Sent list job\nITEM: Protect room | £200.00\nITEM: Paint walls | £300.00");
