@@ -16,6 +16,7 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RV4-03 | RV-4 | 79e7ce836 | invalid-price | Replace 200.00 with 250.001 | Keep the typed price and block Save/Confirm until corrected | Invalid price was submitted as null and confirmation succeeded | P1 | fixed | RT-FIX-7 (commit only) |
 | RV4-04 | RV-4 | 79e7ce836 | cancel-second-dictation | Finish Paint walls; start again with provisional and fit shelves; cancel | Keep the earlier completed words for review | Cancel cleared the transcript and Use these words | P1 | fixed | RT-FIX-7 (commit only) |
 | RT-FIX-7-R1 | Codex review | f48dfc88 | new-session-same-source | Fictional room. Protect room £200.00. | A new anonymous practice session captures the same words successfully | Shared demo tenant caused reuse of the previous session's capture ID and permanent NOT_FOUND | P1 | fixed | #1088 repair round 1 (commit only) |
+| RT-FIX-7-R2 | Codex review | 554bea9e | cancel-second-dictation-final | Finish Paint walls; start again with FINAL and fit shelves; cancel | Restore the earlier completed transcript and raw provenance | Cancel retained the second recording's final words in review and submission | P2 | fixed | #1088 repair round 2 (commit only) |
 
 ## RT-FIX-7 verification — 28 November 2026
 
@@ -76,3 +77,24 @@ retry for a fresh ID, and retained identity after a refused session start. This 
 component-handler verification with mocked network responses, not independent review or
 live database/browser acceptance. Required exact-head independent review and CI remain
 merge gates. No push, browser server, default Playwright configuration or port 3000 used.
+
+## RT-FIX-7 repair round 2 (last) — Codex review of #1088 at 554bea9e
+
+Each recording snapshots the visible review text and raw-segment count before listening.
+Cancel restores that text and truncates the raw segments to the snapshot boundary, preserving
+earlier completed recordings. Recogniser start, stop and result handling are unchanged.
+The RV4-04 handler regression now covers both an interim and a FINAL segment arriving in
+the cancelled second recording and verifies both arguments submitted by Use these words.
+
+- Before the repair: `pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/walk-it-retry.test.tsx -t RV4-04` — exit 1: FINAL regression failed with `Paint walls and fit shelves`; interim regression passed.
+- After the repair: `pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/walk-it-retry.test.tsx app/ui/review-proposal.test.tsx` — exit 0: **61 passed**, including all earlier RV4 cases.
+- `pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts'` — exit 0: **262 files / 3,793 tests passed**. Database suites were excluded from this unit-only run; the previously recorded environment failure is not claimed resolved.
+- `pnpm --filter @jobguard/web typecheck` — exit 0.
+- `pnpm --filter @jobguard/web lint` — exit 0 (the existing web script runs TypeScript).
+- `git diff --check` and direct validation of all three changed tracked paths against the existing lane allow-list — exit 0. No lane change needed.
+
+This is deterministic component-handler verification with a mocked speech adapter, not live
+microphone/browser verification or independent review. No migrations, providers, parser, model
+or contract changes. No build, database suites, Playwright configuration, browser server or
+port 3000 used in this round. Existing exact-head review and CI gates remain. Commit only;
+no push. The pre-existing untracked `.pnpm-store/` is excluded from the commit.

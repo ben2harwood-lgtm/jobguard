@@ -46,6 +46,7 @@ export function dictationMessage(code: DictationFailure, startLabel = "Talk thro
 export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk through a quote",designed=false}:{onUse:(text:string,raw:string)=>void;applyDisabled?:boolean;startLabel?:string;designed?:boolean}){
   const[adapter,setAdapter]=useState<LocalSpeechAdapter|null>(null),[availability,setAvailability]=useState<LocalAvailability|"checking">("installed"),[listening,setListening]=useState(false),[loading,setLoading]=useState(false),[interim,setInterim]=useState(""),[finalText,setFinalText]=useState(""),[message,setMessage]=useState("");
   const session=useRef<LocalSpeechSession|null>(null), seen=useRef(new Set<string>()),raw=useRef<string[]>([]);
+  const recordingSnapshot=useRef({text:"",rawLength:0});
   const active=useRef(true), engine=useRef<LocalSpeechAdapter|null>(null), busy=useRef(false), stopped=useRef(false);
   useEffect(()=>{active.current=true;
     // Only test injection is inspected on mount. No real capability probe, permission, worker or model load.
@@ -74,9 +75,9 @@ export function LocalDictation({onUse,applyDisabled=false,startLabel="Talk throu
     start(value);
   }
   function stopLoading(){stopped.current=true;cancelLocalSpeech(engine.current);setLoading(false);setMessage("")}
-  function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");failed(listeningFailure(code))},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);failed("failed")}}
+  function start(value:LocalSpeechAdapter){if(value.configuration.language!=="en-GB"||!value.configuration.processLocally||value.configuration.remoteFallback){setAvailability("unavailable");return}recordingSnapshot.current={text:finalText,rawLength:raw.current.length};setMessage("");setInterim("");seen.current.clear();setListening(true);try{session.current=value.start({interim:setInterim,final:(text,id)=>{if(seen.current.has(id))return;seen.current.add(id);raw.current.push(text);setFinalText(old=>`${old}${old?" ":""}${text}`.trim());setInterim("")},error:code=>{session.current?.cancel();session.current=null;setListening(false);setInterim("");failed(listeningFailure(code))},end:()=>{session.current=null;setListening(false);setInterim("")}})}catch{cancelLocalSpeech(value);setListening(false);failed("failed")}}
   function stop(){session.current?.stop();setInterim("")}
-  function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("")}
+  function cancel(){session.current?.cancel();session.current=null;setListening(false);setInterim("");setFinalText(recordingSnapshot.current.text);raw.current.length=recordingSnapshot.current.rawLength}
   const buttonClass=designed?"btn":undefined;
   return <section className={designed?"dictation card card-body form":"dictation"} aria-label="On-device dictation">
     <h2>Say the job out loud</h2>

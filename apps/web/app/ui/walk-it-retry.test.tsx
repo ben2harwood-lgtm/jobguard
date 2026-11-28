@@ -382,7 +382,7 @@ function fakeAdapter(availability: LocalAvailability, install: LocalSpeechAdapte
   } satisfies LocalSpeechAdapter;
 }
 
-it("RV4-04: cancelling a second dictation keeps the completed transcript and its raw provenance", async () => {
+it.each(["interim", "final"] as const)("RV4-04: cancelling a second dictation with a %s segment keeps the completed transcript and its raw provenance", async segment => {
   let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
   const cancel = vi.fn(), onUse = vi.fn();
   const adapter: LocalSpeechAdapter = {
@@ -394,8 +394,11 @@ it("RV4-04: cancelling a second dictation keeps the completed transcript and its
   solo.button()!.props.onClick(); await flush();
   callbacks.final("Paint walls", "first"); callbacks.end();
   solo.button()!.props.onClick(); await flush();
-  callbacks.interim("and fit shelves");
-  expect(text(solo.render())).toContain("and fit shelves");
+  if (segment === "final") callbacks.final("and fit shelves", "second");
+  else callbacks.interim("and fit shelves");
+  const recording = solo.render();
+  if (segment === "final") expect(all(recording, node => node.type === "textarea")[0]?.props.value).toBe("Paint walls and fit shelves");
+  else expect(text(recording)).toContain("and fit shelves");
   solo.button("Cancel dictation")!.props.onClick();
   expect(cancel).toHaveBeenCalledTimes(1);
   const tree = solo.render();
