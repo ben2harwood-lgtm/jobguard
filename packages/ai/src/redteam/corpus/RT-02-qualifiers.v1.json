@@ -655,7 +655,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F026"
   },
   {
@@ -678,7 +678,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F027"
   },
   {
@@ -724,7 +724,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F029"
   },
   {
@@ -747,7 +747,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F030"
   },
   {
@@ -1897,7 +1897,7 @@
         54000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F080"
   },
   {
@@ -1922,7 +1922,7 @@
         54000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F081"
   },
   {
@@ -2347,7 +2347,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F100"
   },
   {
@@ -2370,7 +2370,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F101"
   },
   {
@@ -2393,7 +2393,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F102"
   },
   {
@@ -2460,7 +2460,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F105"
   },
   {
@@ -2483,7 +2483,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F106"
   },
   {
@@ -2506,7 +2506,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F107"
   },
   {
@@ -2551,7 +2551,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F109"
   },
   {
@@ -2574,7 +2574,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F110"
   },
   {
@@ -2597,7 +2597,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F111"
   },
   {
@@ -2708,7 +2708,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F116"
   },
   {
@@ -2731,7 +2731,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F117"
   },
   {
@@ -2754,7 +2754,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F118"
   },
   {
@@ -2777,7 +2777,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F119"
   },
   {
@@ -2800,7 +2800,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F120"
   },
   {
@@ -2823,7 +2823,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F121"
   },
   {
@@ -2846,7 +2846,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F122"
   },
   {
@@ -2869,7 +2869,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F123"
   },
   {
@@ -2892,7 +2892,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F124"
   },
   {
@@ -2981,7 +2981,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F128"
   },
   {
@@ -3004,7 +3004,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F129"
   },
   {
@@ -3027,7 +3027,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F130"
   },
   {
@@ -3050,7 +3050,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F131"
   },
   {
@@ -3073,7 +3073,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F132"
   },
   {
@@ -3096,7 +3096,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F133"
   },
   {
@@ -3119,7 +3119,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F134"
   },
   {
@@ -3142,7 +3142,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F135"
   },
   {
@@ -3165,7 +3165,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F136"
   },
   {
@@ -3188,7 +3188,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F137"
   },
   {
@@ -3211,7 +3211,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F138"
   },
   {
@@ -3234,7 +3234,7 @@
       ],
       "neverPence": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F139"
   },
   {
@@ -3443,7 +3443,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F147"
   },
   {
@@ -3496,7 +3496,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F149"
   },
   {
@@ -3523,7 +3523,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F150"
   },
   {
@@ -3550,7 +3550,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F151"
   },
   {
@@ -3577,7 +3577,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F152"
   },
   {
@@ -3604,7 +3604,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F153"
   },
   {
@@ -3631,7 +3631,7 @@
         36000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F154"
   },
   {
@@ -3896,7 +3896,7 @@
         450000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F164"
   },
   {
@@ -3923,7 +3923,7 @@
         450000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-02-F165"
   },
   {
