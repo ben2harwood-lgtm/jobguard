@@ -191,7 +191,7 @@ const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
 // Continuous speech has no punctuation, so a new work item also starts at one of these verbs
 // unless the word before it ties it to the clause (for example "the", "to" or "and").
 export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
-const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
+const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|is|are|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
@@ -237,13 +237,13 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       if (!separator) {
         // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
         if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
-          && !awaitingCorrection && !tiedBefore.test(text.slice(start, i)) && !priceCondition.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
+          && !awaitingCorrection && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
           add(start, i); start = i + 1;
         }
         continue;
       }
       const next = visibleWorkText(text.slice(i + separator.length));
-      if (priceCondition.test(text.slice(start, i))) continue;
+      // A condition qualifies this clause's price; an explicit next work item still starts a new clause.
       if (awaitingCorrection || spokenCorrection.exec(next)?.index === 0) continue;
       // Keep the disposal phrase attached to the removal it describes.
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;

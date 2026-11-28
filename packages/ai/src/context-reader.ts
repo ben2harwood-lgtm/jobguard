@@ -349,10 +349,10 @@ function totals(text: string): TotalPrice[] {
   // A clause ends at punctuation, never at the point or comma inside a number ("4.5k", "1,200").
   const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !points.has(at)
     && !(text[at] === "," && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
-  let previousEnd = -1, previousPriceCount = 0;
+  let previousEnd = -1;
   for (const phrase of text.matchAll(new RegExp(total.source, "giu"))) {
-    // Repeated total words beside one amount name the same total, so scan that clause once.
-    if (phrase.index < previousEnd && previousPriceCount === 1) continue;
+    // Scan an extended clause once: rescanning its tail must never rescue one of several overlapping amounts.
+    if (phrase.index < previousEnd) continue;
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;
     let clauseEnd = phrase.index;
@@ -370,7 +370,6 @@ function totals(text: string): TotalPrice[] {
     const read = hideRoomNumbers(clause);
     const prices = [...read.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
       && !/^\s*(?:square|sq\b|m2|m²|met(?:re|er)s?|linear|mm|cm|coats?|days?|weeks?|hours?|units?|doors?|items?|rooms?)/iu.test(clause.slice(match.index + match[0].length)));
-    previousPriceCount = prices.length;
     // The price said with the total words: the one nearest them.
     const price = prices.length ? prices.reduce((best, match) => Math.min(Math.abs(match.index - phraseEnd), Math.abs(match.index + match[0].length - phraseAt))
       < Math.min(Math.abs(best.index - phraseEnd), Math.abs(best.index + best[0].length - phraseAt)) ? match : best) : null;
@@ -384,7 +383,7 @@ function totals(text: string): TotalPrice[] {
     const phraseStart = clauseStart + Math.min(lo, room?.index ?? lo);
     const phraseStop = clauseStart + Math.max(hi, room && room.index >= hi ? room.index + room[0].length : hi);
     // "all in about 4500", "all in 4500, no, make that 5000": approximate or corrected totals stay open and are asked about.
-    const single = !!price && (prices.length === 1 || prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1);
+    const single = !!price && prices.length === 1;
     // Totals call the same function as line prices (saidAmountOpen), with the words of the same clause either side:
     // "a quarter of a thousand pounds", "five hundred pounds or six hundred", "500 pounds per day" all stay open and
     // are asked about with the whole phrase, including comma-separated qualifications and corrections.
