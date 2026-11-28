@@ -662,7 +662,7 @@ const switchLive = () => ({ version: "practice-activation-command.v1", commandId
 const CRONTAB_TASKS = ["discover_outbox", "discover_final_check_requests", "discover_evidence_pack_requests",
   "discover_demo_source_holds", "discover_retention_reviews"];
 const appJobs = `(SELECT count(*)::int FROM graphile_worker._private_jobs j JOIN graphile_worker._private_tasks t ON t.id = j.task_id
-  WHERE NOT (j.payload ? '_cron' AND t.identifier = ANY('{${CRONTAB_TASKS.join(",")}}'::text[])))`;
+  WHERE NOT (j.payload::jsonb ? '_cron' AND t.identifier = ANY('{${CRONTAB_TASKS.join(",")}}'::text[])))`;
 
 async function effectCounts() {
   const tables = ["graphile_worker._private_jobs", "app.scheduled_readiness_plan", "app.practice_exposure_schedule",
