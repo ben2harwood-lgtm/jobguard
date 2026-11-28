@@ -412,14 +412,14 @@ Executed final validation with at most two Vitest workers:
 Deterministic local verification only. Five requested files changed; no database, web, provider,
 commercial-policy or release change. Commit only; no push, merge, acceptance or independent review
 claimed. This exhausts the two allowed review-repair rounds for this piece.
-| RT-03-F080 | RT-03 | 3d43d1d7 | RT-03-169 | Hang four doors, actually five doors, at £45 each | 1 work line; quantity null with a correction question about five doors (said correction 5; never superseded 4); only 4500 pence or null, no calculated total | capture: Hang.quantity: got "1", expected null; reader: Hang.quantity: got "4", expected null; checked reader: Hang.quantity: got "4", expected null | P1 | open | — |
-| RT-03-F081 | RT-03 | 3d43d1d7 | RT-03-171 | Install three radiators, no, make that two radiators, at £95 each | 1 work line; quantity null with a correction question about two radiators (said correction 2; never superseded 3); only 9500 pence or null, no calculated total | capture: Install.quantity: got "1", expected null | P1 | open | — |
-| RT-03-F082 | RT-03 | 3d43d1d7 | RT-03-173 | Fit 4 doors at £45 each. No, make that 5 doors | 1 work line; quantity null with a correction question about 5 doors (said correction 5; never superseded 4); only 4500 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null | P1 | open | — |
-| RT-03-F083 | RT-03 | 3d43d1d7 | RT-03-174 | Fit six metres of skirting at £12 per metre, sorry eight metres | 1 work line; quantity null with a correction question about eight metres (said correction 8; never superseded 6); only 1200 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null; reader: Fit.quantity: got "6", expected null; checked reader: Fit.quantity: got "6", expected null | P1 | open | — |
-| RT-03-F084 | RT-03 | 3d43d1d7 | RT-03-175 | Install 2 lights at £35 each, actually 3 lights | 1 work line; quantity null with a correction question about 3 lights (said correction 3; never superseded 2); only 3500 pence or null, no calculated total | capture: Install.quantity: got "1", expected null; reader: Install.quantity: got "2", expected null; checked reader: Install.quantity: got "2", expected null | P1 | open | — |
-| RT-03-F085 | RT-03 | 3d43d1d7 | RT-03-176 | Hang five doors at £45 each, no, that is four doors | 1 work line; quantity null with a correction question about four doors (said correction 4; never superseded 5); only 4500 pence or null, no calculated total | capture: Hang.quantity: got "1", expected null; reader: Hang.quantity: got "5", expected null; checked reader: Hang.quantity: got "5", expected null | P1 | open | — |
-| RT-03-F086 | RT-03 | 3d43d1d7 | RT-03-177 | Tile twenty square metres at £30 per square metre, no, fifteen square metres | 1 work line; quantity null with a correction question about fifteen square metres (said correction 15; never superseded 20); only 3000 pence or null, no calculated total | capture: Tile.quantity: got "1", expected null; reader: Tile.quantity: got "20", expected null; checked reader: Tile.quantity: got "20", expected null | P1 | open | — |
-| RT-03-F087 | RT-03 | 3d43d1d7 | RT-03-178 | Fit three shelves at £20 each, I mean four shelves | 1 work line; quantity null with a correction question about four shelves (said correction 4; never superseded 3); only 2000 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null; reader: Fit.quantity: got "3", expected null; checked reader: Fit.quantity: got "3", expected null | P1 | open | — |
+| RT-03-F080 | RT-03 | 3d43d1d7 | RT-03-169 | Hang four doors, actually five doors, at £45 each | 1 work line; quantity null with a correction question about five doors (said correction 5; never superseded 4); only 4500 pence or null, no calculated total | capture: Hang.quantity: got "1", expected null; reader: Hang.quantity: got "4", expected null; checked reader: Hang.quantity: got "4", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F081 | RT-03 | 3d43d1d7 | RT-03-171 | Install three radiators, no, make that two radiators, at £95 each | 1 work line; quantity null with a correction question about two radiators (said correction 2; never superseded 3); only 9500 pence or null, no calculated total | capture: Install.quantity: got "1", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F082 | RT-03 | 3d43d1d7 | RT-03-173 | Fit 4 doors at £45 each. No, make that 5 doors | 1 work line; quantity null with a correction question about 5 doors (said correction 5; never superseded 4); only 4500 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F083 | RT-03 | 3d43d1d7 | RT-03-174 | Fit six metres of skirting at £12 per metre, sorry eight metres | 1 work line; quantity null with a correction question about eight metres (said correction 8; never superseded 6); only 1200 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null; reader: Fit.quantity: got "6", expected null; checked reader: Fit.quantity: got "6", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F084 | RT-03 | 3d43d1d7 | RT-03-175 | Install 2 lights at £35 each, actually 3 lights | 1 work line; quantity null with a correction question about 3 lights (said correction 3; never superseded 2); only 3500 pence or null, no calculated total | capture: Install.quantity: got "1", expected null; reader: Install.quantity: got "2", expected null; checked reader: Install.quantity: got "2", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F085 | RT-03 | 3d43d1d7 | RT-03-176 | Hang five doors at £45 each, no, that is four doors | 1 work line; quantity null with a correction question about four doors (said correction 4; never superseded 5); only 4500 pence or null, no calculated total | capture: Hang.quantity: got "1", expected null; reader: Hang.quantity: got "5", expected null; checked reader: Hang.quantity: got "5", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F086 | RT-03 | 3d43d1d7 | RT-03-177 | Tile twenty square metres at £30 per square metre, no, fifteen square metres | 1 work line; quantity null with a correction question about fifteen square metres (said correction 15; never superseded 20); only 3000 pence or null, no calculated total | capture: Tile.quantity: got "1", expected null; reader: Tile.quantity: got "20", expected null; checked reader: Tile.quantity: got "20", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
+| RT-03-F087 | RT-03 | 3d43d1d7 | RT-03-178 | Fit three shelves at £20 each, I mean four shelves | 1 work line; quantity null with a correction question about four shelves (said correction 4; never superseded 3); only 2000 pence or null, no calculated total | capture: Fit.quantity: got "1", expected null; reader: Fit.quantity: got "3", expected null; checked reader: Fit.quantity: got "3", expected null | P1 | fixed (deterministic tests; review pending) | RT-FIX-6 (#1071); RT-03-CATCHUP at 04d88f74 |
 
 ## RT-03 attack receipt — 28 November 2026
 
@@ -1344,3 +1344,60 @@ interface or alert change. Database, browser/native and live-provider checks are
 inapplicable to this deterministic parser-only repair. These are executed checks;
 independent exact-head RED review and merge/release approval remain pending.
 Commit only, no push; `.pnpm-store/` is excluded.
+
+## RT-03-CATCHUP onto sqpv 718be9f5 — 28 November 2026
+
+Tested merge `04d88f74780ff27ebe84813693f2539c760f93d9` on
+`codex/sandbox/rt-03` (RT-03 `4a095bb6` + sqpv `718be9f5`).
+The PR #1082 `quantity: null` assertions for RT-03-169–180, targeted questions,
+exact-price alternatives and every other expectation are preserved unchanged.
+
+The initial AI run reproduced **30 failures / 1,394 passes**. Of these, **22**
+ordinary tests failed because the ignored local `packages/core/dist` was stale:
+its compiled `checkUnderstandingNumbers` called `read.open(before, after)` without
+passing the unit, while the checked-in source passes `unit`. The reader therefore
+checked valid each/per-unit prices as unqualified money and cleared them. This
+also affected the three-room measure rate, VAT, next-room price, shared runner
+guard, RT-01-171/172 and RT-02-055–061. `@jobguard/core` resolves its runtime import
+through `dist/index.js`. Rebuilding that existing dependency, without source edits,
+removed all 22 failures; the intermediate run had **8 failures / 1,416 passes**,
+all stale open-finding statuses that now passed their unchanged assertions.
+
+Flipped RT-03-169, 171, 173–178 to `pass`, removing their open-finding references,
+and closed **RT-03-F080–F087** against RT-FIX-6 (#1071). RT-03-170/172 were already
+passing, as were 179/180. All twelve strengthened count cases now pass through
+capture, reader and checked reader. **No new F-ids**, parser disagreement or
+production-source changes. The lane note records this catch-up and its tested base.
+
+Merge audit: compared all **58** AI TypeScript source/test files byte-for-byte with
+sqpv `718be9f5`, including every failing test file, the shared corpus runner and
+parser/reader helpers. Only the intended RT-03 focused test's finding-head binding
+from `4a095bb6` differs. The other AI source-tree difference is the intended RT-03
+JSON quantity assertions/statuses. No merged file needed restoration; no shared
+runner/helper change caused the ordinary failures. Core sources also match sqpv.
+
+Commands actually run (Node 24.17.0; pnpm 10.28.1):
+
+| Check | Result |
+| --- | --- |
+| `pnpm --filter @jobguard/core build` | exit 0; refresh ignored dependency output only |
+| `pnpm --filter @jobguard/ai test --maxWorkers=2` | exit 0; **29 files / 1,424 tests passed; 0 unexpected failures**; includes the golden/evaluation tests (`pnpm eval` delegates to this suite) |
+| `pnpm --filter @jobguard/ai typecheck` | exit 0 |
+| `pnpm --filter @jobguard/ai lint` | exit 0 |
+| `pnpm --filter @jobguard/ai build` | exit 0 |
+| Byte comparisons, unchanged corpus-expectation assertions, quantity/status checks, finding-ID uniqueness and `git diff --check` | pass |
+
+The existing initial LATER / SIMPLICITY note for `corpus.test.ts`'s evaluator is
+retained; no helper extraction is needed for this catch-up. Only the RT-03 corpus,
+this findings file and `config/lanes/v2-rt-03.json` change. Database, browser/native,
+live-model and root monorepo checks are inapplicable to these status/documentation
+changes. These are executed deterministic checks, not independent review or
+merge/release approval. Commit only, no push; `.pnpm-store/` remains untracked and
+excluded.
+
+Lane validation: loading the whole register is blocked by the pre-existing
+`config/lanes/v2-rt-12.json` grant of a lane-register path. That unrelated file is
+unchanged. Scoped validation using the same exported validator against the legacy
+register plus RT-03's lane file passes: the exact branch selects `v2-rt-03` and all
+three changed paths are permitted. This is a scoped path check, not a whole-register
+pass. The AI suite/check results above are unaffected.

@@ -1885,8 +1885,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F080"
+    "status": "pass"
   },
   {
     "id": "RT-03-170",
@@ -1939,8 +1938,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F081"
+    "status": "pass"
   },
   {
     "id": "RT-03-172",
@@ -1993,8 +1991,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F082"
+    "status": "pass"
   },
   {
     "id": "RT-03-174",
@@ -2020,8 +2017,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F083"
+    "status": "pass"
   },
   {
     "id": "RT-03-175",
@@ -2047,8 +2043,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F084"
+    "status": "pass"
   },
   {
     "id": "RT-03-176",
@@ -2074,8 +2069,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F085"
+    "status": "pass"
   },
   {
     "id": "RT-03-177",
@@ -2101,8 +2095,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F086"
+    "status": "pass"
   },
   {
     "id": "RT-03-178",
@@ -2128,8 +2121,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-03-F087"
+    "status": "pass"
   },
   {
     "id": "RT-03-179",
