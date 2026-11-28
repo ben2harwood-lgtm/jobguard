@@ -50,17 +50,13 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM app.role_grant g WHERE(g.tenant_id,g.membership_id)=(t,a) AND g.role='finance' AND g.scope_kind='tenant' AND g.scope_id=t
    AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation v WHERE(v.tenant_id,v.grant_id)=(t,g.id))) THEN
    RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
-  SELECT jsonb_agg(jsonb_build_object('jobId',j.id,'teamId',app.contractor_job_team(j.id),
-    'duplicateGroups',coalesce((SELECT jsonb_agg(jsonb_build_object('groupId',u.group_id,'extras',u.extras) ORDER BY u.group_id) FROM app.extra_duplicate_unresolved(t,j.id) u),'[]'::jsonb)) ORDER BY j.id) INTO jobs
-   FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
-   WHERE j.tenant_id=t AND j.provenance='work_order' AND c.job_track='contractor' AND c.environment='synthetic_demo';
- ELSE
-  SELECT jsonb_agg(jsonb_build_object('jobId',j.id,'teamId',app.contractor_job_team(j.id),
-    'duplicateGroups',coalesce((SELECT jsonb_agg(jsonb_build_object('groupId',u.group_id,'extras',u.extras) ORDER BY u.group_id) FROM app.extra_duplicate_unresolved(t,j.id) u),'[]'::jsonb)) ORDER BY j.id) INTO jobs
-   FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
-   WHERE j.tenant_id=t AND j.provenance='work_order' AND c.job_track='contractor' AND c.environment='synthetic_demo'
-    AND app.xa_covers(a,ARRAY[r],j.id,'job.read') IS NOT NULL;
  END IF;
+ -- Finance (tenant grant checked above) covers every synthetic contractor work-order job; any other role needs a covering job grant.
+ SELECT jsonb_agg(jsonb_build_object('jobId',j.id,'teamId',app.contractor_job_team(j.id),
+   'duplicateGroups',coalesce((SELECT jsonb_agg(jsonb_build_object('groupId',u.group_id,'extras',u.extras) ORDER BY u.group_id) FROM app.extra_duplicate_unresolved(t,j.id) u),'[]'::jsonb)) ORDER BY j.id) INTO jobs
+  FROM app.job j JOIN app.job_commercial_track c ON(c.tenant_id,c.job_id)=(j.tenant_id,j.id)
+  WHERE j.tenant_id=t AND j.provenance='work_order' AND c.job_track='contractor' AND c.environment='synthetic_demo'
+   AND (r='finance' OR app.xa_covers(a,ARRAY[r],j.id,'job.read') IS NOT NULL);
  RETURN jsonb_build_object('version','extra-commercial-read-scope.v1','membershipId',a,'role',r,'feeReader',r='finance','jobs',coalesce(jobs,'[]'::jsonb));
 END $$;
 

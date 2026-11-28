@@ -53,7 +53,13 @@ async function loadFacts(db: TenantTransaction, tenant: string, jobs: string[], 
     LEFT JOIN app.work_order_current cur ON(cur.tenant_id,cur.work_order_id)=(w.tenant_id,w.id)
     WHERE v.tenant_id=$1 AND v.job_id=ANY($2::uuid[]) AND v.job_track='contractor' AND ($3::uuid IS NULL OR v.id=$3)
     ORDER BY o.server_recorded_at,v.id`, a);
-  const events = await q(db, `SELECT variation_id,kind,sequence,reason_code,server_recorded_at FROM app.extra_event WHERE ${scoped} ORDER BY variation_id,sequence`, a);
+  // `superseded` mirrors app.xa_latest_kind (0622): only the duplicate event written by a link that was later reversed by an
+  // unlink stops counting toward the effective state. The event itself stays in the history.
+  const events = await q(db, `SELECT e.variation_id,e.kind,e.sequence,e.reason_code,e.server_recorded_at,
+     (e.kind='duplicate' AND EXISTS(SELECT 1 FROM app.extra_duplicate_link l
+       JOIN app.extra_duplicate_link u ON(u.tenant_id,u.job_id,u.reverses_link_id)=(l.tenant_id,l.job_id,l.id) AND u.kind='unlink'
+       WHERE(l.tenant_id,l.job_id,l.duplicate_id,l.command_id)=(e.tenant_id,e.job_id,e.variation_id,e.command_id) AND l.kind='link')) superseded
+    FROM app.extra_event e WHERE e.tenant_id=$1 AND e.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR e.variation_id=$3) ORDER BY e.variation_id,e.sequence`, a);
   const sor = await q(db, `SELECT * FROM app.extra_sor_revision WHERE ${scoped}`, a);
   const bindings = await q(db, `SELECT b.variation_id,b.id,b.logical_revision,b.source_kind,b.sor_revision_id,b.actor_membership_id,b.server_recorded_at,
      coalesce(s.net_pence,r.signed_delta_pence) net_pence,p.server_recorded_at basis_at
@@ -127,7 +133,8 @@ const orderRevision = (e: Extra, which: "originRevision" | "currentRevision") =>
 };
 const basis = (b: Row) => b.basis_at ? { kind: "server_sor" as const, recordedAt: iso(b.basis_at) } : { kind: "basis_not_recorded" as const };
 const lifecycle = (e: Extra): ExtraWorkInput["lifecycle"] => {
-  const kind = e.events.at(-1)?.kind as string | undefined;
+  // The effective state, as app.xa_latest_kind derives it: a duplicate event reversed by an unlink no longer counts.
+  const kind = e.events.filter(x => x.superseded !== true).at(-1)?.kind as string | undefined;
   if (kind === undefined) throw new ExtraCommercialReadError("INCONSISTENT_WORK_INPUT");
   if (["exported", "billed", "part_paid", "paid", "credited", "billing_rejected"].includes(kind)) return "exported";
   return kind as ExtraWorkInput["lifecycle"];
@@ -292,7 +299,7 @@ export class ExtraCommercialReadRepository {
       const push = (at: Date, kind: string, ref: string, detail: Record<string, unknown> = {}) => history.push({ at: at.toISOString(), kind, ref, detail });
       for (const r of [e.originRevision, e.currentRevision]) if (r && !history.some(h => h.ref === r.id)) push(r.created_at as Date, "order_revision", r.id as string, { revision: Number(r.revision), status: r.status });
       push(e.row.raised_at as Date, "raised", e.id, { kind: e.row.origin_kind });
-      for (const x of e.events) push(x.server_recorded_at as Date, "event", `${e.id}:${x.sequence}`, { kind: x.kind, reasonCode: x.reason_code ?? null });
+      for (const x of e.events) push(x.server_recorded_at as Date, "event", `${e.id}:${x.sequence}`, { kind: x.kind, reasonCode: x.reason_code ?? null, reversedByUnlink: x.superseded === true });
       for (const b of e.bindings) push(b.server_recorded_at as Date, "priced", b.id as string, { logicalRevision: Number(b.logical_revision), sourceKind: b.source_kind, netPence: num(b.net_pence), basis: basis(b).kind });
       for (const r of e.requests) {
         push(r.server_recorded_at as Date, "request_opened", r.id as string, { requestRevision: Number(r.request_revision), netPence: num(r.net_pence) });

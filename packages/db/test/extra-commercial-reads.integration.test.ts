@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { ExtraApprovalRepository, ExtraCommercialReadRepository, SiteExtraRepository, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/index.js";
+import { ExtraApprovalRepository, ExtraCommercialReadRepository, ExtraRepository, SiteExtraRepository, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/index.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { world as billingWorld } from "./contractor-billing-fixtures.js";
@@ -251,4 +251,57 @@ describe("the client's narrow projection", () => {
     expect(await code(identity.query("SELECT app.cr_read_scope($1)", [randomUUID()]))).toBe("42501");
     expect(await code(identity.query("SELECT app.cr_fee_trail($1,$2,$3)", [randomUUID(), s.jobId, s.extraId]))).toBe("42501");
   }, 240_000);
+});
+
+// Repair round 1 (P2): the reader derives the effective state as app.xa_latest_kind does, so a duplicate fact reversed by an unlink
+// no longer hides the extra. The reversed event stays in the claim record, flagged.
+describe("approve -> duplicate -> unlink restores the effective state", () => {
+  let w: ChainWorld, sup: S, fin: S;
+  beforeAll(async () => {
+    w = await chainWorld(c);
+    [sup, fin] = await Promise.all([w.members.supervisor, w.members.finance].map(a => session(a.member)));
+  }, 240_000);
+  async function linked(approve: boolean) {
+    const s = await submitted(c, w, 40000), actor = w.members.supervisor.member, ctx = await act(w, actor);
+    if (approve) await approvals().approveExtraStep(ctx, actor, approveInput(s, 0));
+    const canonicalId = await raiseOn(c, w, s.jobId);
+    await approvals().priceExtra(await act(w, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 });
+    const canonical = await approvals().submitExtra(ctx, actor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
+    await approvals().approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: String(canonical.requestId), hash: String(canonical.revisionHash), net: 40000 }, 0));
+    const link = await approvals().markDuplicate(ctx, actor, { version: "mark-duplicate.v1", commandId: randomUUID(), jobId: s.jobId, duplicateId: s.extraId, canonicalId });
+    const extras = new ExtraRepository(c.runtime);
+    const unlink = async () => extras.unlinkDuplicate(ctx, { version: "extra-duplicate-unlink.v1", commandId: randomUUID(), jobId: s.jobId, actorMembershipId: actor.membershipId,
+      linkId: String(link.linkId), expectedRevision: (await extras.readDuplicateLinks(ctx, s.jobId)).revision, reasonCode: "not_same_work" });
+    return { s, unlink };
+  }
+
+  it("an approved, unexported extra wrongly marked duplicate returns to finance's work list once unlinked", async () => {
+    const { s, unlink } = await linked(true);
+    // While the link stands the extra is closed as a duplicate.
+    expect(await itemOf(fin, s.extraId)).toBeUndefined();
+    await unlink();
+    // The raw last event is still `duplicate`; the effective state is `approved`.
+    expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1 AND variation_id=$2 ORDER BY sequence DESC LIMIT 1", [w.p.tenantId, s.extraId])).rows).toEqual([{ kind: "duplicate" }]);
+    expect((await c.admin.query("SELECT app.xa_latest_kind($1,$2,$3) k", [w.p.tenantId, s.jobId, s.extraId])).rows).toEqual([{ k: "approved" }]);
+    expect(await itemOf(fin, s.extraId)).toMatchObject({ state: "approved_not_exported", ownerRoles: ["finance"], nextAction: "export" });
+    expect(await itemOf(fin, s.extraId, { states: ["approved_not_exported"] })).toBeDefined();
+    const asked = await all(fin, s.jobId, s.extraId).asked();
+    expect(asked).toMatchObject({ approvedNetPence: 40000, pendingNetPence: null });
+    expect(asked.revisions.map(r => r.status)).toEqual(["approved"]);
+    const claim = await all(fin, s.jobId, s.extraId).claim();
+    const events = claim.history.filter(h => h.kind === "event").map(h => [h.detail.kind, h.detail.reversedByUnlink]);
+    expect(events.at(-1)).toEqual(["duplicate", true]);
+    expect(events.filter(([, reversed]) => reversed === true)).toHaveLength(1);
+    expect(claim.history.filter(h => h.kind === "duplicate_link").map(h => h.detail.kind)).toEqual(["link", "unlink"]);
+  });
+
+  it("an extra marked duplicate while awaiting approval reads as awaiting its reopened request once unlinked", async () => {
+    const { s, unlink } = await linked(false);
+    expect(await itemOf(sup, s.extraId)).toBeUndefined();
+    await unlink();
+    expect(await itemOf(sup, s.extraId)).toMatchObject({ state: "waiting_for_contractor_approval", nextAction: "approve_or_reject" });
+    const asked = await all(sup, s.jobId, s.extraId).asked();
+    expect(asked.revisions.map(r => [r.requestRevision, r.status])).toEqual([[1, "duplicate"], [2, "pending"]]);
+    expect(asked).toMatchObject({ pendingNetPence: 40000, approvedNetPence: null });
+  });
 });

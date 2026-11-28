@@ -145,7 +145,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "e6f37858707b181dfd639d01c033c861dbe8da1a54563e5f0f04b0a61e3c1de7",
+        "definitionSha256": "eb527295952f440d2a03dc58739a6fba1dfeed826ce444cadba89898f38fdf48",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_team",
