@@ -42,3 +42,9 @@ Q73's reading 1 hit its stop. On the seed stack, `app.finalAccount.build(job, fi
 ## Done when
 - On the practice job, a V2 builder closes the account end to end through main's own computation, main's authority rules are unchanged, and the final invoice is exact.
 - CI1 is green, and the Codex check is clean or answered. Merge only on Ben's own card (RED money and security).
+
+## Parked, 28 Nov 10:55 UK (coordinator decision under Ben's standing say-so)
+The builder's dry-check (`/mnt/project-files/jobguard-v2/notes/q74-dry-check-2026-11-28.md`) found two blockers:
+- Main's close-out is gated to the demo database: 167 functions check `current_database()='jobguard_synthetic_demo'`, including the Final Check worker (`lp11_bind_shadow_job`) and `answer_job_proof_statement`.
+- The proof session digest goes through lp6.
+Renaming the V2 database was refused, because it would switch on main's demo-only shortcuts, such as generated proof, on V2 and would clash with the Mac demo database. Opening main's gates is a RED main change. Decision: park until after the 3 Dec hosting decision. G6 part 1 (the review card and stage-draft guards) ships. 2088 stays reserved for this piece.
