@@ -5,8 +5,10 @@
       "branches": [
         "claude/project-thread-trp08u-g6"
       ],
-      "note": "RED money Q73 V2-G6. Mounts on main-owned files: packages/db/src/final-account-lock-repository.ts (one V2-only guard call first in lock(); a no-op unless JOBGUARD_LOCAL_V2=1 on the synthetic stack), apps/api/src/workspace/application.ts (closeOut wiring), packages/core/src/index.ts and packages/db/src/index.ts (exports), apps/web/app/(designed)/jobs/[id]/money/page.tsx (V2-only card). No migration.",
+      "note": "RED money Q73 V2-G6. Mounts on main-owned files: packages/db/src/final-account-lock-repository.ts (one V2-only guard call first in lock(); a no-op unless JOBGUARD_LOCAL_V2=1 on the synthetic stack), apps/api/src/workspace/application.ts (closeOut wiring), packages/core/src/index.ts and packages/db/src/index.ts (exports), apps/web/app/(designed)/jobs/[id]/money/page.tsx (V2-only card), apps/api/src/final-account-lock.controller.ts (V2_STAGE_DRAFT_OPEN as 409). No migration.",
       "allow": [
+        "apps/api/src/final-account-lock.controller.test.ts",
+        "apps/api/src/final-account-lock.controller.ts",
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/close-out.application.ts",
         "apps/web/app/(designed)/jobs/[id]/money/page.tsx",

@@ -34,7 +34,7 @@ BEGIN
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_schedule_task_done.tenant_id, v2_payment_schedule_task_done.job_id)
     ));
-  -- FL: the standard firm lock, joining the job on (tenant_id, job_id).
+  -- FL: the standard firm lock, joining the job on (tenant_id, job_id) (Q83, as FL-6 did for V2 tables).
   DROP POLICY IF EXISTS v2_practice_firm ON app.v2_payment_schedule_task_done;
   CREATE POLICY v2_practice_firm ON app.v2_payment_schedule_task_done AS RESTRICTIVE FOR ALL TO jobguard_runtime
     USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_schedule_task_done.tenant_id, v2_payment_schedule_task_done.job_id)));
@@ -47,7 +47,7 @@ BEGIN
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_schedule.tenant_id, v2_payment_schedule.job_id)
     ));
-  -- FL: the standard firm lock, joining the job on (tenant_id, job_id).
+  -- FL: the standard firm lock, joining the job on (tenant_id, job_id) (Q83, as FL-6 did for V2 tables).
   DROP POLICY IF EXISTS v2_practice_firm ON app.v2_payment_schedule;
   CREATE POLICY v2_practice_firm ON app.v2_payment_schedule AS RESTRICTIVE FOR ALL TO jobguard_runtime
     USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_schedule.tenant_id, v2_payment_schedule.job_id)));

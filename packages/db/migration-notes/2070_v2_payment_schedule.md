@@ -34,5 +34,8 @@ for local rollback retain the existing rehearsal database and provision fresh
 state from the preceding checkout. Do not drop schedules or audit history.
 
 Renumbered 2012 -> 2070 above v2/main (2061 F8) and the claimed V2 numbers (2067 is E7 in the register). Both tables carry the
-standard restrictive `v2_practice_firm` lock (a mandatory app.job join on tenant_id and job_id), so the
-FL guard covers them with no pending file.
+Firm lock (Q83, edited in place before merge): `app.v2_payment_schedule` and
+`app.v2_payment_schedule_task_done` also carry the restrictive
+`v2_practice_firm` policy (FOR ALL, TO jobguard_runtime, joined to `app.job`),
+the same as the other V2 tables, so v2/main's FL guard holds. Rerunning drops
+and re-creates the policies.

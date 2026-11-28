@@ -39,6 +39,10 @@ BEGIN
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_stage_due.tenant_id, v2_payment_stage_due.job_id)
     ));
+  -- FL: the standard firm lock, joining the job on (tenant_id, job_id) (Q83, as FL-6 did for V2 tables).
+  DROP POLICY IF EXISTS v2_practice_firm ON app.v2_payment_stage_due;
+  CREATE POLICY v2_practice_firm ON app.v2_payment_stage_due AS RESTRICTIVE FOR ALL TO jobguard_runtime
+    USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_payment_stage_due.tenant_id, v2_payment_stage_due.job_id)));
   REVOKE ALL ON app.v2_payment_stage_due FROM PUBLIC;
   GRANT SELECT, INSERT ON app.v2_payment_stage_due TO jobguard_runtime;
 END
