@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl1": {
+      "branches": ["codex/sandbox/v2-fl1"],
+      "note": "RED tenancy. Q35 V2-FL-1: V2 bootstrap migration 2047 puts 2001's restrictive firm policy on the 39 V2 core tables, plus the firm-lock guard test, the shared firm A/B check, and the pending files that FL-2 to FL-5 each delete when they lock their own tables.",
+      "allow": [
+        "packages/db/migration-notes/2047_v2_firm_lock_core.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-1.checks.mjs",
+        "tools/v2/firm-lock/checks-lib.mjs",
+        "tools/v2/firm-lock/guard.mjs",
+        "tools/v2/firm-lock/pending/FL-2.json",
+        "tools/v2/firm-lock/pending/FL-3.json",
+        "tools/v2/firm-lock/pending/FL-4.json",
+        "tools/v2/firm-lock/pending/FL-5.json",
+        "tools/v2/migrations/2047_v2_firm_lock_core.proof.json",
+        "tools/v2/migrations/2047_v2_firm_lock_core.sql",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
