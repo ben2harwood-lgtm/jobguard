@@ -1,6 +1,6 @@
 -- Q63 / V2-G4. Who can read the handover pack. The builder can stop a link, a link sent to a customer
 -- contact the job no longer has stops opening, and "newer version available" ignores stopped releases.
--- Replaces only the 2058 scope-open and view bodies; everything else in them is as 2058 has it.
+-- Replaces only the 2083 scope-open and view bodies; everything else in them is as 2083 has it.
 BEGIN;
 
 DO $v2$

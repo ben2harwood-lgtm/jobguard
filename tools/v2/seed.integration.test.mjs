@@ -2053,11 +2053,11 @@ test("G3 firm A/B read check, and migration 2083 reruns without changing policie
   assert.deepEqual(await catalog(), before);
 });
 
-// V2-G4 (Q63, migration 2062): who can read the handover pack. The builder can stop a link, a changed customer
+// V2-G4 (Q63, migration 2084): who can read the handover pack. The builder can stop a link, a changed customer
 // stops the old one, "newer version available" ignores stopped releases, and another firm sees nothing.
 // G3's rerun case reapplies 2083, which puts back the pre-G4 link function bodies. Each G4 case reapplies
-// 2062 first (it is idempotent), so these cases always run against the G4 bodies whatever ran before.
-const g4Migration = readFileSync(new URL("../../packages/db/migrations/2062_v2_handover_release_stop.sql", import.meta.url), "utf8");
+// 2084 first (it is idempotent), so these cases always run against the G4 bodies whatever ran before.
+const g4Migration = readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8");
 const g4 = {
   async ready() { await admin.query(g4Migration); return g3.ready(); },
   stop: (releaseId, reason = "Sent by mistake", commandId = randomUUID()) => ({ version: "v2-handover-stop-command.v1", commandId, releaseId, reason }),
@@ -2167,7 +2167,7 @@ test("G4 stop replay and conflict; an unknown release; UPDATE and DELETE refused
   assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
 });
 
-test("G4 migration 2062 reruns without changing policies, triggers, function bodies or rows", async () => {
+test("G4 migration 2084 reruns without changing policies, triggers, function bodies or rows", async () => {
   const f = await g4.ready();
   const { result } = await g3.direct(f, g3.release(1));
   await g3.post(f, g4.stop(result.release.releaseId));
@@ -2178,7 +2178,7 @@ test("G4 migration 2062 reruns without changing policies, triggers, function bod
     (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_handover_link_scope_open', 'v2_handover_link_view')) AS bodies,
     (SELECT count(*)::int FROM app.v2_handover_release_stop) AS rows`)).rows[0];
   const before = await catalog();
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2062_v2_handover_release_stop.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
