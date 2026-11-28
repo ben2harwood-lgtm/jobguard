@@ -66,23 +66,23 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2028_v2_measurement.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2076_v2_measurement.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_crew_brief.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2077_v2_crew_brief.sql", import.meta.url), "utf8"));
   // V2-F8 who was on site today (2061), after the crew records it checks. Rule 30: stays above FL-6's 2054 line.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2061_v2_site_attendance.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-D1 measurement firm lock (2059).
   await client.query(readFileSync(new URL("./migrations/2059_v2_measurement_firm_lock.sql", import.meta.url), "utf8"));
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2031_v2_materials_enquiry.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2079_v2_materials_enquiry.sql", import.meta.url), "utf8"));
   // V2-D4 crew brief firm lock (2060).
   await client.query(readFileSync(new URL("./migrations/2060_v2_crew_brief_firm_lock.sql", import.meta.url), "utf8"));
-  // V2-E1 open facts (2029) and their firm lock (2064).
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2030_v2_open_fact.sql", import.meta.url), "utf8"));
+  // V2-E1 open facts (2078) and their firm lock (2064).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2078_v2_open_fact.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("./migrations/2064_v2_open_fact_firm_lock.sql", import.meta.url), "utf8"));
   // V2-K4: local-only chasing tables, after the checked V2 boundary.
   await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
