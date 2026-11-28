@@ -1095,3 +1095,55 @@ src/redteam/corpus.test.ts src/redteam/rt03-corrections.test.ts
 src/capture-qualified-price.test.ts` passed: 3 files, 914 tests, including every RV-01,
 RT-02 and RT-03 corpus case. `git diff --check` passed. Existing open findings retain
 their expected status. Local merge commit only; no push or independent review claimed.
+
+## RT-FIX-6 repair round 1 — Codex reviews #1089 and #1075
+
+Base: merge commit `3d2b952a5` on `codex/sandbox/rt-fix-6`. All three reported
+paths are repaired in the existing shared correction/splitting path:
+
+- `spokenCorrection` includes “oh it's”, “oh, it's” and “it's actually”; the
+  existing “sorry” cue also handles “sorry it's”. Each retracts the original
+  price and asks for confirmation without creating another charged line.
+- A room-only sentence ends a correction chunk. In “Paint the hall £200,
+  actually £250. Kitchen. Fit the sink £300”, painting remains in Hall with an
+  open price, and the sink belongs to Kitchen at £300.
+- “make that” / “make it” require a following numeric or number-word replacement.
+  Ordinary work such as “Make that wall good for £200” remains separately priced.
+  Reader A now consults `spokenCorrection` instead of its separate blanket
+  make-that exclusion. There is still one correction marker guard.
+
+Added 13 pass corpus cases, `RT-03-209`–`RT-03-221`: the four reported correction
+forms, three room-heading cases, three ordinary work instructions, and the three
+replacement-amount forms (£250, two fifty, 300). Eight of these failed before the
+repair; all pass afterwards. Every pre-existing corpus entry and expectation is
+unchanged. The corpus runner, `rt03-corrections.test.ts` and
+`capture-qualified-price.test.ts` are unchanged. The golden record changes only
+the parser implementation hash.
+
+Executed validation (all Vitest runs capped at `--maxWorkers=2`):
+
+| Command | Result |
+| --- | --- |
+| `pnpm eval --maxWorkers=2` before step 1 | 29 files, 1,392 tests passed |
+| `pnpm --filter @jobguard/ai test --maxWorkers=2 src/redteam/corpus.test.ts src/redteam/rt03-corrections.test.ts src/capture-qualified-price.test.ts` after repair | 3 files, 927 tests passed |
+| `pnpm eval --maxWorkers=2` after repair | 29 files, 1,405 tests passed |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | 232 files, 4,895 tests passed |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core typecheck` | passed |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core lint` | passed |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core build` | passed |
+| `node packages/ai/dist/evaluation-cli.js` | PASS; golden record verified |
+| Compiled-reader assertions via `node --input-type=module` | 9 checks passed: all three ordinary work cases, through capture / reader / checked reader, retain two exact prices with no correction question |
+| Scripted baseline comparison and `git diff --check` | unchanged prior corpus/test assertions; golden hash-only change; every finding row from both merge parents preserved, no duplicate finding IDs; passed |
+
+Golden scores before and after: 32/32 cases; scope recall 41/41; valid citations
+119/119; unsupported monetary facts 0; ambiguity checks 63/63. No score drop.
+Shared-corpus status after repair: RT-00 3 pass / 2 open; RT-01 (including RV-01)
+402 / 101; RT-02 127 / 48; RT-03 145 / 0. Existing open findings remain open.
+
+Invariants: corrections never create extra charges or retain retracted money;
+room ownership and independent work remain intact; source citations are preserved.
+No migrations, interface, provider, prompt, policy or operational-alert changes.
+No persistence, browser/native or live-provider suite applies to this deterministic
+parser repair. These are executed checks, not independent review or release
+approval. Commit only; no push. `.pnpm-store/` is excluded. The initial review's
+LATER / SIMPLICITY note above is retained; no unrelated refactor is included.

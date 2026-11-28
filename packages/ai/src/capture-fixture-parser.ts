@@ -69,7 +69,8 @@ export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, th
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
 // One correction marker guard for splitting, price safety and the builder's question. Never choose between said values.
 export const spokenCorrection = new RegExp(
-  `\\b(?:(?:no[\\s,]+)?make\\s+(?:that|it)` +
+  `\\b(?:(?:no[\\s,]+)?make\\s+(?:that|it)(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
+  `|oh[\\s,]+it['’]?s|it['’]?s\\s+actually` +
   `|actually|sorry|i\\s+mean(?:t)?|hang\\s+on|wait|nah|nope|no(?!\\s+(?:vat|more|less|charge)\\b)` +
   `|(?:scratch|scrap|forget|cancel)\\b|start\\s+again|correction|not(?=\\s+(?:£?\\d|${numberWord}(?![\\p{L}])))` +
   `|(?:change|revise|replace)\\s+(?:(?:that|the|first)\\s+)*(?:price|figure|amount|first\\s+item|room)\\b|change\\s+the\\s+first\\s+item|change\\s+that\\s+to|revise\\b[^.;!?\\r\\n]{0,60}?\\bprice|the\\b[^.;!?\\r\\n]{0,60}?\\bfigure\\s+was\\s+wrong` +
@@ -221,7 +222,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   let start = 0, correctionInChunkEnd = -1;
   for (let i = 0; i < text.length; i++) {
     if (party && i === party.start) { i = party.end - 1; continue; }
-    // "make that" is a correction, never a new "make" item; its internal commas stay with the same source span.
+    // A correction marker stays with its source span, including internal commas.
     const correctionEnd = correctionEnds.get(i);
     if (correctionEnd !== undefined) { correctionInChunkEnd = correctionEnd; i = correctionEnd - 1; continue; }
     const char = text[i]!;
@@ -229,8 +230,9 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     // A decimal point or thousands separator belongs to the amount.
     if ((/[.!?;\r\n]/u.test(char) || char === "—" && spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) && !points.has(i)) {
       if (char === "." && /\bapprox$/iu.test(text.slice(start, i)) && /^\s*£?\d/u.test(text.slice(i + 1))) continue;
-      // Pauses inside a correction stay with it; a following work sentence starts a separate item.
-      if (correctionInChunkEnd >= start && !isWork(visibleWorkText(text.slice(i + 1)))) continue;
+      // Pauses inside a correction stay with it; following work or a room heading starts a new clause.
+      const next = visibleWorkText(text.slice(i + 1));
+      if (correctionInChunkEnd >= start && !isWork(next) && !roomOnly.test(next.split(/[.!?;\r\n]/u)[0]!)) continue;
       add(start, i); start = i + 1;
     } else {
       const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];

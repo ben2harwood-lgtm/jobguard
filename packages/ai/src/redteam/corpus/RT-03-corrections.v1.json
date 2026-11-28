@@ -3078,5 +3078,299 @@
       "lineCount": 1
     },
     "status": "pass"
+  },
+  {
+    "id": "RT-03-209",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-210",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh, it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh, it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-211",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. It's actually £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "It's actually £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-212",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Sorry it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Sorry it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-213",
+    "lane": "RT-03",
+    "transcript": "Paint the hall £200, actually £250. Kitchen. Fit the sink £300",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the sink",
+          "room": "Kitchen",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-214",
+    "lane": "RT-03",
+    "transcript": "Paint the lounge £400, sorry £450. In the bathroom. Tile the walls £600",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Tile the walls",
+          "room": "Bathroom",
+          "unitPricePence": 60000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-215",
+    "lane": "RT-03",
+    "transcript": "Skim the hall £300, make that £350. Upstairs bedroom. Fit the shelves £150",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Skim the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the shelves",
+          "room": "Upstairs bedroom",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-216",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that wall good for £200.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that wall good",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-217",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that opening wider for £300.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that opening wider",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-218",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make it watertight for £250.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make it watertight",
+          "unitPricePence": 25000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-219",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that £250",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that £250"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-220",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that two fifty",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that two fifty"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-221",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make it 300",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it 300"
+      ]
+    },
+    "status": "pass"
   }
 ]

@@ -123,7 +123,7 @@ function stripLeadingRoom(value: string): { room: string; rest: string; offset: 
 const extraVerb = /^(?:box(?:ing)? in|add|re-?(?:plaster|paint|tile|wire|skim|point|place|felt|grout|hang|fit)|dig|move|get the|have the|knock|take|swap|put|run|board)\b/iu;
 function isVerb(value: string) {
   value = visibleWorkText(value);
-  return !/^(?:make (?:that|it)|it'?s|i mean)\b/iu.test(value) && (workClause(value) || extraVerb.test(value));
+  return spokenCorrection.exec(value)?.index !== 0 && (workClause(value) || extraVerb.test(value));
 }
 /** "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred": the work starts at the verb. */
 function lateWorkAt(value: string): number | null {
