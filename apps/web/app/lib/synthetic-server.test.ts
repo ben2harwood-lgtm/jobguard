@@ -5,7 +5,6 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "b
 vi.mock("./linked-practice-entry", () => ({ enforcePracticePair: f.pair }));
 vi.mock("@jobguard/db", async original => ({ ...await original<typeof import("@jobguard/db")>(), authenticatePracticeSession: f.authenticate, isBlankPracticeCompanyForContext: f.blank, readSyntheticDemo: f.demo, withTenant: f.withTenant }));
 import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
-import { AuthError } from "@jobguard/api/identity";
 import { practiceFailure, syntheticWorkspace } from "./synthetic-server";
 import { GET as sessionRoute } from "../api/session/route";
 
@@ -44,10 +43,6 @@ it.each([
  [new PracticeAccessError("UNAUTHENTICATED"), 401, "UNAUTHENTICATED"],
  [new PracticeAccessError("NOT_FOUND"), 404, "NOT_FOUND"],
  [new PracticeAccessError("SYNTHETIC_MODE_REQUIRED"), 403, "SYNTHETIC_MODE_REQUIRED"],
- // V2-PAIR-1: a refused live identity sign-in behind a linked session.
- [new AuthError("UNAUTHENTICATED"), 401, "UNAUTHENTICATED"],
- [new AuthError("FORBIDDEN"), 403, "FORBIDDEN"],
- [new AuthError("TENANT_FORBIDDEN"), 403, "FORBIDDEN"],
 ] as const)("returns only the established public code for %s", async (error, status, code) => {
  const response = practiceFailure(error)!;
  expect(response.status).toBe(status);

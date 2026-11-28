@@ -1,6 +1,5 @@
 import "server-only";
 import { enforcePracticePair } from "./linked-practice-entry";
-import { AuthError } from "@jobguard/api/identity";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { closeOutboundWorkerPool, authenticatePracticeSession, isBlankPracticeCompanyForContext, PracticeAccessError, RequestBindingRefusedError, withTenant } from "@jobguard/db";
@@ -59,8 +58,7 @@ export async function syntheticWorkspace() {
 }
 
 export function practiceFailure(error:unknown) {
- // V2-PAIR-1: a linked session whose live identity sign-in is refused is refused here too, never a 500.
- const code=error instanceof PracticeAccessError?error.code:error instanceof RequestBindingRefusedError?(error.sessionKind==="practice"?"UNAUTHENTICATED":"FORBIDDEN"):error instanceof AuthError?(error.code==="UNAUTHENTICATED"?"UNAUTHENTICATED":"FORBIDDEN"):undefined;
+ const code=error instanceof PracticeAccessError?error.code:error instanceof RequestBindingRefusedError?(error.sessionKind==="practice"?"UNAUTHENTICATED":"FORBIDDEN"):undefined;
  if(code===undefined)return null;
  return NextResponse.json({code},{status:code==="UNAUTHENTICATED"?401:code==="NOT_FOUND"?404:403,headers:{"Cache-Control":"no-store"}});
 }
