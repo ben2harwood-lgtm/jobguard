@@ -36,3 +36,12 @@ Main's SQL, lp6 and 0518/0650/0733/0749 stay byte-for-byte the same.
 - H1 step 9 runs by link on a V2 practice job, and the builder-recorded acceptance is no longer needed as a workaround.
 - Desktop Codex code and security verdicts name the head and are clean.
 - Ben presses the RED card to merge, and the planner raises it.
+
+## Planner decision (28 Nov 16:50 UK): PARKED after the dry-check
+The builder's dry-check, on a fresh stack with 4 V2 jobs:
+- **The grant itself works.** `customer_portal_current` can be true for a V2 practice job, issued by the shared practice owner membership.
+- **But the database name gates the whole customer path, in 5 places.** They are `app.demo_issue_customer_link`, `app.customer_portal_issuer`, `identity.customer_portal_use`, `identity.customer_portal_quote` and `app.lp11_open_customer_scope`.
+
+Under this packet's rule, V2 would need mirrors of all five. That includes the identity schema's customer redeem and quote read, and its own copy of lp11's customer-scope opener. In effect it is a second customer-auth path. That's too much security surface for a practice-only H1 step, and the issue-only half (option b, Q85a) gives a link no customer can redeem.
+
+**So B2 is parked.** H1 step 9 keeps the builder-recorded acceptance, which Q87 accepts. Before any build, the design question goes to Astra and to Ben's catch-up: should V2 get its own customer-auth mirrors (one RED packet, a security review, five definers with parity), or should main's five routines accept a second named practice database? The second is a main-lane change, and only Ben's card can allow it. Nothing is built until one is chosen.

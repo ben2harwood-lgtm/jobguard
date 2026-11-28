@@ -107,7 +107,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D47 | Q82 | V2-B4 live job loaded fresh shows the Job started panel (bisect v2/main + #1042). **Closed 28 Nov 15:25: not a bug (dev-server first load ~36 s); no PR. Default-view change folded into Q84.** | **Opus** | v2/main + #1057 | none | T2 |
 | D48 | Q83 | V2-TRAIN-1 C6 done-when QUOTE_NOT_ISSUABLE; K5 firm-lock policies on 2046/2071; K5A-1 helper backed by a real signal | **Opus** | #1047; K5 line | none (in place) | RED money |
 | D49 | Q84 | V2-B1B2 launcher: customer link opens for V2 jobs; default practice recipient on the catcher list; B1 done #1095; B2 moved to Q85; default-view change dropped 15:40 (panels load only inside the editor) | **Opus** | v2/main + #1057 | none | T2 |
-| D50 | Q85 | V2-LINK-1 V2-owned quote-acceptance link definer (no main demo DB-name lock); parity test; settles Q81-2 rule | **Opus** | v2/main + #1057 (+Q81) | one V2 number | T3 RED |
+| D50 | Q85 | **PARKED 16:50 (5 DB-name-locked routines incl. identity + lp11 customer scope; design question to Astra/Ben).** V2-LINK-1 V2-owned quote-acceptance link definer (no main demo DB-name lock); parity test; settles Q81-2 rule | **Opus** | v2/main + #1057 (+Q81) | one V2 number | T3 RED |
 | D51 | Q86 | V2-C3C-UI "Your crew" screen + route over the existing C3C repository; picker lists new crew; dry-check whether G1 snags need part 2 (H1 B5) | **Opus** | v2/main + #1057 | none | T2 |
 | D52 | Q87 | V2-H1-DRY-2 rerun H1 on a train with #1095, #1104, Q85 (+Q86); findings only; 60 s waits | **Opus** | Q80 train rebuilt | none (check only) | T1 |
 
