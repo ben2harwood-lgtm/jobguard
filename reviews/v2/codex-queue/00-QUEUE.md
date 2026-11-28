@@ -101,6 +101,8 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D41 | Q76 | V2-G7 Snags, Handover and Your handover pack finished to M3: 44 px controls, M3 copy, no sideways scroll at 360; thumbnails LATER | **Opus** | G9 `claude/project-thread-trp08u-g9` | none | T2 |
 | D42 | Q77 | V2-SQ-M price limits and credits ("up to £200", "minus £50") stay open and are asked about, on every path; Codex's 18 tests copied unchanged. **Build before Q75** | **Opus** | SQ-K #1049 `claude/project-thread-trp08u-sqk` | none | T2 |
 | D43 | Q78 | V2-ACTOR-KEY linked builder can write on the G stack: drop the actor-to-membership keys on 2081-2086 (and 2031 F3 if its actor is the editor) in place, as #1059; G1 audit key `eventSequence`; linked-builder seed test for each write | **Opus** | each G branch, G1 up | none (in place) | T2 (rides RED G3/G4/G8/G9) |
+| D44 | Q79 | V2-SEED-1 find why the Switch-live seed test fails on the G and K5 stacks (print the _private_jobs task ids); fix the cause, never loosen | **Opus** | G9 @ 531fecb35 | none | T2 |
+| D45 | Q80 | V2-H1-DRY full browser journey on a local train of every open V2 head; findings only, each fix becomes a packet | **Opus** | v2/main + #1057 + trains | none | T1 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
