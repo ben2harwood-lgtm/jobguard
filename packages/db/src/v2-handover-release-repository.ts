@@ -135,14 +135,14 @@ export class HandoverReleaseRepository {
     } finally { client.release(); }
   }
 
-  /** Customer press: receipt only. A repeat returns the stored time. */
+  /** Customer press: receipt only. A repeat returns the stored time; a superseded link is refused. */
   async acknowledge(raw: unknown) {
     const parsed = handoverAcknowledgeV1.safeParse(raw);
     if (!parsed.success) throw new HandoverReleaseError("HANDOVER_RELEASE_INVALID_COMMAND");
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      type Saved = { status: "refused" } | { status: "acknowledged"; replayed: boolean; jobId: string; releaseId: string; version: number;
+      type Saved = { status: "refused" | "superseded" } | { status: "acknowledged"; replayed: boolean; jobId: string; releaseId: string; version: number;
         contentHash: string; acknowledgedAt: string };
       const saved = (await client.query<{ saved: Saved }>("SELECT app.v2_handover_link_acknowledge($1) AS saved",
         [handoverLinkTokenHash(parsed.data.token)])).rows[0]!.saved;

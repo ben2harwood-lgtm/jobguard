@@ -7,6 +7,7 @@ export const releaseIndependent = "Release is independent of the financial lock.
 export const releaseBlocked = "Finish the site work first";
 export const releaseLinkNote = "Practice only: this link went to the local catcher. It is shown once; copy it now if you need it.";
 export const receiptOnly = "Receipt only: acknowledging this pack does not agree the account or sign off any snag.";
+export const newerReadOnly = "This version can no longer be acknowledged. Please open the newer link from your builder.";
 export const newerAvailable = "Newer version available. Your builder has sent you a link to it. This page still shows the version you were sent.";
 export const linkRefused = "This link can’t be opened. It may have expired. Ask your builder for a new one.";
 export const linkProblem = "This pack could not open. Nothing was recorded. Try again.";

@@ -220,7 +220,7 @@ BEGIN
     RETURN result;
   END $f$;
 
-  -- Record receipt once. A repeat returns the stored time. Writes nothing else.
+  -- Record receipt once. A repeat returns the stored time. A superseded link records nothing. Writes nothing else.
   CREATE OR REPLACE FUNCTION app.v2_handover_link_acknowledge(h text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $f$
   DECLARE r app.v2_handover_release; saved app.v2_handover_acknowledgement;
@@ -232,6 +232,11 @@ BEGIN
       DELETE FROM control_plane.v2_handover_link_scope WHERE transaction_id = pg_current_xact_id_if_assigned();
       RETURN jsonb_build_object('status', 'acknowledged', 'replayed', true, 'jobId', r.job_id, 'releaseId', r.id,
         'version', r.version, 'acknowledgedAt', saved.acknowledged_at);
+    END IF;
+    -- A superseded link stays read-only: no new receipt once a newer release exists (the view decides "newer").
+    IF (app.v2_handover_link_view(r)->>'newerAvailable')::boolean THEN
+      DELETE FROM control_plane.v2_handover_link_scope WHERE transaction_id = pg_current_xact_id_if_assigned();
+      RETURN jsonb_build_object('status', 'superseded');
     END IF;
     INSERT INTO app.v2_handover_acknowledgement (tenant_id, job_id, release_id) VALUES (r.tenant_id, r.job_id, r.id)
     RETURNING * INTO saved;
