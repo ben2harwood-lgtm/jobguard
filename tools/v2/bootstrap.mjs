@@ -66,6 +66,7 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2028_v2_measurement.sql", import.meta.url), "utf8"));
   // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
@@ -76,6 +77,14 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2068_v2_rams_draft.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-D1 measurement firm lock (2059).
+  await client.query(readFileSync(new URL("./migrations/2059_v2_measurement_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-E1 open facts (2029) and their firm lock (2064).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_open_fact.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("./migrations/2064_v2_open_fact_firm_lock.sql", import.meta.url), "utf8"));
+  // V2-E9 choices and allowances (2030) and their firm lock (2065).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2030_v2_choice_allowance.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("./migrations/2065_v2_choice_allowance_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

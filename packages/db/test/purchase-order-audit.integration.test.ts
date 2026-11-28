@@ -45,7 +45,9 @@ beforeAll(async () => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
-        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql",
+        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql",
+        "_v2_open_fact.sql",
+        "_v2_choice_allowance.sql",
         // V2-C3C
         "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // Q06 V2-K9: V2-only migration is exercised by the dedicated seed suite.
@@ -66,6 +68,9 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_open_fact') AS fact, to_regclass('app.v2_open_fact_change') AS change")).rows[0]).toEqual({ fact: null, change: null });
+  expect((await admin.query("SELECT to_regclass('app.v2_choice_allowance') AS allowance, to_regclass('app.v2_choice_allowance_step') AS step")).rows[0]).toEqual({ allowance: null, step: null });
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

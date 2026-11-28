@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e9": {
+      "branches": [
+        "claude/project-thread-2k8989"
+      ],
+      "note": "RED. V2-E9 customer choices and allowance tracker (Q17). Each E1 customer-choice fact gets an allowance; a choice over it drafts one variation for the difference through main's variation command, called unchanged (propose unpriced, then revise with a deterministic id; withdraw with reject). Never lists apps/api/src/variation/variation.application.ts or packages/db/src/variation-repository.ts. Stacked on E1 (#919, itself on d1 #904); merge after #904 and #919. Own firm lock in V2 bootstrap file 2065 (FL-1 guard). apps/web/app/(designed)/jobs/[id]/money/page.tsx: mount only, owned by main (live Money tab). The validator includes config/lanes/v2-e9.json implicitly.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/choice-allowance.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/api/jobs/[id]/choice-allowances/route.test.ts",
+        "apps/web/app/api/jobs/[id]/choice-allowances/route.ts",
+        "apps/web/app/ui/v2-choice-allowances.test.tsx",
+        "apps/web/app/ui/v2-choice-allowances.tsx",
+        "apps/web/e2e/artifacts/v2-e9/e9-priced-1280.png",
+        "apps/web/e2e/artifacts/v2-e9/e9-priced-360.png",
+        "apps/web/e2e/artifacts/v2-e9/e9-warning-1280.png",
+        "apps/web/e2e/artifacts/v2-e9/e9-warning-360.png",
+        "packages/db/migration-notes/2030_v2_choice_allowance.md",
+        "packages/db/migration-notes/2065_v2_choice_allowance_firm_lock.md",
+        "packages/db/migrations/2030_v2_choice_allowance.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-choice-allowance-repository.ts",
+        "packages/db/test/migration-proofs/2030_v2_choice_allowance.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-E9.checks.mjs",
+        "tools/v2/migrations/2065_v2_choice_allowance_firm_lock.proof.json",
+        "tools/v2/migrations/2065_v2_choice_allowance_firm_lock.sql",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
