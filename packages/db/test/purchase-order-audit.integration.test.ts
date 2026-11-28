@@ -45,9 +45,10 @@ beforeAll(async () => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
-        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql",
+        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql",
         // V2-C3C
-        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_crew_contact.sql",
+        "_v2_materials_enquiry.sql", "_v2_crew_brief.sql", "_v2_open_fact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // Q06 V2-K9: V2-only migration is exercised by the dedicated seed suite.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && String(values?.[0]).endsWith("_v2_rams_draft.sql")) return { rows: [{}], rowCount: 1 };
@@ -66,6 +67,10 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_material_line') AS line, to_regclass('app.v2_material_enquiry') AS enquiry, to_regclass('app.v2_material_enquiry_command') AS command")).rows[0]).toEqual({ line: null, enquiry: null, command: null });
+  expect((await admin.query("SELECT to_regclass('app.v2_crew_brief') AS brief")).rows[0].brief).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_open_fact') AS fact, to_regclass('app.v2_open_fact_change') AS change")).rows[0]).toEqual({ fact: null, change: null });
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();
@@ -586,3 +591,8 @@ it("refuses direct manual attestations outside the demo database; dropping the g
   expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
     .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });
+
+// V2-K4 deferral: 2019_automatic_chasing.sql is a checked local-bootstrap migration,
+// outside MIGRATION_URLS and this production-schema PO upgrade harness. Its real
+// PostgreSQL audit/RLS/upgrade coverage is tools/v2/chasing.integration.test.mjs;
+// expected catalogs are tools/v2/proofs/2019_automatic_chasing.proof.json.

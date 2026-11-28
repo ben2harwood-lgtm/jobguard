@@ -23,6 +23,10 @@ export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
 export * from "./v2-work-plan-repository.js";
+export * from "./v2-measurement-repository.js";
+export * from "./v2-materials-enquiry-repository.js";
+export * from "./v2-crew-brief-repository.js";
+export * from "./v2-open-fact-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";
@@ -244,6 +248,9 @@ export { RamsRepository } from "./v2-rams-repository.js";
 export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash, RamsError, type RamsDraft } from "./v2-rams-draft.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+// V2-K4: fictional automatic chasing; never a production send capability.
+export { V2ChaseRepository } from "./v2-chase-repository.js";
+export { V2ChaseError, requireV2Chasing } from "./v2-chase-policy.js";
 export * from "./v2-work-plan-templates.js";
 
 // V2-SQ-A practice Sent list (read only).
