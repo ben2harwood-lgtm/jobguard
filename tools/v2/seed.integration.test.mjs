@@ -4031,6 +4031,103 @@ test("V2-PAIR-1: a linked session without its exact browser pairing is refused o
   assert.equal(await edits(), before.edits + 1);
 });
 
+
+// Q89 V2-FL-JOB (migration 2090): an imported job is the importing firm's own on app.job and on every table
+// locked through a visible job. Firm A's draft becomes an imported copy of another of A's jobs (main's import
+// shape: provenance 'imported', no session digest, a job_import_v3 row naming the source), written as admin
+// because main's import definer refuses on the V2 database. A second copy has no import row and no owner.
+async function flJobFixture() {
+  const { draftJob: sourceJob, sessionId } = await draftForPlan();
+  const { draftJob: importedJob } = await draftForPlan();
+  const { draftJob: orphanJob } = await draftForPlan();
+  const { rows: [{ digest }] } = await admin.query("SELECT practice_session_digest AS digest FROM app.job WHERE id = $1", [sourceJob]);
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query(`UPDATE app.job SET provenance = 'imported', practice_session_digest = NULL, practice_scenario = NULL
+      WHERE id = ANY($1::uuid[])`, [[importedJob, orphanJob]]);
+    await client.query(`INSERT INTO app.job_import_v3 (tenant_id, id, job_id, source_job_id, session_digest, command_id,
+      public_request_hash, fixture_id, snapshot, result, meter_exclusion_id, meter_reason, adopted_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'fictional-extension-v3', '{"lifecyclePoint":"live"}', $8, $9, 'ordinary_start_rule', now())`,
+    [DEMO_TENANT_ID, randomUUID(), importedJob, sourceJob, digest, randomUUID(), "a".repeat(64),
+      { jobId: importedJob, sourceJobId: sourceJob }, randomUUID()]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { sourceJob, importedJob, orphanJob, sessionId };
+}
+
+test("Q89 V2-FL-JOB: an imported job and its rows are hidden from every other firm, on app.job and every job-locked table", async () => {
+  const catalog = (await firmLockCatalog(admin)).filter(row => row.firm_policy && row.runtime_access);
+  const direct = catalog.filter(row => row.kind === "direct").map(row => row.relation);
+  const indirect = catalog.filter(row => row.kind === "indirect").map(row => row.relation);
+  const outsider = await signIn("second-builder");
+  const { context: other } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const wholeCounts = async scope => Object.fromEntries(await Promise.all(["app.job", ...direct, ...indirect].map(async table =>
+    [table, (await withTenant(runtime, scope, db => db.$client.query(`SELECT count(*)::int AS n FROM ${table}`))).rows[0].n])));
+  const otherBefore = await wholeCounts(other);
+
+  const { sourceJob, importedJob, orphanJob, sessionId } = await flJobFixture();
+  const { context: owner } = await authenticatePracticeSession(runtime, sessionId);
+  assert.equal(other.tenantId, owner.tenantId, "both firms' practice sessions share one backing tenant");
+  const rowsOf = async (scope, table, job) => (await withTenant(runtime, scope, db =>
+    db.$client.query(`SELECT count(*)::int AS n FROM ${table} WHERE job_id = $1`, [job]))).rows[0].n;
+  const adminRows = async (table, job) => (await admin.query(`SELECT count(*)::int AS n FROM ${table} WHERE job_id = $1`, [job])).rows[0].n;
+  const jobRow = async (scope, job) => (await withTenant(runtime, scope, db =>
+    db.$client.query("SELECT 1 FROM app.job WHERE id = $1", [job]))).rowCount;
+
+  // The fixture is real: the imported copy carries rows on several locked tables.
+  const populated = (await Promise.all(direct.map(async table => [table, await adminRows(table, importedJob)])))
+    .filter(([, n]) => n > 0).map(([table]) => table);
+  assert.ok(populated.length >= 5, `imported job rows on ${populated.join(", ")}`);
+
+  // The other firm sees nothing of the imported job, nor of the ownerless one.
+  const leaks = [];
+  for (const job of [importedJob, orphanJob]) {
+    if (await jobRow(other, job)) leaks.push(`app.job:${job === importedJob ? "imported" : "orphan"}`);
+    for (const table of direct) if (await rowsOf(other, table, job)) leaks.push(`${table}:${job === importedJob ? "imported" : "orphan"}`);
+  }
+  assert.deepEqual(leaks, [], "rows the second firm can read");
+  assert.deepEqual(await wholeCounts(other), otherBefore, "the second firm sees no new row on any locked table, direct or indirect");
+  for (const sql of ["UPDATE app.job SET revision = revision WHERE id = $1", "DELETE FROM app.job WHERE id = $1"]) {
+    const result = await withTenant(runtime, other, db => db.$client.query(sql, [importedJob])).catch(error => error);
+    assert.ok(result.code === "42501" || result.rowCount === 0, `${sql} must not reach the imported job`);
+  }
+
+  // The owning firm still reads its imported job and every row of it; its session job is unchanged.
+  assert.equal(await jobRow(owner, importedJob), 1);
+  assert.equal(await jobRow(owner, sourceJob), 1);
+  for (const table of populated) {
+    assert.equal(await rowsOf(owner, table, importedJob), await adminRows(table, importedJob), `${table} owner rows`);
+    assert.equal(await rowsOf(owner, table, sourceJob), await adminRows(table, sourceJob), `${table} session rows`);
+    assert.equal(await rowsOf(other, table, sourceJob), 0, `${table} session rows hidden`);
+  }
+  // An imported job no firm imported is visible to no practice firm, its "importer" included.
+  assert.equal(await jobRow(owner, orphanJob), 0);
+  for (const table of populated) assert.equal(await rowsOf(owner, table, orphanJob), 0, `${table} orphan rows`);
+
+  const { rows: grants } = await admin.query(`SELECT r.rolname FROM pg_roles r
+    WHERE has_function_privilege(r.oid, 'app.v2_firm_owns_imported_job(uuid, uuid)', 'EXECUTE')
+      AND r.rolname IN ('jobguard_runtime', 'jobguard_worker', 'jobguard_shadow') ORDER BY 1`);
+  assert.deepEqual(grants.map(row => row.rolname), ["jobguard_runtime"]);
+});
+
+test("Q89 V2-FL-JOB: migration 2090 is safe to run twice", async () => {
+  const policy = async () => (await admin.query(`SELECT pg_get_expr(polqual, polrelid) AS q, pg_get_expr(polwithcheck, polrelid) AS c
+    FROM pg_policy WHERE polrelid = 'app.job'::regclass AND polname = 'v2_practice_firm'`)).rows;
+  const before = await policy();
+  assert.equal(before.length, 1);
+  assert.match(before[0].q, /v2_firm_owns_imported_job/u);
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2090_v2_job_firm_owned_import.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await policy(), before);
+});
+
+
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
 
 test("FL guard: every job-bound table runtime can touch is firm-locked or named in a pending slice", async () => {

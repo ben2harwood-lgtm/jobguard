@@ -100,6 +100,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2086_v2_aftercare_offer.sql", import.meta.url), "utf8"));
   // V2-SQ-E quote laid out by room (2087).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2087_v2_quote_section.sql", import.meta.url), "utf8"));
+  // Q89 V2-FL-JOB: app.job's firm lock closes imported jobs to other firms (2090), after every lock that reaches it.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2090_v2_job_firm_owned_import.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

@@ -1,0 +1,6 @@
+{
+  "migration": "2090_v2_job_firm_owned_import.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
