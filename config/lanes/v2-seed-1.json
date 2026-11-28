@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-seed-1": {
+      "branches": [
+        "claude/project-thread-trp08u-seed1"
+      ],
+      "note": "T2 Q79 V2-SEED-1: the seed suite's effectCounts leaves out the worker's own per-minute crontab ticks (payload _cron and one of the five discover_* crontab tasks), which could land inside the Switch live window. Every app-enqueued job still counts; a guard test proves it. Test-only, no product change. Base v2/main.",
+      "allow": [
+        "config/lanes/v2-seed-1.json",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
