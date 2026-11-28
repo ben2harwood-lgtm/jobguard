@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-auth1": {
+      "branches": [
+        "claude/project-thread-trp08u-auth1"
+      ],
+      "note": "RED. Q81 V2-AUTH-1: a linked V2 builder can read job proof and add a progress photo and site complete (migration 2089, V2 mirror of 0734's requirement read; firm lock on stage completions). Main's ProofApplication, 0734 and lp6 unchanged. Mounts: the proof route picks the V2 path on the local V2 stack; workspace wiring; DatabaseSyntheticStorage exported. 2089 locks stage_completion and stage_review_event, so they leave FL-3's pending list.",
+      "allow": [
+        "apps/api/src/proof/proof.application.ts",
+        "apps/api/src/proof/v2-proof.application.test.ts",
+        "apps/api/src/proof/v2-proof.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/[id]/proof/route.ts",
+        "apps/web/app/ui/proof-stage.tsx",
+        "packages/db/migration-notes/2089_v2_job_proof_requirement.md",
+        "packages/db/migrations/2089_v2_job_proof_requirement.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-proof-requirement.ts",
+        "packages/db/test/migration-proofs/2089_v2_job_proof_requirement.proof.json",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/pending/FL-3.json",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
