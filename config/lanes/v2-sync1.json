@@ -3,7 +3,8 @@
   "lanes": {
     "v2-sync1": {
       "branches": [
-        "claude/project-thread-ctngmn"
+        "claude/project-thread-ctngmn",
+        "claude/project-thread-trp08u-sync1"
       ],
       "note": "Q45 V2-SYNC-1 (RED): merge-main of origin/main (#905, #910, #911, pilot 0771-0782) into v2/main as a merge commit. Every path except the four below arrives unchanged from main's tree; the builder's own files are quote-editor.tsx (keep c5 and pilot), packages/db/src/index.ts and purchase-order-audit.integration.test.ts (both sides kept), tools/v2/bootstrap.mjs, tools/v2/seed.integration.test.mjs and tools/v2/migrations/2056_v2_sync1_fences_and_locks.sql. main's config/lanes files arrive with the merge and are not this lane's.",
       "allow": [
