@@ -10,6 +10,7 @@
         "apps/api/src/quote/contracts.ts",
         "apps/api/src/quote/quote.application.ts",
         "apps/web/app/customer/quote/quote.tsx",
+        "apps/web/app/ui/quote-editor-rooms-off.test.tsx",
         "apps/web/app/ui/quote-editor.tsx",
         "apps/web/app/ui/quote-rooms.test.tsx",
         "apps/web/app/ui/quote-rooms.tsx",
