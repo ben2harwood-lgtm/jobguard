@@ -4,6 +4,29 @@ import { checkSpokenNumbers, readSpokenJob } from "./context-reader.js";
 
 const sourceId = "00000000-0000-4000-8000-000000000002";
 
+describe("structured ITEM room ordinals and explicit rates", () => {
+  it.each(["bedroom two", "bedroom 2"])("keeps RATE £150 for %s", async room => {
+    const description = `Paint ${room}`;
+    const text = `ITEM: ${description} | RATE: £150`;
+    const proposal = await extractCaptureFixture(sourceId, text, "item-room-rate-test");
+    expect(proposal.lines).toHaveLength(1);
+    expect(proposal.lines[0]!.description.value).toBe(description);
+    expect(proposal.lines[0]!.unitPricePence.value).toBe(15000);
+    const provenance = proposal.lines[0]!.unitPricePence.provenance;
+    expect(provenance.kind === "extracted" && text.slice(provenance.span.start, provenance.span.end)).toBe("£150");
+    expect(proposal.questions.some(q => /price|rate/iu.test(q.question.value))).toBe(false);
+  });
+
+  it("keeps a real stray description number open despite RATE £150", async () => {
+    const text = "ITEM: Paint 3 walls 40 | RATE: £150";
+    const proposal = await extractCaptureFixture(sourceId, text, "item-stray-number-test");
+    expect(proposal.lines).toHaveLength(1);
+    expect(proposal.lines[0]!.description.value).toBe("Paint 3 walls 40");
+    expect(proposal.lines[0]!.unitPricePence.value).toBeNull();
+    expect(proposal.questions.some(q => /price/iu.test(q.question.value))).toBe(true);
+  });
+});
+
 describe("amounts that are limits or credits", () => {
   it.each([
     "up to two hundred pounds", "at most £200", "no more than £200", "a maximum of £200",

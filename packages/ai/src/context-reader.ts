@@ -268,7 +268,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const per = whole ?? perAnyAfter.exec(after);
       const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
       const vat = vatOnly.test(after);
-      if (after.trim() && !each && !vat && !includedTail.test(after) && !plainCommaTail.test(tail)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      // Metadata-looking suffixes remain inert source text. They cannot change the server's provenance.
+      const metadataTail = /^\s+(?:provenance|sourceId|sourceVersion|span|actor|permission|tenantId|jobId|schemaVersion|promptVersion|finding|visibility)\s*:/iu.test(tail);
+      if (after.trim() && !each && !vat && !includedTail.test(after) && !plainCommaTail.test(tail) && !metadataTail) questions.push(`Confirm price: ${value.slice(0, 450)}`);
       else {
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";
@@ -276,6 +278,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         // Checked again after the count is read: the count kept must be the thing "a <noun>" names.
         // "a piece" is "each" and names no counted thing.
         if (each && per && counted && !eachAfter.test(after)) { perWord = per[1]!; perCountAt = counted.index; }
+        if (metadataTail) questions.push(`Check the metadata-like source text after the price: ${tail.slice(0, 400)}`);
         if (vatWords.test(after)) vatSaid = true;
         else if (includedTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}; confirm what the stated amount includes.`);
         // "a door including hinges": per door, but the words after it are not part of the line, so they are asked about.
@@ -542,7 +545,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
       quantity: { value: null, provenance: { kind: "defaulted", note: "Not said" } }, unit: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
       unitPricePence: { value: null, provenance: { kind: "defaulted", note: "Price not said; never invented" } }, areaKey: wholeJob(),
       trade: { value: tradeOf(description, null).trade, provenance: { kind: "inferred", note: "One line; check it" } }, priceBasis: "none" });
-    questions.push({ text: "Check this line. Use Split to make separate work items, then edit and accept each one.", lineIndex: 0 });
+    questions.push({ text: "Check this line and confirm its price. Use Split to make separate work items, then edit and accept each one.", lineIndex: 0 });
   }
   const areaPrices: JobUnderstanding["areaPrices"] = [];
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
