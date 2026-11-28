@@ -97,6 +97,8 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D37 | Q72 | V2-WP-FIX work plan shows extras it can't plan (extrasNotPlanned), and an open task form keeps its opened variation revision | **Opus** | v2/main | none | T2 |
 | D38 | Q73 | V2-G6 close the account: read-only final review, then main's lock, Final Check and invoice unchanged; no live stage draft at lock | **Opus** | K5 line top `claude/project-thread-trp08u-k5a1` | none (2088 if needed) | RED money |
 | D39 | Q74 | V2-G6A V2 close-out authority: V2 entry points to main's final account, lock, Final Check and invoice; lp6 unchanged | **PARKED** (coordinator 28 Nov 10:55 UK, Ben's standing say-so: main's close-out is demo-DB-only, 167 name gates; wait for the 3 Dec hosting decision) | G6 part 1 PR (Q73) | 2088 (only if a definer is needed) | RED money + security |
+| D40 | Q75 | V2-SQ-L a numbered room's number is never part of an amount: "Bedroom two £500 all in" gets its room price; guards otherwise unchanged | **Opus** | SQ-K #1049 `claude/project-thread-trp08u-sqk` | none | T2 |
+| D41 | Q76 | V2-G7 Snags, Handover and Your handover pack finished to M3: 44 px controls, M3 copy, no sideways scroll at 360; thumbnails LATER | **Opus** | G9 `claude/project-thread-trp08u-g9` | none | T2 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
