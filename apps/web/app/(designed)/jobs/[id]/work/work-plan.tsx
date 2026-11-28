@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
+import { CrewAddForm, useCrewContacts } from "../../../crew/crew-contacts";
 
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
@@ -32,7 +33,7 @@ export function notPlannedReason(item: Pick<NotPlannedExtra, "reason" | "plannin
     ? "Approved extra with no direction yet, so it was taken out of the plan: say whether it adds work or removes it"
     : "Approved extra with no direction yet: say whether it adds work or removes it";
 }
-type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
+type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee" | "assigneeRef">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
   Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee" | "assigneeRef">>;
 type Problem = { message: string; reload?: boolean };
@@ -52,15 +53,48 @@ async function requestPlan<T>(path: string, body?: unknown): Promise<T> {
 }
 
 // The assignee goes only when the user changed it, so a linked crew member stays assigned.
+// V2-C3C-UI: a crew member picked in the crew picker goes as assigneeRef, which replaces free text;
+// a task has one assignment, so the two are never sent together. No picker in the form means no crew change.
 export function editFields(fields: FormData, task: EditableTask): TaskChanges {
   const assignee = String(fields.get("assignee") ?? "").trim();
+  const crew = fields.has("assigneeRef") ? String(fields.get("assigneeRef")) : undefined;
+  const typed = assignee !== (task.assignee ?? "").trim();
   return {
     position: Number(fields.get("position")),
     trade: String(fields.get("trade")).trim(),
     durationMinutes: Number(fields.get("duration")),
     scheduledDate: String(fields.get("day")) || null,
-    ...(assignee !== (task.assignee ?? "").trim() && { assignee: assignee || null }),
+    ...(crew && crew !== task.assigneeRef ? { assigneeRef: crew }
+      : typed ? { assignee: assignee || null }
+      : crew === "" && task.assigneeRef ? { assigneeRef: null } : {}),
   };
+}
+
+// The firm's crew, read once and shared with "Your crew", so someone added here is offered at once.
+export function CrewPicker({ assigneeRef, disabled }: { assigneeRef?: string | null | undefined; disabled: boolean }) {
+  const { crew, failed } = useCrewContacts();
+  const [selected, setSelected] = useState(assigneeRef ?? "");
+  const [adding, setAdding] = useState(false);
+  const unknown = assigneeRef && crew && !crew.some(contact => contact.crewId === assigneeRef);
+  return <div className="crew-picker form">
+    {/* Disabled until the crew has loaded, so an unloaded list never clears a crew assignment. */}
+    <label>Crew member<select name="assigneeRef" value={selected} disabled={disabled || !crew}
+      onChange={event => setSelected(event.currentTarget.value)}>
+      <option value="">No crew member (type a name below)</option>
+      {crew?.map(contact => <option key={contact.crewId} value={contact.crewId}>{contact.displayName} · {contact.trade}</option>)}
+      {unknown && <option value={assigneeRef}>Crew member assigned</option>}
+    </select></label>
+    {failed && !crew && <p role="status">Your crew could not load. The task keeps its crew member.</p>}
+    {adding
+      ? <CrewAddForm onSaved={contact => { setSelected(contact.crewId); setAdding(false); }} onCancel={() => setAdding(false)}/>
+      : <div className="form-actions"><button type="button" className="btn small" disabled={disabled} onClick={() => setAdding(true)}>Add someone</button></div>}
+  </div>;
+}
+
+// The crew member's name on a task, from the shared crew list.
+function CrewName({ crewId }: { crewId: string }) {
+  const { crew } = useCrewContacts();
+  return <>{crew?.find(contact => contact.crewId === crewId)?.displayName ?? "Crew member assigned"}</>;
 }
 
 // An approved extra's edit names the approved revision it was planned from.
@@ -88,6 +122,7 @@ function TaskForm({ task, positions, busy, save, cancel }: {
       <label>Assignee<input name="assignee" defaultValue={task.assignee ?? ""} maxLength={100}
         placeholder={task.assigneeRef ? "Crew member assigned" : undefined}/></label>
     </fieldset>
+    <CrewPicker assigneeRef={task.assigneeRef} disabled={busy}/>
     <div className="form-actions">
       <button type="button" className="btn" onClick={cancel} disabled={busy}>Cancel</button>
       <button className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save task"}</button>
@@ -238,7 +273,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         plan.changes.changed.some(row => taskId(row.after) === taskId(task));
       return <article className="card-body" key={taskId(task)}>
         <h3>{task.position}. {task.title}</h3>
-        <p>{task.trade} · {task.durationMinutes} min{plan.templateKey === "trades.v1" ? " (Typical time, change to suit)" : ""} · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee ? ` · ${task.assignee}` : task.assigneeRef ? " · Crew member assigned" : ""}</p>
+        <p>{task.trade} · {task.durationMinutes} min{plan.templateKey === "trades.v1" ? " (Typical time, change to suit)" : ""} · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee ? ` · ${task.assignee}` : task.assigneeRef ? <> · <CrewName crewId={task.assigneeRef}/></> : ""}</p>
         <div className="job-caption">
           <Tag tone={task.scheduledDate ? "green" : "amber"}>{task.scheduledDate ? "Scheduled" : "Planned"}</Tag>
           {changed && <Tag tone="amber">Changed since last quote revision</Tag>}

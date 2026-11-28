@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c3c-ui": {
+      "branches": [
+        "claude/project-thread-trp08u-crew"
+      ],
+      "note": "T2. Q86 V2-C3C-UI: a crew route over CrewContactApplication (list, record unchanged), a \"Your crew\" screen reached from More and from the work plan's assignee picker, and the picker's crew choice as assigneeRef. V2 only. No migration, no table. Mount on main-owned files: More lists the crew link only when JOBGUARD_LOCAL_V2=1.",
+      "allow": [
+        "apps/web/app/(designed)/crew/crew-contacts.test.tsx",
+        "apps/web/app/(designed)/crew/crew-contacts.tsx",
+        "apps/web/app/(designed)/crew/crew-screen.tsx",
+        "apps/web/app/(designed)/crew/crew.css",
+        "apps/web/app/(designed)/crew/page.tsx",
+        "apps/web/app/(designed)/home-screens.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/(designed)/more/page.tsx",
+        "apps/web/app/api/v2-backend/crew/route.test.ts",
+        "apps/web/app/api/v2-backend/crew/route.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

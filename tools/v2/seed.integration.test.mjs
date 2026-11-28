@@ -2599,6 +2599,53 @@ async function pxLiveJob() {
   return { jobId: draftJob, scopeItemId: scope.id, sessionId };
 }
 
+test("C3C-UI: the crew route lists and records the signed-in firm's crew, and a picked crew member is assigned over HTTP", async () => {
+  const { draftJob, read } = await draftForPlan();
+  const { cookies } = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const path = "/api/v2-backend/crew";
+  const before = await json(await request(path, { cookies }));
+  assert.ok(Array.isArray(before.crew));
+  assert.equal((await json(await request(path), 401)).code, "UNAUTHENTICATED");
+
+  const command = crewCommand({ displayName: "Jordan Fictional", trade: "Electrician", email: "jordan@crew.jobguard-v2.invalid" });
+  const saved = await json(await request(path, { cookies, body: command }), 201);
+  assert.equal(saved.crewId, command.crewId);
+  assert.equal(saved.revision, 1);
+  // A replayed commandId returns the same contact and adds no row or event.
+  assert.deepEqual(await json(await request(path, { cookies, body: command }), 201), saved);
+  assert.equal((await crewEvents(command.crewId)).length, 1);
+  assert.equal((await json(await request(path, { cookies, body: { ...command, trade: "Plumber" } }), 409)).code,
+    "CREW_CONTACT_COMMAND_CONFLICT");
+  assert.ok((await json(await request(path, { cookies }))).crew.some(contact => contact.crewId === command.crewId));
+
+  // A real-looking phone or email is refused with the crew-contact code, and nothing is written.
+  for (const bad of [{ phone: "07911 123456" }, { email: "jordan@gmail.com" }, { surname: "x" }]) {
+    const refused = crewCommand(bad);
+    assert.equal((await json(await request(path, { cookies, body: refused }), 400)).code, "CREW_CONTACT_INVALID");
+    assert.equal((await admin.query(`SELECT FROM ${crewTable} WHERE crew_id = $1`, [refused.crewId])).rowCount, 0);
+  }
+
+  // The other firm never sees this firm's crew, and cannot take the record over.
+  assert.ok(!(await json(await request(path, { cookies: outsider.cookies }))).crew.some(contact => contact.crewId === command.crewId));
+  for (const expectedRevision of [0, 1]) {
+    assert.equal((await json(await request(path, { cookies: outsider.cookies,
+      body: crewCommand({ crewId: command.crewId, expectedRevision }) }), 409)).code, "CREW_CONTACT_VERSION_CONFLICT");
+  }
+  const { rows } = await admin.query(`SELECT revision, trade FROM ${crewTable} WHERE crew_id = $1`, [command.crewId]);
+  assert.deepEqual(rows, [{ revision: 1, trade: "Electrician" }]);
+
+  // The picker's edit: the plan's task is assigned to Jordan by assigneeRef, over the work-plan route.
+  const plan = await read();
+  const task = plan.tasks[0];
+  await json(await request(`/api/v2-backend/jobs/${draftJob}/work-plan`, { cookies,
+    body: planEdit(plan, task, { assigneeRef: command.crewId }) }));
+  const after = await json(await request(`/api/v2-backend/jobs/${draftJob}/work-plan`, { cookies }));
+  assert.equal(after.tasks.find(row => row.key === task.key && row.scopeItemId === task.scopeItemId).assigneeRef, command.crewId);
+  // A crew page and the More link exist only on the V2 stack, and render for the builder.
+  assert.equal((await request("/crew", { cookies })).status, 200);
+});
+
 test("PX: a real practice photo is locked to its own firm on every evidence and photo table", async () => {
   const { jobId: photoJob, scopeItemId, sessionId } = await pxLiveJob();
   const { context } = await authenticatePracticeSession(runtime, sessionId);

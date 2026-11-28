@@ -191,6 +191,24 @@ describe("Plan task edits", () => {
     expect(editFields(form("Sam"), linked).assignee).toBe("Sam");
     expect(editFields(form(""), { ...task("fit", "Fit doors"), assignee: "Sam" }).assignee).toBeNull();
   });
+
+  it("V2-C3C-UI: a crew member picked in the crew picker goes as assigneeRef, never with free text", () => {
+    const jordan = "00000000-0000-4000-8000-000000000021";
+    const picked = (assigneeRef: string, assignee = "") => { const fields = form(assignee); fields.set("assigneeRef", assigneeRef); return fields; };
+    const plain = task("fit", "Fit doors");
+    const linked = { ...plain, assigneeRef: crew };
+    expect(editFields(picked(jordan), plain)).toMatchObject({ assigneeRef: jordan });
+    expect("assignee" in editFields(picked(jordan, "Sam"), plain)).toBe(false);
+    expect(editFields(picked(jordan), linked).assigneeRef).toBe(jordan);
+    // The same crew member again, untouched: no assignment change.
+    const same = editFields(picked(crew), linked);
+    expect("assignee" in same || "assigneeRef" in same).toBe(false);
+    // "No crew member" clears the crew record; a typed name replaces it instead.
+    expect(editFields(picked(""), linked).assigneeRef).toBeNull();
+    expect(editFields(picked("", "Sam"), linked)).toMatchObject({ assignee: "Sam" });
+    expect("assigneeRef" in editFields(picked("", "Sam"), linked)).toBe(false);
+    expect("assigneeRef" in editFields(picked(""), plain)).toBe(false);
+  });
 });
 
 describe("V2-WP-FIX extras the plan can't place", () => {
