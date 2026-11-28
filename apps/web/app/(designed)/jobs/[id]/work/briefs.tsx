@@ -6,6 +6,8 @@ import { Card, Empty, Note, Tag } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
 import { PLAN_SAVED_EVENT } from "./work-plan";
 
+import { BriefLanguage } from "./brief-language";
+
 type Brief = CrewBrief & { current?: boolean };
 type View = { trades: string[]; briefs: Brief[]; code?: "QUOTE_REVISION_NOT_FOUND" };
 async function read<T>(path: string, command?: CrewBriefCommand): Promise<T> {
@@ -66,19 +68,7 @@ function TradeBrief({ path, trade, brief, planned, saved }: {
     <div className="card-head"><h3>{trade}</h3><Tag>{brief ? `Version ${brief.version}` : "No brief yet"}</Tag></div>
     {!planned && <p className="card-body">No longer in the plan</p>}
     {brief?.current === false && planned && <div className="card-body"><Note tone="warning">Out of date · The plan changed. Make a new version before using this brief.</Note></div>}
-    {content && <div className="card-body form">
-      <p><strong>Access</strong> · {content.accessWindow}</p>
-      <ol>{content.tasks.map(task => <li key={`${task.scopeItemId}/${task.taskKey}`}>
-        <h4>{task.title}</h4>
-        <p><strong>What to do</strong> · {task.scope.description}
-          {task.scope.quantity !== null && ` · ${task.scope.quantity} ${task.scope.unit ?? ""}`}</p>
-        <p><strong>Duration</strong> · {task.durationMinutes} minutes</p>
-        <p><strong>When</strong> · {task.visit ?? "To be agreed"}{task.owner && ` · ${task.owner}`}</p>
-        <p><strong>Proof needed</strong> · {task.proofNeeded.join("; ") || "None recorded"}</p>
-      </li>)}</ol>
-      <p>Photos: {content.photos.length} attached</p>
-      <p><strong>Proof needed</strong> · {content.proofNeeded.join("; ") || "None recorded"}</p>
-    </div>}
+    {content && brief && <BriefLanguage key={brief.version} path={`${path}/translation`} brief={brief}/>}
     <div className="card-body form">
       {planned && <form className="form" onSubmit={event => void generate(event)}>
         <label>Access window<input required maxLength={200} value={accessWindow} disabled={busy || stale}

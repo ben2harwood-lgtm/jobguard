@@ -43,7 +43,10 @@ beforeAll(async () => {
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
-      && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
+      && [
+        // V2-D4B: dedicated V2 bootstrap only, deferred in the upgrade fixture.
+        "_v2_crew_brief_translation.sql",
+        "_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql",
         // V2-C3C
@@ -68,6 +71,8 @@ beforeAll(async () => {
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_crew_brief') AS brief")).rows[0].brief).toBeNull();
+  // V2-D4B must not provision tables in the shared synthetic database.
+  expect((await admin.query("SELECT to_regclass('app.v2_crew_brief_translation') AS translation")).rows[0].translation).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

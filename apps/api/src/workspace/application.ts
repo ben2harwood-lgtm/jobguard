@@ -1,3 +1,4 @@
+import { CrewBriefTranslationApplication } from "./crew-brief-translation.application.js";
 import { CommercialIntegrityV3Application } from "../commercial-integrity-v3.application.js";
 import { PaymentFeeApplication } from "../payment-fee.application.js";
 import { OidcApplication } from "../auth/sso/oidc.application.js";
@@ -115,7 +116,10 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   const crewContacts = new CrewContactApplication(dependencies.pool, dependencies.sessionId);
   // V2-F8 who was on site today.
   const siteAttendance = new SiteAttendanceApplication(dependencies.pool, dependencies.sessionId);
-  return Object.freeze({ crewBriefs: new CrewBriefApplication(dependencies.pool, dependencies.sessionId), measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, siteAttendance, commercialIntegrityV3: Object.freeze({
+  return Object.freeze({
+    // V2-D4B: request-scoped practice translation.
+    crewBriefTranslations: new CrewBriefTranslationApplication(dependencies.pool, dependencies.sessionId),
+    crewBriefs: new CrewBriefApplication(dependencies.pool, dependencies.sessionId), measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, siteAttendance, commercialIntegrityV3: Object.freeze({
     family: (jobId:string) => commercialIntegrityV3.family(dependencies.sessionId,jobId),
     view: (jobId:string,query:unknown) => commercialIntegrityV3.view(dependencies.sessionId,jobId,query),
     review: (jobId:string,body:unknown) => commercialIntegrityV3.review(dependencies.sessionId,jobId,body),

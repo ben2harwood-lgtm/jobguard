@@ -1,0 +1,6 @@
+{
+  "migration": "2052_v2_crew_brief_translation.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
