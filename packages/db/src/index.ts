@@ -246,3 +246,4 @@ export { assertPilotConnection } from "./pilot-connection.js";
 
 export { PilotJobRepository } from "./pilot-job-repository.js";
 export * from "./snag-repository.js";
+export * from "./extra-commercial-reads-repository.js";

@@ -1,0 +1,273 @@
+{
+  "migration": "0786_extra_commercial_reads.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-extra-commercial-reads",
+        "description": "Read-only definer routines: app.cr_read_scope returns the contractor session's covered jobs and unresolved duplicate groups, app.cr_fee_trail returns retained-fee contributions for finance, and identity.extra_customer_entitlement returns the narrow client projection for a verified customer link. Two customer-scoped SELECT policies expose the linked job's order lines and the linked variation's SOR revisions only inside an open LP-11 customer scope. No routine writes.",
+        "title": "Extra commercial reads",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep every read tenant-bound and scoped by the caller's contractor session grants, or by the verified customer link for the client projection.",
+          "LP-12": "Keep the reads read-only behind controlled definer routines with exact owner and execute grants and no writes."
+        },
+        "sources": [
+          "packages/db/migrations/0786_extra_commercial_reads.sql",
+          "packages/db/src/extra-commercial-reads-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/extra-commercial-reads.integration.test.ts"
+        ],
+        "gaps": [
+          "CC-S1, CC-S2 and D5 source rows are not recorded on main; those fields read as not recorded."
+        ]
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "title": "Extra commercial reads",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep every read tenant-bound and scoped by the caller's contractor session grants, or by the verified customer link for the client projection.",
+          "LP-12": "Keep the reads read-only behind controlled definer routines with exact owner and execute grants and no writes."
+        },
+        "sources": [
+          "packages/db/migrations/0786_extra_commercial_reads.sql",
+          "packages/db/src/extra-commercial-reads-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/extra-commercial-reads.integration.test.ts"
+        ],
+        "gaps": [
+          "CC-S1, CC-S2 and D5 source rows are not recorded on main; those fields read as not recorded."
+        ],
+        "id": "a-extra-commercial-reads",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Read-only. Landing requires exact-head RED review and green CI."
+        },
+        "downstream": "Read-only definer routines: app.cr_read_scope returns the contractor session's covered jobs and unresolved duplicate groups, app.cr_fee_trail returns retained-fee contributions for finance, and identity.extra_customer_entitlement returns the narrow client projection for a verified customer link. Two customer-scoped SELECT policies expose the linked job's order lines and the linked variation's SOR revisions only inside an open LP-11 customer scope. No routine writes.",
+        "path": "ap-extra-commercial-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.cr_read_scope(uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.cr_read_scope(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-extra-commercial-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.cr_fee_trail(uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.cr_fee_trail(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-extra-commercial-reads"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.extra_customer_entitlement(uuid,uuid,uuid,text,jsonb)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.extra_customer_entitlement(uuid,uuid,uuid,text,jsonb)|jobguard_identity|EXECUTE|-",
+        "group": "a-extra-commercial-reads"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.cr_fee_trail(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "34d626318f9a15ada94558ea7b07086e1e6a189412d45aeecd80d97b5a31b0d2",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.mon8_retained_fee_actor"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.cr_read_scope(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "eb527295952f440d2a03dc58739a6fba1dfeed826ce444cadba89898f38fdf48",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_job_team",
+          "app.contractor_member_active",
+          "app.contractor_session",
+          "app.extra_duplicate_unresolved",
+          "app.mon8_feature_decision",
+          "app.xa_covers"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.extra_customer_entitlement(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "5140cbbd7e1bdcdd372a0104f6227432277d443b3acd8cc678beeb3fa28ead2c",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp11_close_extra_customer",
+          "app.lp11_open_extra_customer",
+          "app.lp6d_client_view_authority",
+          "identity.extra_customer_use"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_sor_revision|lp11_extra_customer_read|PERMISSIVE|SELECT|jobguard_migration|319de3c9f91ca2d9"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.work_order_line|lp11_extra_customer_read|PERMISSIVE|SELECT|jobguard_migration|60f72b3e7a69842d"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "extra_customer_entitlement",
+        "args": "t uuid, j uuid, c uuid, digest text, input jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "cr_read_scope",
+        "args": "p_session uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "cr_fee_trail",
+        "args": "p_session uuid, p_job uuid, p_extra uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "work_order_line",
+        "policyname": "lp11_extra_customer_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_extra_customer_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_sor_revision",
+        "policyname": "lp11_extra_customer_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_extra_customer_tenant('issued_variation'::text, variation_id))",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}

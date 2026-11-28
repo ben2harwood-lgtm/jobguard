@@ -1,5 +1,6 @@
 import { deriveVisitApprovalTiming, type VisitTimingSource, type TimingRequest, type ApprovalTimingFact, type OperativeWorkStatus } from "@jobguard/db";
 import { z } from "zod";
+import { clientEntitlementProjectionV1 } from "@jobguard/core";
 import type { IdentityApplication } from "./identity.application.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 import { CustomerSigninApplication, CustomerRefused, customerRefusal, customerToken } from "./customer-signin.js";
@@ -8,6 +9,8 @@ const common = { version: z.literal("extra-customer.v1"), jobId: uuid };
 export const extraCustomerInput = z.discriminatedUnion("action", [
   z.object({ ...common, action: z.enum(["queue", "history"]) }).strict(),
   z.object({ ...common, action: z.literal("view"), requestId: uuid }).strict(),
+  /** EP-CC-R1: the narrow client entitlement projection for the linked request (contract extra-commercial-reads-v1). */
+  z.object({ ...common, action: z.literal("entitlement"), requestId: uuid }).strict(),
   z.object({ ...common, action: z.literal("decide"), requestId: uuid, commandId: uuid,
     revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().min(1).max(1_000_000_000_000), decision: z.enum(["approve", "reject"]) }).strict(),
 ]);
@@ -20,7 +23,7 @@ export class ExtraCustomerApplication {
       const token = customerToken(request)!;
       const [tenant, job, client] = token.split(".");
       const result = (await this.identity.provider.repository.pool.query<{ result: unknown }>(
-        "SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
+        input.action === "entitlement" ? "SELECT identity.extra_customer_entitlement($1,$2,$3,$4,$5::jsonb) result" : "SELECT identity.extra_customer_approval($1,$2,$3,$4,$5::jsonb) result",
         [tenant, job, client, this.identity.provider.digest(`customer-session:${token}`), JSON.stringify(input)],
       )).rows[0]!.result;
       const project = (raw: unknown) => {
@@ -29,6 +32,7 @@ export class ExtraCustomerApplication {
         const { timingInputs: timing, ...rest } = item;
         return { ...rest, ...deriveVisitApprovalTiming(timing.visit ?? undefined, timing.requests, timing.facts, item.requestId, timing.workStatus ?? undefined, timing.proceedIds ?? []) };
       };
+      if (input.action === "entitlement") return clientEntitlementProjectionV1.parse(result);
       if (input.action === "queue") return { items: (result as { items: unknown[] }).items.map(project) };
       return input.action === "view" ? project(result) : result;
     } catch (error) {
