@@ -71,6 +71,27 @@ describe("V2-C3C-UI crew contacts", () => {
     expect(corrected).toContain("<strong>Jordan Fictional</strong><span>Electrical</span>");
   });
 
+  it("Codex P2: a contact saved while the first read is in flight survives that read, and the read still runs", async () => {
+    let answer!: (response: Response) => void;
+    request.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }))
+      .mockResolvedValueOnce(Response.json(jordan, { status: 201 }));
+    const read = loadCrew();
+    await saveCrew(draft, { current: null });
+    answer(Response.json({ crew: [sam, { ...jordan, revision: 0 }] }));
+    await read;
+    const list = renderToStaticMarkup(<CrewList/>);
+    expect(list).toContain("<strong>Jordan Fictional</strong><span>Electrician</span>");
+    expect(list).toContain("<strong>Sam Fictional</strong>");
+    // Saved before any read: the read is not skipped, and fills in the rest of the crew.
+    resetCrewForTests();
+    request.mockResolvedValueOnce(Response.json(jordan, { status: 201 })).mockResolvedValueOnce(Response.json({ crew: [sam] }));
+    await saveCrew(draft, { current: null });
+    await loadCrew();
+    expect(request).toHaveBeenCalledTimes(4);
+    expect(renderToStaticMarkup(<CrewList/>)).toContain("<strong>Sam Fictional</strong>");
+    expect(renderToStaticMarkup(<CrewList/>)).toContain("<strong>Jordan Fictional</strong>");
+  });
+
   it("the picker stays out of the form until the crew loads, so it never clears a crew assignment", () => {
     const html = renderToStaticMarkup(<CrewPicker assigneeRef={jordan.crewId} disabled={false}/>);
     expect(html).toMatch(/<select name="assigneeRef" disabled=""/u);

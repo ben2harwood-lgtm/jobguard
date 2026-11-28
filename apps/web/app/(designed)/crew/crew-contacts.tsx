@@ -14,6 +14,8 @@ const byName = (a: CrewContact, b: CrewContact) => a.displayName.localeCompare(b
 
 let state: CrewState = { failed: false };
 let loading: Promise<void> | null = null;
+// True once a full read has landed. A contact saved before then is in the list, but the read still runs.
+let loaded = false;
 const listeners = new Set<() => void>();
 function publish(next: CrewState) {
   state = next;
@@ -25,15 +27,24 @@ function subscribe(listener: () => void) {
 }
 const snapshot = () => state;
 
+// The newest revision of each contact from both lists, so a read that started before a save
+// never drops the contact saved meanwhile, and a stale read never undoes a correction.
+function merged(current: CrewContact[] | undefined, incoming: CrewContact[]) {
+  const rows = new Map((current ?? []).map(row => [row.crewId, row]));
+  for (const row of incoming) if ((rows.get(row.crewId)?.revision ?? 0) <= row.revision) rows.set(row.crewId, row);
+  return [...rows.values()].sort(byName);
+}
+
 /** Reads the firm's crew once; later callers share the same answer. */
 export function loadCrew(force = false) {
   if (loading && !force) return loading;
-  if (state.crew && !force) return Promise.resolve();
+  if (loaded && !force) return Promise.resolve();
   loading = fetch(CREW_PATH, { cache: "no-store" })
     .then(async response => {
       if (!response.ok) throw new Error(String(response.status));
       const { crew } = await response.json() as { crew: CrewContact[] };
-      publish({ crew: [...crew].sort(byName), failed: false });
+      loaded = true;
+      publish({ crew: merged(state.crew, crew), failed: false });
     })
     .catch(() => publish({ ...state, failed: true }))
     .finally(() => { loading = null; });
@@ -42,13 +53,14 @@ export function loadCrew(force = false) {
 
 /** A saved contact joins the shared list straight away, so every picker shows it without a reload. */
 export function crewSaved(contact: CrewContact) {
-  publish({ crew: [...(state.crew ?? []).filter(row => row.crewId !== contact.crewId), contact].sort(byName), failed: false });
+  publish({ crew: merged(state.crew, [contact]), failed: state.failed });
 }
 
 /** Test seam: forget the shared list. */
 export function resetCrewForTests() {
   state = { failed: false };
   loading = null;
+  loaded = false;
 }
 
 export function useCrewContacts() {
