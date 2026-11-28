@@ -240,7 +240,16 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     }
   }
   // Trim the price words ("for", "at", a comma) left at the end of the description; it stays a prefix of the source.
-  let description = value.slice(0, descriptionEnd).replace(/(?:\s+(?:for|at)|[\s,]+)+$/iu, "");
+  let description = value.slice(0, descriptionEnd);
+  let trimEnd = description.length;
+  // Scan backwards once; a failed suffix must not retry every partition of a whitespace run.
+  while (trimEnd > 0) {
+    if (/[\s,]/u.test(description[trimEnd - 1]!)) { trimEnd--; continue; }
+    const priceWord = /\s(?:for|at)$/iu.exec(description.slice(Math.max(0, trimEnd - 4), trimEnd));
+    if (!priceWord) break;
+    trimEnd -= priceWord[0].length;
+  }
+  description = description.slice(0, trimEnd);
   if (!description) description = value;
   description = description.slice(0, 500);
 
