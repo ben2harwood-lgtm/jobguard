@@ -15,7 +15,6 @@
         "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/asked-against-approved/route.ts",
         "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/claim-record/route.ts",
         "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/entitlement-context/route.ts",
-        "config/lanes/ep-cc-r1.json",
         "docs/contracts/extra-commercial-reads-v1.md",
         "packages/core/src/extra-commercial-reads.test.ts",
         "packages/core/src/extra-commercial-reads.ts",
