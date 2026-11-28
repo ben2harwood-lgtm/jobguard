@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { E2E_ADMIN_DATABASE_URL } from "./global-setup";
 import { jsonResult } from "./helpers/customer-invoice-journey";
 import { finishDispositionsAndTerms, seedManySignals } from "./helpers/final-account-lock-journey";
-import { prepareLockJobV2 as prepareLockJobDesigned } from "./helpers/designed-v2-money";
+import { openDesignedTab, prepareLockJobV2 as prepareLockJobDesigned } from "./helpers/designed-v2-money";
 
 const unlocked = "JobGuard's final check runs after you complete the final account.";
 const running = "Running JobGuard's final check";
@@ -37,8 +37,11 @@ async function expectHidden(page: Page, status: string) {
   await expect(reveal(page)).not.toContainText(/heated towel rail|Synthetic held extra|found \d/u);
 }
 
+// V2-SQ-I-3: designed, the lock-bound invoices sit on Money (not inside the Work lock panel), so check
+// them there and come back to Work for the declaration and reveal steps.
 async function expectInvoiceRefusal(page: Page, jobId: string, code: string) {
-  const invoices = lockPanel(page).getByTestId("lock-bound-invoices");
+  await openDesignedTab(page, "Money");
+  const invoices = page.getByTestId("lock-bound-invoices");
   await expect(invoices.getByRole("alert")).toHaveAttribute("data-error-code", code);
   const { account } = await lockView(page, jobId);
   for (const invoiceKind of ["final", "supplementary"]) {
@@ -50,6 +53,7 @@ async function expectInvoiceRefusal(page: Page, jobId: string, code: string) {
     expect(refusal.status()).toBe(400);
     expect((await refusal.json()).code).toBe(code);
   }
+  await page.goto(`/jobs/${jobId}/work#final-check`);
 }
 
 async function screenshot(info: TestInfo, name: string, anchor: Locator) {
@@ -115,7 +119,10 @@ test("V2-DUI-3: designed declaration, saved processing, evidence and one confirm
   await expect(item.getByRole("listitem")).toHaveCount(2);
   await expect(item).toContainText("no match found");
   await expect(item.getByRole("button", { name: "Save answer", exact: true })).toBeDisabled();
-  await expect(panel.getByRole("button", { name: "Issue final invoice", exact: true })).toBeEnabled();
+  await openDesignedTab(page, "Money");
+  await expect(page.getByTestId("lock-bound-invoices").getByRole("button", { name: "Issue final invoice", exact: true })).toBeEnabled();
+  await page.goto(`${work}#final-check`);
+  await expect(check.getByTestId("final-check-item")).toHaveCount(1);
   await screenshot(info, "results", item);
   const confirm = item.getByRole("button", { name: "Yes — this was extra work", exact: true });
   await checkDesigned(page, confirm);

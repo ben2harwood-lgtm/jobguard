@@ -50,6 +50,19 @@ export function JobInvoices({ jobId }: { jobId: string }) {
       window.removeEventListener(FINAL_CHECK_CHANGED_EVENT, checkChanged);
     };
   }, [jobId, load]);
+  // The final check finishes in the background, and this tab does not mount the reveal that announces it.
+  // While the saved guard says the check is still running, read again every 5 s, for up to 3 minutes.
+  const pending = saved?.lock?.invoiceGuard === "FINAL_CHECK_NOT_COMPLETE";
+  useEffect(() => {
+    if (!pending) return;
+    let reads = 0;
+    const timer = window.setInterval(() => {
+      reads += 1;
+      if (reads > 36) { window.clearInterval(timer); return; }
+      void load();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [pending, load]);
   useEffect(() => {
     const root = panel.current;
     if (!root) return;
