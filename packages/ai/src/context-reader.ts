@@ -1,6 +1,7 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
 import { amounts, numberWords, plainDraft, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
  * V2-SQ-C Reader A, the context reader. Code only: no model, no network, no spend. It reads one spoken
@@ -46,18 +47,9 @@ export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: 
   checkUnderstandingNumbers(understanding, sourceText, spokenNumbers);
 
 // ---- Rooms ---------------------------------------------------------------------------------------------------
-const ROOM = "en[\\s-]?suite|ensuite|living room|dining room|utility room|utility|kitchen|bathroom|wc|cloakroom|hallway|hall|landing|stairs|staircase|lounge|bedroom|loft|garage|garden|roof|extension|conservatory|porch|office|study";
-const QUALIFIER = "upstairs|downstairs|front|back|master|main|spare|small|big|kids|other|top|first|second|third|fourth";
-/** "bedroom two", "bedroom 3": an ordinal only after "bedroom", and never the start of an amount or a count of coats. */
-const ORDINAL = "(?:one|two|three|four|five|[1-5])(?![\\d.,]|\\s*(?:k|grand|pounds|quid|hundred|thousand|coats?|of)\\b)";
 const OUTSIDE = /^(?:.*\s)?(?:garden|roof|back|front|outside)$/iu;
-const roomPart = `(?:(?:${QUALIFIER})\\s+)?(?:bedroom\\s+${ORDINAL}|${ROOM})(?:\\s+(?:upstairs|downstairs)(?![\\p{L}]))?`;
 const roomMention = new RegExp(`(?<![\\p{L}])(?:out the (?:back|front)|${roomPart}(?:\\s+and\\s+(?:the\\s+)?${roomPart})?)(?![\\p{L}])(?!\\s+(?:walls?|fences?|gates?|sheds?|paths?|taps?)\\b)`, "iu");
-/** "In the kitchen rip out …", "Upstairs bathroom strip out", "then the hallway paint …": the room words before the work. */
-const roomLead = "(?:(?:right|ok|okay|so|um|er|well)[\\s,]+)*(?:(?:and\\s+)?(?:then\\s+)?(?:(?:in|on|up on|at)\\s+)?(?:the\\s+)?|out the\\s+)";
 const leadingRoom = new RegExp(`^${roomLead}(${roomPart}(?:\\s+and\\s+(?:the\\s+)?${roomPart})?|back|front)[\\s,:-]+`, "iu");
-/** A clause that only names a room ("In the kitchen", "Upstairs bathroom", "Out the back"): it opens the room for what follows. */
-const roomOnly = new RegExp(`^${roomLead}(${roomPart}(?:\\s+and\\s+(?:the\\s+)?${roomPart})?|back|front)[\\s,:-]*$`, "iu");
 /** "new suite supply and fit 3200": a verb with no object of its own finishes the item before it. */
 const bareVerb = /^(?:supply and fit|supply and install|supply|fit|install|fitted|supplied)(?:\s+(?:£?\d[\d,.]*(?:\s*(?:grand|k))?|for\b.*|at\b.*))?$/iu;
 /** A bare room at the end of continuous speech ("… fit new units bathroom", "… then the kitchen") opens the next item's room. */

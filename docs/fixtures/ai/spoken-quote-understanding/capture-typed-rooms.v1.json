@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "note": "V2-SQ-J: typed or punctuated quote text gets the same rooms as spoken text. Each row is one capture-parser row in order, labelled by Reader A (understoodLabels), as the review screen shows it. No row is a sentence that only names a room. Fictional text only.",
+  "cases": [
+    {
+      "id": "smith-typed",
+      "source": "cases.v1.json smith-three-rooms, verbatim",
+      "text": "Smith house refurb. In the kitchen rip out the old units and fit new ones for 2400, tile the floor about 12 square metres at 60 a metre. Upstairs bathroom strip out, new suite supply and fit 3200, and get the sparky to move two sockets. Paint the hallway and landing, two coats, 650.",
+      "rows": [
+        {
+          "words": "rip out the old units",
+          "room": "Kitchen",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "fit new ones",
+          "room": "Kitchen",
+          "trade": "Kitchen fitting",
+          "pence": null
+        },
+        {
+          "words": "tile the floor",
+          "room": "Kitchen",
+          "trade": "Tiling",
+          "pence": null
+        },
+        {
+          "words": "strip out",
+          "room": "Upstairs bathroom",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "new suite",
+          "room": "Upstairs bathroom",
+          "trade": "Plumbing",
+          "pence": null
+        },
+        {
+          "words": "move two sockets",
+          "room": "Upstairs bathroom",
+          "trade": "Plumbing",
+          "pence": null
+        },
+        {
+          "words": "Paint the hallway and landing",
+          "room": "Hallway and landing",
+          "trade": "Decorating",
+          "pence": null
+        }
+      ]
+    },
+    {
+      "id": "smith-recogniser",
+      "source": "The SQ-H builder's recogniser form of the same job (lower case, no punctuation, prices in words)",
+      "text": "smith house refurb in the kitchen rip out the old units and fit new ones for two thousand four hundred pounds tile the floor twelve square metres at sixty pounds a metre upstairs bathroom strip out new suite supply and fit three thousand two hundred pounds and get the sparky to move two sockets paint the hallway and landing two coats six hundred and fifty pounds",
+      "rows": [
+        {
+          "words": "rip out the old units",
+          "room": "Kitchen",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "fit new ones",
+          "room": "Kitchen",
+          "trade": "Kitchen fitting",
+          "pence": 240000
+        },
+        {
+          "words": "tile the floor twelve square metres",
+          "room": "Kitchen",
+          "trade": "Tiling",
+          "pence": null
+        },
+        {
+          "words": "strip out new suite",
+          "room": "Upstairs bathroom",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "move two sockets",
+          "room": "Upstairs bathroom",
+          "trade": "Other",
+          "pence": 320000
+        },
+        {
+          "words": "paint the hallway and landing",
+          "room": "Hallway and landing",
+          "trade": "Decorating",
+          "pence": 65000
+        }
+      ]
+    },
+    {
+      "id": "jones-flat",
+      "source": "builder-written",
+      "text": "Jones flat. In the bathroom remove the old bath and fit a walk-in shower for £2,800. In the bedroom paint the walls and ceiling for £450. Out the back, clear the garden for £300.",
+      "rows": [
+        {
+          "words": "remove the old bath",
+          "room": "Bathroom",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "fit a walk-in shower",
+          "room": "Bathroom",
+          "trade": "Plumbing",
+          "pence": 280000
+        },
+        {
+          "words": "paint the walls and ceiling",
+          "room": "Bedroom",
+          "trade": "Decorating",
+          "pence": 45000
+        },
+        {
+          "words": "clear the garden",
+          "room": "Garden",
+          "trade": "Strip-out",
+          "pence": 30000
+        }
+      ]
+    },
+    {
+      "id": "patel-kitchen-lounge",
+      "source": "builder-written",
+      "text": "Patel kitchen and lounge. Kitchen. Strip out the old worktops. Fit new worktops for £1,200. Lounge. Plaster the chimney breast for £380. Paint the walls £520.",
+      "rows": [
+        {
+          "words": "Strip out the old worktops",
+          "room": "Kitchen",
+          "trade": "Strip-out",
+          "pence": null
+        },
+        {
+          "words": "Fit new worktops",
+          "room": "Kitchen",
+          "trade": "Kitchen fitting",
+          "pence": 120000
+        },
+        {
+          "words": "Plaster the chimney breast",
+          "room": "Lounge",
+          "trade": "Plastering",
+          "pence": 38000
+        },
+        {
+          "words": "Paint the walls",
+          "room": "Lounge",
+          "trade": "Decorating",
+          "pence": 52000
+        }
+      ]
+    },
+    {
+      "id": "green-house",
+      "source": "builder-written",
+      "text": "Green house. Upstairs bathroom: replace the toilet for £350. Downstairs WC: tile the floor for £240. Landing: hang a new door for £180.",
+      "rows": [
+        {
+          "words": "replace the toilet",
+          "room": "Upstairs bathroom",
+          "trade": "Plumbing",
+          "pence": 35000
+        },
+        {
+          "words": "tile the floor",
+          "room": "Downstairs WC",
+          "trade": "Tiling",
+          "pence": 24000
+        },
+        {
+          "words": "hang a new door",
+          "room": "Landing",
+          "trade": "Carpentry",
+          "pence": 18000
+        }
+      ]
+    }
+  ]
+}
