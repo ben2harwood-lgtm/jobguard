@@ -231,14 +231,14 @@ export class CrewBriefRepository {
       FROM app.quote_line l LEFT JOIN app.v2_work_plan_task t
         USING (tenant_id, job_id, quote_revision_id, scope_item_id)
       WHERE (l.tenant_id, l.job_id, l.quote_revision_id) = ($1, $2, $3) AND l.included
-      ORDER BY ${isStaged(template) ? "t.position NULLS LAST, l.ordinal" : "l.ordinal, t.position"}
-    `, key);
-    // Same order as WorkPlanRepository.loadTasks: a staged plan keeps its stored stage order.
+      ORDER BY CASE WHEN $4::boolean THEN t.position END NULLS LAST, l.ordinal, t.position
+    `, [...key, isStaged(template)]);
+    // A staged template (trades.v1) keeps the plan's stage order across scope items, as loadTasks does.
     const base = scope.flatMap((row, index): WorkPlanTask[] => {
       if (row.template_task_key === null) return [];
       const task = template.tasks.find(entry => entry.key === row.template_task_key);
       if (!task) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
-      const { category: _category, stage: _stage, ...details } = task as WorkPlanTemplate["tasks"][number];
+      const { category: _category, stage: _stage, ...details } = task as typeof task & { stage?: number };
       return [{ ...details, position: index + 1, scopeItemId: row.scope_item_id,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) }];
     });
@@ -267,8 +267,9 @@ export class CrewBriefRepository {
       .filter(row => !seen.has(row.scopeItemId) && seen.add(row.scopeItemId))
       .filter(row => row.addition)
       .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
-    const extraTasks = extras.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
-      .map(({ category: _category, ...task }): WorkPlanTask => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
+    // Extras expand through the stored plan's own template, as approvedScope does.
+    const extraTasks = extras.flatMap(row => template.tasks.filter(task => task.category === row.source.category)
+      .map(({ category: _category, stage: _stage, ...task }: typeof template.tasks[number] & { stage?: number }): WorkPlanTask => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) })))
       .map((task, index) => ({ ...task, position: base.length + index + 1 }));
     const { rows: edits } = await client.query<WorkPlanEditRow>(`

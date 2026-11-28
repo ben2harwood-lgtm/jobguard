@@ -2073,8 +2073,8 @@ const photoTables = ["app.evidence_upload", "app.evidence_object", "app.syntheti
 const photoTablesByLink = { "app.evidence_invalidation": "evidence_id", "app.synthetic_evidence_chunk": "upload_id" };
 
 // A fresh live practice job of the builder's firm (the shared seeded job is closed by an earlier case).
-async function pxLiveJob() {
-  const { draftJob, lines, save } = await draftForPlan();
+async function pxLiveJob(...plan) {
+  const { draftJob, lines, save } = await draftForPlan(...plan);
   const { sessionId, cookies, csrfToken } = await signIn("builder");
   const app = createWorkspaceApplication({ pool: runtime, sessionId });
   await save(1, lines);
@@ -2101,7 +2101,7 @@ async function pxLiveJob() {
     statedCustomerName: "Fictional Photo Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
   await json(await request(`/api/jobs/${draftJob}/quotes/activation`, { cookies, csrf: csrfToken, body: switchLive() }));
   const { rows: [scope] } = await admin.query("SELECT id FROM app.scope_identity WHERE job_id = $1 ORDER BY id LIMIT 1", [draftJob]);
-  return { jobId: draftJob, scopeItemId: scope.id, sessionId };
+  return { jobId: draftJob, scopeItemId: scope.id, sessionId, lines };
 }
 
 test("PX: a real practice photo is locked to its own firm on every evidence and photo table", async () => {
@@ -2468,6 +2468,32 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   const before = await policies();
   await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   assert.deepEqual(await policies(), before);
+});
+
+test("D4: a trades.v1 brief keeps the plan's stage order and its approved extras' own task keys", async () => {
+  const { jobId: liveJob, sessionId, lines } = await pxLiveJob(["Plumbing", "Plumbing", "Tiling"],
+    ["Move the basin waste", "Fit the new bath", "Tile the bath panel"]);
+  const [, , tiling] = lines.map(line => line.scopeItemId);
+  const { workPlan, variation, crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const vary = (action, fields) => variation.command(liveJob, { version: "variation-command.v1", action, ...fields });
+  const proposalId = randomUUID();
+  const extraItem = randomUUID();
+  const proposed = await vary("propose", { proposalId, scopeItemId: extraItem, existingScopeItemId: null,
+    lineageParentScopeItemId: tiling, description: "Tile the window reveal", captureText: "Customer asks about the reveal",
+    price: { quantity: "1", unit: "item", unitRatePence: 9000, direction: "addition" } });
+  await vary("approve", { variationId: proposalId, revisionId: proposed.variations.find(item => item.id === proposalId).currentRevisionId,
+    approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const plan = await workPlan.read(liveJob, planQuery);
+  assert.equal(plan.templateKey, "trades.v1");
+  const planned = trade => plan.tasks.filter(task => task.trade === trade).map(task => [task.key, task.scopeItemId]);
+  assert.deepEqual(planned("plumber").map(([key]) => key),
+    ["plumbing-first-fix", "plumbing-first-fix", "plumbing-second-fix", "plumbing-second-fix"], "both first fixes come first");
+  assert.ok(planned("tiler").some(([key, scopeItemId]) => key === "tiling-tile" && scopeItemId === extraItem));
+  for (const trade of ["plumber", "tiler"]) {
+    const brief = await crewBriefs.generate(liveJob, { version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade,
+      expectedVersion: 0, accessWindow: "Any weekday", photoIds: [] });
+    assert.deepEqual(brief.content.tasks.map(task => [task.taskKey, task.scopeItemId]), planned(trade), `${trade} brief follows the plan`);
+  }
 });
 
 // must stay the last test: it signs the cached builder out
