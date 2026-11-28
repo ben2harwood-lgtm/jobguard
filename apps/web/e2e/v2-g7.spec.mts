@@ -158,7 +158,8 @@ test("Handover: no draft, then a saved version, then the customer's pack current
         await pack.reload();
         const alert = view.getByRole("alert");
         await expect(alert).toContainText("Newer version available");
-        expect(await view.locator("[role=alert], h1, h2, h3, p").first().getAttribute("role")).toBe("alert");
+        // First in the pack content itself (CustomerPack's form), after the page header.
+        expect(await view.locator(".form > :first-child").first().getAttribute("role")).toBe("alert");
         await phoneReady(pack, view, `pack older ${width}`);
         expect(await view.innerText()).not.toMatch(/£|pence/iu);
         await shot(pack, "pack-older", width);
