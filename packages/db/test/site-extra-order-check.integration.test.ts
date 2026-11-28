@@ -155,8 +155,10 @@ describe("ENT-3c catalogue (the new tables and routines)", () => {
       const grants = (await c.admin.query("SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END grantee,a.privilege_type FROM pg_class c,aclexplode(c.relacl) a WHERE c.oid=$1::regclass ORDER BY 1,2", [`app.${table}`])).rows;
       expect(grants.filter(g => g.grantee !== "jobguard_migration"), table).toEqual([{ grantee: "jobguard_runtime", privilege_type: "SELECT" }]);
       for (const role of ["jobguard_runtime"]) for (const privilege of ["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) expect((await c.admin.query("SELECT has_table_privilege($1,$2,$3) ok", [role, `app.${table}`, privilege])).rows[0]!.ok, `${table} ${privilege}`).toBe(false);
-      const policies = (await c.admin.query("SELECT policyname,cmd,roles::text,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1", [table])).rows;
-      expect(policies).toHaveLength(1); expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL" }); expect(policies[0]!.roles).toContain("jobguard_runtime"); expect(policies[0]!.roles).toContain("jobguard_migration");
+      const policies = (await c.admin.query("SELECT policyname,cmd,roles::text,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1 ORDER BY policyname DESC", [table])).rows;
+      // 0786 adds exactly one customer-scoped read policy on extra_sor_revision (migration role, SELECT, LP-11 customer scope only).
+      expect(policies).toHaveLength(table === "extra_sor_revision" ? 2 : 1); expect(policies[0]).toMatchObject({ policyname: "tenant_isolation", cmd: "ALL" }); expect(policies[0]!.roles).toContain("jobguard_runtime"); expect(policies[0]!.roles).toContain("jobguard_migration");
+      if (table === "extra_sor_revision") expect(policies[1]).toEqual({ policyname: "lp11_extra_customer_read", cmd: "SELECT", roles: "{jobguard_migration}", qual: "(tenant_id = app.lp11_extra_customer_tenant('issued_variation'::text, variation_id))", with_check: null });
       const triggers = (await c.admin.query("SELECT tgname,tgtype,tgisinternal,tgconstraint<>0 AS is_constraint FROM pg_trigger WHERE tgrelid=$1::regclass AND NOT tgisinternal ORDER BY tgname", [`app.${table}`])).rows;
       expect(triggers.map(t => t.tgname), table).toEqual(table === "extra_sor_revision" ? ["a_sor_revision_guard", "immutable", "sor_revision_audit", "sor_revision_basis"] : ["a_pricing_basis_guard", "immutable"]);
     }

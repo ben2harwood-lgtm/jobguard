@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "ep-cc-r1": {
+      "branches": [
+        "claude/ep-cc-r1"
+      ],
+      "note": "EP-CC-R1 extra commercial reads (RED, read-only): migration 0786 definer read routines and two customer-scoped read policies; pure work-state machine; contractor GET routes; narrow client projection on the existing customer route.",
+      "allow": [
+        "apps/api/src/auth/extra-customer.test.ts",
+        "apps/api/src/auth/extra-customer.ts",
+        "apps/web/app/api/contractor/extra-work-list/route.test.ts",
+        "apps/web/app/api/contractor/extra-work-list/route.ts",
+        "apps/web/app/api/contractor/extra-work-list/transport.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/asked-against-approved/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/claim-record/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/site-extras/[extraId]/entitlement-context/route.ts",
+        "config/lanes/ep-cc-r1.json",
+        "docs/contracts/extra-commercial-reads-v1.md",
+        "packages/core/src/extra-commercial-reads.test.ts",
+        "packages/core/src/extra-commercial-reads.ts",
+        "packages/core/src/index.ts",
+        "packages/db/migrations/0786_extra_commercial_reads.sql",
+        "packages/db/src/extra-commercial-reads-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/extra-commercial-reads.integration.test.ts",
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/migration-proofs/0786_extra_commercial_reads.proof.json",
+        "packages/db/test/site-extra-order-check.integration.test.ts"
+      ]
+    }
+  }
+}

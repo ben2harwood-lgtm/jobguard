@@ -48,3 +48,27 @@ it("keeps the previous result when customer timing has no proceed IDs", async ()
  expect(await f.app.run({version:"extra-customer.v1",action:"view",jobId:job,requestId},{headers}))
   .toMatchObject({doneWithoutRequiredPreapproval:"not_derived"});
 });
+
+// EP-CC-R1: the client entitlement projection is routed to its own identity function and parsed against the narrow v1 schema.
+describe("EP-CC-R1 client entitlement projection", () => {
+ const projection = { version: "extra-client-entitlement.v1", requestId, requestRevision: 1,
+  orderLines: [{ position: 0, clientLineReference: null, rateCode: "R1", unit: "each", quantity: "1" }],
+  claimed: { status: "not_recorded", source: "CC-S1" }, rateItem: { status: "not_recorded", source: "CC-S1" },
+  inclusionRule: { status: "not_recorded", source: "CC-S2" }, decision: { status: "not_recorded", source: "CC-S2" }, ownDecisions: [] };
+ const ask = { version: "extra-customer.v1", action: "entitlement", jobId: job, requestId };
+ it("calls identity.extra_customer_entitlement with the cookie-derived binding and returns only the parsed projection", async () => {
+  const f = fixture(); f.query.mockReset().mockResolvedValueOnce({ rows: [{ result: { extraApprover: true } }] }).mockResolvedValueOnce({ rows: [{ result: projection }] });
+  expect(await f.app.run(ask, { headers })).toEqual(projection);
+  expect(f.query.mock.calls[1]![0]).toContain("identity.extra_customer_entitlement(");
+  expect(f.query.mock.calls[1]![1].slice(0, 4)).toEqual([tenant, job, client, "c".repeat(64)]);
+  expect(JSON.parse(f.query.mock.calls[1]![1][4])).toEqual(ask);
+ });
+ it.each([{ ...projection, fees: [] }, { ...projection, internalRationale: "x" }, { ...projection, basisNote: "x" }, { ...projection, version: "extra-client-entitlement.v0" }])(
+  "refuses a projection carrying anything beyond the narrow schema", async result => {
+   const f = fixture(); f.query.mockReset().mockResolvedValueOnce({ rows: [{ result: { extraApprover: true } }] }).mockResolvedValueOnce({ rows: [{ result }] });
+   await expect(f.app.run(ask, { headers })).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" });
+  });
+ it.each([{ ...ask, requestId: undefined }, { ...ask, tenantId: tenant }, { ...ask, clientContractId: tenant }])("refuses malformed or forged entitlement input before querying", async raw => {
+  const f = fixture(); await expect(f.app.run(raw, { headers })).rejects.toMatchObject({ code: "CUSTOMER_REFUSED" }); expect(f.query).not.toHaveBeenCalled();
+ });
+});
