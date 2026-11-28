@@ -2153,3 +2153,71 @@ unchanged 50,000-character case finish its semantic assertions; it does not
 replace the failed standard full eval or alter the dedicated 1-second performance
 assertions. This is semantic evidence only. Log:
 `/tmp/rt-fix-9-corpus-final.log`.
+
+
+## RT-FIX-8 follow-up, fixed in RT-FIX-9
+
+Codex review P2 of #1102 at `capture-fixture-parser.ts:awaitingCorrection`,
+implemented as a follow-up to `f2e1255b8` on `codex/sandbox/rt-fix-9`.
+
+| Finding | Severity | Corpus cases | Repair |
+| --- | --- | --- | --- |
+| RT-FIX-8-P2-01 | P2 | RT-03-233, RT-03-234 | A bare-number replacement (`600`) or count correction (`3`) now ends the correction wait before the next explicit work item. The corrected line stays open with the correction question; the separate doors/hall line keeps its own £200/£300 price. |
+
+`plainDraft` reuses the existing number-token vocabulary rather than requiring a
+currency amount to end the wait. This only permits the existing shared item
+boundary to split: it never applies the replacement number. Capture, Reader A
+and `checkSpokenNumbers` retain the same correction chunks and targets; there
+is no second boundary implementation. No changes to context-reader or core
+source were needed. The initial RT-FIX-9 LATER / SIMPLICITY note above is retained.
+
+Both added cases first failed through all three corpus paths (one swallowed
+item each), then passed after the fix. Their expectations require exactly two
+lines, the original and replacement prices to remain absent on the corrected
+line, its correction question, and the following item's exact price; the count
+case also requires an unresolved quantity. Existing cases and expectations are
+unchanged. Only the parser implementation hash changes in `golden-run.v1.json`.
+
+Validation (Node 24.17.0 / pnpm 10.28.1):
+
+```sh
+pnpm --filter @jobguard/core build
+pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2 -t 'RT-03-23[34]'
+pnpm eval --maxWorkers=2
+pnpm eval --maxWorkers=2 --no-file-parallelism
+pnpm --filter @jobguard/core typecheck
+pnpm --filter @jobguard/core lint
+pnpm --filter @jobguard/core build
+pnpm --filter @jobguard/ai typecheck
+pnpm --filter @jobguard/ai lint
+pnpm --filter @jobguard/ai build
+pnpm --filter @jobguard/core test --maxWorkers=2
+git diff --check
+```
+
+- Core was rebuilt before the post-fix tests. All six package
+  typecheck/lint/build commands passed. Core tests: **4,895/4,895**, 232 files.
+- New cases: **2/2 pass** after the fix (both failed before it).
+- Every corpus case ran in both full evals: **1,569/1,569 corpus-suite tests**,
+  comprising **1,522 cases** (1,144 pass, 378 declared open findings) plus 47
+  runner checks. RT-03 is **158 pass / 0 open**. No existing status was changed.
+- Both full evals returned **2 unexpected failures, 2,598 ordinary passes,
+  41 expected failures = 2,641 tests in 37 files** (36 files pass, 1 fails;
+  no skips). Both failures are in the existing `redteam/perf.test.ts`:
+  `between-chain` exceeds the 1-second reader budgets, and `hyphen-words`
+  exceeds the 50-millisecond regex budget (also the reader budget in the serial
+  run). The serial run measured 1,170/1,562 ms for between-chain capture/reader
+  and a 560 ms maximum regex call for hyphen-words. These failures were already
+  recorded in the preceding RT-FIX-9 receipt. No performance threshold, test
+  expectation or expected-failure status was weakened. **The requested full
+  eval gate of zero unexpected failures is NOT met; the validation hold remains.**
+- Scope and hash checks passed: four allowed files changed, existing corpus
+  entries identical, exactly two cases added, golden-run changed only at the
+  parser implementation hash. No database migration, web workflow, provider,
+  live-model, release or deployment change. These are deterministic checks,
+  not independent RED review. Commit only; no push; `.pnpm-store/` excluded.
+
+Local logs: `/tmp/rt-fix-9-followup-red.log`,
+`/tmp/rt-fix-9-followup-green.log`, `/tmp/rt-fix-9-followup-eval.log`,
+`/tmp/rt-fix-9-followup-eval-serial.log`,
+`/tmp/rt-fix-9-followup-core-tests.log`.

@@ -84,6 +84,7 @@ export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, th
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
 // A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
 const unreadNumber = `(?:\\d[\\d,.]*k?|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|k|point|half|halves|quarters?|thirds?|couple|few|dozen|score)(?![\\p{L}]))`;
+const correctionNumber = new RegExp(unreadNumber, "iu");
 const withdrawal = /\b(?:scratch|scrap|forget|cancel)\b/iu;
 // One correction marker guard for splitting, price safety and the builder's question. Never choose between said values.
 export const spokenCorrection = new RegExp(
@@ -288,19 +289,20 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   const party = suggestCapturePartyClause(text);
   const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
     .map(match => [match.index, match.index + match[0].length]));
-  let start = 0, correctionInChunkEnd = -1, correctionNeedsAmount = false;
+  let start = 0, correctionInChunkEnd = -1, correctionNeedsNumber = false;
   for (let i = 0; i < text.length; i++) {
     if (party && i === party.start) { i = party.end - 1; continue; }
     // A correction marker stays with its source span, including internal commas.
     const correctionEnd = correctionEnds.get(i);
     if (correctionEnd !== undefined) {
       correctionInChunkEnd = correctionEnd;
-      correctionNeedsAmount = !withdrawal.test(text.slice(i, correctionEnd));
+      correctionNeedsNumber = !withdrawal.test(text.slice(i, correctionEnd));
       i = correctionEnd - 1; continue;
     }
     const char = text[i]!;
     // Withdrawals are complete without a replacement number; the next work item can start after them.
-    const awaitingCorrection = correctionNeedsAmount && correctionInChunkEnd >= start && !amounts(text.slice(correctionInChunkEnd, i)).length;
+    // A bare number/count also ends the wait, but never resolves the corrected quantity or price.
+    const awaitingCorrection = correctionNeedsNumber && correctionInChunkEnd >= start && !correctionNumber.test(text.slice(correctionInChunkEnd, i));
     // A decimal point or thousands separator belongs to the amount.
     if ((/[.!?;\r\n]/u.test(char) || char === "—" && spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) && !points.has(i)) {
       if (char === "." && /\bapprox$/iu.test(text.slice(start, i)) && /^\s*£?\d/u.test(text.slice(i + 1))) continue;
