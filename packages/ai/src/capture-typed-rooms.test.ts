@@ -43,4 +43,9 @@ describe("V2-SQ-J typed text gets the same rooms as spoken text", () => {
     expect(proposal.lines.every(line => line.quantity.value === "1" ? line.unitPricePence.value === null : true)).toBe(true);
     expect(proposal.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
   });
+  it("a room clause before a single work item keeps that row parsed (Codex P2)", () => {
+    const { rows, proposal } = review("Jones flat. In the kitchen. Fit six doors at fifty pounds each.");
+    expect(rows.map(row => [row.description, row.pence, row.room])).toEqual([["Fit six doors", 5000, "Kitchen"]]);
+    expect(proposal.lines[0]!.quantity.value).toBe("6");
+  });
 });

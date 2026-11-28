@@ -245,12 +245,14 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     const draft = plainDraft(text);
     // V2-SQ-J: a clause that only names a room ("In the kitchen", "Upstairs bathroom") opens that room for the rows
     // after it (Reader A labels them); it is never a work row itself.
+    // The row decision below still counts the room clause, so "Jones flat. In the kitchen. Fit six doors …" keeps its parsed row.
+    const said = draft.chunks.length;
     draft.chunks = draft.chunks.filter(chunk => chunk.inferred || !roomOnly.test(chunk.value));
     if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
     // One spoken item with a stated price ("supply and fit one door for three hundred pounds") is a line too; an unclear price stays open.
     const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
       && amounts(draft.chunks[0]!.value).length > 0;
-    if (draft.chunks.length >= 2 || single) {
+    if ((said >= 2 && draft.chunks.length > 0) || single) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
       questions.push(...draft.notes.map(question));
