@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
 import { roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -25,6 +25,8 @@ function thousands(words: string): number | null {
   const value = spoken && !/\d/u.test(spoken[1]!) ? spokenPounds(spoken[1]!) : null;
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
+/** Where one work item ends and the next begins inside a sentence: a comma, or "and"/"then" before a work verb. */
+const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
     const text = words.trim();
@@ -40,6 +42,12 @@ export const spokenNumbers: SpokenNumberReader = {
     if (/^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/u.test(text)) return Number(text);
     if (!/^[a-z]+(?:[\s-][a-z]+)?$/u.test(text) || /pounds|quid|hundred|thousand/u.test(text)) return null;
     return spokenPounds(text);
+  },
+  // The same said-amount guards as the reader's own line prices (V2-SQ-M), on the amount's own work clause only:
+  // another item in the same sentence ("…, fit a handle for twenty pounds and fifty pence") never opens this one.
+  open: (before, after) => {
+    const ownBefore = before.split(itemBreak).at(-1) ?? before, ownAfter = after.split(itemBreak)[0] ?? after;
+    return saidAmountOpen(ownBefore, ownAfter, "line");
   },
 };
 /** Reader B (SQ-G) passes its output through the same check. */
@@ -180,7 +188,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       // A second rate or a correction after this one ("60 a metre, or 80 a metre") leaves the rate open.
       const tail = value.slice(rate.index + rate[0].length);
       const vat = vatOnly.test(tail);
-      if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
+      const at = rate.index + rate[0].indexOf(rate[1]!);
+      if (pence !== null && saidAmountOpen(value.slice(0, at), value.slice(at + rate[1]!.length), "line")) questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
+      else if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
         questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
       else if (pence !== null) {
         price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit";
@@ -198,7 +208,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const text = bare[1]!;
       candidates.push({ text, at: bare.index + bare[0].length - text.length, pence: spokenNumbers.money(text) });
     }
-    if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at))) {
+    // Every said-amount guard, the same function the draft path and the totals call (V2-SQ-M: "up to £200" is asked about).
+    const open = (found: { text: string; at: number }) => saidAmountOpen(value.slice(0, found.at), value.slice(found.at + found.text.length), "line");
+    if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at)) && !open(candidates[0]!)) {
       const found = candidates[0]!;
       const after = value.slice(found.at + found.text.length);
       const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-m": {
+      "branches": [
+        "claude/project-thread-trp08u-sqm"
+      ],
+      "note": "T2 Q77 V2-SQ-M: a limit, floor or credit beside a said amount (up to, at most, minimum, tops, minus, -£50, credit, off the bill) leaves it unpriced and asked about, on the draft path, the reader's line prices and per-metre rates, room and whole-job totals, and checkSpokenNumbers. Reader only: no row, route, table or migration. Base claude/project-thread-trp08u-sqk (#1049) at 179a8e674. capture-qualified-price.test.ts copied unchanged from the Codex handoff (frm-management-layer 940e9129c). Mount: packages/core/src/job-understanding.ts gains an optional open() on SpokenNumberReader, used for money cites only. Golden record = parser hash only.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-qualified-price.test.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/core/src/job-understanding.ts"
+      ]
+    }
+  }
+}

@@ -251,3 +251,53 @@ describe("V2-SQ-C Reader A", () => {
     }
   });
 });
+
+describe("V2-SQ-M limit and credit words only count beside the amount", () => {
+  it.each([
+    ["Fit the radiator under the window for £150", 15000], ["Paint the hall over the stairs for £300", 30000],
+    ["Lay the floor in the back bedroom for £400", 40000], ["Hang the door - £200", 20000], ["Hang the door – £200", 20000],
+  ])("keeps %s", (text, pence) => {
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([pence]);
+  });
+  it("leaves a credit room total and whole-job total open", () => {
+    const read = readSpokenJob("00000000-0000-4000-8000-000000000002", "In the kitchen paint the ceiling for £200. The kitchen all in minus £300. For the whole job up to £400.");
+    expect(read.areaPrices).toEqual([]);
+    expect(read.wholeJobPrice).toBeNull();
+  });
+});
+
+describe("V2-SQ-M a digits-only citation still sees the words before its currency sign (Codex P2 on #1064)", () => {
+  it.each(["up to ", "minus ", "a credit of ", "-"])("clears a line, room and whole-job price cited as digits after %s£", words => {
+    const pad = " ".repeat(words.length);
+    const exact = `In the kitchen paint the ceiling for ${pad}£200. The kitchen all in ${pad}£300. For the whole job ${pad}£400.`;
+    const { timeline: _timeline, ...original } = readSpokenJob("00000000-0000-4000-8000-000000000002", exact);
+    expect([original.lines[0]!.unitPricePence.value, original.areaPrices[0]?.pence, original.wholeJobPrice?.pence]).toEqual([20000, 30000, 40000]);
+    // Each citation narrowed to its digits, as another reader may cite them; the sign and the words stay outside.
+    type Cited = { provenance: { kind: string } };
+    const digits = <T extends Cited>(field: T): T => {
+      const provenance = field.provenance as { kind: "extracted"; span: { start: number; end: number } };
+      return { ...field, provenance: { ...provenance, span: { ...provenance.span, start: provenance.span.start + 1 } } };
+    };
+    const narrowed = { ...original, lines: original.lines.map(line => ({ ...line, unitPricePence: digits(line.unitPricePence) })),
+      areaPrices: original.areaPrices.map(digits), wholeJobPrice: original.wholeJobPrice && digits(original.wholeJobPrice) };
+    expect(checkSpokenNumbers(narrowed, exact).lines[0]!.unitPricePence.value).toBe(20000);
+    const checked = checkSpokenNumbers(narrowed, exact.replaceAll(`${pad}£`, `${words}£`));
+    expect(checked.lines[0]!.unitPricePence.value).toBeNull();
+    expect(checked.areaPrices).toEqual([]);
+    expect(checked.wholeJobPrice).toBeNull();
+  });
+});
+
+describe("V2-SQ-M another item's words in the same sentence never open this item's price (Codex P2 on #1064)", () => {
+  it.each(["Paint the walls for £200, fit a handle for twenty pounds and fifty pence",
+    "Paint the walls for £200 and fit a handle for twenty pounds and fifty pence"])("keeps £200 in %s through checkSpokenNumbers", text => {
+    const { timeline: _timeline, ...job } = readSpokenJob("00000000-0000-4000-8000-000000000002", text);
+    const before = job.lines.map(line => line.unitPricePence.value);
+    expect(before[0]).toBe(20000);
+    expect(checkSpokenNumbers(job, text).lines.map(line => line.unitPricePence.value)).toEqual(before);
+  });
+  it("still opens a limit said in the amount's own clause next to another item", () => {
+    const text = "Fit a handle for twenty pounds, paint the walls for up to £200";
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([2000, null]);
+  });
+});

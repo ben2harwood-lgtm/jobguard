@@ -54,7 +54,9 @@ export type UnderstoodLine = JobUnderstanding["lines"][number];
  * Reads the cited words as a number with the parsers that read the transcript (packages/ai supplies them).
  * `money` returns pence, `count` the counted value; null when the words are not exactly one number.
  */
-export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null };
+export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null;
+  /** True when the words of the same sentence either side of a cited amount leave it open ("up to £200", "-£50"). */
+  open?(before: string, after: string): boolean };
 
 const NUMBER_WORDS = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|half|point";
 const NUMBER_WORD_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NUMBER_WORDS})(?:[\\s-]+and)?[\\s-]+$`, "iu");
@@ -68,7 +70,7 @@ const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})
  */
 export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourceText: string, read: SpokenNumberReader): JobUnderstanding {
   const questions = [...understanding.questions];
-  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: keyof SpokenNumberReader) => {
+  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: "money" | "count") => {
     if (provenance.kind !== "extracted") return false;
     const { start, end } = provenance.span;
     if (start < 0 || end > sourceText.length || start >= end) return false;
@@ -76,6 +78,12 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if (/\d[.,]?$/u.test(sourceText.slice(Math.max(0, start - 2), start)) || /^[.,]?\d/u.test(sourceText.slice(end, end + 2))) return false;
     // … nor "five" inside "twenty five", or "twenty" inside "twenty five" or "two hundred".
     if (NUMBER_WORD_BEFORE.test(sourceText.slice(Math.max(0, start - 40), start)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
+    // … nor an amount the words around it leave open, such as a limit or a credit (V2-SQ-M), within its own sentence.
+    if (kind === "money" && read.open) {
+      // A currency sign just outside a digits-only citation ("up to £" + "200") is part of the amount, not of the words before it.
+      const before = sourceText.slice(Math.max(0, start - 80), start).replace(/[£$€]\s*$/u, ""), after = sourceText.slice(end, end + 80);
+      if (read.open(before.slice(before.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)))) return false;
+    }
     return read[kind](sourceText.slice(start, end)) === expected;
   };
   const spanOf = (provenance: z.infer<typeof provenanceV1>) => provenance.kind === "extracted" ? provenance.span : null;
