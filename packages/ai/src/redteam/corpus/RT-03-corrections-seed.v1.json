@@ -1,0 +1,534 @@
+[
+  {
+    "id": "RT-03-001",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, no make that £450",
+    "why": "M5: no make that retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "no make that £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-002",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, actually £450",
+    "why": "M5: actually retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "actually £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-003",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, sorry I mean £450",
+    "why": "M5: sorry I mean retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "sorry I mean £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-004",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, scratch that £450",
+    "why": "M5: scratch that retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "scratch that £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-005",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, not £400 £450",
+    "why": "M5: not £400 £450 retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "not £400 £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-006",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, change that to £450",
+    "why": "M5: change that to retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "change that to £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-007",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, or rather £450",
+    "why": "M5: or rather retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "or rather £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-008",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, call it £450 instead",
+    "why": "M5: call it £450 instead retracts the old price; keep one open item and ask about the correction",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "call it £450 instead"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-009",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, no make that 450",
+    "why": "M5: no make that retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "no make that 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-010",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, actually 450",
+    "why": "M5: actually retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "actually 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-011",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, sorry I mean 450",
+    "why": "M5: sorry I mean retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "sorry I mean 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-012",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, scratch that 450",
+    "why": "M5: scratch that retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "scratch that 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-013",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, not £400 450",
+    "why": "M5: not £400 £450 retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "not £400 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-014",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, change that to 450",
+    "why": "M5: change that to retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "change that to 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-015",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, or rather 450",
+    "why": "M5: or rather retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "or rather 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-016",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, call it 450 instead",
+    "why": "M5: call it £450 instead retracts the old price; keep one open item and ask about the correction even without repeated currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "call it 450 instead"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-017",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, no, make that £450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "make that £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-018",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, sorry, I mean £450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "I mean £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-019",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400. Actually £450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "Actually £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-020",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400; change that to £450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "change that to £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-021",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400 no make that £450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "make that £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-022",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, not 400, 450",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "not 400, 450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-023",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, call it £450.50 instead",
+    "why": "M5: punctuation or unpunctuated speech must not separate a correction from its item",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "questionsInclude": [
+        "call it £450.50 instead"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-024",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen £400, no, make that £450. Fit the door £150",
+    "why": "M5: only the corrected item stays open; a following independent item retains its exact price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "questionsInclude": [
+        "make that £450"
+      ],
+      "neverPence": [
+        40000
+      ],
+      "lineCount": 2
+    },
+    "status": "pass"
+  }
+]

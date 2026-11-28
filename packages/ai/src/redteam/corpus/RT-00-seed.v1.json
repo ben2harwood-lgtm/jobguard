@@ -27,7 +27,7 @@
       "lines": [{ "descriptionIncludes": "Paint", "unitPricePence": [45000, null] }],
       "questionsInclude": ["check"], "neverPence": [40000], "lineCount": 1
     },
-    "status": "open-finding", "finding": "RT-00-F002"
+    "status": "pass", "finding": "RT-00-F002"
   },
   {
     "id": "RT-00-004", "lane": "RT-00",
