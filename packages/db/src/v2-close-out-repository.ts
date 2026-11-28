@@ -42,6 +42,16 @@ export async function assertFinalAccountOpen(client: PoolClient, tenantId: strin
   }
 }
 
+// Approved extras still outside the plan: those the plan cannot place (omissions, zero-value) and approved
+// additions waiting in Unplanned because no template task matched (an unknown trade). Each scope item counts once.
+function extrasWaiting(plan: { extrasNotPlanned: { scopeItemId: string }[]; unplanned: { scopeItemId: string }[];
+  scopeItems: { scopeItemId: string; variationRevisionId?: string }[] } | null) {
+  if (!plan) return 0;
+  const approved = new Set(plan.scopeItems.filter(item => item.variationRevisionId).map(item => item.scopeItemId));
+  return new Set([...plan.extrasNotPlanned.map(item => item.scopeItemId),
+    ...plan.unplanned.filter(item => approved.has(item.scopeItemId)).map(item => item.scopeItemId)]).size;
+}
+
 /** V2-G6: the facts behind "Before you close this job", read in one tenant transaction. Read only; nothing is stored. */
 export class V2CloseOutRepository {
   constructor(private readonly pool: Pool) {}
@@ -66,7 +76,7 @@ export class V2CloseOutRepository {
       [context.tenantId, jobId]);
       return v2CloseOutReview({ jobId,
         openTasks: (plan?.tasks ?? []).filter(task => !done.has(`${task.scopeItemId}/${task.key}`)).length,
-        extrasNotPlanned: plan?.extrasNotPlanned.length ?? 0,
+        extrasNotPlanned: extrasWaiting(plan),
         stageDraftsOpen: await liveDrafts(client, context.tenantId, jobId),
         proofMissing: proof?.n ?? 0 });
     });

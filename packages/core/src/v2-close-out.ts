@@ -9,7 +9,7 @@ export type V2CloseOutFacts = {
   readonly jobId: string;
   /** Effective work-plan tasks with no recorded "done". */
   readonly openTasks: number;
-  /** Approved extras the plan could not place (the work plan's extrasNotPlanned). */
+  /** Approved extras outside the plan: the work plan's extrasNotPlanned, and approved additions still Unplanned. */
   readonly extrasNotPlanned: number;
   /** K5B-1 stage invoice drafts with no withdrawal. */
   readonly stageDraftsOpen: number;

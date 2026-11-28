@@ -2808,8 +2808,16 @@ test("G6 done when (review): open items are listed as warnings, and only a live 
   const before = { effects: await effectCounts(), money: await k5bMoney(draftJob) };
   const open = await g6Review(app, draftJob);
   assert.equal(open.blocking, false, "open tasks are a reminder, not a block");
-  assert.deepEqual(open.items.map(item => [item.kind, item.blocking]), [["open_tasks", false]]);
+  // Desktop Codex P2: the approved addition has no template task (an unknown trade), so it waits in Unplanned
+  // and must still be listed, not left out of "Before you close this job".
+  const planQuery = { version: "work-plan-query.v1" };
+  const waiting = await app.workPlan.read(draftJob, planQuery);
+  const added = waiting.scopeItems.find(item => item.variationRevisionId === extra.revisionId);
+  assert.ok(waiting.unplanned.some(item => item.scopeItemId === added.scopeItemId), "the addition is Unplanned");
+  assert.deepEqual(open.items.map(item => [item.kind, item.blocking]), [["open_tasks", false], ["extras_not_planned", false]]);
   assert.ok(open.items[0].count > 0);
+  assert.deepEqual(open.items[1], { kind: "extras_not_planned", blocking: false, count: 1,
+    label: "1 approved extra is not in the plan", href: `/jobs/${draftJob}/work` });
   assert.equal(open.items[0].href, `/jobs/${draftJob}/work`);
   await app.paymentSchedule.set(draftJob, k5bDraft(0));
   const drafted = await g6Review(app, draftJob);
@@ -2823,6 +2831,12 @@ test("G6 done when (review): open items are listed as warnings, and only a live 
   assert.equal((await g6Review(app, draftJob)).blocking, false);
   const after = { effects: await effectCounts(), money: await k5bMoney(draftJob) };
   assert.deepEqual(after.money, before.money, "no invoice or lock");
+  // Once the builder plans the addition, it is an open task, no longer an extra outside the plan.
+  await app.workPlan.edit(draftJob, { ...planEdit(waiting, { scopeItemId: added.scopeItemId, key: customTaskKey },
+    { position: waiting.tasks.length + 1, trade: "fictional trade", durationMinutes: 30 }), variationRevisionId: extra.revisionId });
+  const planned = await g6Review(app, draftJob);
+  assert.deepEqual(planned.items.map(item => item.kind), ["open_tasks"]);
+  assert.equal(planned.items[0].count, open.items[0].count + 1);
   // The second firm cannot read it.
   const outsider = await signIn("second-builder");
   await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).closeOut.review(draftJob), { code: "NOT_FOUND" });
