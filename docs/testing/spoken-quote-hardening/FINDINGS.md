@@ -1936,3 +1936,59 @@ deterministic checks, not independent review or live-model accuracy evidence.
 Independent RED review against the committed head remains required before merge.
 Commit only; no push, merge or deployment. `.pnpm-store/` remains untracked and
 is excluded from the commit.
+### RT-06 limits and noise attack (#1071, 28 Nov 2026)
+
+HEAD_UNDER_TEST (this branch's base): `ac8065af7305d9cc3db110eff4eb38d47248fa51`.
+Expectations were specified from the source words before running the cases. Existing F-005–F-008
+and already documented findings are excluded from the new rows. In particular, the known single
+item after a title fallback and the intentional open-price guard for format characters inside a
+clause are not reported again.
+
+For the generated inputs below, `F(s) = s.repeat(Math.ceil(49970 / s.length)).slice(0, 49970)`;
+concatenation is literal JavaScript string concatenation. Unicode escapes identify the original
+code units, not replacements made before parsing. All inputs are synthetic and all timings are
+local Node 24.17.0 measurements, not CI performance certification.
+
+| ID | Lane | Head sha | Case id | Transcript / input | Expected | Actual | Sev | Status | Fix PR |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RT-06-F001 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-06-057–060 | `Fit the latch for £1\u030150.`, `Fit the latch for £1\u000050.`, `Fit the latch for £1\ud80050.`, `Fit the latch for £1\udfff50.` (escapes denote one combining mark, NUL, lone high surrogate or lone low surrogate) | One open latch line, a price question, no fixed 100/5000/15000 pence: a corrupted literal cannot prove any exact price | Capture keeps **100 pence (£1)** with a citation ending before the corruption. Reader A and the checked reader safely leave the price null. Four cases share the unrecognised non-format-character money boundary defect | P0 | open | — |
+| RT-06-F002 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: RT-06-078 (corpus semantic assertions pass) | `'Fit the latch for £25.'.padEnd(50000, ' ')` | Both readers <1000 ms; each regex call <50 ms; same intact £25 item at the exact request limit | Full-suite capture **2612.5 ms**, Reader A **2095.5 ms**. Separate uninstrumented run: 1350.5/1257.9 ms. Slowest profiled regex: `suggestCapturePartyClause`'s for/name/at matcher in `packages/core/src/capture.ts`, **1346.6 ms max**, 2579.3 ms summed across two calls. Trailing whitespace drives expensive unsuccessful party matching | P1 | open | — |
+| RT-06-F003 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: number-words | `'Fit panel ' + F('one hundred and ') + ' end'` (49984 code units) | Each reader <1000 ms and every regex call <50 ms, including unsuccessful number-word matches | Full-suite capture **1000.6 ms**, Reader A **1023.6 ms**. `capture-fixture-parser.ts:spokenAmount` **166.2 ms max** (288.2 ms cumulative); `wholeJobTail` **155.8 ms max** (278.4 ms cumulative). Initial lower-load run also exceeded the regex limit: 122.9/120.5 ms. `priceCondition` had 642.2 ms cumulative across 6246 calls, with no >50 ms individual call | P1 | open | — |
+| RT-06-F004 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: comma-digits | `'Fit panel £' + F('1,111,') + 'x'` (49982 code units) | Each reader <1000 ms; each regex call <50 ms; malformed money stays safe without blocking processing | Full-suite capture **5214.5 ms**, Reader A **5061.7 ms**. Native isolated exec of the current AST's unchanged `capture-fixture-parser.ts:wholeJobTail` initializer took **2076.0 ms**. Other isolated regexes: spokenAmount 0.69 ms, priceLiteral 0.57 ms, fractionOrRange 0.38 ms. Full-parser profiling was stopped by its diagnostic 40 s watchdog; those partial profiling results are not treated as native timings | P1 | open | — |
+| RT-06-F005 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: and-chain | `'Fit panel ' + F('and ') + ' end'` (49984 code units) | Each reader <1000 ms on a repeated recogniser filler; no repeated full-suffix work that exceeds the budget | Full-suite capture **2308.9 ms**, Reader A **2274.2 ms**; initial run 1564.3/1679.6 ms. Slowest cumulative regexes across the two instrumented readers: `priceCondition` **1808.8 ms / 24984 calls**, `spokenCorrection` **1210.0 ms / 24985 calls**, invisible-format recognition **684.6 ms / 87482 calls**. Individual maxima 1.24/1.95/0.83 ms: the defect is repeated scans, not one long regex call | P1 | open | — |
+
+Coverage and validation:
+
+- Corpus: **78 cases; 74 pass, 4 open P0 cases** linked to RT-06-F001. Includes noise-only input,
+  200 repeated fillers, Welsh/Polish/combining/emoji labels, CRLF/tabs/Unicode separators, NUL and lone
+  surrogates, corrupted money, 99/100 distinct items, exactly 1500/4500/9000-word notes, and 50000
+  code units. Empty and over-limit strings use focused tests because the shared corpus schema
+  requires nonempty transcripts and its assertions expect parser output rather than clean refusal.
+- Focused checks: **25 pass**. Both request source kinds accept 49999/50000 and reject 50001;
+  overlong raw local recognition is rejected independently of edited text. Silent sources get the
+  typed capture refusal. Both readers keep all 100 distinct items or refuse 101 with
+  `FIXTURE_STRUCTURE_REQUIRED`; there is no partial result. Fixture-gateway and Reader A citations
+  retain original source code units. These are package checks, not browser-message or database
+  persistence verification.
+- Performance: **10 cases; 6 pass, 4 open P1 cases**, each with its finding ID in the test name.
+  Long 1500/4500/9000-word notes passed (capture 5.7/23.2/81.7 ms; reader 23.2/42.9/108.5 ms).
+  Between-chains, room chains and hyphenated number noise passed. Timings exclude worker imports
+  and profiling. A terminable worker and 15 s watchdog bound runaway synchronous work.
+  Open cases assert a real budget violation remains; worker import/runtime errors still fail.
+- **113 RT-06 checks overall: 105 pass / 8 open**. Open-case severity: **P0 4, P1 4, P2 0**.
+  Unique new findings: **P0 1, P1 4, P2 0**. P0 list: **RT-06-F001**.
+- After building the missing generated core dependency with `pnpm --filter @jobguard/core build`,
+  `pnpm --filter @jobguard/ai test --maxWorkers=2` passed **30 files / 1352 tests**, including the
+  open-finding guard assertions. AI `typecheck` and `build` passed. No source, migrations, model,
+  prompt, live provider, browser, database, deployment or demo service was changed or exercised.
+- `node tools/agent-lane-boundary-lint.mjs --lane=v2-rt-06` is blocked by the existing invalid
+  self-grant in `config/lanes/v2-rt-12.json`. An isolated call to the existing `mergeLanePolicy` and
+  `lanePathAllowed` functions accepts the RT-06 file, exact branch and all six intended paths,
+  and rejects parser-source, another lane and `.pnpm-store` paths. The unrelated lane is untouched.
+
+LATER / SIMPLICITY (initial review only): `packages/ai/src/capture-fixture-parser.ts:plainDraft`
+repeatedly prepares and scans the same suffix for several separator checks. Prepare the candidate
+suffix once per separator and reuse it within that iteration while retaining original offsets.
+This keeps one splitter and one source-coordinate scheme, reduces duplicate recognition work,
+and makes future separator changes easier to maintain. This suggestion is not a gate or a source
+change in this attack lane.

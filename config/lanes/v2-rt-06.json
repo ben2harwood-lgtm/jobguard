@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-06": {
+      "branches": ["codex/sandbox/rt-06"],
+      "note": "RT-06 limits-and-noise attack corpus (#1071). HEAD_UNDER_TEST=ac8065af7305d9cc3db110eff4eb38d47248fa51. Corpus, tests and findings only. The lane checker automatically permits config/lanes/v2-rt-06.json as this lane's own file; explicit lane-register grants are forbidden.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-06-limits-and-noise.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
