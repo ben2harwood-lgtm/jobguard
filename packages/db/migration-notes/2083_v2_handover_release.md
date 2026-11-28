@@ -1,8 +1,8 @@
-# 2058 · V2 handover release by link, and acknowledgement of receipt
+# 2083 · V2 handover release by link, and acknowledgement of receipt
 
-V2-only, inside the same `DO $v2$` fence as 2043 (database name, practice firm policy),
+V2-only, inside the same `DO $v2$` fence as 2082 (database name, practice firm policy),
 and it returns early when `app.v2_handover_version` is absent. The checked V2 bootstrap
-applies 2058 after 2043. Practice tenant only. Running it twice changes nothing.
+applies 2083 after 2082 (G2), and the two app tables carry the same restrictive `v2_practice_firm` lock as every V2 table. Practice tenant only. Running it twice changes nothing.
 
 New tables, append-only (`reject_immutable_authorization_record` on UPDATE and DELETE),
 RLS enabled and forced, runtime policy tenant plus job visibility (the job's practice-firm
