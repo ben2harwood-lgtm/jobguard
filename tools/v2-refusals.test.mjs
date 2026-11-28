@@ -18,14 +18,15 @@ function requests(refusal = refused, calls = []) {
 }
 const check = request => assertBuilderRouteRefuses({ request, signIn: sessions(), route });
 
-test("SX fixed list binds all eleven GETs, retaining direct API transport", () => {
+test("SX fixed list binds all twelve GETs, retaining direct API transport", () => {
   const routes = bindBuilderRoutes({ jobId: "saved-id", tenantId: "practice-id" });
-  assert.equal(builderGetRoutes.length, 11);
+  assert.equal(builderGetRoutes.length, 12);
+  assert.equal(routes[11].path, "/api/jobs/saved-id/calendar-feeds");
   assert.ok(routes.every(route => !route.path.includes("{")));
-  assert.deepEqual(routes.map(route => route.transport), [...Array(8).fill(undefined), "api", "api", undefined]);
+  assert.deepEqual(routes.map(route => route.transport), [...Array(8).fill(undefined), "api", "api", undefined, undefined]);
   assert.equal(routes[0].path, "/api/jobs?tenantId=practice-id");
   assert.equal(routes[9].optional, true);
-  for (const route of [...routes.slice(0, 9), routes[10]]) assert.equal(route.optional, undefined);
+  for (const route of [...routes.slice(0, 9), routes[10], routes[11]]) assert.equal(route.optional, undefined);
   // V2-F8 appended the attendance read (rule 29).
   assert.equal(routes[10].path, "/api/v2-backend/jobs/saved-id/attendance");
 });

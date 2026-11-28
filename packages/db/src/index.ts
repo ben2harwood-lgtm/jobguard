@@ -246,3 +246,6 @@ export * from "./v2-crew-contact-repository.js";
 export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";
 // V2-F8 who was on site today.
 export * from "./v2-site-attendance-repository.js";
+// V2-K2A: builder-only calendar link.
+export * from "./v2-calendar-feed.js";
+export * from "./v2-calendar-feed-repository.js";

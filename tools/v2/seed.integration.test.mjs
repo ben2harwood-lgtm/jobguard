@@ -1691,6 +1691,234 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   assert.deepEqual(await policies(), before);
 });
 
+// V2-K2A: builder calendar link. Persistence, audit, replay, failure, bearer reads and firm boundary proofs.
+const feedCommand = (action, feedId, expectedVersion) => ({
+  version: "calendar-feed-command.v1", commandId: randomUUID(), feedId, expectedVersion, action,
+});
+const feedEvents = async job => (await admin.query(`SELECT actor_ref,payload,event_type FROM app.audit_event
+  WHERE subject_ref=$1 AND event_type LIKE 'v2.calendar_feed.%' ORDER BY sequence`, [job])).rows;
+const feedFile = token => `/api/v2/calendar/${token}.ics`;
+const unfoldIcs = text => text.replace(/\r\n[ \t]/gu, "").split("\r\n").filter(Boolean);
+async function datedFeedJob() {
+  const draft = await draftForPlan();
+  let plan = await draft.read();
+  await draft.edit(planEdit(plan, plan.tasks[0], { scheduledDate: "2026-12-01", assignee: "Fictional Tess Tile" }));
+  plan = await draft.read();
+  return { ...draft, plan, feeds: createWorkspaceApplication({ pool: runtime, sessionId: draft.sessionId }).calendarFeeds };
+}
+
+test("V2-K2A: create, refresh and revoke each persist one audit event, replay nothing and refuse stale or changed requests", async () => {
+  const { draftJob, plan, edit, read, feeds } = await datedFeedJob();
+  const before = await counts();
+  const id = randomUUID();
+  const create = feedCommand("create", id, 0);
+  const made = await feeds.command(draftJob, create);
+  assert.equal(made.feedVersion, 1);
+  assert.match(made.token, /^[A-Za-z0-9_-]{43}$/u);
+  const replayed = await feeds.command(draftJob, create);
+  assert.deepEqual(replayed, { ...made, token: null }, "a replay never hands the token out again");
+  await Promise.all([feeds.command(draftJob, create), feeds.command(draftJob, create)]);
+  await assert.rejects(feeds.command(draftJob, feedCommand("create", randomUUID(), 0)), { code: "CALENDAR_FEED_EXISTS" });
+  // The token is never stored, logged into the audit or returned by the builder's list.
+  const stored = (await admin.query("SELECT * FROM app.v2_calendar_feed_revision WHERE feed_id=$1", [id])).rows;
+  assert.equal(JSON.stringify(stored).includes(made.token), false);
+  const listed = await feeds.list(draftJob);
+  assert.equal(JSON.stringify(listed).includes(made.token), false);
+  assert.equal(JSON.stringify(listed).includes(stored[0].token_hash), false);
+  assert.deepEqual({ count: listed.feeds.length, stale: listed.stale, tasks: listed.feeds[0].taskCount }, { count: 1, stale: false, tasks: 1 });
+
+  let ics = await (await request(feedFile(made.token))).text();
+  assert.ok(unfoldIcs(ics).includes("DTSTART;VALUE=DATE:20261201"));
+  assert.ok(unfoldIcs(ics).includes("SUMMARY:" + `${plan.tasks[0].title} (${plan.tasks[0].trade})`.replace(/[\\;,]/gu, "\\$&")));
+  // A plan change shows as stale, and appears in the feed after the builder's refresh.
+  await edit(planEdit(plan, plan.tasks[1], { scheduledDate: "2026-12-02" }));
+  assert.equal((await feeds.list(draftJob)).stale, true);
+  assert.equal(unfoldIcs(await (await request(feedFile(made.token))).text()).some(line => line === "DTSTART;VALUE=DATE:20261202"), false);
+  const refresh = feedCommand("refresh", id, 1);
+  const refreshed = await feeds.command(draftJob, refresh);
+  assert.deepEqual({ version: refreshed.feedVersion, token: refreshed.token }, { version: 2, token: null });
+  assert.deepEqual(await feeds.command(draftJob, refresh), refreshed);
+  assert.equal((await feeds.list(draftJob)).stale, false);
+  ics = await (await request(feedFile(made.token))).text();
+  assert.ok(unfoldIcs(ics).includes("DTSTART;VALUE=DATE:20261202"));
+  await assert.rejects(feeds.command(draftJob, feedCommand("refresh", id, 1)), { code: "CALENDAR_FEED_VERSION_CONFLICT" });
+  await assert.rejects(feeds.command(draftJob, { ...refresh, expectedVersion: 5 }), { code: "CALENDAR_FEED_COMMAND_CONFLICT" });
+  await assert.rejects(feeds.command(draftJob, { ...create, action: "revoke", expectedVersion: 2 }), { code: "CALENDAR_FEED_COMMAND_CONFLICT" });
+
+  const revoke = feedCommand("revoke", id, 2);
+  assert.equal((await feeds.command(draftJob, revoke)).feedVersion, 3);
+  assert.equal((await feeds.command(draftJob, revoke)).feedVersion, 3);
+  await assert.rejects(feeds.command(draftJob, feedCommand("refresh", id, 3)), { code: "CALENDAR_FEED_NOT_FOUND" });
+  const events = await feedEvents(draftJob);
+  assert.deepEqual(events.map(event => event.event_type), ["v2.calendar_feed.create", "v2.calendar_feed.refresh", "v2.calendar_feed.revoke"]);
+  for (const [index, event] of events.entries()) {
+    assert.equal(event.actor_ref, `membership:${made.actorMembershipId}`);
+    assert.equal(event.payload.references.commandId, [create, refresh, revoke][index].commandId);
+    assert.equal(event.payload.references.feedVersion, String(index + 1));
+    assert.equal("version" in event.payload.references, false);
+    assert.doesNotMatch(JSON.stringify(event.payload), new RegExp(`${made.token}|${stored[0].token_hash}|Tess|Tile`, "u"));
+  }
+  // A revoked link is gone, and it looks exactly like a link that never existed.
+  const gone = await request(feedFile(made.token)), never = await request(feedFile("A".repeat(43)));
+  const malformed = await request("/api/v2/calendar/short.ics");
+  for (const response of [gone, never, malformed]) {
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await response.json(), { code: "NOT_FOUND" });
+  }
+  // After revoking, a new link can be made, and the old one stays off.
+  const again = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  assert.equal((await request(feedFile(again.token))).status, 200);
+  assert.equal((await request(feedFile(made.token))).status, 404);
+  assert.equal((await feedEvents(draftJob)).length, 4, "reads append nothing");
+  assert.equal((await counts()).sends, before.sends, "no local catcher action is created");
+  assert.ok((await read()).tasks.length);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("V2-K2A: the feed is valid iCalendar, carries the job address and no prices, and serves no-store", async () => {
+  const { sessionId } = await signIn("builder");
+  const feeds = createWorkspaceApplication({ pool: runtime, sessionId }).calendarFeeds;
+  const existing = (await feeds.list(jobId)).feeds.find(feed => !feed.revoked);
+  if (existing) await feeds.command(jobId, feedCommand("revoke", existing.feedId, existing.feedVersion));
+  const made = await feeds.command(jobId, feedCommand("create", randomUUID(), 0));
+  try {
+    const response = await request(feedFile(made.token));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/calendar; charset=utf-8");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    const text = await response.text();
+    for (const physical of text.slice(0, -2).split("\r\n")) assert.ok(Buffer.byteLength(physical) <= 75);
+    const lines = unfoldIcs(text);
+    assert.equal(lines[0], "BEGIN:VCALENDAR");
+    assert.equal(lines.at(-1), "END:VCALENDAR");
+    assert.equal(lines.filter(line => line === "BEGIN:VEVENT").length, lines.filter(line => line === "END:VEVENT").length);
+    for (const line of lines) assert.match(line, /^[A-Z][A-Z0-9-]*(;[A-Z-]+=[^:;]*)*:/u);
+    const plan = await createWorkspaceApplication({ pool: runtime, sessionId }).workPlan.read(jobId, planQuery);
+    assert.equal(lines.filter(line => line === "BEGIN:VEVENT").length, plan.tasks.filter(task => task.scheduledDate).length);
+    // The saved copy carries the job's site address (LOCATION on each event; rendering is proved in the unit test).
+    const { rows: [saved] } = await admin.query(`SELECT snapshot->>'address' AS address FROM app.v2_calendar_feed_revision
+      WHERE feed_id=$1 AND feed_version=1`, [made.feedId]);
+    assert.equal(saved.address, "42 Make-Believe Mews, Sampleford, ZY1 0AA");
+    assert.equal(lines.filter(line => line.startsWith("LOCATION:")).length, lines.filter(line => line === "BEGIN:VEVENT").length);
+    assert.doesNotMatch(text, /£|\b\d+\.\d{2}\b(?!\d)|pence|netPence/u);
+  } finally {
+    await feeds.command(jobId, feedCommand("revoke", made.feedId, 1));
+  }
+});
+
+test("V2-K2A: audit failure rolls back create, refresh and revoke", async () => {
+  const { CalendarFeedRepository, calendarFeedSnapshot } = await import("../../packages/db/dist/index.js");
+  const { draftJob, sessionId, plan, feeds } = await datedFeedJob();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const snapshot = calendarFeedSnapshot(plan, null);
+  const id = randomUUID();
+  const commands = [feedCommand("create", id, 0), feedCommand("refresh", id, 1), feedCommand("revoke", id, 2)];
+  for (const [index, command] of commands.entries()) {
+    await assert.rejects(new CalendarFeedRepository(failingAuditPool(runtime))
+      .command(context, draftJob, sessionId, command, command.action === "revoke" ? null : snapshot), { code: "FORCED" });
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_calendar_feed_revision WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.equal((await feedEvents(draftJob)).length, index);
+    await feeds.command(draftJob, command);
+  }
+});
+
+test("V2-K2A: forced RLS, least privilege, owner-run reader, second firm and V2-only access", async () => {
+  const { draftJob, sessionId, feeds } = await datedFeedJob();
+  const outsider = await signIn("second-builder");
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const made = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  const { rows: [acl] } = await admin.query(`SELECT relforcerowsecurity AS forced,relrowsecurity AS enabled,
+    pg_get_userbyid(relowner) AS owner,has_table_privilege('jobguard_runtime',oid,'SELECT') AS read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutate,
+    (SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='app.v2_calendar_feed_read(text)'::regprocedure) AS reader,
+    (SELECT prosecdef FROM pg_proc WHERE oid='app.v2_calendar_feed_read(text)'::regprocedure) AS definer
+    FROM pg_class WHERE oid='app.v2_calendar_feed_revision'::regclass`);
+  assert.deepEqual(acl, { forced: true, enabled: true, owner: "jobguard_migration", read: true, insert: true, mutate: false,
+    reader: "jobguard_migration", definer: true });
+  const { rows: [row] } = await admin.query("SELECT * FROM app.v2_calendar_feed_revision WHERE feed_id=$1", [made.feedId]);
+  // Second firm: in the shared practice tenant and in its own real tenant, it can select, insert, update and delete none.
+  for (const scope of [context, outsider.realContext]) {
+    const query = (sql, values) => withTenant(runtime, scope, db => db.$client.query(sql, values));
+    assert.equal((await query("SELECT * FROM app.v2_calendar_feed_revision WHERE job_id=$1", [draftJob])).rowCount, 0);
+    await assert.rejects(query(`INSERT INTO app.v2_calendar_feed_revision
+      (tenant_id,job_id,feed_id,feed_version,command_id,action,request,token_hash,snapshot,actor_membership_id)
+      VALUES ($1,$2,$3,2,$4,'refresh','{}',NULL,$5,$6)`, [DEMO_TENANT_ID, draftJob, made.feedId, randomUUID(),
+      JSON.stringify({ version: "calendar-feed-snapshot.v1", address: "Elsewhere", tasks: [] }), randomUUID()]), { code: "42501" });
+    for (const sql of ["UPDATE app.v2_calendar_feed_revision SET feed_version=9", "DELETE FROM app.v2_calendar_feed_revision"]) {
+      await assert.rejects(query(sql), { code: "42501" });
+    }
+  }
+  assert.equal((await runtime.query("SELECT * FROM app.v2_calendar_feed_revision")).rowCount, 0, "unbound runtime sees nothing");
+  // The reader takes the token hash only and returns no tenant, job, firm or member identifiers.
+  const { rows: [{ feed }] } = await runtime.query("SELECT app.v2_calendar_feed_read($1) AS feed", [row.token_hash]);
+  assert.deepEqual(Object.keys(feed).sort(), ["feedId", "snapshot", "updatedAt"]);
+  assert.doesNotMatch(JSON.stringify(feed), new RegExp(`${draftJob}|${DEMO_TENANT_ID}|${row.actor_membership_id}`, "u"));
+  for (const bad of [null, "", "x", row.token_hash.toUpperCase(), `${row.token_hash}0`]) {
+    assert.equal((await runtime.query("SELECT app.v2_calendar_feed_read($1) AS feed", [bad])).rows[0].feed, null);
+  }
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).calendarFeeds.list(draftJob), { code: "NOT_FOUND" });
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).calendarFeeds
+    .command(draftJob, feedCommand("revoke", made.feedId, 1)), { code: "NOT_FOUND" });
+  // HTTP: no session and a foreign origin are refused before any write.
+  const path = `/api/jobs/${draftJob}/calendar-feeds`;
+  assert.equal((await request(path)).status, 401);
+  const foreign = await fetch(origin + path, { method: "POST", headers: { origin: "https://evil.invalid",
+    "content-type": "application/json", cookie: (await signIn("builder")).cookies }, body: JSON.stringify(feedCommand("revoke", made.feedId, 1)) });
+  assert.equal(foreign.status, 403);
+  assert.equal((await feedEvents(draftJob)).length, 1);
+  for (const [local, mode] of [["0", "synthetic_demo"], ["1", "pilot_no_charge"], ["1", "production_billing"]]) {
+    process.env.JOBGUARD_LOCAL_V2 = local; process.env.JOBGUARD_ENV = mode;
+    try {
+      await assert.rejects(feeds.list(draftJob), { code: "SYNTHETIC_MODE_REQUIRED" });
+      await assert.rejects(feeds.command(draftJob, feedCommand("revoke", made.feedId, 1)), { code: "SYNTHETIC_MODE_REQUIRED" });
+      assert.equal(await feeds.calendar(made.token), null);
+    } finally { process.env.JOBGUARD_LOCAL_V2 = "1"; process.env.JOBGUARD_ENV = "synthetic_demo"; }
+  }
+  assert.equal(typeof await feeds.calendar(made.token), "string");
+});
+
+// Rule 29 (V2-SX) cases (e) and (f): the calendar link is a bearer capability. It reads its own saved copy only,
+// a revoked link and another job's feed refuse, and the token is never accepted as a builder credential.
+import { assertCapabilityConfined } from "./test/refusals.mjs";
+async function calendarCapabilityRequest(path, { method, body, cookies, headers } = {}) {
+  const response = await fetch(origin + path, { method: method ?? "GET", redirect: "manual",
+    headers: { origin, ...(body !== undefined && { "content-type": "application/json" }), ...(cookies && { cookie: cookies }), ...headers },
+    ...(body !== undefined && { body: JSON.stringify(body) }) });
+  if (response.status !== 200 || !response.headers.get("content-type")?.startsWith("text/calendar")) return response;
+  // The real iCalendar body, re-shaped as JSON (property name to value) so the helper's field check reads every property.
+  const text = await response.text();
+  assert.doesNotMatch(text, /£|\d+\.\d{2}\b/u);
+  const calendar = {}, events = [];
+  for (const line of unfoldIcs(text)) {
+    const [, name, value] = /^([A-Z][A-Z0-9-]*)(?:;[^:]*)?:(.*)$/u.exec(line);
+    if (name === "BEGIN" && value === "VEVENT") events.push({});
+    else if (name !== "BEGIN" && name !== "END") (events.at(-1) ?? calendar)[name] = value;
+  }
+  return Response.json({ calendar, events });
+}
+test("V2-K2A rule 29: the calendar link reads only its own copy and is never a builder credential", async () => {
+  const { draftJob, feeds } = await datedFeedJob();
+  const first = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  await feeds.command(draftJob, feedCommand("revoke", first.feedId, 1));
+  const live = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  const feedRows = async () => (await admin.query("SELECT count(*)::int AS n FROM app.v2_calendar_feed_revision")).rows[0];
+  await assertCapabilityConfined({ request: calendarCapabilityRequest, value: live.token }, {
+    allowedPath: feedFile(live.token),
+    allowedDenyList: ["price", "amount", "cost", "margin", "profit", "pence", "email", "phone", "customer", "finding", "photo"],
+    // The link names no job, so another job is reachable only through the builder's routes, which refuse it.
+    forbiddenPaths: [{ kind: "other_job", path: `/api/jobs/${jobId}/calendar-feeds` },
+      { kind: "other_link", path: feedFile(first.token) }],
+    builderPaths: [{ path: `/api/jobs/${draftJob}/calendar-feeds` }, { path: `/api/jobs/${jobId}/calendar-feeds` },
+      { path: `/api/jobs/${draftJob}` }, { path: `/api/jobs/${draftJob}/parties` },
+      { path: `/api/jobs/${draftJob}/calendar-feeds`, method: "POST", body: feedCommand("revoke", live.feedId, 1), checkDatabase: feedRows }],
+  });
+  assert.equal((await feeds.list(draftJob)).feeds.find(feed => feed.feedId === live.feedId).revoked, false);
+  await feeds.command(draftJob, feedCommand("revoke", live.feedId, 1));
+});
+
 // must stay the last test: it signs the cached builder out
 // Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
 test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
