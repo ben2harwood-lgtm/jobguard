@@ -82,3 +82,27 @@ test("V2-G3 at 360px: release v1, the customer acknowledges, release v2, and v1'
     }
   } finally { await customer.close(); await context.close(); }
 });
+
+test("V2-G4 at 360px: stop the latest link, and the customer's reload shows the refusal page", { timeout: 120000 }, async () => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
+  const customer = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true });
+  try {
+    const jobId = (await (await context.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")).json()).jobs[0].id;
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/handover`);
+    const releases = page.getByTestId("handover-releases");
+    await releases.getByRole("button", { name: /^Release this version · version \d+$/u }).click();
+    const link = await releases.getByTestId("handover-link").getAttribute("href");
+    const pack = await customer.newPage();
+    await pack.goto(link);
+    await expect(pack.getByTestId("handover-pack-page")).toContainText("Receipt only");
+    await releases.getByRole("button", { name: "Stop this link" }).last().click();
+    await releases.getByLabel("Why are you stopping it? (only you see this)").fill("Sent before the final snag was checked");
+    await releases.getByRole("button", { name: "Stop this link" }).last().click();
+    await expect(releases).toContainText("link stopped");
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no sideways scroll at 360px");
+    await pack.reload();
+    await expect(pack.locator("body")).toContainText("This link can’t be opened");
+    await expect(pack.locator("body")).not.toContainText("Receipt only");
+  } finally { await customer.close(); await context.close(); }
+});

@@ -1878,10 +1878,18 @@ test("G2 migration 2082 reruns without changing policies, triggers or rows", asy
 
 // V2-G3 (Q57, migration 2083): release a saved handover version by customer link, and "Acknowledge receipt".
 const g3 = {
-  // No V2 command completes site work yet, so the fixture marks every scope item complete directly
-  // (the same final state main's proof command reaches through app.transition_scope_progress).
-  complete: jobId => admin.query(`UPDATE app.scope_progress SET stage='complete', revision=revision+1, updated_at=clock_timestamp()
-    WHERE job_id=$1 AND stage<>'complete'`, [jobId]),
+  // No V2 command completes site work yet, so the fixture completes every scope item through main's
+  // app.transition_scope_progress, as the job's own practice session (the site-work guard refuses a maintenance write).
+  complete: async f => withTenant(runtime, (await authenticatePracticeSession(runtime, f.sessionId)).context, async db => {
+    const { rows } = await db.$client.query(`SELECT scope_item_id AS id, stage, revision FROM app.scope_progress
+      WHERE job_id=$1 AND stage<>'complete'`, [f.job]);
+    for (const { id, stage, revision } of rows) {
+      if (stage === "not_started") await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'in_progress','start')",
+        [DEMO_TENANT_ID, f.job, id, revision]);
+      await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'complete','complete')",
+        [DEMO_TENANT_ID, f.job, id, revision + (stage === "not_started" ? 1 : 0)]);
+    }
+  }),
   release: (handoverVersion, commandId = randomUUID()) => ({ version: "v2-handover-release-command.v1", commandId, handoverVersion }),
   releases: f => request(`${f.path}/releases`, { cookies: f.owner.cookies }).then(response => json(response)),
   post: (f, body, status = 200) => request(`${f.path}/releases`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
@@ -1901,7 +1909,7 @@ const g3 = {
   },
   async ready() {
     const f = await g2.job();
-    await g3.complete(f.job);
+    await g3.complete(f);
     const view = await json(await request(f.path, { cookies: f.owner.cookies }));
     const line = view.sources.lines[0].id;
     const v1 = (await f.post(g2.save({ sections: ["done", "snags", "contacts"], lineIds: [line], variationIds: [], photoIds: [],
@@ -1972,7 +1980,7 @@ test("G3 release is refused while a scope item is still in progress, with no del
   assert.equal((await g3.post(f, g3.release(saved.version), 409)).code, "HANDOVER_SITE_NOT_COMPLETE");
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release WHERE job_id=$1", [f.job])).rows[0].n, 0);
   // Never the financial lock: completing the site work alone is enough.
-  await g3.complete(f.job);
+  await g3.complete(f);
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.final_account_lock WHERE job_id=$1", [f.job])).rows[0].n, 0);
   assert.ok((await g3.post(f, g3.release(saved.version))).token);
 });
@@ -2065,6 +2073,137 @@ test("G3 firm A/B read check, and migration 2083 reruns without changing policie
     (SELECT count(*)::int FROM app.v2_handover_release) + (SELECT count(*)::int FROM app.v2_handover_acknowledgement) AS rows`)).rows[0];
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2083_v2_handover_release.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G4 (Q63, migration 2084): who can read the handover pack. The builder can stop a link, a changed customer
+// stops the old one, "newer version available" ignores stopped releases, and another firm sees nothing.
+// G3's rerun case reapplies 2083, which puts back the pre-G4 link function bodies. Each G4 case reapplies
+// 2084 first (it is idempotent), so these cases always run against the G4 bodies whatever ran before.
+const g4Migration = readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8");
+const g4 = {
+  async ready() { await admin.query(g4Migration); return g3.ready(); },
+  stop: (releaseId, reason = "Sent by mistake", commandId = randomUUID()) => ({ version: "v2-handover-stop-command.v1", commandId, releaseId, reason }),
+  // The ordinary customer-and-site path: a correction on a live job, with a reason. A null customerRef is a new customer.
+  async customer(f, email, { same = false } = {}) {
+    const app = createWorkspaceApplication({ pool: runtime, sessionId: f.sessionId });
+    const view = await app.parties.view({ sessionId: f.sessionId }, f.job);
+    const known = view.customers.find(row => row.id === view.currentIds.customerId);
+    return app.parties.command({ sessionId: f.sessionId }, f.job, {
+      version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+      expectedJobRevision: view.jobRevision, expectedBindingId: view.currentIds.bindingId,
+      customer: { ...view.current.customer, ...(same ? {} : { name: "Fictional Replacement Customer" }), email },
+      customerRef: same ? { id: known.id, revisionId: known.revisionId, expectedRevision: known.revision } : null,
+      site: view.current.site, savedSiteRevisionId: view.current.siteRevisionId, reuseSiteId: null, expectedReuseRevisionId: null,
+      confirmSamePlace: false, payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: true, reason: "Customer contact changed",
+    });
+  },
+  refused: async (token, cookies) => {
+    assert.deepEqual(await g3.acknowledge(token, 404, cookies), { code: "HANDOVER_LINK_REFUSED" });
+    const page = await (await g3.open(token)).text();
+    assert.match(page, /This link can’t be opened|This link can&#x27;t be opened|This link can’t/u);
+    assert.doesNotMatch(page, /Refit the hall door stop|£|pence/u);
+  },
+};
+
+test("G4 stop: a stopped link is refused like an unknown one, history shows it, and a new release opens", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  const stopped = await g3.post(f, g4.stop(first.result.release.releaseId));
+  assert.equal(stopped.replayed, false);
+  assert.ok(stopped.release.stoppedAt);
+  await g4.refused(first.result.token);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_acknowledgement WHERE job_id=$1", [f.job])).rows[0].n, 0);
+  const history = (await g3.releases(f)).releases;
+  assert.deepEqual(history.map(row => [row.version, row.stoppedAt !== null, row.recipientCurrent]), [[1, true, true]]);
+  const again = await g3.direct(f, g3.release(1));
+  assert.equal(again.captured.length, 1, "one more catcher delivery");
+  assert.equal((await g3.open(again.result.token)).status, 200);
+  assert.match(await (await g3.open(again.result.token)).text(), /Refit the hall door stop/u);
+  const events = (await admin.query(`SELECT payload FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.link_stopped'`, [f.job])).rows;
+  assert.equal(events.length, 1);
+  // The audit layer adds its own auditActor*/auditTrust keys; the stop itself references only these three.
+  assert.deepEqual(Object.keys(events[0].payload.references).filter(key => !key.startsWith("audit")).sort(),
+    ["commandId", "handoverVersion", "releaseId"]);
+  assert.doesNotMatch(JSON.stringify(events), /Sent by mistake|customer@|jobguard-v2\.invalid/u, "no reason text and no email");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G4 changed customer: the old link is refused, a cosmetic edit keeps it, and a release to the new customer opens", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  await g4.customer(f, "CUSTOMER@jobguard-v2.invalid", { same: true });
+  assert.equal((await g3.open(first.result.token)).status, 200, "a change of case keeps the link");
+  assert.equal((await g3.releases(f)).releases[0].recipientCurrent, true);
+  await g4.customer(f, "replacement@jobguard-v2.invalid");
+  await g4.refused(first.result.token);
+  assert.deepEqual((await g3.releases(f)).releases.map(row => [row.recipientCurrent, row.stoppedAt]), [[false, null]]);
+  const next = await g3.direct(f, g3.release(1));
+  assert.equal(next.captured.length, 1, "one delivery, to the new address");
+  assert.equal((await admin.query("SELECT recipient_email FROM app.v2_handover_release WHERE id=$1", [next.result.release.releaseId])).rows[0].recipient_email,
+    "replacement@jobguard-v2.invalid");
+  assert.match(await (await g3.open(next.result.token)).text(), /Refit the hall door stop/u);
+  await g4.refused(first.result.token);
+});
+
+test("G4 newer-version ignores a stopped release", async () => {
+  const f = await g4.ready();
+  const first = await g3.direct(f, g3.release(1));
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  assert.match(await (await g3.open(first.result.token)).text(), /Newer version available/u);
+  await g3.post(f, g4.stop(second.result.release.releaseId, "Released too early"));
+  assert.doesNotMatch(await (await g3.open(first.result.token)).text(), /Newer version available/u);
+  assert.deepEqual((await g3.releases(f)).releases.map(row => [row.version, row.superseded, row.stoppedAt !== null]), [[1, false, false], [2, false, true]]);
+});
+
+test("G4 other firm: 404 on read, release and stop; a stopped first-firm token with second-firm cookies is refused; no stop rows", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g3.release(1) }), 404);
+  await json(await request(`${f.path}/releases`, { cookies: second.cookies, csrf: second.csrfToken, body: g4.stop(result.release.releaseId) }), 404);
+  await g3.post(f, g4.stop(result.release.releaseId));
+  await g4.refused(result.token, second.cookies);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no stop rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db =>
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_handover_release_stop WHERE job_id=$1", [f.job])).rowCount, 0));
+});
+
+test("G4 stop replay and conflict; an unknown release; UPDATE and DELETE refused", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  const body = g4.stop(result.release.releaseId);
+  const first = await g3.post(f, body), replay = await g3.post(f, body);
+  assert.deepEqual([replay.replayed, replay.release.stoppedAt], [true, first.release.stoppedAt]);
+  assert.equal((await g3.post(f, { ...body, reason: "Another reason" }, 409)).code, "HANDOVER_RELEASE_COMMAND_CONFLICT");
+  assert.equal((await g3.post(f, g4.stop(result.release.releaseId), 409)).code, "HANDOVER_LINK_ALREADY_STOPPED");
+  assert.equal((await g3.post(f, g4.stop(randomUUID()), 404)).code, "HANDOVER_RELEASE_NOT_FOUND");
+  assert.equal((await g3.post(f, { ...g4.stop(result.release.releaseId), reason: " " }, 400)).code, "HANDOVER_RELEASE_INVALID_COMMAND");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release_stop WHERE job_id=$1", [f.job])).rows[0].n, 1);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.link_stopped'`, [f.job])).rows[0].n, 1);
+  for (const sql of ["UPDATE app.v2_handover_release_stop SET reason=reason WHERE job_id=$1", "DELETE FROM app.v2_handover_release_stop WHERE job_id=$1"]) {
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+    await assert.rejects(admin.query(sql, [f.job]));
+  }
+  const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid='app.v2_handover_release_stop'::regclass`);
+  assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+});
+
+test("G4 migration 2084 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g4.ready();
+  const { result } = await g3.direct(f, g3.release(1));
+  await g3.post(f, g4.stop(result.release.releaseId));
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy WHERE polname LIKE 'v2_handover_%') AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_release_stop'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_release_stop'::regclass) AS acl,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_handover_link_scope_open', 'v2_handover_link_view')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_handover_release_stop) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2084_v2_handover_release_stop.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 

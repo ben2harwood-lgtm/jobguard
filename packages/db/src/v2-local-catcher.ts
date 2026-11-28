@@ -4,6 +4,7 @@ const destinations = new Set([
   "builder@jobguard-v2.invalid",
   "second-builder@jobguard-v2.invalid",
   "customer@jobguard-v2.invalid",
+  "replacement@jobguard-v2.invalid", // G4: an invented second customer contact
   "merchant@jobguard-v2.invalid",
   "tiler@jobguard-v2.invalid",
   "decorator@jobguard-v2.invalid",

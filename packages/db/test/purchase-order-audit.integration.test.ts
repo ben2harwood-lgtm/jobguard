@@ -58,7 +58,9 @@ beforeAll(async () => {
         // V2-G1
         "_v2_snag_register.sql",
         // V2-G2
-        "_v2_handover_version.sql", "_v2_handover_release.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_handover_version.sql", "_v2_handover_release.sql",
+        // V2-G4
+        "_v2_handover_release_stop.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -80,6 +82,8 @@ beforeAll(async () => {
   expect((await admin.query("SELECT to_regclass('app.v2_handover_version') AS handover")).rows[0].handover).toBeNull();
   // V2-G3: handover releases stay absent outside the V2 database.
   expect((await admin.query("SELECT to_regclass('app.v2_handover_release') AS handover")).rows[0].handover).toBeNull();
+  // V2-G4: handover link stops stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_release_stop') AS stop")).rows[0].stop).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

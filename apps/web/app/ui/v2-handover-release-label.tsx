@@ -15,10 +15,27 @@ export const linkProblem = "This pack could not open. Nothing was recorded. Try 
 const when = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   timeZone: "Europe/London" }).format(new Date(iso));
 
-export function releaseLine(row: { version: number; recipient: string; releasedAt: string; acknowledgedAt: string | null; superseded: boolean }) {
+export const earlierContact = "Sent to an earlier customer contact · this link no longer opens";
+export const releaseToCurrent = "Release to the current customer";
+export const stopLink = "Stop this link";
+export const stopReasonLabel = "Why are you stopping it? (only you see this)";
+
+type ReleaseRow = { version: number; recipient: string; releasedAt: string; acknowledgedAt: string | null; superseded: boolean;
+  stoppedAt: string | null; recipientCurrent: boolean };
+export function releaseLine(row: ReleaseRow) {
   return [`Version ${row.version} released to ${row.recipient} · ${when(row.releasedAt)}`,
     row.acknowledgedAt ? `acknowledged ${when(row.acknowledgedAt)}` : "acknowledgement pending",
-    ...(row.superseded ? ["a newer version was released"] : [])].join(" · ");
+    ...(row.superseded ? ["a newer version was released"] : []),
+    ...(row.stoppedAt ? [`link stopped ${when(row.stoppedAt)}`] : []),
+    ...(!row.stoppedAt && !row.recipientCurrent ? [earlierContact] : [])].join(" · ");
+}
+/** V2-G4: a link the builder may still stop. An expired one already refuses, so it offers nothing. */
+export const linkStoppable = (row: ReleaseRow & { expiresAt: string }, now = Date.now()) =>
+  !row.stoppedAt && row.recipientCurrent && Date.parse(row.expiresAt) > now;
+export function stopProblemText(code: string | undefined) {
+  if (code === "HANDOVER_LINK_ALREADY_STOPPED") return "This link was already stopped.";
+  if (code === "HANDOVER_RELEASE_INVALID_COMMAND") return "Not stopped: add a reason of up to 200 characters.";
+  return "Not stopped. Try again.";
 }
 export function releaseProblemText(code: string | undefined) {
   if (code === "HANDOVER_SITE_NOT_COMPLETE") return "Not released: finish the site work first.";
