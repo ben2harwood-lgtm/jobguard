@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-g": {
+      "branches": [
+        "claude/project-thread-trp08u-sqg"
+      ],
+      "note": "RED (AI gateway, spending path, one migration) V2-SQ-G: Reader B, the model reader. Claude Sonnet 5.5 sorts Reader A's items into rooms and trades for the practice tenant only; it never supplies, moves or confirms a number. Migration 2069 (app.v2_job_understanding, append-only app.v2_ai_call ledger). Three switches, all unset. Base claude/project-thread-trp08u-sqd (#1019).",
+      "allow": [
+        ".env.example",
+        "AGENTS.md",
+        "BUILD_PLAN.md",
+        "apps/api/src/capture/capture-state.test.ts",
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/model-reader.test.ts",
+        "apps/api/src/capture/model-reader.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/jobs/new/page.tsx",
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/walk-it-model-reader.test.tsx",
+        "docs/decisions/v2-sq-g-practice-model-reader.md",
+        "docs/fixtures/ai/spoken-quote-understanding/model-reader-recordings.hand-written.v1.json",
+        "docs/operations/claude-data-flow.md",
+        "docs/operations/provider-register.md",
+        "packages/ai/package.json",
+        "packages/ai/src/anthropic-live-sort.ts",
+        "packages/ai/src/context-reader-evaluation.test.ts",
+        "packages/ai/src/context-reader-evaluation.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/index.ts",
+        "packages/ai/src/live-sort.test.ts",
+        "packages/ai/src/live-sort.ts",
+        "packages/ai/src/locate-model-reading.test.ts",
+        "packages/ai/src/locate-model-reading.ts",
+        "packages/core/src/job-understanding.ts",
+        "packages/db/migration-notes/2069_v2_job_understanding.md",
+        "packages/db/migrations/2069_v2_job_understanding.sql",
+        "packages/db/src/capture-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-ai-call-ledger.ts",
+        "packages/db/test/capture.integration.test.ts",
+        "packages/db/test/migration-proofs/2069_v2_job_understanding.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "pnpm-lock.yaml",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/spoken-sort-live-eval.mjs"
+      ]
+    }
+  }
+}

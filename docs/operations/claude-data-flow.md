@@ -22,7 +22,7 @@ verify any real model, profile, provider capability or residency claim.
 | Fallback | Deny; redirect errors, no retry or alternate route |
 | D04 / D12 evidence | None; D04 proposed, D12 applicability needs review before release |
 | Review date / evidence | 2026-10-29 source and deterministic adapter tests; no provider verification |
-| Gate / kill switch | Live factory always throws `live_route_disabled`; no enabling environment flag |
+| Gate / kill switch | Live factory always throws `live_route_disabled`; no enabling environment flag. The one exception is the V2-SQ-G practice route below, with its own three switches |
 
 `createDarkClaudeProvider` requires explicit synthetic configuration and a fake
 fetch transport. Its zero-pence budget is a refusal to support paid traffic,
@@ -63,7 +63,7 @@ not production classification or access-control adapters.
 This RED piece leaves D04 route approval open for people. Any live route or live
 evaluation remains founder-reserved spending and requires separate authorization.
 Shadow text must never enter a live path until a person approves that data flow.
-`createLiveAiProvider` still refuses; gates G0–G5 are not opened. The local API
+`createLiveAiProvider` still refuses; gates G0–G5 are not opened. The V2-SQ-G practice model reader (below) is a separate method and adapter; it does not use or widen `createLiveAiProvider`. The local API
 regressions use the existing in-memory identity provider, a fake database client
 and the recorded fixture provider. They do not prove PostgreSQL RLS; database and
 browser suites cannot run in this sandbox and remain CI checks. The golden record
@@ -77,7 +77,7 @@ separate corpus/labels, per-case failures and fixed proposed targets. It remains
 zero-spend fixture evidence, never live release evidence.
 
 After building, `pnpm --filter @jobguard/ai eval:live` is the scripted live release
-preflight. It always exits 1 with a machine-readable BLOCKED report. It is not run
+preflight (the V2-SQ-G scored run, `eval:spoken-sort-live`, is separate and described below). It always exits 1 with a machine-readable BLOCKED report. It is not run
 as a live evaluation by this piece. There is no release approval from fixture CI.
 Before any live run or release, a separately authorized change must verify and
 register the exact route/model/profile and all destinations, bind D04 approval,
@@ -86,3 +86,27 @@ with the founder-authorized golden runner. That runner must preserve the existin
 thresholds, record deployment/prompt/schema/dataset versions, cost, per-case
 failures and numerators/denominators, and verify persisted citation retrieval.
 No migration, deployment or real provider call is part of this slice.
+
+## V2-SQ-G practice model reader: the one live route
+
+Approved by Ben for the practice tenant only (cards 27 Nov 2026 15:07 and 16:24 UK);
+record: `docs/decisions/v2-sq-g-practice-model-reader.md`. Nothing here applies to real data.
+
+| Register field | Current value |
+| --- | --- |
+| Provider / feature | Anthropic Claude API, `claude-sonnet-5-5`, through `packages/ai/src/anthropic-live-sort.ts` (the only SDK import; `@anthropic-ai/sdk` pinned 1.8.0) |
+| Environment | `synthetic_demo`, `DEMO_TENANT_ID`, operation `spoken_job_sort.v1` only |
+| Sent | One capture's words as text, never audio, with the customer-and-site clause removed, and Reader A's item words. Nothing else |
+| Returned | Rooms and trades per Reader A item, and at most eight quoted missed lines; no numbers, no free text |
+| Direction / caller | `apps/api/src/capture/model-reader.ts`, the one call site of `generateLive()`, outside any database transaction |
+| Fallback | Reader A's result, unchanged, on any failure, refusal, timeout or cap |
+| Retry | None: SDK `maxRetries: 0`, one call per capture, 15 s timeout |
+| Spend | £10 a month cap (ceiling £20), 40 calls a UTC day, ledger `app.v2_ai_call` (migration 2069) |
+| Gate / kill switch | `JOBGUARD_SPOKEN_JOB_MODEL_KEY` + valid `JOBGUARD_SPOKEN_JOB_MONTHLY_CAP_PENCE` + `JOBGUARD_SPOKEN_JOB_LIVE=1`, and the screen's notice shown; unset everywhere by default |
+| Logs | No transcript text and no key |
+
+The scored run, `pnpm --filter @jobguard/ai eval:spoken-sort-live`, is the only
+other path to the API. It runs by hand on Ben's Mac, never in CI (it exits if `CI`
+is set), needs the key, the cap and `JOBGUARD_SPOKEN_JOB_EVAL=1` (not the live flag),
+reads its ledger context from a signed-in practice builder session (`JOBGUARD_PRACTICE_SESSION`,
+the local `jg_session` cookie) through the same practice bridge as the app, writes to the ledger in the local `jobguard_v2_local` database and obeys the same cap.

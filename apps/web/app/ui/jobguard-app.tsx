@@ -89,7 +89,9 @@ function Logo(){return <span className="logo" aria-hidden="true">JG</span>} func
 
 const referenceWalk=`Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves`;
 type CaptureResult=ReviewCaptureResult;
-export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured,designed=false}:{designed?:boolean;tenantId:string;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
+/** V2-SQ-G: shown beside the mic and the typed box whenever the model reader is on. */
+export const MODEL_READER_NOTICE="Your words (text only, never audio) are sent to Anthropic's Claude to be sorted into rooms and trades. Practice only: don't say real names or addresses.";
+export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured,designed=false,modelReader=false}:{designed?:boolean;modelReader?:boolean;tenantId:string;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
   const [reviewing,setReviewing]=useState(false),
     [textValue,setTextValue]=useState(initialText ?? (mode==="own"?"":referenceWalk)),
     [dictation,setDictation]=useState<{raw:string}|null>(null),
@@ -120,9 +122,9 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     let captureId=captureIds.current.get(snapshot);
     if(!captureId){captureId=crypto.randomUUID();captureIds.current.set(snapshot,captureId);}
     // The ref closes the same-tick double-click window before React renders disabled controls.
-    submitting.current=true;setBusy(true);setMessage("Making your draft…");
+    submitting.current=true;setBusy(true);setMessage(modelReader?"Sorting into rooms and trades…":"Making your draft…");
     try {
-      const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
+      const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json",...(modelReader?{"x-jobguard-model-reader-notice":"shown"}:{})},body:JSON.stringify({...input,captureId})});
       if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
       const captured=await response.json() as CaptureResult;
       setResult(captured);onCaptured?.(captured);
@@ -152,11 +154,13 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     <button type="button" className={designed?"btn ghost back":"back"} onClick={close}>← Back to jobs</button>
     <p className={designed?"kicker":"eyebrow"}>New job · safe demo</p><h1>Walk the job</h1>
     <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check.</p>
+    {modelReader&&<p className="helper model-reader-notice" data-testid="model-reader-notice-mic">{MODEL_READER_NOTICE}</p>}
     <LocalDictation designed={designed} applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
     <div className="walk-grid"><div className={designed?"walk-input card card-body form":"walk-input"}>
       <label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label>
       <textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} disabled={busy} onChange={e=>{if(submitting.current)return;setTextValue(e.target.value);sourceChanged();}} rows={15}/>
       <p id="walk-help" className="helper">Include the job name, each piece of work and a price if you know it. Missing prices can be added later.</p>
+      {modelReader&&<p className="helper model-reader-notice" data-testid="model-reader-notice-typed">{MODEL_READER_NOTICE}</p>}
       <button className={designed?"btn primary wide":"primary wide"} type="button" disabled={busy} onClick={()=>void submit()}>Make my draft</button>
       <p className="helper">This only makes a draft for you to check. It does not send anything.</p>
       <p className="result-message">{message}</p>

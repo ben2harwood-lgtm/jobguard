@@ -1,0 +1,1408 @@
+{
+ "version": "model-reader-recordings.v1",
+ "label": "HAND-WRITTEN, not model output. Derived by the builder (V2-SQ-G, 27 Nov 2026) with a one-off script from each case's expected room and trade, as an ideal reading would return them. Zero spend.",
+ "recordings": [
+  {
+   "set": "cases.v1.json",
+   "id": "sq-1-four-items",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 3,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "sq-2-two-prices-one-open",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "sq-3-two-sixty",
+   "wire": {
+    "areas": [],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": -1,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 1,
+      "area_index": -1,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "sq-4-supply-and-fit",
+   "wire": {
+    "areas": [],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": -1,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "sq-5-whole-job",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "smith-three-rooms",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     },
+     {
+      "name_words": "Upstairs bathroom"
+     },
+     {
+      "name_words": "hallway and landing"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Tiling"
+     },
+     {
+      "item_index": 3,
+      "area_index": 1,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 4,
+      "area_index": 1,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 5,
+      "area_index": 1,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 6,
+      "area_index": 2,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "patel-bathroom-room-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "bathroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "henderson-kitchen-grand",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "lounge-dining-room-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "lounge"
+     },
+     {
+      "name_words": "dining room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plastering"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "loft-and-stairs",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Loft"
+     },
+     {
+      "name_words": "stairs"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Flooring"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Roofing"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "front-back-bedrooms",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "front bedroom"
+     },
+     {
+      "name_words": "back bedroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 1,
+      "area_index": 1,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "patio-out-the-back",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "back"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Groundworks"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Brickwork"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "kitchen-correction-count",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "bedroom-same-again",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Back bedroom"
+     },
+     {
+      "name_words": "front bedroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 1,
+      "area_index": 1,
+      "trade": "Other"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "bathroom-shower-room-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Bathroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "kitchen-six-grand-unpunctuated",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "rewire-consumer-unit",
+   "wire": {
+    "areas": [],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": -1,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 1,
+      "area_index": -1,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 2,
+      "area_index": -1,
+      "trade": "Electrics"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "bare-number-not-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "en suite"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Electrics"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "radiators-correction",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Dining room"
+     },
+     {
+      "name_words": "hall"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 1,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "roof-and-gutters",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Roof"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Roofing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Roofing"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Roofing"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "utility-plaster-unpunctuated",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "utility room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plastering"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Flooring"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "skirting-linear-metres",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "living room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Flooring"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "conservatory-whole-job",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Conservatory"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Groundworks"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Groundworks"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Brickwork"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "garage-same-as",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "garage"
+     },
+     {
+      "name_words": "porch"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 1,
+      "area_index": 1,
+      "trade": "Other"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "two-rooms-two-prices",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Downstairs WC"
+     },
+     {
+      "name_words": "Office"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 1,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "extension-unpunctuated",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "extension"
+     },
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plastering"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Kitchen fitting"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "roughly-price-open",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "bathroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "landing-correction-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Landing"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "master-bedroom-unpunctuated-ref",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "master bedroom"
+     },
+     {
+      "name_words": "second bedroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Flooring"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Other"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "cases.v1.json",
+   "id": "kitchen-k-price",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-1-kitchen-run-on",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-2-bathroom-upstairs-wc",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Downstairs WC"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": -1,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": -1,
+      "trade": "Plastering"
+     },
+     {
+      "item_index": 2,
+      "area_index": -1,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 3,
+      "area_index": -1,
+      "trade": "Tiling"
+     },
+     {
+      "item_index": 4,
+      "area_index": 0,
+      "trade": "Plumbing"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-3-two-bedrooms-each",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "landing"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-4-lounge",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Lounge"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Flooring"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 3,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 4,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-5-bathroom-all-in-hallway",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "bathroom"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-6-out-the-back-garage",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "back"
+     },
+     {
+      "name_words": "garage"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Strip-out"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Groundworks"
+     },
+     {
+      "item_index": 3,
+      "area_index": 1,
+      "trade": "Electrics"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-7-kitchen-corrections",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Kitchen fitting"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-8-loft-same-again",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Loft"
+     },
+     {
+      "name_words": "garage"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 3,
+      "area_index": 1,
+      "trade": "Electrics"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-9-patel-rewire-lot",
+   "wire": {
+    "areas": [],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": -1,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 1,
+      "area_index": -1,
+      "trade": "Plastering"
+     },
+     {
+      "item_index": 2,
+      "area_index": -1,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out.v1.json",
+   "id": "ho-10-en-suite-utility",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "en suite"
+     },
+     {
+      "name_words": "utility"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 2,
+      "area_index": 1,
+      "trade": "Plumbing"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-1-knock-through",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "dining room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Brickwork"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-2-master-bedroom-en-suite",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Master bedroom"
+     },
+     {
+      "name_words": "En suite"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Flooring"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Decorating"
+     },
+     {
+      "item_index": 3,
+      "area_index": 1,
+      "trade": "Plumbing"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-3-garage-roof",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "garage roof"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Roofing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Roofing"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-4-three-bedrooms-same",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Three bedrooms"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-5-utility-boiler",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "utility room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Tiling"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-6-front-of-house",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Front"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Electrics"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-7-withdrawn-plastering",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "living room"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Carpentry"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-8-kitchen-all-in-separate",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Kitchen"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Flooring"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-9-spindles",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "stairs and landing"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Decorating"
+     }
+    ],
+    "missed": []
+   }
+  },
+  {
+   "set": "held-out-2.v1.json",
+   "id": "h2-10-bathroom-ufh-hall",
+   "wire": {
+    "areas": [
+     {
+      "name_words": "Bathroom"
+     },
+     {
+      "name_words": "hall"
+     }
+    ],
+    "items": [
+     {
+      "item_index": 0,
+      "area_index": 0,
+      "trade": "Electrics"
+     },
+     {
+      "item_index": 1,
+      "area_index": 0,
+      "trade": "Tiling"
+     },
+     {
+      "item_index": 2,
+      "area_index": 0,
+      "trade": "Plumbing"
+     },
+     {
+      "item_index": 3,
+      "area_index": 1,
+      "trade": "Plumbing"
+     }
+    ],
+    "missed": []
+   }
+  }
+ ]
+}

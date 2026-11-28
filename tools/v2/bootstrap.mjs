@@ -70,6 +70,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
+  // V2-SQ-G spoken-job understanding and the model-reader ledger (2069).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2069_v2_job_understanding.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

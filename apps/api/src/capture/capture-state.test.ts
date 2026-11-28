@@ -9,7 +9,9 @@ import { captureWorkspaceResponseV1 } from "./contracts.js";
 const jobId="d2000000-0000-4000-8000-000000000001";
 type Captured=NonNullable<Awaited<ReturnType<CaptureRepository["readByJob"]>>>;
 const fixture=(status:string)=>({capture_id:"d2000000-0000-4000-8000-000000000002",id:"d2000000-0000-4000-8000-000000000003",content_text:"Generated practice notes",proposal:{title:{value:"Fictional job"},questions:[]},lines:[],status}) as unknown as Captured;
-beforeEach(()=>vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:"11111111-1111-4111-8111-111111111111"}} as never));
+beforeEach(()=>{vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:"11111111-1111-4111-8111-111111111111"}} as never);
+ // V2-SQ-G: view() reads a stored understanding first; none here.
+ vi.spyOn(CaptureRepository.prototype,"readUnderstanding").mockResolvedValue(null);});
 afterEach(()=>vi.restoreAllMocks());
 describe("capture workspace lifecycle projection",()=>{
  it.each(jobStatuses)("preserves persisted %s instead of coercing it to draft",async status=>{

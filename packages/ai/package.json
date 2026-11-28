@@ -11,6 +11,10 @@
     "./testing": {
       "types": "./src/testing.ts",
       "import": "./dist/testing.js"
+    },
+    "./live-adapter": {
+      "types": "./src/anthropic-live-sort.ts",
+      "import": "./dist/anthropic-live-sort.js"
     }
   },
   "types": "./src/index.ts",
@@ -20,15 +24,17 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "eval:contract": "node dist/evaluation-cli.js",
-    "eval:live": "node dist/live-evaluation-cli.js"
+    "eval:live": "node dist/live-evaluation-cli.js",
+    "eval:spoken-sort-live": "node ../../tools/v2/spoken-sort-live-eval.mjs"
   },
   "dependencies": {
-    "zod": "4.6.6",
-    "@jobguard/core": "workspace:*"
+    "@anthropic-ai/sdk": "1.8.0",
+    "@jobguard/core": "workspace:*",
+    "zod": "4.6.6"
   },
   "devDependencies": {
+    "@types/node": "24.0.3",
     "typescript": "5.8.3",
-    "vitest": "4.1.12",
-    "@types/node": "24.0.3"
+    "vitest": "4.1.12"
   }
 }

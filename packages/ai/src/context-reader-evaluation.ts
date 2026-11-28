@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import type { JobUnderstanding } from "@jobguard/core";
 import { readSpokenJob } from "./context-reader.js";
 
 /**
@@ -25,11 +26,12 @@ export function loadContextReaderCases(path: string): Case[] {
   return parsed.cases;
 }
 
-export function evaluateContextReader(cases: Case[]): ContextReaderReport {
+/** `read` defaults to Reader A; V2-SQ-G passes Reader A combined with a recorded model reading. */
+export function evaluateContextReader(cases: Case[], read: (sourceId: string, text: string, id: string) => JobUnderstanding = readSpokenJob): ContextReaderReport {
   const report: ContextReaderReport = { cases: cases.length, expectedLines: 0, missedWork: 0, inventedWork: 0, wrongNumbers: 0, missedNumbers: 0,
     roomRight: 0, tradeRight: 0, matchedLines: 0, questionsExpected: 0, questionsRaised: 0, misses: [] };
   for (const item of cases) {
-    const result = readSpokenJob(`case-${item.id}`, item.text);
+    const result = read(`case-${item.id}`, item.text, item.id);
     const roomOf = new Map(result.areas.map(area => [area.key, area.name.value]));
     const used = new Set<number>();
     const matched = new Map<string, number>();

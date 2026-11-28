@@ -8,6 +8,7 @@ export * from "../sandbox/contracts.js";
 export * from "../sandbox/sandbox.service.js";
 export * from "../capture/contracts.js";
 export * from "../capture/capture.application.js";
+export { modelReaderOn } from "../capture/model-reader.js";
 
 export * from "../quote/contracts.js";
 export * from "../quote/quote.application.js";

@@ -15,7 +15,7 @@ fallbacks and approval gaps. Missing detail is a gate, never implicit approval.
 | --- | --- | --- |
 | [accounting-observation-data-flow.md](accounting-observation-data-flow.md) | Local synthetic fixtures and PostgreSQL source receipts only; live region **not chosen** | e9fc108fbd72c4863f98cdff6d0e45866cec165881bd69e44617a2e2d8b7752b |
 | [audit-export-data-flow.md](audit-export-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 3e737f01740a6e14275ba0b84a35100c96f82eed3a6a79b4314711f7e8b43aa8 |
-| [claude-data-flow.md](claude-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | eae2511578f0dca5a6920e76a3f814cdb80ccbf6055a9c046886709af581ddb7 |
+| [claude-data-flow.md](claude-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 2604609620344f42136fe54f9f91810b2eb8df4f3529baa39194fb6180db6767 |
 | [connector-data-flow.md](connector-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | a750079947c00d4c4a9cee863eae4e4b4ae02f9f8cf6894ddc0ffee734c60f1c |
 | [contractor-parties-data-flow.md](contractor-parties-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 3ee9b862c517165f25c58df6532809c4c5ae2837cd6cf8e57ed042db32487076 |
 | [deepgram-fixture-data-flow.md](deepgram-fixture-data-flow.md) | Local synthetic fixtures only; live region **not chosen** | 68a728eba95244e521febcab7db6e4583d0ecfc3b4d55b07ec6d3c517f4a17c3 |
