@@ -818,6 +818,10 @@ test("existing Switch live activates a plan once and only approved variation rev
   await hire("link", 1, { tasks: [{ quoteRevisionId: updated.quoteRevisionId, scopeItemId, templateTaskKey: customTaskKey }] });
   const [linked] = (await hires.list(jobId)).items.filter(item => item.hireId === extraHire);
   assert.deepEqual(linked.tasks, [{ quoteRevisionId: updated.quoteRevisionId, scopeItemId, templateTaskKey: customTaskKey }]);
+  // A link kept from an earlier quote revision still matches by scope item and task key, and moves to this revision.
+  await hire("link", 2, { tasks: [{ quoteRevisionId: randomUUID(), scopeItemId, templateTaskKey: customTaskKey }] });
+  const [relinked] = (await hires.list(jobId)).items.filter(item => item.hireId === extraHire);
+  assert.deepEqual(relinked.tasks, linked.tasks);
 
   // The database refuses an extra's edit that names no approved revision of its scope item.
   const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_work_plan_edit WHERE command_id = $1",

@@ -92,9 +92,8 @@ export class HireRepository {
         ? { ...command.details!, tasks: [], status: "on_hire", offHireDate: null }
         : { ...prior!.state, ...(command.details ?? {}) };
       if (command.action === "link") {
-        if (offered) this.checkOffered(offered, command.tasks!);
-        else await this.checkTasks(client, context.tenantId, jobId, command.tasks!);
-        state.tasks = command.tasks!;
+        if (offered) state.tasks = this.checkOffered(offered, command.tasks!);
+        else { await this.checkTasks(client, context.tenantId, jobId, command.tasks!); state.tasks = command.tasks!; }
       }
       if (command.action === "request_off_hire") state.status = "off_hire_requested";
       if (command.action === "off_hire") { state.status = "off_hire"; state.offHireDate = clock!.today; }
@@ -122,12 +121,15 @@ export class HireRepository {
   }
 
   // The tasks the panel offers come from the effective plan, which includes approved extras that
-  // are not quote lines, so a link is checked against that same plan.
+  // are not quote lines, so a link is checked against that same plan. Links match by scope item and
+  // task key, as list() reads them, so a link kept from an earlier quote revision moves to this one.
   private checkOffered(plan: OfferedPlan, tasks: HireTask[]) {
-    for (const task of tasks) {
-      if (task.quoteRevisionId !== plan.quoteRevisionId || !plan.tasks.some(entry =>
-        entry.scopeItemId === task.scopeItemId && entry.key === task.templateTaskKey)) throw new HireError("HIRE_TASK_NOT_FOUND");
-    }
+    return tasks.map(task => {
+      if (!plan.tasks.some(entry => entry.scopeItemId === task.scopeItemId && entry.key === task.templateTaskKey)) {
+        throw new HireError("HIRE_TASK_NOT_FOUND");
+      }
+      return { ...task, quoteRevisionId: plan.quoteRevisionId };
+    });
   }
 
   private async checkTasks(client: PoolClient, tenant: string, job: string, tasks: HireTask[]) {
