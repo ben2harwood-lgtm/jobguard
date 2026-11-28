@@ -50,7 +50,7 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
  return { view, busy, error, load, save, pending };
 }
 
-export function JobDiary({ jobId, extrasHref }: { jobId: string; extrasHref?: string }) {
+export function JobDiary({ jobId, extrasHref, designed = false }: { jobId: string; designed?: boolean; extrasHref?: string }) {
  const { view, busy, error, save, pending } = useSource<DiaryRead>(jobId, "diary", raw => diaryReadV1.parse(raw));
  const [onSite, setOnSite] = useState(false);
  const [text, setText] = useState(""), [mode, setMode] = useState<"typed" | "dictated_text">("typed");
@@ -59,37 +59,37 @@ export function JobDiary({ jobId, extrasHref }: { jobId: string; extrasHref?: st
   const command = retry && pending.current ? pending.current : diaryInputV1.parse({ version: "job-diary-input.v1", commandId: crypto.randomUUID(), entryMode: mode, onSite, text });
   if (await save(command)) { setText(""); setOnSite(false); }
  };
- return <section id="job-diary" className={styles.panel} aria-labelledby="job-diary-title" aria-busy={busy} data-testid="job-diary">
+ return <section id="job-diary" className={designed ? "card card-body form designed-site-work" : styles.panel} aria-labelledby="job-diary-title" aria-busy={busy} data-testid="job-diary">
   <h2 id="job-diary-title">Job diary</h2>
   {view && <p data-testid="diary-notice">{extrasHref && extrasIndex >= 0 ? <>{view.notice.slice(0, extrasIndex)}<a href={extrasHref}>{extrasLabel}</a>{view.notice.slice(extrasIndex + extrasLabel.length)}</> : view.notice}</p>}
   {error && <p role="alert">{error}</p>}
   <div className={styles.field}><label htmlFor="diary-text">Note</label><textarea id="diary-text" value={text} maxLength={8000} disabled={busy} onChange={e => setText(e.target.value)}/></div>
-  <div className={styles.actions}>
+  <div className={designed ? "work-actions form" : styles.actions}>
    <div className={styles.field}><label htmlFor="diary-mode">How it was written</label><select id="diary-mode" value={mode} disabled={busy} onChange={e => setMode(e.target.value as "typed" | "dictated_text")}><option value="typed">Typed</option><option value="dictated_text">Dictated, then checked</option></select></div>
    <label><input type="checkbox" disabled={busy} checked={onSite} onChange={e => setOnSite(e.target.checked)}/> Written on site</label>
-   <button type="button" disabled={busy || !!pending.current || text.trim() === ""} onClick={() => void submit(false)}>Save note</button>
-   {pending.current && !busy && <button type="button" onClick={() => void submit(true)}>Retry the same save</button>}
+   <button className={designed ? "btn" : undefined} type="button" disabled={busy || !!pending.current || text.trim() === ""} onClick={() => void submit(false)}>Save note</button>
+   {pending.current && !busy && <button className={designed ? "btn" : undefined} type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
   <ol>{view?.entries.map(entry => <li key={entry.id} data-testid="diary-entry" data-entry-id={entry.id}><p style={{ whiteSpace: "pre-wrap" }}>{entry.text}</p><small>{entry.entryMode === "typed" ? "Typed" : "Dictated"} · {when(entry.evidence.serverReceivedAt)}</small></li>)}</ol>
  </section>;
 }
 
-export function CustomerMessages({ jobId }: { jobId: string }) {
+export function CustomerMessages({ jobId, designed = false }: { jobId: string; designed?: boolean }) {
  const { view, busy, error, save, pending } = useSource<CustomerMessageRead>(jobId, "customer-messages", raw => customerMessageReadV1.parse(raw));
  const [text, setText] = useState(""), [name, setName] = useState("");
  const submit = async (retry: boolean) => {
   const command = retry && pending.current ? pending.current : customerMessageInputV1.parse({ version: "customer-message-input.v1", commandId: crypto.randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name }, text });
   if (await save(command)) setText("");
  };
- return <section id="customer-messages" className={styles.panel} aria-labelledby="customer-messages-title" aria-busy={busy} data-testid="customer-messages">
+ return <section id="customer-messages" className={designed ? "card card-body form designed-site-work" : styles.panel} aria-labelledby="customer-messages-title" aria-busy={busy} data-testid="customer-messages">
   <h2 id="customer-messages-title">Customer messages</h2>
   <p>Practice sandbox: you type a message as a made-up customer. Nothing is sent to anyone.</p>
   {error && <p role="alert">{error}</p>}
-  <div className={styles.actions}>
+  <div className={designed ? "work-actions form" : styles.actions}>
    <div className={styles.field}><label htmlFor="message-name">Made-up customer name</label><input id="message-name" value={name} maxLength={160} disabled={busy} onChange={e => setName(e.target.value)}/></div>
    <div className={styles.field}><label htmlFor="message-text">Message</label><textarea id="message-text" value={text} maxLength={8000} disabled={busy} onChange={e => setText(e.target.value)}/></div>
-   <button type="button" disabled={busy || !!pending.current || text.trim() === "" || name.trim() === ""} onClick={() => void submit(false)}>Save message</button>
-   {pending.current && !busy && <button type="button" onClick={() => void submit(true)}>Retry the same save</button>}
+   <button className={designed ? "btn" : undefined} type="button" disabled={busy || !!pending.current || text.trim() === "" || name.trim() === ""} onClick={() => void submit(false)}>Save message</button>
+   {pending.current && !busy && <button className={designed ? "btn" : undefined} type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
   <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)} · Evidence {message.evidence.id} · SHA-256 {message.evidence.sha256} · Version {message.evidence.objectVersionId}</small></li>)}</ol>
  </section>;
