@@ -11,7 +11,7 @@ import { JobFinalAccount } from "./job-final-account";
 import { V2QuotePrompts } from "./v2-quote-prompts-panel";
 // V2-C6
 import { V2QuoteAddLine, postAddLine } from "./v2-quote-add-line-panel";
-import { withAddedScope } from "./v2-quote-add-line";
+import { afterSaveLines, withAddedScope } from "./v2-quote-add-line";
 // Inlined at build time only by the V2 launcher (next.config.mjs), as the prompts are.
 const v2AddLine=process.env.NEXT_PUBLIC_JOBGUARD_V2_QUOTE_PROMPTS==="1";
 import { CustomerPaymentStatus } from "./customer-payment-status";
@@ -196,7 +196,7 @@ async function save(){
   if(response.status===409){setNotice("This quote changed. Review the latest version.");return;}
   if(!response.ok){setNotice("This draft could not be saved. Your entered prices are still here.");return;}
   const parsed=quoteWorkspaceResponseV1.parse(await response.json());if(!currentJob())return;const current=parsed.revisions.at(-1)!;
-  setRevision(current.revision);setHistory(parsed.revisions.map(x=>({revision:x.revision,netPence:x.netPence})));setLines(current.lines);savedForm.current=JSON.stringify({lines:current.lines,recipient,blocking});
+  setRevision(current.revision);setHistory(parsed.revisions.map(x=>({revision:x.revision,netPence:x.netPence})));setLines(form=>v2AddLine?afterSaveLines(current.lines,parsed.scope,form):current.lines);savedForm.current=JSON.stringify({lines:current.lines,recipient,blocking});
   setNotice(`Draft revision ${current.revision} saved. Rate confirmations are recorded once; nothing was sent or billed.`);
  }catch{if(!currentJob())return;setNotice("The save result could not be confirmed. Your prices are still here; reload the saved revision before issuing.");}
  finally{if(currentJob()){savingRef.current=false;setSaving(false);}}

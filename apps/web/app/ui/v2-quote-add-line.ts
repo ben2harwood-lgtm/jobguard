@@ -41,6 +41,13 @@ export function withAddedScope(lines: readonly QuoteLine[], scope: readonly AddL
   return [...lines, ...missing.map(addedLine)];
 }
 
+/** After a draft save: the saved lines, then confirmed scope they miss, then any line the form gained meanwhile
+ * (an add that returned while the save was in flight), so no added line drops out of the form. */
+export function afterSaveLines(saved: readonly QuoteLine[], scope: readonly AddLineReceipt[], form: readonly QuoteLine[]): QuoteLine[] {
+  const merged = withAddedScope(saved, scope);
+  return [...merged, ...form.filter(line => !merged.some(kept => kept.scopeItemId === line.scopeItemId))];
+}
+
 export function addLineAddedText(description: string) {
   return `${description} added without a price. Price it or exclude it with a reason, then save a draft revision.`;
 }

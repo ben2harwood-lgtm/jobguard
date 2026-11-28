@@ -2,7 +2,7 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { quoteAddLineCommandV1 } from "@jobguard/db";
-import { addedLine, addLineAddedText, addLineCommand, addLineProblemText, withAddedScope } from "./v2-quote-add-line";
+import { addedLine, addLineAddedText, addLineCommand, addLineProblemText, afterSaveLines, withAddedScope } from "./v2-quote-add-line";
 import { postAddLine, V2QuoteAddLine } from "./v2-quote-add-line-panel";
 
 const sent = vi.hoisted(() => ({ bodies: [] as Array<{ commandId: string }>, answers: [] as Array<() => Promise<Response>> }));
@@ -35,6 +35,15 @@ describe("V2-C6 add a line to the quote", () => {
     const merged = withAddedScope(saved, [item, { ...item, scopeItemId: saved[0]!.scopeItemId }]);
     expect(merged.map(line => [line.scopeItemId, line.origin])).toEqual([[saved[0]!.scopeItemId, "captured"], [item.scopeItemId, "human"]]);
     expect(withAddedScope(merged, [item])).toHaveLength(2);
+  });
+
+  it("keeps a line added while a draft save was in flight", () => {
+    const savedLine = { ...addedLine(item), scopeItemId: "10000000-0000-8000-8000-000000000003", unitRatePence: 4500 };
+    const lateItem = { ...item, scopeItemId: "10000000-0000-8000-8000-000000000004", description: "Parking permit" };
+    // The save response knew nothing of the late add; the form gained it while the save was in flight.
+    const lines = afterSaveLines([savedLine], [{ ...item, scopeItemId: savedLine.scopeItemId }], [{ ...savedLine, unitRatePence: 1 }, addedLine(lateItem)]);
+    expect(lines.map(line => [line.scopeItemId, line.unitRatePence])).toEqual([[savedLine.scopeItemId, 4500], [lateItem.scopeItemId, null]]);
+    expect(afterSaveLines([savedLine], [item], [savedLine]).map(line => line.scopeItemId)).toEqual([savedLine.scopeItemId, item.scopeItemId]);
   });
 
   it("says what happened in plain words", () => {
