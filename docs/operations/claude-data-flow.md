@@ -108,4 +108,5 @@ record: `docs/decisions/v2-sq-g-practice-model-reader.md`. Nothing here applies 
 The scored run, `pnpm --filter @jobguard/ai eval:spoken-sort-live`, is the only
 other path to the API. It runs by hand on Ben's Mac, never in CI (it exits if `CI`
 is set), needs the key, the cap and `JOBGUARD_SPOKEN_JOB_EVAL=1` (not the live flag),
-writes to the ledger in the local `jobguard_v2_local` database and obeys the same cap.
+reads its ledger context from a signed-in practice builder session (`JOBGUARD_PRACTICE_SESSION`,
+the local `jg_session` cookie) through the same practice bridge as the app, writes to the ledger in the local `jobguard_v2_local` database and obeys the same cap.

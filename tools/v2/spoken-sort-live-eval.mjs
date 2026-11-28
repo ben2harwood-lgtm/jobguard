@@ -1,13 +1,16 @@
 // V2-SQ-G scored run: the only path to the API besides the practice capture. Run by hand on Ben's Mac, never in CI:
 //   pnpm --filter @jobguard/ai build && pnpm --filter @jobguard/db build
 //   JOBGUARD_SPOKEN_JOB_EVAL=1 JOBGUARD_SPOKEN_JOB_MODEL_KEY=… JOBGUARD_SPOKEN_JOB_MONTHLY_CAP_PENCE=1000 \
+//     JOBGUARD_PRACTICE_SESSION=<jg_session cookie of the signed-in practice builder> JOBGUARD_LOCAL_V2=1 JOBGUARD_ENV=synthetic_demo \
 //     DATABASE_URL=<runtime url of jobguard_v2_local> pnpm --filter @jobguard/ai eval:spoken-sort-live -- <cases.json> [report.json]
+// The ledger context comes from that practice session through the one practice bridge, as in the app; the script
+// never builds a tenant context itself.
 // It does not need the live flag. It writes to the ledger in the local jobguard_v2_local database and obeys the same
 // cap and daily limit as the app. It prints case ids, scores and cost only: no transcript text, never the key.
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
-import { DEMO_TENANT_ID, V2AiCallLedger, verifiedTenantContextForQueuedJob } from "../../packages/db/dist/index.js";
+import { V2AiCallLedger, authenticatePracticeSession } from "../../packages/db/dist/index.js";
 import {
   FixtureAiProvider, LiveAiGateway, SPOKEN_SORT_MAX_INPUT_BYTES, SPOKEN_SORT_OPERATION, cleanTranscript, combineModelReading, microPenceFor,
   readSpokenJob, reservationMicroPence, sentBytes, sortItems, spokenSortCapPence,
@@ -22,17 +25,20 @@ const capPence = spokenSortCapPence(process.env.JOBGUARD_SPOKEN_JOB_MONTHLY_CAP_
 if (capPence === null) refuse(2, "refused: JOBGUARD_SPOKEN_JOB_MONTHLY_CAP_PENCE must be 1 to 2000");
 const [casesPath, reportPath] = process.argv.slice(2).filter(arg => arg !== "--");
 if (!casesPath) refuse(2, "usage: eval:spoken-sort-live -- <cases.json> [report.json]");
-const adapter = createAnthropicLiveSortAdapter({ apiKey: process.env.JOBGUARD_SPOKEN_JOB_MODEL_KEY, environment: "synthetic_demo", tenantId: DEMO_TENANT_ID, operation: SPOKEN_SORT_OPERATION });
-if (!adapter) refuse(2, "refused: JOBGUARD_SPOKEN_JOB_MODEL_KEY is not set");
+if (!process.env.JOBGUARD_SPOKEN_JOB_MODEL_KEY) refuse(2, "refused: JOBGUARD_SPOKEN_JOB_MODEL_KEY is not set");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 try {
   const { rows: [{ database }] } = await pool.query("SELECT current_database() AS database");
   if (database !== "jobguard_v2_local") refuse(2, "refused: the ledger must be the local jobguard_v2_local database");
-  const context = verifiedTenantContextForQueuedJob(DEMO_TENANT_ID);
+  const { context } = await authenticatePracticeSession(pool, process.env.JOBGUARD_PRACTICE_SESSION)
+    .catch(() => refuse(2, "refused: JOBGUARD_PRACTICE_SESSION must be a signed-in practice builder session"));
+  const tenantId = context.tenantId;
+  const adapter = createAnthropicLiveSortAdapter({ apiKey: process.env.JOBGUARD_SPOKEN_JOB_MODEL_KEY, environment: "synthetic_demo", tenantId, operation: SPOKEN_SORT_OPERATION });
+  if (!adapter) refuse(2, "refused: JOBGUARD_SPOKEN_JOB_MODEL_KEY is not set");
   const ledger = new V2AiCallLedger(pool);
   if (!(await ledger.available(context))) refuse(2, "refused: migration 2069 is not applied");
-  const gateway = new LiveAiGateway(new FixtureAiProvider({}), () => ({ tenantId: DEMO_TENANT_ID }), adapter);
+  const gateway = new LiveAiGateway(new FixtureAiProvider({}), () => ({ tenantId }), adapter);
   const cases = loadContextReaderCases(casesPath);
   const outcomes = [];
   const combinedById = new Map();
@@ -46,7 +52,7 @@ try {
     const callId = randomUUID(), captureId = randomUUID();
     const reserved = await ledger.reserve(context, { callId, captureId, microPence: reservationMicroPence(sentBytes(cleaned, items)), capMicroPence: capPence * 1_000_000 });
     if (!reserved.reserved) { outcomes.push({ id: item.id, outcome: reserved.reason }); break; }
-    const result = await gateway.generateLive({ operation: SPOKEN_SORT_OPERATION, environment: "synthetic_demo", tenantId: DEMO_TENANT_ID, cleaned, items });
+    const result = await gateway.generateLive({ operation: SPOKEN_SORT_OPERATION, environment: "synthetic_demo", tenantId, cleaned, items });
     if (result.usage) {
       const microPence = microPenceFor(result.usage.inputTokens, result.usage.outputTokens);
       settledMicroPence += microPence;
