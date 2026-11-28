@@ -74,6 +74,8 @@ try {
   // V2-F8 who was on site today (2061), after the crew records it checks. Rule 30: stays above FL-6's 2054 line.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2061_v2_site_attendance.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2063_v2_crew_brief.sql", import.meta.url), "utf8"));
+  // Q06 V2-K9: after the work-plan, photo lock, crew and site attendance migrations.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2068_v2_rams_draft.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-D1 measurement firm lock (2059).
