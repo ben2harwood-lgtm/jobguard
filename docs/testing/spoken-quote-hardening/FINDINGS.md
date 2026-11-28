@@ -14,19 +14,19 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RT12-04 | RT-12 | b25b5ee9 | 05-whole-job (desktop, mobile-360); line-3-trade | strip out the old kitchen fit the new units paint the walls eight hundred pounds for the whole job | Decorating | Other | P1 | open-finding | — |
 | RT12-05 | RT-12 | b25b5ee9 | 07-thousand (desktop, mobile-360); line-1-trade | Paint the walls for one thousand two hundred and fifty pounds. | Decorating | Other | P1 | open-finding | — |
 | RT12-06 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); line-1-trade | Paint the walls for £400 plus VAT. | Decorating | Other | P1 | open-finding | — |
-| RT12-07 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); line-1-price | Paint the walls for £400 plus VAT. | (open / blank) | 400.00 | P0 | open-finding | — |
-| RT12-08 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); room-total-Whole job | Paint the walls for £400 plus VAT. | £0.00 · incomplete: 1 row needs a price | £400.00 | P0 | open-finding | — |
-| RT12-09 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); running-total | Paint the walls for £400 plus VAT. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £400.00 · complete | P0 | open-finding | — |
-| RT12-10 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); line-1-price | Fit the door for £200 plus materials. | (open / blank) | 200.00 | P0 | open-finding | — |
+| RT12-07 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); line-1-price | Paint the walls for £400 plus VAT. | (open / blank) | 400.00 | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
+| RT12-08 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); room-total-Whole job | Paint the walls for £400 plus VAT. | £0.00 · incomplete: 1 row needs a price | £400.00 | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
+| RT12-09 | RT-12 | b25b5ee9 | 08-vat (desktop, mobile-360); running-total | Paint the walls for £400 plus VAT. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £400.00 · complete | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
+| RT12-10 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); line-1-price | Fit the door for £200 plus materials. | (open / blank) | 200.00 | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
 | RT12-11 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); question-1 | Fit the door for £200 plus materials. | materials | ["Confirm disposal and waste allowance"] | P2 | open-finding | — |
-| RT12-12 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); room-total-Whole job | Fit the door for £200 plus materials. | £0.00 · incomplete: 1 row needs a price | £200.00 | P0 | open-finding | — |
-| RT12-13 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); running-total | Fit the door for £200 plus materials. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £200.00 · complete | P0 | open-finding | — |
+| RT12-12 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); room-total-Whole job | Fit the door for £200 plus materials. | £0.00 · incomplete: 1 row needs a price | £200.00 | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
+| RT12-13 | RT-12 | b25b5ee9 | 09-materials (desktop, mobile-360); running-total | Fit the door for £200 plus materials. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £200.00 · complete | P1 | open-finding; left open is safe but the rule is keep the number as said and ask a question (RT-02 seed table, vatWords) | — |
 | RT12-14 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); line-count | Paint the walls for £400, no, make that £450. | 1 | 2 | P1 | open-finding | — |
 | RT12-15 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); line-1-trade | Paint the walls for £400, no, make that £450. | Decorating | Other | P1 | open-finding | — |
-| RT12-16 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); line-1-price | Paint the walls for £400, no, make that £450. | ["", "450.00"] | 400.00 | P0 | open-finding | — |
+| RT12-16 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); line-1-price | Paint the walls for £400, no, make that £450. | ["", "450.00"] | 400.00 | P0 | duplicate of RT-00-F002 | RT-FIX-2 (fixed; preview not rerun) |
 | RT12-17 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); question-1 | Paint the walls for £400, no, make that £450. | 400.*450 | ["Confirm disposal and waste allowance"] | P2 | open-finding | — |
-| RT12-18 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); room-total-Whole job | Paint the walls for £400, no, make that £450. | £0.00 · incomplete: 1 row needs a price | £850.00 | P0 | open-finding | — |
-| RT12-19 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); running-total | Paint the walls for £400, no, make that £450. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £850.00 · complete | P0 | open-finding | — |
+| RT12-18 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); room-total-Whole job | Paint the walls for £400, no, make that £450. | £0.00 · incomplete: 1 row needs a price | £850.00 | P0 | duplicate of RT-00-F002 | RT-FIX-2 (fixed; preview not rerun) |
+| RT12-19 | RT-12 | b25b5ee9 | 10-correction (desktop, mobile-360); running-total | Paint the walls for £400, no, make that £450. | Total so far £0.00 · incomplete: 1 row needs a price | Total so far £850.00 · complete | P0 | duplicate of RT-00-F002 | RT-FIX-2 (fixed; preview not rerun) |
 | RT12-20 | RT-12 | b25b5ee9 | 11-room-return (desktop, mobile-360); line-count | In the kitchen. Fit the units for £600. In the bathroom. Tile the floor for £200. Back in the kitchen. Paint the walls for £150. | 3 | 4 | P1 | open-finding | — |
 | RT12-21 | RT-12 | b25b5ee9 | 11-room-return (desktop, mobile-360); line-2-trade | In the kitchen. Fit the units for £600. In the bathroom. Tile the floor for £200. Back in the kitchen. Paint the walls for £150. | Tiling | Other | P1 | open-finding | — |
 | RT12-22 | RT-12 | b25b5ee9 | 11-room-return (desktop, mobile-360); line-3-trade | In the kitchen. Fit the units for £600. In the bathroom. Tile the floor for £200. Back in the kitchen. Paint the walls for £150. | Decorating | Other | P1 | open-finding | — |
@@ -88,9 +88,13 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RT12-78 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); line-count | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | 2 | 3 | P1 | open-finding | — |
 | RT12-79 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); line-1-trade | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | Tiling | Other | P1 | open-finding | — |
 | RT12-80 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); question-1 | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | 800.*bathroom | ["Confirm disposal and waste allowance"] | P2 | open-finding | — |
-| RT12-81 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); room-total-Bathroom | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | £0.00 · incomplete: 2 rows need a price | £800.00 · incomplete: 2 rows need a price | P0 | open-finding | — |
-| RT12-82 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); running-total | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | Total so far £0.00 · incomplete: 2 rows need a price | Total so far £800.00 · incomplete: 2 rows need a price | P0 | open-finding | — |
+| RT12-81 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); room-total-Bathroom | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | £0.00 · incomplete: 2 rows need a price | £800.00 · incomplete: 2 rows need a price | P1 | open-finding; price missing, not wrong | — |
+| RT12-82 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); running-total | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | Total so far £0.00 · incomplete: 2 rows need a price | Total so far £800.00 · incomplete: 2 rows need a price | P1 | open-finding; price missing, not wrong | — |
 | RT12-83 | RT-12 | b25b5ee9 | 20-room-price (desktop, mobile-360); said-room-price | In the bathroom. Tile the floor and fit the basin. £800 for the bathroom. | true | false | P2 | open-finding | — |
+
+| RT12-84 | RT-12 | b25b5ee9 | 01–20 @layout-save (mobile-360); tap-targets | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Every measured review control at least 44×44 px | 20/20 scripts fail; representative Walk the job 85.56×36, price field 272×42, Save review 100.72×40; per-script counts below | P2 | open-finding | — |
+| RT12-85 | RT-12 | b25b5ee9 | 01–20 @layout-save (desktop); tap-targets | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Every measured review control at least 44×44 px | 20/20 scripts fail; representative Walk the job 85.56×36, price field 138×42, Save review 100.72×40; per-script counts below | P2 | open-finding | — |
+| RT12-86 | RT-12 | b25b5ee9 | 01–20 @layout-save (desktop, mobile-360); reopen-job | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Jobs-list Open job navigation is verified at the saved job URL | Immediate page.url() sample returns false in 40/40 journeys; no navigation wait precedes it. Subsequent direct review reopen retains edits, transcript and firm in 40/40 | P2 | harness-gap; not evidence of a wrong-job defect; navigation remains unverified | — |
 
 ## RT-12 hosted attack receipt — 28 November 2026
 
@@ -173,3 +177,103 @@ reader with room/trade fields and reuse it, so accessible-label changes have one
 This is non-blocking and no helper refactor was bundled here.
 
 Final local checks after repairs: TypeScript typecheck PASS (exit 0); hosted-config discovery PASS (40 tests); `git diff --check` PASS. No corrective browser run was made.
+
+## RT-12 repair round 1 — 28 November 2026
+
+Triage requested by Ben: RT12-07/08/09/10/12/13 and RT12-81/82 are now P1;
+RT12-16/18/19 are duplicates of RT-00-F002, fixed by RT-FIX-2 (user-supplied fix status,
+not a fresh preview verification). The original expected/actual cells remain historical observations.
+For VAT and materials the governing rule is keep the number as said and ask a question
+(RT-02 seed table, `vatWords`); safe open prices are not wrong-money P0s. RT12-81/82 are
+missing-price findings, not wrong-price P0s. No line-content assertion was rerun in this round.
+
+Local base: `b52ccc47aaea21dd9a1f41d9322b9eb5f0d234c5`, branch `codex/sandbox/rt-12`.
+Same target, owner-supplied head `b25b5ee9`, Worker `d7b174a0`, and entry-asset fingerprint
+`44f496ea4730dbf34bfbac9175f6e8905a94375e1b3a89b0488a2b7eed338aad` as the initial receipt.
+All 40 entry fingerprint checks matched (no deployment-change skips); this remains bundle-change
+detection, not an independent attestation of the owner-supplied version.
+
+Commands actually run (Node 24.17.0; pnpm 10.28.1):
+
+```sh
+pnpm --dir apps/web exec tsc -p tsconfig.json --noEmit --incremental false
+JOBGUARD_HOSTED_URL=https://sq-preview-jobguard-demo.ben2harwood.workers.dev pnpm --dir apps/web exec playwright test -c playwright.hosted.config.ts RT-12-right-place.spec.ts --grep @layout-save --trace off --workers=2 --list
+JOBGUARD_HOSTED_URL=https://sq-preview-jobguard-demo.ben2harwood.workers.dev PLAYWRIGHT_JSON_OUTPUT_FILE=/tmp/rt12-round1-layout-save-results.json pnpm --dir apps/web exec playwright test -c playwright.hosted.config.ts RT-12-right-place.spec.ts --grep @layout-save --trace off --workers=2 --reporter=line,json
+```
+
+Exactly one browser batch: 14:09:38–14:19:14 UTC, 576.1 seconds, 40 journeys, two workers,
+zero retries, trace off. Discovery selected only `@layout-save`. Each journey created its own blank
+practice firm, typed the existing fictional script, measured layout, edited the first price to £123.45,
+saved, reloaded, clicked the single Jobs-list Open job button, and reopened the saved review directly.
+The saved-content assertions compare the edited snapshot, not the parser's line-content expectations.
+No split/merge, confirmation, microphone, audio upload, paid model, default Playwright config,
+local server, deployment or push was used.
+
+| Check | 360×740 pass / fail | 1280×740 pass / fail |
+| --- | --- | --- |
+| No horizontal scroll | 20 / 0 | 20 / 0 |
+| 44 px control bounding boxes | 0 / 20 (RT12-84) | 0 / 20 (RT12-85) |
+| Save review HTTP success and saved notice | 20 / 0 | 20 / 0 |
+| Reload edited rows | 20 / 0 | 20 / 0 |
+| Reload unchanged transcript | 20 / 0 | 20 / 0 |
+| Jobs-list URL sample (harness gap) | 0 / 20 (RT12-86) | 0 / 20 (RT12-86) |
+| Direct saved-review reopen edited rows | 20 / 0 | 20 / 0 |
+| Direct saved-review reopen unchanged transcript | 20 / 0 | 20 / 0 |
+| Reopen same practice firm | 20 / 0 | 20 / 0 |
+
+All 40 also passed own-firm, capture-transcript, initial job identity, HTML/dialog and page-crash
+checks. No layout-selector or other caught harness exception occurred. Playwright's raw result was
+**0 passed, 40 failed, 0 skipped** (exit 1): every journey found a small-control mismatch and the
+immediate URL sample mismatch before new finding IDs were registered. The final source binds those
+assertions to `test.fail` with RT12-84/85/86. It was typechecked, not rerun in a second browser batch;
+there is no claim of an executed expected-failure/green rerun.
+
+RT12-84/85 measure the existing spec's raw control rectangles, including radio/checkbox rectangles;
+this is not a separate measurement of enlarged label hit areas. Visible Save review buttons at 40 px
+and text inputs at 42 px are sufficient to fail this check independently of those small inputs.
+
+RT12-86 is a test timing limitation, not a P0 product claim: `Open job →` calls asynchronous
+`router.push` in `apps/web/app/(designed)/jobs-screens.tsx`, while the spec samples `page.url()`
+immediately after click without `waitForURL`/`toHaveURL`, then navigates directly to the known saved
+review URL. All direct reopen content and tenant checks pass. The jobs-list navigation destination
+therefore remains **unverified**. The original immediate assertion is explicitly labelled and retained
+as an expected failing observation; a synchronized navigation check needs separately authorized
+browser execution. No actual wrong job, lost edit or changed transcript was observed.
+
+Each script below has the same result: no-scroll PASS, save/reload/direct-review-reopen PASS,
+tap-target FAIL under RT12-84/85, and jobs-list URL sample FAIL under RT12-86. Counts are measured
+control rectangles below 44 px; full labels/dimensions remain in the JSON evidence.
+
+| Script | Small controls at 360 | Small controls at 1280 |
+| --- | --- | --- |
+| 01-four-items | 46 | 58 |
+| 02-two-prices-open | 38 | 47 |
+| 03-two-sixty | 32 | 38 |
+| 04-supply-fit | 23 | 26 |
+| 05-whole-job | 39 | 48 |
+| 06-money-words | 23 | 26 |
+| 07-thousand | 23 | 26 |
+| 08-vat | 24 | 27 |
+| 09-materials | 23 | 26 |
+| 10-correction | 32 | 38 |
+| 11-room-return | 52 | 64 |
+| 12-bedroom-two | 23 | 26 |
+| 13-credit | 33 | 39 |
+| 14-range | 24 | 27 |
+| 15-total-mismatch | 33 | 39 |
+| 16-euro | 23 | 26 |
+| 17-html | 32 | 38 |
+| 18-thirty-items | 284 | 374 |
+| 19-trade-slang | 31 | 37 |
+| 20-room-price | 38 | 47 |
+
+Evidence remains local and ignored: `/tmp/rt12-round1-layout-save-results.json` contains all 40
+`RT12-evidence` attachments, `/tmp/rt12-round1-evidence.json` is the extracted evidence, and
+`apps/web/test-results/` contains `review.png`, `reopened.png`, and error contexts per script/size.
+The initial batch artifacts may have been replaced by this Playwright output; its receipt above is
+historical. Neither report nor screenshots are claimed uploaded or committed. Only the test source
+and this findings file are included in the round-1 results commit; `.pnpm-store/` is excluded.
+
+Post-annotation validation: TypeScript typecheck PASS; hosted-config discovery PASS (40 selected
+layout/save tests); `git diff --check` PASS. Full build, unit, database, migration and model-eval suites
+were not run for this scoped test/documentation change.
