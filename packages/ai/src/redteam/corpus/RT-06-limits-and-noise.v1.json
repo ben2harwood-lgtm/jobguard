@@ -1167,7 +1167,7 @@
         15000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-06-F001"
   },
   {
@@ -1194,7 +1194,7 @@
         15000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-06-F001"
   },
   {
@@ -1221,7 +1221,7 @@
         15000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-06-F001"
   },
   {
@@ -1248,7 +1248,7 @@
         15000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-06-F001"
   },
   {

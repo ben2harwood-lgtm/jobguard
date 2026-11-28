@@ -168,7 +168,7 @@
       "wholeJobPricePence": null,
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F006"
   },
   {
@@ -1026,7 +1026,7 @@
       "wholeJobPricePence": null,
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F005"
   },
   {
@@ -1087,7 +1087,7 @@
       "wholeJobPricePence": null,
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F005"
   },
   {
@@ -1148,7 +1148,7 @@
       "wholeJobPricePence": null,
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F005"
   },
   {
@@ -1209,7 +1209,7 @@
       "wholeJobPricePence": null,
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F005"
   },
   {
@@ -3591,7 +3591,7 @@
       "wholeJobPricePence": null,
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F009"
   },
   {
@@ -3804,7 +3804,7 @@
       "wholeJobPricePence": null,
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F006"
   },
   {
@@ -4811,7 +4811,7 @@
         5000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4838,7 +4838,7 @@
         6000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4865,7 +4865,7 @@
         7000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4892,7 +4892,7 @@
         8000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4919,7 +4919,7 @@
         9000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4946,7 +4946,7 @@
         10000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -4973,7 +4973,7 @@
         20000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -5000,7 +5000,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F001"
   },
   {
@@ -5027,7 +5027,7 @@
         5000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5054,7 +5054,7 @@
         6000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5081,7 +5081,7 @@
         7000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5108,7 +5108,7 @@
         8000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5135,7 +5135,7 @@
         9000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5162,7 +5162,7 @@
         10000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5189,7 +5189,7 @@
         20000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5216,7 +5216,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F002"
   },
   {
@@ -5243,7 +5243,7 @@
         5000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5270,7 +5270,7 @@
         6000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5297,7 +5297,7 @@
         7000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5324,7 +5324,7 @@
         8000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5351,7 +5351,7 @@
         9000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5378,7 +5378,7 @@
         10000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5405,7 +5405,7 @@
         20000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5432,7 +5432,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F003"
   },
   {
@@ -5459,7 +5459,7 @@
         5000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5486,7 +5486,7 @@
         6000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5513,7 +5513,7 @@
         7000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5540,7 +5540,7 @@
         8000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5567,7 +5567,7 @@
         9000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5594,7 +5594,7 @@
         10000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5621,7 +5621,7 @@
         20000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   },
   {
@@ -5648,7 +5648,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-05-F004"
   }
 ]

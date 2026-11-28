@@ -33,8 +33,8 @@ describe("RT-05 disfluent money qualifiers", () => {
   // and a missing question must not conceal a repaired price (or the other way round).
   const p0 = cases.filter(item => /^RT-05-F00[1-4]$/u.test(item.finding ?? ""));
   for (const item of p0) for (const path of paths) {
-    const before = item.finding !== "RT-05-F004";
-    const keepsWrongMoney = before || path === "capture" || path === "gateway";
+    const before = false;
+    const keepsWrongMoney = false;
     (keepsWrongMoney ? it.fails : it)(`${item.finding} ${item.id} ${path}: qualified money stays open`, async () => {
       expect((await outcome(path, item.transcript)).prices).toEqual([null]);
     });
@@ -54,7 +54,7 @@ describe("RT-05 disfluent money qualifiers", () => {
 
 describe("RT-05 independent symptoms of open P1 findings", () => {
   for (const path of paths) {
-    it.fails(`RT-05-F005 ${path}: a leading er does not discard a hundred pounds`, async () => {
+    it(`RT-05-F005 ${path}: a leading er does not discard a hundred pounds`, async () => {
       expect((await outcome(path, words(48))).prices).toEqual([10000]);
     });
   }
@@ -78,7 +78,7 @@ describe("RT-05 independent symptoms of open P1 findings", () => {
     const output = reader(words(number));
     expect(output.areas.find(area => area.key === output.lines[0]!.areaKey)?.name.value).toBe(room);
   });
-  it.fails("RT-05-F009: filler between items never turns the first work into a title", () => {
+  it("RT-05-F009: filler between items never turns the first work into a title", () => {
     const output = reader(words(170));
     expect(output.lines.some(line => /fit the door/iu.test(line.description.value))).toBe(true);
   });

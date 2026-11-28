@@ -45,14 +45,29 @@ const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approxi
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
 // Recognition only: never use this copy for source spans or amount parsing.
 export const visibleWorkText = (value: string) => value.replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, "").trimStart();
+const speechFillerWords = "um|uh|er|erm|like|you\\s+know|sort\\s+of|kind\\s+of|i\\s+mean";
+const speechFillers = new RegExp(`(?:,\\s*)?(?<![\\p{L}\\p{N}-])(${speechFillerWords})(?![\\p{L}\\p{N}-])(?:\\s*,)?`, "giu");
+const leadingSpeechFillers = new RegExp(`^(?:[\\s,]*(?:${speechFillerWords})(?![\\p{L}\\p{N}-]))+[\\s,]*`, "iu");
+/** Recognition copy only. Same UTF-16 length; source text and cited offsets never change. */
+export function speechComparison(value: string, leadingOnly = false): string {
+  const mask = (words: string) => words.replace(/[^\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, " ");
+  const input = leadingOnly ? value.slice(0, leadingSpeechFillers.exec(value)?.[0].length ?? 0) : value;
+  const comparison = input.replace(speechFillers, (match: string, word: string, at: number) => {
+    if (/^like$/iu.test(word) && (/\bwould\s*$/iu.test(value.slice(0, at)) || /^\s*new\b/iu.test(value.slice(at + match.length)))) return match;
+    return mask(match);
+  });
+  if (leadingOnly) return comparison + value.slice(input.length);
+  return comparison.replace(/\b(?:yeah|so)(?:[\s,]+(?:yeah|so))*[\s,]*(?=[.!?;]*$)/giu, (words: string, at: number) =>
+    /^so\b/iu.test(words) && /\bor\s+$/iu.test(comparison.slice(0, at)) ? words.slice(0, 2) + mask(words.slice(2)) : mask(words));
+}
 export const workClause = (value: string) => {
-  const visible = visibleWorkText(value);
+  const visible = speechComparison(visibleWorkText(value), true).trimStart();
   return workWord.test(visible) || spokenVerb.test(visible) || /^woodwork\s+in\s+gloss\b/iu.test(visible);
 };
 export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 // Keep corrupted literals whole so they produce an open price, never a valid prefix or a second work line.
 export const invisibleFormat = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
-const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:[£€$](?=[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]*[\p{Cf}\p{Default_Ignorable_Code_Point}])[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]+|[£€$](?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?\s+(?:pounds|quid|euros?|dollars?))(?:[km½]|ish)?(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:[£€$](?=[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}\p{M}\p{Cs}\x00]*[\p{Cf}\p{Default_Ignorable_Code_Point}\p{M}\p{Cs}\x00])[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}\p{M}\p{Cs}\x00]+|[£€$](?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?\s+(?:pounds|quid|euros?|dollars?))(?:[km½]|ish)?(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 /** Decimal punctuation, including malformed repeated dots, belongs to the amount rather than a new clause. */
 export function amountPoints(text: string): Set<number> {
   const points = new Set<number>();
@@ -171,6 +186,10 @@ const limitAfter = /^\s*(?:[-–−)]|(?:pounds?\s+|quid\s+)?(?:minimum|maximum|
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open", unit?: string | null): boolean {
+  // "I mean" can also retract a price: retain the original correction check.
+  const correction = spokenCorrection.test(before) || spokenCorrection.test(after);
+  before = speechComparison(before).replace(/[^\S\uFEFF]+/gu, " ");
+  after = speechComparison(after).replace(/[^\S\uFEFF]+/gu, " ");
   after = after.replace(/^[\s,]+/u, " ");
   // A prefix before a work/title/room clause is harmless, even when the numeric checker includes the title.
   // Keep a prefix directly beside the amount, and every invisible character inside the clause or amount.
@@ -183,7 +202,7 @@ export function saidAmountOpen(before: string, after: string, rates: "open" | "l
     : rates === "open" || /^(?:days?|hours?)$/iu.test(rate[1] ?? "") || /^\s*\//u.test(after));
   return foreignCurrency.test(`${before} ${after}`) || priceCondition.test(before) || priceCondition.test(after) || nonPriceWords.test(`${before} ${after}`)
     || /^[km½]/iu.test(after)
-    || spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+    || correction || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
     || invisibleFormat.test(priceBefore) || invisibleFormat.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || rateOpen;
 }
@@ -356,7 +375,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
     if (index > 0 && !isWork(chunk.value) && !chunk.correction && !amounts(chunk.value).length
-      && /^(?:the customer['’]s (?:dog|cat|pet) is (?:called|named) [\p{L}'’-]+|er|erm|um)[\s.]*$/iu.test(chunk.value)) return false;
+      && (!speechComparison(chunk.value).trim() || /^the customer['’]s (?:dog|cat|pet) is (?:called|named) [\p{L}'’-]+[\s.]*$/iu.test(chunk.value))) return false;
     return !/^JOB:/u.test(visibleWorkText(chunk.value)) && !(index === 0 && !isWork(chunk.value) && !chunk.correction);
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
@@ -377,7 +396,7 @@ export function priceDescription(value: string, at: number): string {
   if (bare) at = Math.min(at, bare.index);
   let prefix = value.slice(0, at);
   const lead = [...prefix.matchAll(/\s+(?:for|at)\b/giu)].reverse().find(match => {
-    const tail = prefix.slice(match.index + match[0].length);
+    const tail = speechComparison(prefix.slice(match.index + match[0].length));
     return !tail.trim() || limitBefore.test(tail) || hedgeBefore.test(tail);
   });
   if (lead) prefix = prefix.slice(0, lead.index);
@@ -401,7 +420,7 @@ export const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, f
 /** "fit six base units": the stated count and what it counts. Only right after the item's verb. */
 export function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
   const offset = leadingContentOffset(description);
-  const visible = description.slice(offset);
+  const visible = speechComparison(description.slice(offset), true).trimStart();
   const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(visible);
   if (!match || !spokenVerb.test(visible)) return null;
   const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];
@@ -473,7 +492,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
       lines = draft.chunks.map(chunk => {
         const firstAmount = amounts(chunk.value)[0];
         const found = plainPrice(chunk);
-        const after = found ? chunk.value.slice(found.at + found.value.length) : "";
+        const after = found ? speechComparison(chunk.value.slice(found.at + found.value.length)).trimEnd() : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
         // "per door" or "a door" only when it names the counted thing; "per pair" or "a day" leaves the price open.
         // VAT words after the per-item word ("a door plus VAT") do not hide it.

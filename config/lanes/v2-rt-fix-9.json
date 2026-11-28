@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-9": {
+      "branches": [
+        "codex/sandbox/rt-fix-9"
+      ],
+      "note": "RT-FIX-9 (#1071): speech fillers and corrupted amounts. Corpus/test edits are status flips only; golden-run edits are hash only. RT-06-F005 stays reserved for RT-FIX-10. Commit only; independent exact-head RED review remains required. The own lane file is implicitly editable and is not included in allow.",
+      "allow": [
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/core/src/job-understanding.ts",
+        "packages/ai/src/redteam/corpus/RT-05-speech-realism.v1.json",
+        "packages/ai/src/redteam/RT-05-speech-realism.test.ts",
+        "packages/ai/src/redteam/corpus/RT-06-limits-and-noise.v1.json",
+        "packages/ai/src/redteam/limits-and-noise.test.ts",
+        "packages/ai/src/redteam/perf.test.ts",
+        "packages/ai/src/redteam/corpus/RT-13-fuzz-metamorphic.v1.json",
+        "packages/ai/src/redteam/fuzz.test.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}
