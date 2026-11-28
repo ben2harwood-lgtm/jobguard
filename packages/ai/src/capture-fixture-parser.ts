@@ -96,6 +96,8 @@ export const spokenCorrection = new RegExp(
   `|that\\s+(?:should\\s+be|was\\s+euros|figure\\s+is\\s+a\\s+credit)` +
   `|(?:do\\s+not|don't)\\s+(?:use|bother)|we\\s+are\\s+not\\s+doing|leave\\b[^.;!?\\r\\n]{0,60}?\\bout|cannot\\s+give\\s+a\\s+figure` +
   `|or\\s+rather|call\\s+it\\s+[^;!?\\r\\n]{1,100}?\\binstead)\\b`, "iu");
+// Boundary predicates only ask about offset zero; never search every remaining suffix for a later correction.
+export const leadingSpokenCorrection = new RegExp(`^(?:${spokenCorrection.source})`, "iu");
 /** The same explicit question follows a correction through both draft readers. */
 export const correctionQuestion = (words: string) => `A spoken correction was made: “${words.slice(0, 380)}”. Check the item, room, quantity and price; is the work in or out?`;
 
@@ -125,7 +127,8 @@ export function amounts(said: string): Amount[] {
   const value = hideRoomNumbers(said);
   const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
     pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
-  for (const match of value.matchAll(spokenAmount)) {
+  // A spoken amount requires this currency word. Avoid retrying an unterminated number chain at every word.
+  for (const match of /(?:pounds|quid)(?![\p{L}\p{N}])/iu.test(value) ? value.matchAll(spokenAmount) : []) {
     // "twenty pounds and fifty pence": the pence words are part of the same amount.
     const [poundWords, penceWords] = match[0].split(/(?<=pounds|quid)\s+(?:and\s+)?/iu);
     const pounds = spokenPounds(poundWords!);
@@ -215,23 +218,39 @@ const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
 export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
 const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|is|are|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
+const wholeJobEnding = /(?:for the whole job|for the lot|for everything|all in|in total|altogether)$/iu;
 
 const nextRoomLead = new RegExp(`^(?:(?:and|then)\\s+)?in\\s+(?:the\\s+)?${roomPart}[,:]?\\s+`, "iu");
 
+/** Normalize once per boundary scan, keeping original UTF-16 offsets even when recognition removes format characters. */
+export function boundaryRecognition(text: string): (at: number) => string {
+  if (!invisibleFormat.test(text)) return at => text.slice(at).trimStart();
+  const removed = new Uint32Array(text.length + 1);
+  let at = 0, count = 0;
+  const visible = text.replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, (word: string, offset: number) => {
+    while (at <= offset) removed[at++] = count;
+    count += word.length;
+    return "";
+  });
+  while (at <= text.length) removed[at++] = count;
+  return offset => visible.slice(offset - removed[offset]!).trimStart();
+}
+
 /** The draft's next-item boundary length, or zero. Shared with numeric checks and total clauses. */
 export function plainItemBoundary(text: string, i: number, start: number,
-  isNext: (value: string) => boolean = workClause): number {
+  isNext: (value: string) => boolean = workClause,
+  readNext: (at: number) => string = at => visibleWorkText(text.slice(at))): number {
   const char = text[i] ?? "";
   if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && i > start) {
     const next = text.slice(i + 1), room = nextRoomLead.exec(next);
     if (room && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2 && isNext(next.slice(room[0].length))) return 1;
   }
   const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
-  if (!separator && !/\s/u.test(char)) return 0;
-  const next = visibleWorkText(text.slice(i + (separator?.length ?? 1)));
+  if (!separator && (!/\s/u.test(char) || /\s/u.test(text[i - 1] ?? " "))) return 0;
+  const next = readNext(i + (separator?.length ?? 1));
   // Price revisions qualify the original item, even when "new" or "make" is also a work word.
   // Keep this guard here so draft readers and numeric checks use the same clause.
-  if (spokenCorrection.exec(next)?.index === 0) return 0;
+  if (leadingSpokenCorrection.test(next)) return 0;
   if (!separator) {
     // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
     if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && (spokenVerb.test(next)
@@ -258,7 +277,7 @@ export function plainItemBoundary(text: string, i: number, start: number,
 /** The draft's next-item predicate, shared with numeric checks. */
 export function plainNextItem(next: string, isWork: (value: string) => boolean,
   isTiming: (value: string) => boolean): boolean {
-  return isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!);
+  return isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.slice(0, next.search(/[,;.!?\r\n]|$/u)));
 }
 
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
@@ -279,14 +298,16 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     const raw = text.slice(start, end), value = trimSourceText(raw).replace(/\s+and$/iu, "");
     if (!value) return;
     const at = start + raw.indexOf(value);
-    const tail = wholeJobTail.exec(value);
+    const tail = wholeJobEnding.test(value) ? wholeJobTail.exec(value) : null;
     if (tail && tail.index > 0 && isWork(value.slice(0, tail.index))) {
       const head = value.slice(0, tail.index).trimEnd();
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
   };
   const isNext = (next: string) => plainNextItem(next, isWork, isTiming);
-  const party = suggestCapturePartyClause(text);
+  const readNext = boundaryRecognition(text);
+  // No party clause can match without "at <site>". Keep the original input and all of its offsets.
+  const party = /\bat\s/iu.test(text) ? suggestCapturePartyClause(text) : null;
   const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
     .map(match => [match.index, match.index + match[0].length]));
   let start = 0, correctionInChunkEnd = -1, correctionNeedsNumber = false;
@@ -304,7 +325,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     // A bare number/count also ends the wait, but never resolves the corrected quantity or price.
     const awaitingCorrection = correctionNeedsNumber && correctionInChunkEnd >= start && !correctionNumber.test(text.slice(correctionInChunkEnd, i));
     // A decimal point or thousands separator belongs to the amount.
-    if ((/[.!?;\r\n]/u.test(char) || char === "—" && spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) && !points.has(i)) {
+    if ((/[.!?;\r\n]/u.test(char) || char === "—" && leadingSpokenCorrection.test(visibleWorkText(text.slice(i + 1)))) && !points.has(i)) {
       if (char === "." && /\bapprox$/iu.test(text.slice(start, i)) && /^\s*£?\d/u.test(text.slice(i + 1))) continue;
       // Pauses inside a correction stay with it; work, a room heading or a total after a completed correction starts a new clause.
       const next = visibleWorkText(text.slice(i + 1));
@@ -313,7 +334,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
         && (awaitingCorrection || !total.test(nextClause))) continue;
       add(start, i); start = i + 1;
     } else {
-      const separator = plainItemBoundary(text, i, start, isNext);
+      const separator = plainItemBoundary(text, i, start, isNext, readNext);
       if (!awaitingCorrection && separator) {
         add(start, i); start = i + separator; i = start - 1;
       }

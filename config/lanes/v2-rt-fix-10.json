@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-10": {
+      "branches": [
+        "codex/sandbox/rt-fix-10"
+      ],
+      "note": "RT-FIX-10 (#1071): performance only, same reader results. RT-06 corpus/test edits are status flips only; golden-run edits are parser hash only. Commit only; independent exact-head review remains separate. The own lane file is implicitly editable and is not included in allow.",
+      "allow": [
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/core/src/job-understanding.ts",
+        "packages/ai/src/redteam/corpus/RT-06-limits-and-noise.v1.json",
+        "packages/ai/src/redteam/limits-and-noise.test.ts",
+        "packages/ai/src/redteam/perf.test.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}

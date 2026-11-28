@@ -18,10 +18,7 @@ const attacks = [
   { id: "room-chain", text: `Fit panel ${fill("kitchen bedroom bathroom ")} end`, profile: true },
   { id: "hyphen-words", text: `Fit panel ${fill("one-hundred-and-")} end`, profile: true },
 ];
-const openFindings: Record<string, string> = {
-  "RT-06-078": "RT-06-F002", "and-chain": "RT-06-F005",
-  "number-words": "RT-06-F003", "comma-digits": "RT-06-F004",
-};
+const openFindings: Record<string, string> = {};
 type Sample = { regex: string; totalMs: number; maxMs: number; calls: number };
 type Result = { timings: { path: string; ms: number; lines: number }[]; samples: Sample[]; timedOut: boolean; activePath?: string };
 async function measure(text: string, profile: boolean): Promise<Result> {
