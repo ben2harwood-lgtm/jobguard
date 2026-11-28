@@ -2,6 +2,7 @@ import { customWorkPlanTaskKey, WorkPlanError } from "@jobguard/db";
 import { workPlanEditV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { practiceFailure } from "../../../../../lib/synthetic-server";
+import { isTrustedBrowserOrigin } from "../../../../contractor/origin";
 import { workspaceApplication } from "../../../../../lib/workspace-server";
 
 type Route = { params: Promise<{ id: string }> };
@@ -47,6 +48,8 @@ export async function GET(_request: Request, { params }: Route) {
 
 export async function POST(request: Request, { params }: Route) {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1") return failure("NOT_FOUND", 404);
+  // V2-PAIR-1, rule 21: configured origins only, never the request URL or forwarded headers.
+  if (!isTrustedBrowserOrigin(request)) return failure("ORIGIN_FORBIDDEN", 403);
   const input = workPlanEditV1.safeParse(await request.json().catch(() => null));
   if (!input.success) return failure("WORK_PLAN_INVALID_EDIT", 400);
   try {
