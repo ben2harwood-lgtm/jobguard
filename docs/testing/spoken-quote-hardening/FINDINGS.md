@@ -916,3 +916,30 @@ Commands and deterministic results (Node 24.17.0; pnpm 10.28.1):
 Golden scores before and after are identical: 32/32 cases; scope recall 41/41; valid citations 119/119; unsupported monetary facts 0; ambiguity checks 63/63. Only the parser implementation SHA-256 changes in `golden-run.v1.json`; no labels, scores, targets or prediction hashes change. Every existing corpus status/expectation and `capture-qualified-price.test.ts` is preserved. Existing open corpus findings remain open.
 
 Invariants touched: ambiguous money stays open with a question; conditional prices never become exact prices; a separate work item and its cited money are preserved. No migrations, interface changes, new alerts or commercial-policy changes. Database, browser/native and live-provider suites were not run because this is a deterministic parser-only repair with no affected persistence, UI or provider path. These checks are not independent RED review or release approval; review against the final committed head remains required before merge. Commit only, no push. `.pnpm-store/` is excluded.
+
+## RT-FIX-5 repair round 2 (last) — Codex review of PR #1085 at 34625ab6
+
+Base `34625ab6`, branch `codex/sandbox/rt-fix-5`. All three reported P2s are repaired locally:
+
+- `capture-fixture-parser.ts` exports `plainItemBoundary()`, extracted from `plainDraft()` with the existing separator, continuous-speech, tied-word, correction, disposal and “supply and fit” guards intact. `plainDraft()` retains its existing work/timing/total recognition through a predicate. The reader passes its existing `isWork` predicate to that same helper for numeric-check clause selection and total-clause boundaries. The narrower `itemBreak` regex is removed; no second copy of a guard or work-word list is introduced.
+- `context-reader.ts` keeps the original amount tail, including its comma, for `plainCommaTail`; the normalised copy still serves VAT and per-item checks. Both “£200, including preparation” and “£200, to a high standard” retain the cited £200. The shared numeric boundary isolates “move two sockets £300” from the walls' conditional £200. The total scanner stops before connector-led work, preserving both the £500 total and the doors' separate £300, while comma-separated qualifiers and conflicting totals still stay open.
+- RV-01 adds eight pass cases: each of the four supplied transcripts plus one variant (cleanup, smooth finish, then move three sockets, and fit six doors). All existing cases, statuses, expectations and `capture-qualified-price.test.ts` are unchanged. Replaying the final eight additions against the original two source files gives exactly eight failures / 773 passes; the repaired sources give 781 passes.
+
+Commands and deterministic results (Node 24.17.0; pnpm 10.28.1):
+
+| Check | Result |
+| --- | --- |
+| Baseline `34625ab6` bytes: `pnpm eval --maxWorkers=2` | exit 0; 28 files, 1,251 tests passed; working changes restored after the baseline check |
+| Original sources with new cases: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts src/capture-qualified-price.test.ts --maxWorkers=2` | expected exit 1; eight new failures / 773 passes |
+| Repaired sources: same targeted command | exit 0; 2 files, 781 tests passed |
+| After: `pnpm eval --maxWorkers=2` | exit 0; 28 files, 1,259 tests passed |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai typecheck` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai lint` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai build` | exit 0 |
+| Node assertion against fresh compiled evaluation and golden-record verification | exit 0; entire before/after golden record equal apart from parser implementation hash |
+| Node reader and checked-reader assertions for `move`, `add` and `get the sparky` after a conditional item | exit 0; prices `[null, 30000]` for each |
+| `git diff --check` | exit 0 |
+
+Golden scores have no drop: 32/32 cases; scope recall 41/41; valid citations 119/119; unsupported monetary facts 0; ambiguity checks 63/63. Only the parser implementation SHA-256 changes in `golden-run.v1.json`; labels, targets, scores and prediction hashes are unchanged. The complete existing corpus still satisfies its original pass/open-finding expectations. Existing open findings remain open. An initial baseline eval also passed 1,251 tests; its extra argument separator was corrected for the bounded baseline command recorded above.
+
+Invariants touched: exact cited line prices survive harmless comma tails; a condition opens only its own price; totals and later work retain separate amounts. No migrations, interface changes, new alerts or commercial-policy changes. Database, browser/native and live-provider checks are inapplicable to this deterministic parser-only change. This is test execution, not independent RED review or release approval; exact-head review remains required before merge. Commit only, no push. `.pnpm-store/` is excluded.

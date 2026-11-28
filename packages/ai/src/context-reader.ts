@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, invisibleFormat, leadingContentOffset, numberWords, plainDraft, priceCondition, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, priceCondition, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -25,8 +25,19 @@ function thousands(words: string): number | null {
   const value = spoken && !/\d/u.test(spoken[1]!) ? spokenPounds(spoken[1]!) : null;
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
-/** Where one work item ends and the next begins inside a sentence: a comma, or "and"/"then" before a work verb. */
-const itemBreak = new RegExp(`,(?=\\s*(?:${spokenVerb.source.replace(/^\^/u, "")}))|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
+/** Keep number checks inside the same item boundaries that the context reader passes to plainDraft. */
+function itemClauses(text: string): string[] {
+  const clauses: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const separator = plainItemBoundary(text, i, start, isWork);
+    if (separator) {
+      clauses.push(text.slice(start, i)); start = i + separator; i = start - 1;
+    }
+  }
+  clauses.push(text.slice(start));
+  return clauses;
+}
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
     if (invisibleFormat.test(words)) return null;
@@ -47,7 +58,7 @@ export const spokenNumbers: SpokenNumberReader = {
   // The same said-amount guards as the reader's own line prices (V2-SQ-M), on the amount's own work clause only:
   // another item in the same sentence ("…, fit a handle for twenty pounds and fifty pence") never opens this one.
   open: (before, after, unit) => {
-    const ownBefore = before.split(itemBreak).at(-1) ?? before, ownAfter = after.split(itemBreak)[0] ?? after;
+    const ownBefore = itemClauses(before).at(-1) ?? before, ownAfter = itemClauses(after)[0] ?? after;
     return saidAmountOpen(ownBefore, ownAfter, unit === undefined ? "open" : "line", unit);
   },
 };
@@ -217,12 +228,13 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     const open = (found: { text: string; at: number }) => saidAmountOpen(shown.slice(0, found.at), shown.slice(found.at + found.text.length), "line");
     if (candidates.length === 1 && candidates[0]!.pence !== null && !open(candidates[0]!)) {
       const found = candidates[0]!;
-      const after = value.slice(found.at + found.text.length).replace(/^[\s,]+/u, " ");
+      const tail = value.slice(found.at + found.text.length);
+      const after = tail.replace(/^[\s,]+/u, " ");
       const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
       const per = whole ?? perAnyAfter.exec(after);
       const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
       const vat = vatOnly.test(after);
-      if (after.trim() && !each && !vat && !includedTail.test(after) && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      if (after.trim() && !each && !vat && !includedTail.test(after) && !plainCommaTail.test(tail)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
       else {
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";
@@ -325,11 +337,11 @@ function totals(text: string): TotalPrice[] {
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;
     let clauseEnd = phrase.index;
-    while (clauseEnd < text.length && !boundary(clauseEnd)) clauseEnd++;
+    while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
     // A comma before a qualifier/correction stays with the total. A new work item still ends it.
-    while (text[clauseEnd] === "," && !isWork(text.slice(clauseEnd + 1))) {
+    while (text[clauseEnd] === "," && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) {
       clauseEnd++;
-      while (clauseEnd < text.length && !boundary(clauseEnd)) clauseEnd++;
+      while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
     }
     previousEnd = clauseEnd;
     const clause = text.slice(clauseStart, clauseEnd);
