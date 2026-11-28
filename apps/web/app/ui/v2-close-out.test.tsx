@@ -18,7 +18,9 @@ describe("V2-G6 Before you close this job", () => {
     expect(html).toContain("Check: </span>2 plan tasks are not marked done");
     expect(html).toContain('href="/jobs/job-1/money#payment-schedule-heading"');
     expect(html).toContain('href="/jobs/job-1/work"');
-    expect(html).toContain("These are reminders. You can still complete the final account.");
+    expect(html).toContain("You cannot lock the account until the must-fix item is done.");
+    expect(html).toContain("The checks are reminders only.");
+    expect(html).not.toContain("You can still complete the final account.");
     expect(html).toContain("min-height:44px");
   });
 });

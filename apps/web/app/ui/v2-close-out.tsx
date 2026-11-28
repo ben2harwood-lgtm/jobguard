@@ -14,7 +14,8 @@ export function V2CloseOutCard({ review }: { review: V2CloseOutReview }) {
         <p>{item.blocking ? <strong>Must fix: </strong> : <span>Check: </span>}{item.label}.</p>
         <a style={control} href={item.href}>{item.blocking ? "Fix this" : "Look at this"}</a>
       </li>)}</ul>}
-    {review.items.some(item => !item.blocking) && <p>These are reminders. You can still complete the final account.</p>}
+    {review.blocking && <p>You cannot lock the account until the must-fix item is done.</p>}
+    {review.items.some(item => !item.blocking) && <p>{review.blocking ? "The checks are reminders only." : "These are reminders. You can still complete the final account."}</p>}
   </section>;
 }
 
