@@ -16,6 +16,7 @@
         "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
         "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
         "apps/web/app/(designed)/more/page.tsx",
+        "apps/web/app/api/v2-backend/crew/route.test.ts",
         "apps/web/app/api/v2-backend/crew/route.ts",
         "tools/v2/seed.integration.test.mjs"
       ]

@@ -1,7 +1,9 @@
+import { AuthError } from "@jobguard/api/identity";
 import { CrewContactError, type CrewContactCommand } from "@jobguard/db";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { hasSyntheticSession, practiceFailure } from "../../../lib/synthetic-server";
+import { enforcePracticePair } from "../../../lib/linked-practice-entry";
+import { hasSyntheticSession, practiceFailure, syntheticPool } from "../../../lib/synthetic-server";
 import { isTrustedBrowserOrigin } from "../../contractor/origin";
 import { workspaceApplication } from "../../../lib/workspace-server";
 
@@ -21,12 +23,22 @@ function refusal(error: unknown) {
   if (error instanceof CrewContactError) {
     return failure(error.code === "CREW_CONTACT_EDITOR_REQUIRED" ? "FORBIDDEN" : error.code, statuses[error.code]);
   }
+  if (error instanceof AuthError) {
+    return error.code === "UNAUTHENTICATED" ? failure("UNAUTHENTICATED", 401) : failure("FORBIDDEN", 403);
+  }
   return practiceFailure(error) ?? failure("CREW_CONTACT_UNAVAILABLE", 503);
 }
 
+// A linked practice session must also carry its exact browser pairing, before any read or write.
 async function signedIn() {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1") return failure("NOT_FOUND", 404);
-  if (!hasSyntheticSession((await cookies()).get("jg_session")?.value)) return failure("UNAUTHENTICATED", 401);
+  const sessionId = (await cookies()).get("jg_session")?.value;
+  if (!hasSyntheticSession(sessionId)) return failure("UNAUTHENTICATED", 401);
+  try {
+    await enforcePracticePair(syntheticPool(), sessionId);
+  } catch (error) {
+    return refusal(error);
+  }
   return null;
 }
 
