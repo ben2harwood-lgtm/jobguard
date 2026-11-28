@@ -51,6 +51,9 @@ beforeAll(async () => {
         "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql",
         // V2-C3C
         "_v2_crew_contact.sql", "_v2_crew_brief.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+    // Q06 V2-K9: V2-only migration is exercised by the dedicated seed suite.
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
+      && String(values?.[0]).endsWith("_v2_rams_draft.sql")) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);

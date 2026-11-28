@@ -156,6 +156,9 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/parties/import-v3/preview": "pre_live_allowed",
   // M4-7-S: the synthetic practice feed is session-owned practice data that no watchdog table records, usable at any job stage.
   "/api/jobs/[id]/direct-debit-practice": "pre_live_allowed",
+  // Q06 V2-K9: the RAMS draft is a builder-only practice safety document, usable before the job goes live.
+  "/api/jobs/[id]/rams": "pre_live_allowed",
+  "nest:/jobs/:id/rams": "pre_live_allowed",
   "/api/jobs/[id]/practice-feed": "pre_live_allowed",
   "/api/jobs/[id]/practice-facts": "pre_live_allowed",
   "/api/jobs/[id]/prevention-checks/[action]": "pre_live_allowed",

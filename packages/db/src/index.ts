@@ -244,6 +244,9 @@ export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
 // V2-D4B: practice-only brief translation.
 export * from "./v2-brief-translator.js";
 export * from "./v2-crew-brief-translation-repository.js";
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsRepository } from "./v2-rams-repository.js";
+export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash, RamsError, type RamsDraft } from "./v2-rams-draft.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
 export * from "./v2-work-plan-templates.js";

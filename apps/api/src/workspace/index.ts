@@ -140,3 +140,5 @@ export { ConnectorPromotionApplication } from "../connectors/promotion.applicati
 
 // V2-D4B
 export * from "./crew-brief-translation.application.js";
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsApplication, RamsError, type RamsScreen } from "./rams.application.js";
