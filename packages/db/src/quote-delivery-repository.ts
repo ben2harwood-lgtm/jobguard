@@ -42,7 +42,8 @@ export class QuoteDeliveryRepository{
    const parties=(await db.$client.query(`SELECT app.require_current_job_parties($1,$2) AS snapshot`,[context.tenantId,jobId])).rows[0]?.snapshot;
    if(!parties)throw new Error("JOB_PARTIES_REQUIRED");
    const r=(await db.$client.query<any>(`SELECT qr.*,coalesce(json_agg(json_build_object('id',ql.id,'scopeItemId',ql.scope_item_id,'scopeRevisionId',ql.scope_revision_id,'description',ql.description,'origin',ql.origin,'included',ql.included,'exclusionReason',ql.exclusion_reason,'quantity',ql.quantity_decimal,'unit',ql.unit,'unitRatePence',ql.unit_rate_pence,'discountPercent',ql.discount_decimal,'taxTreatment',ql.tax_treatment,'rateProvenance',ql.rate_provenance,'category',ql.category,'region',ql.region) ORDER BY ql.ordinal) FILTER(WHERE ql.included),'[]') lines FROM app.quote_revision qr JOIN app.quote_draft qd ON(qd.tenant_id,qd.current_revision_id)=(qr.tenant_id,qr.id) LEFT JOIN app.quote_line ql ON(ql.tenant_id,ql.quote_revision_id)=(qr.tenant_id,qr.id) WHERE qr.job_id=$1 AND qr.issuable=true GROUP BY qr.tenant_id,qr.id`,[jobId])).rows[0];
-   if(!r)throw new Error("QUOTE_NOT_ISSUABLE");
+   // The same code as the coverage refusal (quote-repository), so callers can read it the same way.
+   if(!r)throw Object.assign(new Error("QUOTE_NOT_ISSUABLE"),{code:"QUOTE_NOT_ISSUABLE"});
    await assertQuoteScopeCoverage(db,context.tenantId,jobId,r.id);
    const excluded=await v2Exclusions(db,r.id);
    const lines=(r.lines as QuoteLine[]).map(line=>({scopeItemId:line.scopeItemId,description:line.description,quantity:line.quantity,unit:line.unit,netPence:evaluateDraftQuote({currency:r.currency,taxPolicyVersion:r.tax_policy_version,lines:[line]}).totals.net.pence}));
