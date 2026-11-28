@@ -15,6 +15,7 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RV4-02 | RV-4 | 79e7ce836 | edit-during-confirm | Paint walls → Paint walls AND ceiling while confirm is pending | Prevent editing or require confirmation of the new edit | Confirmation hid an unsaved edit | P1 | fixed | RT-FIX-7 (commit only) |
 | RV4-03 | RV-4 | 79e7ce836 | invalid-price | Replace 200.00 with 250.001 | Keep the typed price and block Save/Confirm until corrected | Invalid price was submitted as null and confirmation succeeded | P1 | fixed | RT-FIX-7 (commit only) |
 | RV4-04 | RV-4 | 79e7ce836 | cancel-second-dictation | Finish Paint walls; start again with provisional and fit shelves; cancel | Keep the earlier completed words for review | Cancel cleared the transcript and Use these words | P1 | fixed | RT-FIX-7 (commit only) |
+| RT-FIX-7-R1 | Codex review | f48dfc88 | new-session-same-source | Fictional room. Protect room £200.00. | A new anonymous practice session captures the same words successfully | Shared demo tenant caused reuse of the previous session's capture ID and permanent NOT_FOUND | P1 | fixed | #1088 repair round 1 (commit only) |
 
 ## RT-FIX-7 verification — 28 November 2026
 
@@ -46,3 +47,32 @@ duplicate work. This is non-blocking and outside this repair.
 
 Release hold: price handling is RED under AGENTS §5.13; an independent review bound to the
 final commit and required CI remain necessary before merge. This build is not that review.
+
+## RT-FIX-7 repair round 1 — Codex review of #1088 at f48dfc88
+
+Practice-session creation in the legacy and designed entry screens now shares the existing
+designed client's POST helper. A successful POST rotates a random, non-secret generation in
+sessionStorage. Both persisted and mounted-form retry identities include that generation,
+tenant and request digest. No credential or source words are stored. Ordinary reloads keep
+the same generation and capture ID. Older unscoped storage entries are no longer read.
+
+An explicit NOT_FOUND for a reused ID removes it from storage and the form's map, persists a
+fresh ID before sending, and retries once. A new ID's NOT_FOUND, other refusals and unknown
+outcomes never automatically rotate the ID. No server/API, parser, reader, core or contract
+changes; no migrations. The lane allow-list adds only the existing designed session client.
+
+- Before the repair, the three new session/retry regressions failed; RV4-01 passed.
+- Targeted command: `pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/walk-it-retry.test.tsx app/ui/review-proposal.test.tsx 'app/(designed)/real-designed-screens.test.tsx' app/ui/jobguard-linked-entry.test.tsx` — **142 passed** before adding the two final boundary cases.
+- `pnpm --filter @jobguard/web typecheck` — passed.
+- `pnpm --filter @jobguard/web lint` — passed (TypeScript, per the existing web script).
+- Final unit run: `pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts'` — **262 files / 3,792 tests passed**, including all five new regression/boundary cases and RV4-01. Database suites were not run in this UI-only repair; the prior embedded-PostgreSQL environment failure above is not claimed resolved.
+- `pnpm --filter @jobguard/web build` — passed; optimized compilation, TypeScript and all 79 static pages completed.
+- `git diff --check` — passed. Direct lane-policy validation of the five changed tracked paths — passed; the pre-existing untracked `.pnpm-store/` was excluded and is not staged.
+
+The regression server models ownership by practice session even though both sessions share
+one tenant. It verifies new-session capture in the same mounted form, reload reuse within the
+new session, recovery from a stored inaccessible ID, the single-retry bound, no automatic
+retry for a fresh ID, and retained identity after a refused session start. This is deterministic
+component-handler verification with mocked network responses, not independent review or
+live database/browser acceptance. Required exact-head independent review and CI remain
+merge gates. No push, browser server, default Playwright configuration or port 3000 used.

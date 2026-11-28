@@ -34,6 +34,14 @@ export const PHOTOS = ["/design/assets/reference-job-martin.jpg", "/design/asset
 const TABS = [["today", "Today", "home"], ["jobs", "Jobs", "jobs"], ["check", "To check", "bell"], ["money", "Money", "money"], ["more", "More", "more"]] as const;
 const UNKNOWN = "Details needed";
 const TENANT_KEY = "jobguard-designed-workspace";
+export const PRACTICE_SESSION_GENERATION_KEY = "jobguard-practice-session-generation-v1";
+
+export async function startPracticeSession() {
+  const response = await fetch("/api/session", { method: "POST" });
+  // This random namespace contains no credential and survives reloads in this tab.
+  if (response.ok) sessionStorage.setItem(PRACTICE_SESSION_GENERATION_KEY, crypto.randomUUID());
+  return response;
+}
 
 export function RailIcon({ name }: { name: string }) {
   return <svg className="rr-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><path d={RAIL_ICONS[name] ?? RAIL_ICONS.file}/></svg>;
@@ -410,7 +418,7 @@ export function StateScreen({ load, retry, title, active = "jobs" }: { load: Loa
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ version: "blank-practice-company.v1", action: "start" }),
           })
-        : await fetch("/api/session", { method: "POST" });
+        : await startPracticeSession();
       if (!response.ok) throw new Error("PRACTICE_START_FAILED");
       retry();
     } catch {

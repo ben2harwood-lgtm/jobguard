@@ -1,6 +1,7 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalkIt } from "./jobguard-app";
+import { StateScreen } from "../(designed)/designed-ui";
 import { cancelLocalSpeech, createLocalSpeechAdapter } from "./local-speech";
 import { dictationMessage, LocalDictation, speechFailure, type LocalAvailability, type LocalSpeechAdapter } from "./local-dictation";
 
@@ -48,25 +49,32 @@ const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 type CaptureBody = { captureId: string; source: { kind: string; text: string; acquisition?: unknown }; [key: string]: unknown };
 
 function captureServer() {
-  const saved = new Map<string, { snapshot: string; result: Record<string, unknown> }>();
+  let session = 0;
+  const saved = new Map<string, { session: number; snapshot: string; result: Record<string, unknown> }>();
   const requests: CaptureBody[] = [];
-  const fetcher = vi.fn(async (_url: unknown, init: RequestInit) => {
+  const replaceSession = () => { session++; };
+  const fetcher = vi.fn(async (url: unknown, init: RequestInit) => {
+    if (url === "/api/session" && init.method === "POST") {
+      replaceSession();
+      return Response.json({}); // The practice credential is an HttpOnly cookie, never response data.
+    }
     const body = JSON.parse(init.body as string) as CaptureBody;
     requests.push(body);
     const { captureId, ...input } = body;
     const snapshot = JSON.stringify(input);
     const existing = saved.get(captureId);
+    if (existing && existing.session !== session) return Response.json({ code: "NOT_FOUND" }, { status: 404 });
     if (existing && existing.snapshot !== snapshot) return new Response(JSON.stringify({ code: "CAPTURE_ID_REUSED" }), { status: 409 });
     const result = existing?.result ?? {
       jobId: `job-${saved.size + 1}`,
       source: body.source,
       proposal: { lines: [{ description: { value: body.source.text }, unitPricePence: { value: 20000 } }], questions: [] },
     };
-    saved.set(captureId, { snapshot, result });
+    saved.set(captureId, { session, snapshot, result });
     return new Response(JSON.stringify(result), { status: 201 });
   });
   vi.stubGlobal("fetch", fetcher);
-  return { saved, requests, fetcher };
+  return { saved, requests, fetcher, replaceSession };
 }
 function panel(tenantId = "tenant") {
   const captured = vi.fn();
@@ -80,7 +88,7 @@ function panel(tenantId = "tenant") {
 beforeEach(() => {
   hooks.reset(); vi.stubGlobal("React", React);
   const stored = new Map<string, string>();
-  vi.stubGlobal("sessionStorage", { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) });
+  vi.stubGlobal("sessionStorage", { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value), removeItem: (key: string) => stored.delete(key) });
 });
 afterEach(() => { hooks.cleanup(); vi.unstubAllGlobals(); });
 
@@ -129,6 +137,83 @@ it("RV4-01: reload after a lost capture response retries the original identity a
   expect(server.requests[1]).toEqual(server.requests[0]);
   expect(server.saved.size).toBe(1);
   expect(reloaded.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-1" }));
+});
+
+it("a new example practice session captures the same words with a new identity in the same tab", async () => {
+  const server = captureServer(), p = panel();
+  await p.submit();
+  hooks.render("session-start");
+  const retry = vi.fn();
+  const screen = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  all(screen, node => node.type === "button" && text(node.props.children) === "Look around an example firm")[0]!.props.onClick();
+  await vi.waitFor(() => expect(retry).toHaveBeenCalledOnce());
+  // Even a still-mounted capture form must not retain the earlier session's ID.
+  await p.submit();
+  expect(server.requests).toHaveLength(2);
+  expect(server.requests[1]!.captureId).not.toBe(server.requests[0]!.captureId);
+  expect(server.requests[1]!.source).toEqual(server.requests[0]!.source);
+  expect(p.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-2" }));
+  hooks.reset();
+  const reloaded = panel(); await reloaded.submit();
+  expect(server.requests[2]).toEqual(server.requests[1]);
+  expect(server.saved.size).toBe(2);
+});
+
+it("NOT_FOUND on a stored capture drops that identity and retries once with a fresh reload-safe ID", async () => {
+  const server = captureServer();
+  await panel().submit();
+  // Credential replacement outside this screen: the old persisted ID is now unavailable.
+  server.replaceSession(); hooks.reset();
+  const reloaded = panel(); await reloaded.submit();
+  expect(server.requests).toHaveLength(3);
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.requests[2]!.captureId).not.toBe(server.requests[0]!.captureId);
+  expect(reloaded.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-2" }));
+  hooks.reset(); await panel().submit();
+  expect(server.requests[3]).toEqual(server.requests[2]);
+  expect(server.saved.size).toBe(2);
+});
+
+it("does not loop when NOT_FOUND also rejects the one fresh retry", async () => {
+  const server = captureServer();
+  await panel().submit(); hooks.reset();
+  const requests: CaptureBody[] = [];
+  server.fetcher.mockImplementation(async (_url, init) => {
+    requests.push(JSON.parse(init.body as string) as CaptureBody);
+    return Response.json({ code: "NOT_FOUND" }, { status: 404 });
+  });
+  const p = panel(); await p.submit();
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEqual(server.requests[0]);
+  expect(requests[1]!.captureId).not.toBe(requests[0]!.captureId);
+  expect(p.captured).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+  expect(text(p.render())).toContain("NOT_FOUND");
+});
+
+it("does not retry NOT_FOUND for a newly minted capture ID", async () => {
+  const server = captureServer();
+  server.fetcher.mockImplementation(async () => Response.json({ code: "NOT_FOUND" }, { status: 404 }));
+  const p = panel(); await p.submit();
+  expect(server.fetcher).toHaveBeenCalledOnce();
+  expect(p.captured).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+});
+
+it("a refused example session start preserves the current session's retry identity", async () => {
+  const server = captureServer(), p = panel();
+  await p.submit();
+  server.fetcher.mockResolvedValueOnce(Response.json({ code: "UNAVAILABLE" }, { status: 503 }));
+  hooks.render("session-start");
+  const retry = vi.fn();
+  const screen = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  all(screen, node => node.type === "button" && text(node.props.children) === "Look around an example firm")[0]!.props.onClick();
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+  await flush();
+  expect(retry).not.toHaveBeenCalled();
+  await p.submit();
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(1);
 });
 
 it("keeps persisted capture identities separate for another business and edited source after reload", async () => {
