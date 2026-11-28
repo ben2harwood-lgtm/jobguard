@@ -2,7 +2,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Empty } from "../../../designed-ui";
 import { jobPageFetch } from "../../../../ui/job-page-fetch";
-import { editCommand, editFields, WorkPlan } from "./work-plan";
+import { editCommand, editFields, PLAN_SAVED_EVENT, WorkPlan } from "./work-plan";
 
 // Exercise the Plan card's real read handlers with persistent hook slots.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], slot: 0, effects: [] as Array<() => void | (() => void)>, collecting: true }));
@@ -161,6 +161,32 @@ describe("Plan task edits", () => {
     await vi.waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     const [, init] = request.mock.calls.find(([, init]) => init?.method === "POST")!;
     expect(JSON.parse(String(init!.body)).expectedVersion).toBe(1);
+  });
+
+  it("tells the crew briefs only after a task edit is saved", async () => {
+    const heard: unknown[] = [];
+    window.addEventListener(PLAN_SAVED_EVENT, event => heard.push((event as CustomEvent).detail));
+    request.mockResolvedValueOnce(Response.json(view("rev-1", "draft", [task("fit", "Fit doors")])));
+    await mount();
+    await vi.waitFor(() => expect(taskKeys()).toEqual([`${scopeItemId}/fit`]));
+    const edit = () => (shown().find(node => node.props["aria-label"] === "Edit task Fit doors")!.props.onClick as () => void)();
+    const save = () => (shown().find(node => typeof node.props.save === "function")!.props.save as (changes: object) => void)({ trade: "Tiling" });
+    edit();
+    request.mockResolvedValueOnce(Response.json({ code: "WORK_PLAN_VERSION_CONFLICT" }, { status: 409 }));
+    save();
+    await vi.waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(heard).toEqual([]);
+    hooks.values = []; hooks.effects = []; hooks.collecting = true; request.mockReset();
+    cleanups.forEach(cleanup => cleanup()); cleanups = [];
+    request.mockResolvedValueOnce(Response.json(view("rev-1", "draft", [task("fit", "Fit doors")])));
+    await mount();
+    await vi.waitFor(() => expect(taskKeys()).toEqual([`${scopeItemId}/fit`]));
+    edit();
+    request.mockResolvedValueOnce(Response.json({ saved: true }))
+      .mockResolvedValueOnce(Response.json({ ...view("rev-1", "draft", [{ ...task("fit", "Fit doors"), trade: "Tiling" }]), version: 2 }));
+    save();
+    await vi.waitFor(() => expect(heard).toEqual([{ jobId }]));
   });
 
   it("keeps a linked crew member unless the assignee is changed", () => {

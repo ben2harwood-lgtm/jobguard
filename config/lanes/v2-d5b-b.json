@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d5b-b": {
+      "branches": [
+        "codex/sandbox/v2-d5b-b"
+      ],
+      "note": "T1 packet Q23 V2-D5B-B. Stacked on D4 #916; review only commits after f7aacf55d. work/page.tsx: mount only, owned by main (live Work tab). Compare against origin/claude/project-thread-btt9d2. The crew brief repository and seed file are allowed because D5B-B is where D4 briefs first meet C3C crew records (assigneeRef owner names). work/work-plan.tsx: one event after a saved task edit (and its test in work-plan.test.tsx), because D5B-B is where the C4 plan card and the briefs share the Work tab (repair round 2). The seed file also carries the rule 29 crew-briefs check after SX #965.",
+      "test": "tools/v2/crew-briefs.browser.test.mjs",
+      "allow": [
+        "apps/web/app/api/v2-backend/jobs/[id]/crew-briefs/route.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/crew-briefs/route.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/briefs.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "tools/v2/crew-briefs.browser.test.mjs",
+        "apps/web/app/(designed)/jobs/[id]/work/brief-types.ts",
+        "packages/db/src/v2-crew-brief-repository.ts",
+        "tools/v2/seed.integration.test.mjs",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx"
+      ]
+    }
+  }
+}

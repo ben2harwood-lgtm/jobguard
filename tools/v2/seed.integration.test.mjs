@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
@@ -7,9 +7,8 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
+import { CrewBriefRepository, DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
 // V2-C3C
-import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
 // V2-F8
 import { SiteAttendanceRepository } from "../../packages/db/dist/index.js";
@@ -68,7 +67,7 @@ async function openSession(localPart) {
   assert.equal(memberships.length, 1);
   assert.equal(memberships[0].role, "owner");
   return {
-    ...await enterPractice(signedIn, csrfToken), signedIn, csrfToken,
+    ...await enterPractice(signedIn, csrfToken), signedIn, csrfToken, membershipId: memberships[0].id,
     realContext: await identity.context({ sessionToken: signedIn.slice("jobguard_session=".length),
       requestedTenantId: memberships[0].tenantId, csrfToken, origin }),
   };
@@ -766,6 +765,21 @@ async function verifyTenantChain(tenantId) {
   assert.doesNotThrow(() => verifyAuditChain(rows));
 }
 
+// Generates a crew brief and rolls it back, so a test can check the brief mid-way and leave nothing stored.
+async function previewBrief(sessionId, trade) {
+  const rollingBack = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client);
+    client.query = (sql, ...rest) => query(sql === "COMMIT" ? "ROLLBACK" : sql, ...rest);
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  return new CrewBriefRepository(rollingBack).generate(context, jobId, sessionId, { version: "v2-crew-brief-command.v1",
+    commandId: randomUUID(), trade, expectedVersion: 0, accessWindow: "Any weekday", photoIds: [] });
+}
+
 test("existing Switch live activates a plan once and only approved variation revisions regenerate money scope", async () => {
   const { cookies, sessionId, csrfToken } = await signIn("builder");
   const { workPlan, variation, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
@@ -850,6 +864,12 @@ test("existing Switch live activates a plan once and only approved variation rev
     scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
   assert.deepEqual(updated.unplanned, live.unplanned);
   assert.deepEqual(updated.agreement, expected);
+  // The joiner's crew brief carries the planned extra with its edits, and still no money.
+  const joinerBrief = await previewBrief(sessionId, "joiner");
+  assert.deepEqual(joinerBrief.content.tasks.map(task => [task.scopeItemId, task.taskKey, task.title, task.scope, task.visit,
+    task.owner]), [[scopeItemId, customTaskKey, "Add trim", { description: "Add trim", quantity: "1", unit: "item" },
+    "2026-12-10", "Fictional Jo Joiner"]]);
+  assert.doesNotMatch(JSON.stringify(joinerBrief.content), /12500|pence|price/iu);
   const { rows: saved } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
     WHERE (job_id, scope_item_id) = ($1, $2)`, [jobId, scopeItemId]);
   assert.deepEqual(saved, [{ variation_revision_id: revisionId }, { variation_revision_id: revisionId }]);
@@ -951,6 +971,12 @@ test("existing Switch live activates a plan once and only approved variation rev
     { scopeItemId, title: "Trim no longer needed", reason: "omission", planningDropped: true });
   assert.equal(flipped.agreement.approvedVariations.find(item => item.scopeItemId === scopeItemId).signedDeltaPence, -12500);
   assert.equal(flipped.version, replanned.version, "removal by approval records no plan edit");
+  // Omitted and no-charge extras are not crew work either.
+  await assert.rejects(previewBrief(sessionId, "joiner"), { code: "CREW_BRIEF_TRADE_NOT_FOUND" });
+  assert.deepEqual((await previewBrief(sessionId, "tiler")).content.tasks.map(task => task.scopeItemId),
+    flipped.tasks.filter(task => task.trade === "tiler").map(task => task.scopeItemId));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_crew_brief WHERE job_id = $1", [jobId])).rows[0].n, 0,
+    "previews leave no brief behind");
   assert.deepEqual(await effectCounts(), beforeApproval, "omissions schedule, send, book, order and charge nothing");
 
   const state = await workState.get(jobId);
@@ -959,6 +985,126 @@ test("existing Switch live activates a plan once and only approved variation rev
     expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
   assert.equal(closed.events.at(-1).kind, "closed");
   assert.deepEqual(await workPlan.read(jobId, planQuery), flipped);
+});
+
+const measurementQuery = { version: "v2-measurement-query.v1" };
+const packInputs = {
+  wastageMultiplier: "1.10",
+  product: { packSize: { quantity: "1.2", unit: "m²" } },
+  confirmedUsablePacksSetAside: 0n,
+};
+
+async function seededMeasurement(category = "Tiling") {
+  const owner = await signIn("builder");
+  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows: [scope] } = await admin.query(`
+    SELECT scope_item_id FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included AND category = $4
+  `, [DEMO_TENANT_ID, jobId, quoteRevisionId, category]);
+  const scopeItemId = scope.scope_item_id;
+  return { measurements, owner, scopeItemId, command: {
+    version: "v2-measurement-command.v1", scopeItemId, commandId: randomUUID(),
+    expectedVersion: 0, quantity: "6.000000", unit: "m²", confirmed: false,
+  } };
+}
+
+test("the seeded scope asks for missing and unconfirmed measurements and calculates from a confirmed revision", async () => {
+  const { measurements, owner, scopeItemId, command } = await seededMeasurement();
+  const before = await effectCounts();
+  const query = { ...measurementQuery, scopeItemId };
+  const question = { scopeItemId, status: "needs_input", reason: "measurement" };
+  const [missing] = await measurements.read(jobId, query);
+  assert.deepEqual(missing, { scopeItemId, version: 0, measurement: null });
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
+  for (const quantity of ["six", "0.000000", "6.0000001", "06", "6\n", 6]) {
+    await assert.rejects(measurements.save(jobId, { ...command, quantity }), { code: "MEASUREMENT_INVALID_COMMAND" });
+  }
+  await assert.rejects(measurements.save(jobId, { ...command, scopeItemId: randomUUID() }), { code: "NOT_FOUND" });
+
+  const [draft, replay] = await Promise.all([measurements.save(jobId, command), measurements.save(jobId, command)]);
+  assert.deepEqual(replay, draft);
+  assert.equal(draft.version, 1);
+  assert.equal(draft.source, "builder_typed");
+  assert.equal(draft.confirmedAt, null);
+  assert.equal(draft.confirmedByMembershipId, null);
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
+
+  const confirm = { ...command, commandId: randomUUID(), expectedVersion: 1, confirmed: true };
+  const revisions = await Promise.allSettled([
+    measurements.save(jobId, confirm),
+    measurements.save(jobId, { ...confirm, commandId: randomUUID() }),
+  ]);
+  assert.equal(revisions.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(revisions.find(result => result.status === "rejected").reason.code, "MEASUREMENT_VERSION_CONFLICT");
+  const confirmed = revisions.find(result => result.status === "fulfilled").value;
+  assert.equal(confirmed.version, 2);
+  assert.equal(confirmed.quantity, "6.000000");
+  assert.equal(confirmed.confirmedByMembershipId, owner.membershipId);
+  assert.deepEqual(confirmed.confirmedAt, confirmed.recordedAt);
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), {
+    scopeItemId, status: "calculated", grossPacks: 6n, setAsidePacksUsed: 0n, neededPacks: 6n,
+  });
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  assert.notEqual(fresh.sessionId, owner.sessionId);
+  const { measurements: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.save(jobId, command), draft);
+  await assert.rejects(reopened.save(jobId, { ...command, quantity: "7" }), { code: "MEASUREMENT_COMMAND_CONFLICT" });
+  assert.deepEqual(await reopened.read(jobId, query), [{ scopeItemId, version: 2, measurement: confirmed }]);
+  const listed = await reopened.read(jobId, measurementQuery);
+  assert.deepEqual(listed.find(item => item.scopeItemId === scopeItemId), { scopeItemId, version: 2, measurement: confirmed });
+  const { scopeItemId: decoratingId } = await seededMeasurement("Decorating");
+  assert.deepEqual(listed.find(item => item.scopeItemId === decoratingId), {
+    scopeItemId: decoratingId, version: 0, measurement: null,
+  });
+  const { rows: [stored] } = await admin.query(`
+    SELECT count(*)::int AS revisions FROM app.v2_measurement WHERE job_id = $1
+  `, [jobId]);
+  assert.equal(stored.revisions, 2);
+  assert.deepEqual(await effectCounts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("forced measurement policies hide revisions and reject changes from the second firm", async () => {
+  const { command, scopeItemId, owner, measurements: builder } = await seededMeasurement("Decorating");
+  await builder.save(jobId, { ...command, quantity: "2", unit: "litre", confirmed: true });
+  const outsider = await signIn("second-builder");
+  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(measurements.read(jobId, measurementQuery), { code: "NOT_FOUND" });
+  await assert.rejects(measurements.save(jobId, command), { code: "NOT_FOUND" });
+  await assert.rejects(measurements.calculatePacks(jobId, scopeItemId, packInputs), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { rows: [acl] } = await admin.query(`SELECT
+    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid = 'app.v2_measurement'::regclass`);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  const key = [DEMO_TENANT_ID, jobId, scopeItemId];
+  const filter = "WHERE (tenant_id, job_id, scope_item_id) = ($1, $2, $3)";
+  const select = `SELECT * FROM app.v2_measurement ${filter}`;
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  assert.equal((await query(ownerContext, select, key)).rowCount, 1);
+  for (const scope of [outsider.realContext, context]) {
+    assert.equal((await query(scope, select, key)).rowCount, 0);
+    await assert.rejects(query(scope, `INSERT INTO app.v2_measurement
+      (tenant_id, job_id, scope_item_id, expected_version, command_id, quantity, unit, source, confirmed, actor_membership_id)
+      VALUES ($1,$2,$3,2,$4,'7','m²','builder_typed',true,$5)`,
+    [...key, randomUUID(), owner.membershipId]), { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `UPDATE app.v2_measurement SET quantity = '7' ${filter}`, key), { code: "42501" });
+    await assert.rejects(query(scope, `DELETE FROM app.v2_measurement ${filter}`, key), { code: "42501" });
+  }
+  assert.equal((await runtime.query(select, key)).rowCount, 0);
 });
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
@@ -1383,6 +1529,370 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal((await generatedEvents(nextId)).length, 0);
 });
 
+
+// V2-D1R1: measurement audit append, replay, rollback and tenant-chain proof.
+for (const confirmed of [false, true]) {
+  test(`a measurement ${confirmed ? "confirmation" : "save"} appends once, rolls back atomically and stays tenant-scoped`, async () => {
+    const { measurements, owner, scopeItemId, command: initial } = await seededMeasurement();
+    const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+    const [current] = await measurements.read(jobId, { ...measurementQuery, scopeItemId });
+    const command = { ...initial, expectedVersion: current.version, confirmed };
+    const events = async () => (await admin.query(`SELECT tenant_id, actor_ref, event_type, payload
+      FROM app.audit_event WHERE subject_type = 'scope_item' AND subject_ref = $1
+      AND event_type IN ('v2.measurement.saved', 'v2.measurement.confirmed') ORDER BY sequence`, [scopeItemId])).rows;
+    const before = await events();
+    const receipt = await measurements.save(jobId, command);
+    const recorded = await events();
+    assert.equal(recorded.length, before.length + 1);
+    const event = recorded.at(-1);
+    assert.equal(event.tenant_id, context.tenantId);
+    assert.equal(event.actor_ref, `membership:${owner.membershipId}`);
+    assert.equal(event.event_type, confirmed ? "v2.measurement.confirmed" : "v2.measurement.saved");
+    assert.deepEqual(event.payload.references, { ...event.payload.references,
+      commandId: command.commandId, jobId, scopeItemId, expectedVersion: String(current.version),
+      measurementVersion: String(receipt.version), quantity: receipt.quantity,
+      source: "builder_typed", confirmed: String(confirmed) });
+    assert.equal("version" in event.payload.references, false);
+    assert.equal(event.payload.hashes.unit, createHash("sha256").update(command.unit).digest("hex"));
+
+    assert.deepEqual(await measurements.save(jobId, command), receipt);
+    const replays = await Promise.all([measurements.save(jobId, command), measurements.save(jobId, command)]);
+    assert.deepEqual(replays, [receipt, receipt]);
+    await assert.rejects(measurements.save(jobId, { ...command, quantity: "7" }), { code: "MEASUREMENT_COMMAND_CONFLICT" });
+    assert.deepEqual(await events(), recorded, "replays and conflicts append nothing");
+
+    const failing = {
+      async connect() {
+        const client = await runtime.connect();
+        const query = client.query.bind(client);
+        client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+          ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+        const release = client.release.bind(client);
+        client.release = (...args) => { client.query = query; return release(...args); };
+        return client;
+      },
+    };
+    const next = { ...command, commandId: randomUUID(), expectedVersion: receipt.version, quantity: "8" };
+    await assert.rejects(new MeasurementRepository(failing).save(context, jobId, owner.sessionId, next), { code: "FORCED" });
+    const { rows: [{ count }] } = await admin.query(
+      "SELECT count(*)::int AS count FROM app.v2_measurement WHERE command_id = $1", [next.commandId]);
+    assert.equal(count, 0, "the measurement insert rolls back when audit append fails");
+    assert.deepEqual(await events(), recorded);
+    assert.deepEqual(await measurements.read(jobId, { ...measurementQuery, scopeItemId }),
+      [{ scopeItemId, version: receipt.version, measurement: receipt }]);
+
+    await measurements.save(jobId, next);
+    assert.equal((await events()).length, recorded.length + 1);
+    await verifyTenantChain(context.tenantId);
+    const outsider = await signIn("second-builder");
+    assert.notEqual(outsider.realContext.tenantId, context.tenantId);
+    const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+      "SELECT 1 FROM app.audit_event WHERE subject_type = 'scope_item' AND subject_ref = $1", [scopeItemId]));
+    assert.equal(rowCount, 0, "the second firm's real tenant cannot see measurement audit events");
+  });
+}
+
+test("measurement commands remain disabled outside local V2", async () => {
+  const previous = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try {
+    const { measurements } = createWorkspaceApplication({ pool: runtime });
+    await assert.rejects(measurements.save(jobId, {
+      version: "v2-measurement-command.v1", scopeItemId: randomUUID(), commandId: randomUUID(),
+      expectedVersion: 0, quantity: "1", unit: "m²", confirmed: true,
+    }), { code: "SYNTHETIC_MODE_REQUIRED" });
+  } finally {
+    if (previous === undefined) delete process.env.JOBGUARD_LOCAL_V2;
+    else process.env.JOBGUARD_LOCAL_V2 = previous;
+  }
+});
+
+const briefQuery = { version: "v2-crew-brief-query.v1" };
+
+async function plantPhoto(targetJobId, scopeItemId, contentType = "image/jpeg") {
+  const uploadId = randomUUID();
+  const evidenceId = randomUUID();
+  const sha = randomUUID().replaceAll("-", "").repeat(2);
+  const objectKey = `v2-brief-test/${evidenceId}`;
+  // Stands in for photos verified on site while the job was live. An earlier test
+  // has since closed the seeded job, so skip the site-work triggers for this fixture only.
+  await admin.query("BEGIN");
+  try {
+    await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query(`INSERT INTO app.evidence_upload (id, tenant_id, job_id, scope_item_id, object_key, expected_sha256,
+      expected_content_type, maximum_bytes, retention_class, state, object_version_id, server_verified_at, expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,1024,'standard_evidence','verified','v1',now(),now() + interval '1 day')`,
+    [uploadId, DEMO_TENANT_ID, targetJobId, scopeItemId, objectKey, sha, contentType]);
+    await admin.query(`INSERT INTO app.evidence_object (id, tenant_id, upload_id, job_id, scope_item_id, kind, evidence_type,
+      object_key, object_version_id, sha256, byte_length, content_type, retention_class, server_received_at, server_verified_at)
+      VALUES ($1,$2,$3,$4,$5,'original','photo',$6,'v1',$7,512,$8,'standard_evidence',now(),now())`,
+    [evidenceId, DEMO_TENANT_ID, uploadId, targetJobId, scopeItemId, objectKey, sha, contentType]);
+    await admin.query("COMMIT");
+  } catch (error) {
+    await admin.query("ROLLBACK");
+    throw error;
+  }
+  return evidenceId;
+}
+
+async function briefSetup() {
+  const owner = await signIn("builder");
+  const { crewBriefs, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows: scope } = await admin.query(`SELECT scope_item_id, category FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included`, [DEMO_TENANT_ID, jobId, quoteRevisionId]);
+  const tilingId = scope.find(line => line.category === "Tiling").scope_item_id;
+  const decoratingId = scope.find(line => line.category === "Decorating").scope_item_id;
+  const command = (trade, fields = {}) => ({ version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade,
+    expectedVersion: 0, accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour", photoIds: [], ...fields });
+  return { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command };
+}
+
+const briefEvents = async () => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_crew_brief.generated' ORDER BY sequence`, [jobId])).rows;
+
+const briefRows = async () => (await admin.query(`SELECT
+  (SELECT count(*)::int FROM app.v2_crew_brief WHERE job_id = $1) AS briefs,
+  (SELECT count(*)::int FROM app.v2_crew_brief_photo WHERE job_id = $1) AS photos,
+  (SELECT count(*)::int FROM app.v2_crew_brief_command WHERE job_id = $1) AS receipts`, [jobId])).rows[0];
+
+test("each trade's unpriced brief has only its own tasks and picked photos, and generating twice keeps one current brief", async () => {
+  const { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command } = await briefSetup();
+  const before = await effectCounts();
+  assert.deepEqual(await crewBriefs.read(jobId, briefQuery), []);
+  const tilerPhoto = await plantPhoto(jobId, tilingId);
+  const hallPhoto = await plantPhoto(jobId, decoratingId);
+  const pdf = await plantPhoto(jobId, tilingId, "application/pdf");
+  const { rows: [other] } = await admin.query("SELECT id FROM app.job WHERE tenant_id = $1 AND id <> $2 LIMIT 1",
+    [DEMO_TENANT_ID, jobId]);
+  const elsewhere = await plantPhoto(other.id, null);
+  for (const photoIds of [[pdf], [elsewhere], [randomUUID()]]) {
+    await assert.rejects(crewBriefs.generate(jobId, command("tiler", { photoIds })), { code: "CREW_BRIEF_PHOTO_NOT_FOUND" });
+  }
+  await assert.rejects(crewBriefs.generate(jobId, command("plumber")), { code: "CREW_BRIEF_TRADE_NOT_FOUND" });
+  for (const bad of [{ photoIds: [tilerPhoto, tilerPhoto] }, { accessWindow: " " }, { trade: "" }, { price: 1 }]) {
+    await assert.rejects(crewBriefs.generate(jobId, command("tiler", bad)), { code: "CREW_BRIEF_INVALID_COMMAND" });
+  }
+
+  const tiler = command("tiler", { photoIds: [tilerPhoto] });
+  const [first, replay] = await Promise.all([crewBriefs.generate(jobId, tiler), crewBriefs.generate(jobId, tiler)]);
+  assert.deepEqual(replay, first);
+  assert.equal(first.version, 1);
+  assert.equal(first.actorMembershipId, owner.membershipId);
+  // Visit and owner come from the plan; the Switch live test edited whichever task the seed put first.
+  const livePlan = await workPlan.read(jobId, planQuery);
+  const planned = key => livePlan.tasks.find(task => task.key === key);
+  const visit = key => planned(key).scheduledDate ?? null;
+  const assignee = key => planned(key).assignee ?? null;
+  assert.deepEqual(first.content, {
+    version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
+    accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
+    tasks: [
+      { position: 1, scopeItemId: tilingId, taskKey: "tiling-prepare", title: "Prepare the surface",
+        scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
+        durationMinutes: 60, visit: visit("tiling-prepare"), owner: assignee("tiling-prepare"),
+        proofNeeded: ["Photo of the prepared surface"] },
+      { position: 2, scopeItemId: tilingId, taskKey: "tiling-tile", title: "Tile and grout",
+        scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
+        durationMinutes: 240, visit: visit("tiling-tile"), owner: assignee("tiling-tile"),
+        proofNeeded: ["Photo of the finished tiling"] },
+    ],
+    photos: [{ evidenceId: tilerPhoto, scopeItemId: tilingId, contentType: "image/jpeg" }],
+    proofNeeded: ["Photo of the prepared surface", "Photo of the finished tiling"],
+  });
+  const decorator = await crewBriefs.generate(jobId, command("decorator", { photoIds: [hallPhoto] }));
+  assert.deepEqual(decorator.content.tasks.map(task => task.title),
+    ["Protect and prepare", "Paint and finish"]);
+  assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
+  assert.deepEqual(decorator.content.tasks.map(task => task.scopeItemId), [decoratingId, decoratingId]);
+  // Each brief task carries the plan task's key, so progress can name the exact task.
+  assert.deepEqual(decorator.content.tasks.map(task => task.taskKey),
+    decorator.content.tasks.map(task => livePlan.tasks.find(item => item.title === task.title).key));
+  assert.deepEqual([...first.content.tasks, ...decorator.content.tasks].filter(task => task.owner)
+    .map(({ visit: date, owner: name }) => [date, name]), [["2026-12-09", "Fictional Tiler"]]);
+  const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
+    [quoteRevisionId]);
+  for (const brief of [first, decorator]) {
+    // Random ids can hold "fee" or a rate's digits (e.g. "…45bfeeed…"), so blank ids before the money checks.
+    const text = JSON.stringify(brief.content)
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu, "<id>");
+    assert.doesNotMatch(text, /pence|price|rate|total|£|cost|fee/iu);
+    for (const { rate } of rates) assert.ok(!text.includes(rate), rate);
+  }
+
+  // Same inputs again: still one current brief. Stale or altered commands are refused.
+  const repeat = command("tiler", { expectedVersion: 1, photoIds: [tilerPhoto] });
+  assert.deepEqual(await crewBriefs.generate(jobId, repeat), first);
+  assert.deepEqual(await briefRows(), { briefs: 2, photos: 2, receipts: 3 });
+  // One audit event per recorded command, in its transaction; the concurrent replay appended nothing.
+  const events = await briefEvents();
+  assert.equal(events.length, 3);
+  const { context: practice } = await authenticatePracticeSession(runtime, owner.sessionId);
+  for (const event of events) {
+    assert.equal(event.tenant_id, practice.tenantId);
+    assert.equal(event.actor_ref, `membership:${owner.membershipId}`);
+    assert.equal("version" in event.payload.references, false);
+    assert.doesNotMatch(JSON.stringify(event.payload), /tiler|decorator|fictional neighbour|splashback/iu,
+      "free text stays out of the audit payload");
+    for (const value of Object.values(event.payload.hashes)) assert.match(value, /^[a-f0-9]{64}$/u);
+  }
+  assert.deepEqual(events.map(({ payload: { references: { auditActorKind, auditActorRef, auditTrust, ...own } } }) => own), [
+    { commandId: tiler.commandId, quoteRevisionId, expectedVersion: "0", briefVersion: "1", outcome: "created",
+      taskCount: "2", photoCount: "1" },
+    { commandId: events[1].payload.references.commandId, quoteRevisionId, expectedVersion: "0", briefVersion: "1",
+      outcome: "created", taskCount: "2", photoCount: "1" },
+    { commandId: repeat.commandId, quoteRevisionId, expectedVersion: "1", briefVersion: "1", outcome: "unchanged",
+      taskCount: "2", photoCount: "1" },
+  ]);
+  // The unchanged generation keeps its own receipt: a changed replay is refused, not applied.
+  await assert.rejects(crewBriefs.generate(jobId, { ...repeat, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
+  await assert.rejects(crewBriefs.generate(jobId, { ...tiler, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
+  await assert.rejects(crewBriefs.generate(jobId, command("tiler", { photoIds: [] })), { code: "CREW_BRIEF_VERSION_CONFLICT" });
+  const revised = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: 1, photoIds: [], accessWindow: "Mornings only" }));
+  assert.equal(revised.version, 2);
+  assert.deepEqual(revised.content.photos, []);
+  assert.equal(revised.content.accessWindow, "Mornings only");
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const { crewBriefs: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.read(jobId, briefQuery), [
+    { ...decorator, current: true }, { ...revised, current: true },
+  ]);
+  assert.deepEqual(await reopened.generate(jobId, tiler), first);
+
+  // A plan change leaves the stored brief intact but no longer current.
+  const plan = await workPlan.read(jobId, planQuery);
+  const task = plan.tasks.find(item => item.trade === "tiler" && item.key === "tiling-tile");
+  await workPlan.edit(jobId, planEdit(plan, task, { scheduledDate: "2026-12-10" }));
+  const [stale] = await reopened.read(jobId, { ...briefQuery, trade: "tiler" });
+  assert.deepEqual(stale, { ...revised, current: false });
+  const refreshed = await reopened.generate(jobId, command("tiler", { expectedVersion: 2, accessWindow: "Mornings only" }));
+  assert.equal(refreshed.version, 3);
+  assert.equal(refreshed.content.tasks[1].visit, "2026-12-10");
+  // Exact replays after the plan change still return their original results, and append nothing.
+  assert.deepEqual(await reopened.generate(jobId, repeat), first);
+  assert.deepEqual(await reopened.generate(jobId, tiler), first);
+  assert.equal((await briefEvents()).length, 5);
+
+  // Fail the audit append after the brief and receipt inserts: the transaction must keep none of them.
+  const failing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const rowsBefore = await briefRows();
+  await assert.rejects(new CrewBriefRepository(failing).generate(practice, jobId, owner.sessionId,
+    command("tiler", { expectedVersion: 3, accessWindow: "Afternoons" })), { code: "FORCED" });
+  assert.deepEqual(await briefRows(), rowsBefore, "the brief and receipt rolled back with the audit event");
+  assert.equal((await briefEvents()).length, 5);
+  await verifyTenantChain(practice.tenantId);
+
+  assert.deepEqual(await effectCounts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("a planted hidden financial finding leaves the exported briefs byte-identical", async () => {
+  const { crewBriefs, command } = await briefSetup();
+  const [decorator, tiler] = await crewBriefs.read(jobId, briefQuery);
+  const exports = () => Promise.all(["decorator", "tiler"].map(trade => crewBriefs.exportInternal(jobId, trade)));
+  const clean = await exports();
+  const rebuild = () => Promise.all([decorator, tiler].map(brief => crewBriefs.generate(jobId, command(brief.trade, {
+    expectedVersion: brief.version, accessWindow: brief.content.accessWindow,
+    photoIds: brief.content.photos.map(photo => photo.evidenceId) }))));
+  const cleanRebuild = await rebuild();
+  const rows = await briefRows();
+  rows.receipts += 2;
+  const eventCount = (await briefEvents()).length + 2;
+  const findings = await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
+    (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
+
+  // The hidden finding: a final value far below the accepted value, plus an outside-app settlement.
+  await admin.query(`INSERT INTO app.commercial_integrity_value_fact
+    (id, tenant_id, job_id, value_kind, net_value_pence, currency, source_ref, occurred_at, synthetic)
+    VALUES ($1, $2, $3, 'final', 1, 'GBP', $4, now(), true)`, [randomUUID(), DEMO_TENANT_ID, jobId, randomUUID()]);
+  await admin.query(`INSERT INTO app.commercial_integrity_activity_fact (id, tenant_id, job_id, activity_kind, occurred_at, synthetic)
+    VALUES ($1, $2, $3, 'outside_app_settlement', now(), true)`, [randomUUID(), DEMO_TENANT_ID, jobId]);
+  const planted = await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
+    (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
+  assert.deepEqual(planted.rows[0], { values: findings.rows[0].values + 1, activities: findings.rows[0].activities + 1 });
+
+  assert.deepEqual(await exports(), clean);
+  assert.deepEqual(await rebuild(), cleanRebuild);
+  assert.deepEqual(await crewBriefs.read(jobId, briefQuery), [decorator, tiler]);
+  assert.deepEqual(await briefRows(), rows);
+  // Each rebuild appended one "unchanged" event, with the same content hash with or without the finding.
+  const events = await briefEvents();
+  assert.equal(events.length, eventCount);
+  // The two rebuilds run concurrently, so compare each pair as a set.
+  const hashes = events.slice(-4).map(event => event.payload.hashes.content);
+  assert.deepEqual(hashes.slice(2).sort(), hashes.slice(0, 2).sort());
+  assert.deepEqual(events.slice(-4).map(event => event.payload.references.outcome), Array(4).fill("unchanged"));
+  const exported = JSON.parse(clean[1]);
+  assert.deepEqual(exported, { version: "v2-crew-brief-export.v1", environment: "synthetic_demo",
+    notice: "Practice sandbox — synthetic data; nothing is sent or charged", brief: tiler.content });
+});
+
+test("forced crew brief policies hide briefs and photos and reject changes from the second firm", async () => {
+  const { owner, command } = await briefSetup();
+  const outsider = await signIn("second-builder");
+  const { crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(crewBriefs.read(jobId, briefQuery), { code: "NOT_FOUND" });
+  await assert.rejects(crewBriefs.generate(jobId, command("tiler", { expectedVersion: 3 })), { code: "NOT_FOUND" });
+  await assert.rejects(crewBriefs.exportInternal(jobId, "tiler"), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const { rows: [photo] } = await admin.query("SELECT * FROM app.v2_crew_brief_photo WHERE job_id = $1 LIMIT 1", [jobId]);
+  for (const table of ["app.v2_crew_brief", "app.v2_crew_brief_photo", "app.v2_crew_brief_command"]) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false });
+    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
+    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+      await assert.rejects(query(scope, `UPDATE ${table} SET trade = 'tiler' WHERE job_id = $1`, [jobId]), { code: "42501" });
+      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" });
+    }
+    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+  }
+  for (const scope of [outsider.realContext, context]) {
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief (tenant_id, job_id, trade, expected_version, command_id,
+      quote_revision_id, access_window, content, actor_membership_id)
+      VALUES ($1, $2, 'tiler', 99, $3, $5, 'Any time', '{}', $4)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId, (await acceptedPlanSource()).quoteRevisionId]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief_photo
+      (tenant_id, job_id, trade, expected_version, position, evidence_id) VALUES ($1, $2, $3, $4, 20, $5)`,
+    [DEMO_TENANT_ID, jobId, photo.trade, photo.expected_version, photo.evidence_id]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief_command (tenant_id, job_id, command_id, trade,
+      expected_version, access_window, photo_ids, brief_version, actor_membership_id)
+      VALUES ($1, $2, $3, $4, $5, 'Any time', '{}', $5, $6)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), photo.trade, photo.expected_version, owner.membershipId]),
+    { code: "42501", message: /row-level security policy/u });
+  }
+});
+
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
 const crewTable = "app.v2_crew_contact";
 const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
@@ -1538,6 +2048,44 @@ test("C3C: two crew records with the same name get separate assignments, and old
   assert.equal((await assignedEvents(draftJob)).length, 3);
 });
 
+test("D5B-B with C3C: a brief shows the assigned crew record's name and goes out of date when it changes", async () => {
+  const { crewBriefs, workPlan, command } = await briefSetup();
+  const latest = async () => (await crewBriefs.read(jobId, { ...briefQuery, trade: "tiler" }))[0];
+  const crew = crewApp((await signIn("builder")).sessionId);
+  const sam = await crew.record(crewCommand());
+  const alex = await crew.record(crewCommand({ displayName: "Alex Fictional", phone: "07700900789" }));
+  const assign = async assigneeRef => {
+    const plan = await workPlan.read(jobId, planQuery);
+    await workPlan.edit(jobId, planEdit(plan, plan.tasks.find(task => task.key === "tiling-tile"), { assigneeRef }));
+  };
+  const owner = brief => brief.content.tasks.find(task => task.taskKey === "tiling-tile").owner;
+  await assign(sam.crewId);
+  const forSam = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: (await latest())?.version ?? 0 }));
+  assert.equal(owner(forSam), "Sam Fictional");
+  assert.doesNotMatch(JSON.stringify(forSam.content), /07700|@crew/u, "only the name reaches the brief");
+  assert.equal((await latest()).current, true);
+  await assign(alex.crewId);
+  assert.equal((await latest()).current, false, "a reassignment marks the brief out of date");
+  const forAlex = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: forSam.version }));
+  assert.equal(forAlex.version, forSam.version + 1);
+  assert.equal(owner(forAlex), "Alex Fictional");
+  await crew.record(crewCommand({ crewId: alex.crewId, expectedRevision: 1, displayName: "Alex Corrected",
+    phone: "07700900789" }));
+  assert.equal((await latest()).current, false, "a name correction marks the brief out of date");
+  assert.equal(owner(await crewBriefs.generate(jobId, command("tiler", { expectedVersion: forAlex.version }))),
+    "Alex Corrected");
+});
+
+// Rule 29 for D5B-B's crew-briefs GET. It reads the plan (and opens it on first read), so it runs here, after the
+// plan tests, not in SX's early fixed list; joining sxRoutes puts it in the final signed-out case (c) too.
+test("D5B-B rule 29: the crew-briefs GET has a working positive control, then refuses cases a, b and d", async t => {
+  const route = { path: `/api/v2-backend/jobs/${jobId}/crew-briefs`, tenantId: DEMO_TENANT_ID,
+    expect: body => { assert.ok(Array.isArray(body.trades) && body.trades.length); assert.ok(Array.isArray(body.briefs)); } };
+  const observed = await assertBuilderRouteRefuses({ request: sxRequest, signIn, route });
+  for (const result of observed) t.diagnostic(`SX web ${route.path} ${result.case}: ${result.status} ${result.code}`);
+  sxRoutes.push(route);
+});
+
 test("C3C: a task can never be assigned to another firm's crew record, even past the app check", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
   const outsider = await signIn("second-builder");
@@ -1614,8 +2162,8 @@ const photoTables = ["app.evidence_upload", "app.evidence_object", "app.syntheti
 const photoTablesByLink = { "app.evidence_invalidation": "evidence_id", "app.synthetic_evidence_chunk": "upload_id" };
 
 // A fresh live practice job of the builder's firm (the shared seeded job is closed by an earlier case).
-async function pxLiveJob() {
-  const { draftJob, lines, save } = await draftForPlan();
+async function pxLiveJob(...plan) {
+  const { draftJob, lines, save } = await draftForPlan(...plan);
   const { sessionId, cookies, csrfToken } = await signIn("builder");
   const app = createWorkspaceApplication({ pool: runtime, sessionId });
   await save(1, lines);
@@ -1642,7 +2190,7 @@ async function pxLiveJob() {
     statedCustomerName: "Fictional Photo Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
   await json(await request(`/api/jobs/${draftJob}/quotes/activation`, { cookies, csrf: csrfToken, body: switchLive() }));
   const { rows: [scope] } = await admin.query("SELECT id FROM app.scope_identity WHERE job_id = $1 ORDER BY id LIMIT 1", [draftJob]);
-  return { jobId: draftJob, scopeItemId: scope.id, sessionId };
+  return { jobId: draftJob, scopeItemId: scope.id, sessionId, lines };
 }
 
 test("PX: a real practice photo is locked to its own firm on every evidence and photo table", async () => {
@@ -1714,6 +2262,26 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+test("D4: a task assigned to a crew record shows the record's current name in the brief", async () => {
+  const { owner, crewBriefs, workPlan, command } = await briefSetup();
+  const crew = await crewApp(owner.sessionId).record(crewCommand({ displayName: "Dee Fictional", trade: "decorator" }));
+  const plan = await workPlan.read(jobId, planQuery);
+  const task = plan.tasks.find(item => item.trade === "decorator");
+  await workPlan.edit(jobId, planEdit(plan, task, { assigneeRef: crew.crewId }));
+  const latest = async () => (await crewBriefs.read(jobId, { ...briefQuery, trade: "decorator" }))[0];
+  assert.equal((await latest()).current, false, "a new crew assignment makes the brief out of date");
+  const generate = async () => crewBriefs.generate(jobId, command("decorator", { expectedVersion: (await latest()).version }));
+  const assigned = (await generate()).content.tasks.find(item => item.taskKey === task.key);
+  assert.deepEqual([assigned.owner, assigned.ownerRef], ["Dee Fictional", crew.crewId]);
+  assert.doesNotMatch(JSON.stringify(await latest()), /07700|jobguard-v2\.invalid/u, "the brief keeps no crew contact details");
+
+  await crewApp(owner.sessionId).record(crewCommand({ crewId: crew.crewId, expectedRevision: 1, displayName: "Dee Renamed",
+    trade: "decorator" }));
+  assert.equal((await latest()).current, false, "renaming the crew record makes the brief out of date");
+  const renamed = (await generate()).content.tasks.find(item => item.taskKey === task.key);
+  assert.deepEqual([renamed.owner, renamed.ownerRef], ["Dee Renamed", crew.crewId]);
 });
 
 // V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
@@ -1989,6 +2557,32 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   const before = await policies();
   await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   assert.deepEqual(await policies(), before);
+});
+
+test("D4: a trades.v1 brief keeps the plan's stage order and its approved extras' own task keys", async () => {
+  const { jobId: liveJob, sessionId, lines } = await pxLiveJob(["Plumbing", "Plumbing", "Tiling"],
+    ["Move the basin waste", "Fit the new bath", "Tile the bath panel"]);
+  const [, , tiling] = lines.map(line => line.scopeItemId);
+  const { workPlan, variation, crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const vary = (action, fields) => variation.command(liveJob, { version: "variation-command.v1", action, ...fields });
+  const proposalId = randomUUID();
+  const extraItem = randomUUID();
+  const proposed = await vary("propose", { proposalId, scopeItemId: extraItem, existingScopeItemId: null,
+    lineageParentScopeItemId: tiling, description: "Tile the window reveal", captureText: "Customer asks about the reveal",
+    price: { quantity: "1", unit: "item", unitRatePence: 9000, direction: "addition" } });
+  await vary("approve", { variationId: proposalId, revisionId: proposed.variations.find(item => item.id === proposalId).currentRevisionId,
+    approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const plan = await workPlan.read(liveJob, planQuery);
+  assert.equal(plan.templateKey, "trades.v1");
+  const planned = trade => plan.tasks.filter(task => task.trade === trade).map(task => [task.key, task.scopeItemId]);
+  assert.deepEqual(planned("plumber").map(([key]) => key),
+    ["plumbing-first-fix", "plumbing-first-fix", "plumbing-second-fix", "plumbing-second-fix"], "both first fixes come first");
+  assert.ok(planned("tiler").some(([key, scopeItemId]) => key === "tiling-tile" && scopeItemId === extraItem));
+  for (const trade of ["plumber", "tiler"]) {
+    const brief = await crewBriefs.generate(liveJob, { version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade,
+      expectedVersion: 0, accessWindow: "Any weekday", photoIds: [] });
+    assert.deepEqual(brief.content.tasks.map(task => [task.taskKey, task.scopeItemId]), planned(trade), `${trade} brief follows the plan`);
+  }
 });
 
 // must stay the last test: it signs the cached builder out
