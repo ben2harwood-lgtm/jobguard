@@ -2114,7 +2114,9 @@ test("G4 stop: a stopped link is refused like an unknown one, history shows it, 
   assert.match(await (await g3.open(again.result.token)).text(), /Refit the hall door stop/u);
   const events = (await admin.query(`SELECT payload FROM app.audit_event WHERE subject_ref=$1 AND event_type='v2.handover.link_stopped'`, [f.job])).rows;
   assert.equal(events.length, 1);
-  assert.deepEqual(Object.keys(events[0].payload.references).sort(), ["commandId", "handoverVersion", "releaseId"]);
+  // The audit layer adds its own auditActor*/auditTrust keys; the stop itself references only these three.
+  assert.deepEqual(Object.keys(events[0].payload.references).filter(key => !key.startsWith("audit")).sort(),
+    ["commandId", "handoverVersion", "releaseId"]);
   assert.doesNotMatch(JSON.stringify(events), /Sent by mistake|customer@|jobguard-v2\.invalid/u, "no reason text and no email");
   await verifyTenantChain(f.context.tenantId);
 });
