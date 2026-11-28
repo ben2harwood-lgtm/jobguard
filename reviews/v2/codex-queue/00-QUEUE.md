@@ -104,9 +104,9 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D44 | Q79 | V2-SEED-1 find why the Switch-live seed test fails on the G and K5 stacks (print the _private_jobs task ids); fix the cause, never loosen | **Opus** | G9 @ 531fecb35 | none | T2 |
 | D45 | Q80 | V2-H1-DRY full browser journey on a local train of every open V2 head; findings only, each fix becomes a packet | **Opus** | v2/main + #1057 + trains | none | T1 |
 | D46 | Q81 | V2-AUTH-1 linked builder reads and adds job proof (H1 B3): V2 entry via v2_work_plan_editor, one command boundary for writes; lp6 and 0734 unchanged; first slice of parked Q74 | **Opus** | v2/main + #1057 | next free V2 number only if a definer is needed | RED (security) |
-| D47 | Q82 | V2-B4 live job loaded fresh shows the Job started panel (bisect v2/main + #1042) | **Opus** | v2/main + #1057 | none | T2 |
+| D47 | Q82 | V2-B4 live job loaded fresh shows the Job started panel (bisect v2/main + #1042). **Closed 28 Nov 15:25: not a bug (dev-server first load ~36 s); no PR. Default-view change folded into Q84.** | **Opus** | v2/main + #1057 | none | T2 |
 | D48 | Q83 | V2-TRAIN-1 C6 done-when QUOTE_NOT_ISSUABLE; K5 firm-lock policies on 2046/2071; K5A-1 helper backed by a real signal | **Opus** | #1047; K5 line | none (in place) | RED money |
-| D49 | Q84 | V2-B1B2 launcher: customer link opens for V2 jobs; default practice recipient on the catcher list | **Opus** | v2/main + #1057 | none | T2 |
+| D49 | Q84 | V2-B1B2 launcher: customer link opens for V2 jobs; default practice recipient on the catcher list; plus live job with no fragment opens on Work and proof (workspace-shell, own commit) | **Opus** | v2/main + #1057 | none | T2 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 

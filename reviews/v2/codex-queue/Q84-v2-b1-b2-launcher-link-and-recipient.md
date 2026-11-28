@@ -12,3 +12,6 @@
 - The H1 step 4 screenshot at 1280 and 360.
 
 **Done when:** H1 steps 3 and 4 pass in the browser without workarounds.
+
+## Added 28 Nov 15:26 UK (from Q82's result)
+Q82 found no bug: the Job started panel mounts in the pricing view, and a slow first load under `next dev` hid it. Add, as its own commit in this PR: a live job opened with no fragment lands on Work and proof (pricing), in workspace-shell. Test: no fragment on a live job → pricing; `#scope` → scope; a job not started → unchanged. Don't touch jobguard-app.tsx or designed-ui.tsx (Codex RT-FIX-7).
