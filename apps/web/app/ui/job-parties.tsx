@@ -27,7 +27,7 @@ function conflictSince(observed: View, latest: View, refs: DraftRefs): string | 
   if (isLive(observed.status) !== isLive(latest.status)) return WENT_LIVE_MESSAGE;
   return partiesChanged(observed, latest, refs) ? CHANGED_MESSAGE : null;
 }
-export function JobParties({ jobId, pilotFetch }: { jobId: string; pilotFetch?: typeof jobPageFetch }) {
+export function JobParties({ jobId, pilotFetch, designed = false }: { jobId: string; designed?: boolean; pilotFetch?: typeof jobPageFetch }) {
   const fetch = pilotFetch ?? jobPageFetch;
   const partiesPath = `/api/jobs/${jobId}/parties`;
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -174,17 +174,18 @@ export function JobParties({ jobId, pilotFetch }: { jobId: string; pilotFetch?: 
     try { const response=await fetch(`/api/jobs/${jobId}/parties/import`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:view.current.bindingId})}); const result=await response.json(); if(!response.ok)throw new Error(result.code??"Import could not be confirmed"); location.assign(`/jobs/${jobPartiesImportResultV1.parse(result).jobId}`); }
     catch(e) { setError(e instanceof Error?e.message:"Import could not be confirmed");setBusy(false); }
   }
-  return <section className={`review ${styles.panel}`} aria-labelledby={`parties-${jobId}`} style={{ minWidth: 0 }}>
+  const buttonClass = designed ? "btn" : undefined;
+  return <section className={designed ? `review designed-parties card card-body ${styles.panel}` : `review ${styles.panel}`} aria-labelledby={`parties-${jobId}`} style={{ minWidth: 0 }}>
     <h2 id={`parties-${jobId}`}>Customer and site</h2>
     {!pilotFetch && <a href={`/jobs/${jobId}/imports`}>Bring in a job that's already under way</a>}
     <p>Use the supplied fictional details only. Do not enter real names, addresses or contact details.</p>
     {view?.current ? <dl data-testid="job-party-details"><dt>Customer</dt><dd data-testid="party-customer">{view.current.customer.name}</dd><dt>Site</dt><dd data-testid="party-site">{[view.current.site.unit, ...view.current.site.addressLines, view.current.site.town, view.current.site.postcode].filter(Boolean).join(", ")}</dd><dt>Who pays?</dt><dd data-testid="party-payer">{view.current.payingParty.name}</dd></dl> : <p>{view ? "Details needed — add a customer and site before previewing a quote or switching live." : "Loading customer and site…"}</p>}
     {view?.current && <details><summary>Technical details</summary><dl><dt>Saved binding</dt><dd style={{ overflowWrap: "anywhere" }} data-testid="party-binding-id">{view.current.bindingId}</dd></dl></details>}
     {!pilotFetch && <><p>You can bring in the practice job that's already under way, using these saved details. Its £1,000.00 starting value is the figure you gave; it creates no past bills.</p>
-    <button type="button" disabled={!view?.current||busy} onClick={()=>void adopt()}>Bring in the practice job already under way</button>
+    <button type="button" className={buttonClass} disabled={!view?.current||busy} onClick={()=>void adopt()}>Bring in the practice job already under way</button>
     {!view?.current&&<p>Customer and site are required before adopting an underway job.</p>}</>}
     {error && <p ref={errorRef} tabIndex={-1} role="alert">{error}</p>}
-    {!view ? <button onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form ref={formRef} noValidate onChange={() => { touched.current = true; }} onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">
+    {!view ? <button className={buttonClass} onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form ref={formRef} className={designed ? "form" : undefined} noValidate onChange={() => { touched.current = true; }} onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">
       {!view.current && <p>{suggested ? "Suggested from your words — check before saving" : "Practice example — check before saving"}</p>}
       <p>{draftChanged ? "Unsaved draft — use Save customer and site to record it." : <>Saved{savedAt && <> at <time dateTime={savedAt.toISOString()}>{savedAt.toLocaleTimeString("en-GB")}</time></>}</>}</p>
       {view.current && customerRevisionId === view.current.customerRevisionId && view.customers.some(c => c.id === customerId && c.revisionId !== customerRevisionId) && <p>This job keeps its saved customer revision. Choose the customer again to use the latest registry details.</p>}
@@ -202,9 +203,9 @@ export function JobParties({ jobId, pilotFetch }: { jobId: string; pilotFetch?: 
         <label>UK postcode<input aria-label="UK postcode" value={postcode} onChange={e => { setPostcode(e.target.value); setReuse(""); setConfirm(false); }} required/></label>
         <label>Flat or unit (optional)<input aria-label="Flat or unit (optional)" value={unit} onChange={e => { setUnit(e.target.value); setReuse(""); setConfirm(false); }}/></label>
         <label>Property reference (UPRN, optional)<input aria-label="UPRN (optional)" value={uprn} onChange={e => { setUprn(e.target.value); setReuse(""); setConfirm(false); }} inputMode="numeric"/></label>
-        {suggestions.length > 0 && <><label>Possible existing places<select aria-label="Possible existing places" value={reuse} onChange={e => { const x = view.sites.find(y => y.id === e.target.value); if (x) rebase(b => ({ ...b, sites: [...b.sites.filter(y => y.id !== x.id), x] })); setReuse(e.target.value); setConfirm(false); }}><option value="">Create a separate site</option>{suggestions.map(s => <option key={s.id} value={s.id}>{s.site.unit ?? "No unit recorded"} · {s.site.addressLines.join(", ")}{key && JSON.stringify(JSON.parse(s.matchKey)) === key ? " (matching address)" : " (near match)"}</option>)}</select></label>{reuse && <label><input type="checkbox" aria-label="I confirm this is the same place" checked={confirm} onChange={e => setConfirm(e.target.checked)}/>I confirm this is the same place</label>}<p>Suggestions are never merged automatically. Different flats remain separate.</p></>}
+        {suggestions.length > 0 && <><label>Possible existing places<select aria-label="Possible existing places" value={reuse} onChange={e => { const x = view.sites.find(y => y.id === e.target.value); if (x) rebase(b => ({ ...b, sites: [...b.sites.filter(y => y.id !== x.id), x] })); setReuse(e.target.value); setConfirm(false); }}><option value="">Create a separate site</option>{suggestions.map(s => <option key={s.id} value={s.id}>{s.site.unit ?? "No unit recorded"} · {s.site.addressLines.join(", ")}{key && JSON.stringify(JSON.parse(s.matchKey)) === key ? " (matching address)" : " (near match)"}</option>)}</select></label>{reuse && <label className={designed ? "checkrow" : undefined}><input type="checkbox" aria-label="I confirm this is the same place" checked={confirm} onChange={e => setConfirm(e.target.checked)}/>I confirm this is the same place</label>}<p>Suggestions are never merged automatically. Different flats remain separate.</p></>}
         {["live", "invoiced", "paid"].includes(view.status) && <label>Reason for correction<input aria-label="Reason for correction" value={reason} onChange={e => setReason(e.target.value)} required maxLength={500}/></label>}
-        <button type="submit" className="primary" disabled={!!reuse && !confirm} style={{ minHeight: 44, minWidth: 44 }}>Save customer and site</button>
+        <button type="submit" className={designed ? "btn primary" : "primary"} disabled={!!reuse && !confirm} style={{ minHeight: 44, minWidth: 44 }}>Save customer and site</button>
       </fieldset>
     </form>}
   </section>;

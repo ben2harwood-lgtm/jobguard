@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-4": {
+      "branches": [
+        "codex/sandbox/dui-4"
+      ],
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/job-invoices.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/records/page.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/customer-receipts.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/job-value.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/e2e/DUI-4-company-money.spec.ts",
+        "apps/web/e2e/DUI-4-found-extra-to-paid.spec.ts",
+        "apps/web/e2e/DUI-4-own-job-to-paid.spec.ts",
+        "apps/web/e2e/artifacts/dui-4/README.md",
+        "apps/web/e2e/artifacts/dui-4/desktop-invoice.png",
+        "apps/web/e2e/artifacts/dui-4/desktop-paid-report.png",
+        "apps/web/e2e/artifacts/dui-4/desktop-partial-payment.png",
+        "apps/web/e2e/artifacts/dui-4/desktop-records-payment-evidence.png",
+        "apps/web/e2e/artifacts/dui-4/desktop-reversal.png",
+        "apps/web/e2e/artifacts/dui-4/desktop-supplementary-paid-report.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-invoice.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-paid-report.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-partial-payment.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-records-payment-evidence.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-reversal.png",
+        "apps/web/e2e/artifacts/dui-4/mobile-360-supplementary-paid-report.png",
+        "apps/web/e2e/helpers/dui-4.ts"
+      ],
+      "note": "Changed registration: config/lanes/dui-4.json (covered by the lane checker\u2019s own-file rule)."
+    }
+  }
+}

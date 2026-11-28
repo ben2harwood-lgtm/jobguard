@@ -1,4 +1,5 @@
 import { PilotJobs } from "../../../pilot-jobs";
+import { Legacy } from "../../../designed-ui";
 import { DesignedJob } from "../../../jobs-screens";
 import { WorkspaceShell } from "../../../../ui/workspace-shell";
 import { MerchantOrder } from "../../../../ui/merchant-order";
@@ -9,5 +10,5 @@ export const metadata = { title: "JobGuard · Job work" };
 export default async function JobWorkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (process.env.JOBGUARD_ENV === "pilot_no_charge") return <PilotJobs screen="review" jobId={id}/>;
-  return <DesignedJob jobId={id} tab="work"><WorkspaceShell jobId={id}/>{process.env.JOBGUARD_ENV === "synthetic_demo" && <MerchantOrder key={id} jobId={id}/>}</DesignedJob>;
+  return <DesignedJob jobId={id} tab="work"><WorkspaceShell designed jobId={id}/>{process.env.JOBGUARD_ENV === "synthetic_demo" && <Legacy label="Merchant order" cards><MerchantOrder key={id} jobId={id}/></Legacy>}</DesignedJob>;
 }

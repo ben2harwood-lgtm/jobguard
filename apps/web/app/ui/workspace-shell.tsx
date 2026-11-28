@@ -26,11 +26,15 @@ import { PracticeReceipts } from "./practice-receipts";
 import { PaymentFeeStatements } from "./payment-fee-statements";
 import { CustomerMessages, JobDiary } from "./job-sources";
 import { JobWorkState } from "./job-work-state";
+import { Legacy } from "../(designed)/designed-ui";
+import type { ReactNode } from "react";
 import { FinalCheckReveal } from "./final-check-reveal";
 const stages=["Scope","Quote","Work","Final account","Payment"];
 
 // Tours can open pricing directly without triggering ordinary fragment navigation.
-export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initialPricing?:boolean}){
+export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobId:string;initialPricing?:boolean;designed?:boolean}){
+ const legacy = (children: ReactNode) => designed ? <div className="jgd-legacy jgd-tools"><div className="workspace-page">{children}</div></div> : children;
+ const legacyWorkspace = (children: ReactNode) => designed ? <Legacy label="Saved job tools" cards>{children}</Legacy> : children;
  const[job,setJob]=useState<JobWorkspaceResponse["job"]|null>(null);
  const[capture,setCapture]=useState<CaptureWorkspaceResponse|null>(null);
  const[error,setError]=useState<"forbidden"|"unavailable"|null>(null);
@@ -88,6 +92,8 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
     const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
     if(open)return false;
    }
+   // The reveal moves into the account when its loading panel resolves.
+   if(designed&&fragment==="#final-check"&&root.querySelector(".job-final-account[aria-live]"))return false;
    const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;
    // Reveal the region first: focusing it can redirect focus to a journey control.
    // That control must be the final scroll destination, rather than the region.
@@ -99,19 +105,20 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
- },[capture,loading,section,fragment]);
- if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
- if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
+ },[capture,loading,section,fragment,designed]);
+ if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return legacyWorkspace(<main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>);
+ if(error)return legacyWorkspace(<main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>);
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
-  <main className="workspace-page" id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
-   <header><h1>{capture.proposal.title}</h1><p className="status">{completionLabel??jobStatusLabels[capture.status]}</p></header>
-   {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
+  <main className={designed ? "workspace-page designed-workspace" : "workspace-page"} id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
+   <header className={designed ? "work-status" : undefined}><h1>{capture.proposal.title}</h1><p className={designed ? "tag blue" : "status"}>{completionLabel??jobStatusLabels[capture.status]}</p></header>
+   {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage designed={designed} jobId={jobId}/></WatchdogPanel>}
    {/* Put stable section links before panels that load asynchronously. */}
-   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope" onClick={event=>{event.preventDefault();navigateSection("#scope");}}>Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote" onClick={event=>{event.preventDefault();navigateSection("#quote");}}>Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof" onClick={event=>{event.preventDefault();navigateSection("#work-proof");}}>Work and proof</a><a href="#final-account-title" onClick={event=>{event.preventDefault();navigateSection("#final-account-title");}}>Final account and invoices</a></>}</nav>
-   <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
-   <JobParties jobId={jobId}/>
+   <nav className={designed ? "designed-work-links" : "workspace-stages"} aria-label="Saved job sections"><a href="#scope" onClick={event=>{event.preventDefault();navigateSection("#scope");}}>Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote" onClick={event=>{event.preventDefault();navigateSection("#quote");}}>Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof" onClick={event=>{event.preventDefault();navigateSection("#work-proof");}}>Work and proof</a>{designed&&<a href="#variations-title" onClick={event=>{event.preventDefault();navigateSection("#variations-title");}}>Extras</a>}<a href="#final-account-title" onClick={event=>{event.preventDefault();navigateSection("#final-account-title");}}>Final account and invoices</a></>}</nav>
+   <PracticeJourney designed={designed} jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
+   <JobParties designed={designed} jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal designed={designed} key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState designed={designed} jobId={jobId}/><JobDiary designed={designed} key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages designed={designed} key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId} designed={designed}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   {legacy(<>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
    <p>These tools use fictional examples to explore JobGuard; they are separate from your job’s next steps.</p>
@@ -132,8 +139,9 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
    {hasStartedWork(capture.status)&&<SimulationFeeStatements key={`statements-${jobId}`} jobId={jobId}/>}
    <Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link>{" "}
    <Link href={`/jobs/${jobId}/recovery-journey`} prefetch={false}>Recovery practice guide</Link>
+   </>)}
   </main>
  </WatchdogStatusProvider>;
  if(!job)return null;
- return <WatchdogStatusProvider jobId={jobId} initialStatus={job.status}><main className="workspace-page"><Link href="/classic">← Jobs</Link><Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link><JobParties jobId={jobId}/><header><p className="eyebrow">Saved practice job</p><h1>{job.title}</h1><p className="status" data-testid="job-status">{jobStatusLabels[job.status]}</p><p>Server revision <strong data-testid="job-revision">{job.revision}</strong></p></header><nav className="workspace-stages" aria-label="Job stages">{stages.map((stage,index)=><a href={`#stage-${index}`} key={stage}>{stage}</a>)}</nav><PreventionChecks jobId={jobId}/><section id="stage-0"><h2>Scope</h2><p>Persistent job ID <code data-testid="job-id">{job.id}</code></p><p>Practice sandbox — synthetic data; nothing is sent or charged</p></section><WatchdogPanel><PurchaseOrder jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierDocuments jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierMatch jobId={jobId}/></WatchdogPanel><WatchdogPanel><ThingsToCheck jobId={jobId}/></WatchdogPanel><WatchdogPanel><Readiness jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><RelevanceInbox jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>{stages.slice(1).map((stage,index)=><section id={`stage-${index+1}`} key={stage}><h2>{stage}</h2><p>Illustration — not yet connected to this job</p></section>)}<RecoveryCases jobId={jobId}/><PaymentFeeStatements key={jobId} jobId={jobId}/>{hasStartedWork(job.status)&&<SimulationFeeStatements key={`statements-${jobId}`} jobId={jobId}/>}</main></WatchdogStatusProvider>;
+ return legacyWorkspace(<WatchdogStatusProvider jobId={jobId} initialStatus={job.status}><main className="workspace-page"><Link href="/classic">← Jobs</Link><Link href={`/jobs/${jobId}/trial`} prefetch={false}>First job trial and card</Link><JobParties jobId={jobId}/><header><p className="eyebrow">Saved practice job</p><h1>{job.title}</h1><p className="status" data-testid="job-status">{jobStatusLabels[job.status]}</p><p>Server revision <strong data-testid="job-revision">{job.revision}</strong></p></header><nav className="workspace-stages" aria-label="Job stages">{stages.map((stage,index)=><a href={`#stage-${index}`} key={stage}>{stage}</a>)}</nav><PreventionChecks jobId={jobId}/><section id="stage-0"><h2>Scope</h2><p>Persistent job ID <code data-testid="job-id">{job.id}</code></p><p>Practice sandbox — synthetic data; nothing is sent or charged</p></section><WatchdogPanel><PurchaseOrder jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierDocuments jobId={jobId}/></WatchdogPanel><WatchdogPanel><SupplierMatch jobId={jobId}/></WatchdogPanel><WatchdogPanel><ThingsToCheck jobId={jobId}/></WatchdogPanel><WatchdogPanel><Readiness jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><RelevanceInbox jobId={jobId}/></WatchdogPanel><WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>{stages.slice(1).map((stage,index)=><section id={`stage-${index+1}`} key={stage}><h2>{stage}</h2><p>Illustration — not yet connected to this job</p></section>)}<RecoveryCases jobId={jobId}/><PaymentFeeStatements key={jobId} jobId={jobId}/>{hasStartedWork(job.status)&&<SimulationFeeStatements key={`statements-${jobId}`} jobId={jobId}/>}</main></WatchdogStatusProvider>);
 }

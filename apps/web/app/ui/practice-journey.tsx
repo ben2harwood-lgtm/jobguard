@@ -34,7 +34,7 @@ async function readJson(path: string, signal: AbortSignal, absent?: { status: nu
 }
 
 /** Persisted read models decide the next step; this component never advances a job locally. */
-export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { jobId: string; status: string; onSavedLabel?: (label: string | null) => void; onNavigate?: (target: string) => void }) {
+export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate, designed = false }: { jobId: string; status: string; onSavedLabel?: (label: string | null) => void; designed?: boolean; onNavigate?: (target: string) => void }) {
  const [state, setState] = useState<ReadState>({ jobId, status, phase: "loading" });
  const navigationCleanup = useRef<(() => void) | null>(null);
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
@@ -116,8 +116,8 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
   if (phase === "failed" && state.phase === "failed" && state.userInitiated &&
    (document.activeElement === retryButton.current || document.activeElement === document.body)) errorHeading.current?.focus();
  }, [phase, state]);
- const retry = <button ref={retryButton} type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load(true)}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
- if (phase !== "ready" || state.phase !== "ready") return <section className="journey-progress" aria-label="Practice journey progress" data-testid="uiwire15-journey">
+ const retry = <button className={designed ? "btn" : undefined} ref={retryButton} type="button" style={{ minHeight: 44, minWidth: 44 }} onClick={() => void load(true)}>{phase === "failed" ? "Try checking saved progress again" : "Check saved progress"}</button>;
+ if (phase !== "ready" || state.phase !== "ready") return <section className={designed ? "card card-body designed-progress" : "journey-progress"} aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>
   {phase === "failed" ? <div role="alert"><h2 ref={errorHeading} tabIndex={-1}>Saved progress could not be checked</h2><p>Earlier progress may be out of date. Balance, next step and completion are unavailable until a fresh check succeeds.</p></div> : <p role="status">Checking saved progress… Balance and completion are not yet known.</p>}
   {retry}
@@ -137,6 +137,9 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
  const [label, fallback] = destinations[step];
  // Only validated saved identities enter fragments; never build a CSS selector from a fragment.
  const target = step === "resolve_extras" && extras && "id" in extras ? `#variation-${extras.id}` : fallback;
+ const moneyTarget = designed && (step === "issue_invoice" || step === "record_payment")
+  ? `/jobs/${jobId}/money${step === "issue_invoice" ? "#customer-invoices" : target}`
+  : null;
  const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
   event.preventDefault();
   navigationCleanup.current?.();
@@ -195,9 +198,9 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
  const balancePence = invoices.reduce((sum, item) => sum + BigInt(item.balancePence), 0n);
  const paidPence = invoices.reduce((sum, item) => sum + BigInt(item.paidPence ?? 0), 0n);
  const money = (pence: bigint) => `GBP ${(pence / 100n).toLocaleString("en-GB")}.${(pence % 100n).toString().padStart(2, "0")}`;
- return <section className="journey-progress" aria-label="Practice journey progress" data-testid="uiwire15-journey">
+ return <section className={designed ? "card card-body designed-progress" : "journey-progress"} aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>
-  {completed ? <><h2>You finished this practice job</h2><p>{result.completion === "paid" ? "Customer paid. The saved receipts settle every invoice." : result.completion === "credit_assisted" ? "Customer payments and credits settle every invoice." : result.completion === "credit_only" ? "Settled by credit; no customer cash payment recorded." : "Zero-value job complete; no customer payment due."}</p><a className="primary" href={`/jobs/${jobId}/value`}>How JobGuard helps protect your money</a></> : <><h2>Continue this job</h2><a className="primary" data-testid="uiwire15-continue" href={target} onClick={navigate}>{label}</a></>}
+  {completed ? <><h2>You finished this practice job</h2><p>{result.completion === "paid" ? "Customer paid. The saved receipts settle every invoice." : result.completion === "credit_assisted" ? "Customer payments and credits settle every invoice." : result.completion === "credit_only" ? "Settled by credit; no customer cash payment recorded." : "Zero-value job complete; no customer payment due."}</p><a className={designed ? "btn primary" : "primary"} href={`/jobs/${jobId}/${designed ? "money#paid-report" : "value"}`}>How JobGuard helps protect your money</a></> : <><h2>Continue this job</h2><a className={designed ? "btn primary" : "primary"} data-testid="uiwire15-continue" href={moneyTarget ?? target} onClick={moneyTarget ? undefined : navigate}>{label}</a></>}
   <dl><div><dt>Customer balance</dt><dd data-testid="journey-customer-balance">{money(balancePence)}</dd></div><div><dt>Recorded customer payments</dt><dd data-testid="journey-customer-paid">{money(paidPence)}</dd></div><div><dt>Real external actions</dt><dd data-testid="journey-real-external-actions">{snapshot.realExternalActions}</dd></div></dl>{retry}
  </section>;
 }
