@@ -246,3 +246,5 @@ export * from "./v2-crew-contact-repository.js";
 export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";
 // V2-F8 who was on site today.
 export * from "./v2-site-attendance-repository.js";
+// V2-K6A: local inbound fixture routing only.
+export { V2InboundMailRepository, InboundMailError, requireV2Inbound } from "./v2-inbound-mail.js";

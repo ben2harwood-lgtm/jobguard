@@ -100,7 +100,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, owner, other;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   process.env.JOBGUARD_LOCAL_V2 = "1";
@@ -153,7 +153,8 @@ test("SX fixed GET list has working positive controls before checking refusals",
 // End V2-SX positive and refusal block.
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  owner = await signIn("builder");
+  const { cookies } = owner;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -203,7 +204,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  other = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = other;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -907,6 +909,37 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.equal(closed.events.at(-1).kind, "closed");
   assert.deepEqual(await workPlan.read(jobId, planQuery), flipped);
 });
+
+// The test above closes the seeded job's work, and the demo practice cannot reopen it.
+// Later pieces that need open work on an accepted quote make their own job here.
+async function acceptedPracticeJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines);
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Accepted Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900043" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["12 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional Accepted Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  return draftJob;
+}
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
@@ -1665,6 +1698,24 @@ test("FL guard: a lock must be mandatory joins on every job-bound parent's full 
     "a parent without its own firm lock doesn't count");
 });
 
+test("FL guard: K6 inbox locks its own firm_key, with a separate nullable job check", async () => {
+  const catalog = await firmLockCatalog(admin);
+  const row = catalog.find(entry => entry.relation === "app.v2_inbound_item");
+  assert.deepEqual(lockProblems(row, new Set(), new Set()), [], "the real 2072 policies pass");
+  assert.deepEqual(row.not_null, { firm_key: true, job_id: false });
+  const job = row.job_policy.using;
+  const fails = (change, reason) => assert.ok(lockProblems({ ...row, ...change }).some(text => text.includes(reason)), reason);
+  // The firm-key form is only for a nullable job_id; a NOT NULL job_id must still join app.job.
+  fails({ not_null: { firm_key: true, job_id: true } }, "not only mandatory EXISTS joins");
+  fails({ not_null: { firm_key: false, job_id: false } }, "needs a NOT NULL firm_key");
+  fails({ job_policy: null }, "needs a separate v2_practice_job policy");
+  fails({ job_policy: { ...row.job_policy, restrictive: false } }, "v2_practice_job is permissive");
+  fails({ job_policy: { ...row.job_policy, using: `(${job} OR true)`, check: null } }, "v2_practice_job is not job_id IS NULL OR");
+  fails({ job_policy: { ...row.job_policy, using: job.replace("(j.id = v2_inbound_item.job_id)", "(j.tenant_id = v2_inbound_item.tenant_id)"), check: null } },
+    "v2_practice_job is not job_id IS NULL OR");
+  fails({ firm_policy: { ...row.firm_policy, using: `(${row.firm_policy.using} OR true)`, check: null } }, "not only mandatory EXISTS joins");
+});
+
 let firmContexts;
 const firmLockHelpers = {
   test, assert, admin, runtime, withTenant,
@@ -1689,6 +1740,212 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   const before = await policies();
   await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   assert.deepEqual(await policies(), before);
+});
+
+// V2-K6A: routing, atomic intake/audit and firm isolation on the real V2 seed.
+// Reuse the full suite's owner and second-firm sessions; do not request more codes.
+// The seeded job keeps the fixture merchant requirements; K6A works on its own open job.
+const k6SeededJob = () => jobId;
+test("K6A forwards fixtures, holds real files, replays once and isolates both firms", async t => {
+  const previousV2=process.env.JOBGUARD_LOCAL_V2;
+  process.env.JOBGUARD_LOCAL_V2="1";
+  t.after(()=>{if(previousV2===undefined)delete process.env.JOBGUARD_LOCAL_V2;else process.env.JOBGUARD_LOCAL_V2=previousV2;});
+  const { randomUUID } = await import("node:crypto");
+  const { V2InboundMailRepository } = await import("../../packages/db/dist/index.js");
+  const { createWorkspaceApplication } = await import("../../apps/api/dist/workspace/index.js");
+  assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
+  const jobId = await acceptedPracticeJob();
+  const auth = await authenticatePracticeSession(runtime,owner.sessionId);
+  const second = await authenticatePracticeSession(runtime,other.sessionId);
+  const repo = new V2InboundMailRepository(runtime);
+  const workspace = createWorkspaceApplication({pool:runtime,sessionId:owner.sessionId});
+  await workspace.quote.activate(jobId,{version:"practice-activation-command.v1",commandId:randomUUID(),scenario:"no_charge"});
+  const command = fields => ({version:"v2-inbound-mail.v1",commandId:randomUUID(),expectedVersion:0,...fields});
+  const events = async id => (await admin.query(`SELECT * FROM app.audit_event WHERE event_type LIKE 'v2.inbound.%'
+    AND payload->'references'->>'commandId'=$1`,[id])).rows;
+  async function failsAtomically(input, action, verify) {
+    const beforeAudit=(await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1",[auth.context.tenantId])).rows[0].n;
+    // UUID is generated locally above; no message text enters this SQL.
+    await admin.query(`CREATE FUNCTION app.k6_fail_one() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.command_id='${input.commandId}'::uuid THEN RAISE EXCEPTION 'K6_FORCED_FAILURE'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER k6_fail_one BEFORE UPDATE ON app.v2_inbound_command FOR EACH ROW EXECUTE FUNCTION app.k6_fail_one()`);
+    try {
+      await assert.rejects(action(),/K6_FORCED_FAILURE/);
+      assert.equal((await events(input.commandId)).length,0);
+      assert.equal((await admin.query("SELECT * FROM app.v2_inbound_command WHERE command_id=$1",[input.commandId])).rowCount,0);
+      assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1",[auth.context.tenantId])).rows[0].n,beforeAudit);
+      await verify();
+    } finally { await admin.query("DROP TRIGGER k6_fail_one ON app.v2_inbound_command; DROP FUNCTION app.k6_fail_one()"); }
+  }
+  const addressCommand = command({});
+  await failsAtomically(addressCommand,()=>repo.address(auth,addressCommand),async()=>{
+    assert.equal((await repo.view(auth)).address,null);
+  });
+  const { address } = await repo.address(auth,addressCommand);
+  assert.deepEqual(await repo.address(auth,addressCommand),{address});
+  assert.equal((await events(addressCommand.commandId)).length,1);
+  const { address: otherAddress } = await repo.address(second,command({}));
+  assert.notEqual(otherAddress,address);
+  const receive = fields => command({recipient:address,messageId:randomUUID(),sender:"merchant@jobguard-v2.invalid",
+    subject:`Invoice ${jobId}`,body:"",fixtureId:"materials-B-invoice",...fields});
+  const forward = receive({});
+  const filed = await repo.receive(auth,forward);
+  assert.equal(filed.state,"filed");
+  assert.deepEqual(await repo.receive(auth,forward),filed);
+  const again = {...forward,commandId:randomUUID()};
+  const duplicate = await repo.receive(auth,again);
+  assert.deepEqual(duplicate,{itemId:filed.itemId,duplicate:true});
+  // The duplicate's own command id is now bound to its request: an exact replay returns the
+  // same result, and reusing it for another message or a dismiss is refused.
+  assert.deepEqual(await repo.receive(auth,again),duplicate);
+  await assert.rejects(repo.receive(auth,{...again,messageId:randomUUID()}),/IDEMPOTENCY_CONFLICT/);
+  await assert.rejects(repo.command(auth,{version:"v2-inbound-mail.v1",commandId:again.commandId,expectedVersion:0,
+    action:"dismiss",itemId:filed.itemId}),/IDEMPOTENCY_CONFLICT/);
+  assert.equal((await events(again.commandId)).length,0,"a duplicate delivery adds no routing event");
+  await assert.rejects(repo.receive(auth,{...forward,subject:"changed"}),/IDEMPOTENCY_CONFLICT/);
+  await assert.rejects(repo.receive(auth,{...forward,commandId:randomUUID(),body:"changed"}),/IDEMPOTENCY_CONFLICT/);
+  assert.equal((await events(forward.commandId)).length,1);
+  const event=(await events(forward.commandId))[0];
+  assert.equal(event.actor_ref,`membership:${auth.membershipId}`);
+  assert.equal(event.event_type,"v2.inbound.received");
+  assert.equal(event.payload.references.commandId,forward.commandId);
+  assert.equal(Object.hasOwn(event.payload.references,"version"),false);
+  const original = (await admin.query(`SELECT i.channel,i.fixture_id,d.id FROM app.supplier_document_intake i
+    JOIN app.supplier_document d ON(d.tenant_id,d.job_id,d.id)=(i.tenant_id,i.job_id,i.document_id)
+    WHERE i.document_id=$1`,[filed.documentId])).rows;
+  assert.equal(original.length,1);assert.equal(original[0].channel,"fixture_mail");
+  assert.equal(original[0].fixture_id,"materials-B-invoice");
+  const documents=await workspace.supplierDocuments.view(jobId);
+  assert.ok(documents.state.facts.some(fact=>fact.document_id===filed.documentId));
+  assert.equal((await workspace.supplierMatches.view(jobId)).environment,"synthetic_demo");
+  const waiting=await repo.receive(auth,receive({sender:"unknown@jobguard-v2.invalid"}));
+  assert.equal(waiting.state,"needs_job");
+  // An explicit unrecognised reference must never fall back to the supplier.
+  assert.equal((await repo.receive(auth,receive({subject:`Invoice ${randomUUID()}`}))).state,"needs_job");
+  assert.equal((await repo.receive(auth,receive({attachments:[{name:"real.pdf"}]}))).state,"needs_k6b");
+  const noFixture=receive({});delete noFixture.fixtureId;
+  const held=await repo.receive(auth,noFixture);assert.equal(held.state,"needs_k6b");
+  await assert.rejects(repo.command(auth,command({action:"file",itemId:held.itemId,jobId})),/NEEDS_K6B/);
+  const manual=command({action:"file",itemId:waiting.itemId,jobId});
+  await failsAtomically(manual,()=>repo.command(auth,manual),async()=>{
+    assert.equal((await repo.view(auth)).items.find(item=>item.id===waiting.itemId).state,"needs_job");
+  });
+  await repo.command(auth,manual);await repo.command(auth,manual);
+  assert.equal((await events(manual.commandId)).length,1);
+  const dismiss=command({action:"dismiss",itemId:held.itemId});
+  await failsAtomically(dismiss,()=>repo.command(auth,dismiss),async()=>{
+    assert.equal((await repo.view(auth)).items.find(item=>item.id===held.itemId).state,"needs_k6b");
+  });
+  await repo.command(auth,dismiss);await repo.command(auth,dismiss);
+  assert.equal((await events(dismiss.commandId)).length,1);
+  await assert.rejects(repo.receive(second,receive({})),/NOT_FOUND/);
+  await assert.rejects(repo.receive(auth,receive({recipient:otherAddress})),/NOT_FOUND/);
+  assert.deepEqual((await repo.view(second)).items,[]);
+  await assert.rejects(repo.command(second,command({action:"file",itemId:waiting.itemId,jobId})),/NOT_FOUND/);
+  const firm=(await admin.query("SELECT firm_key FROM app.v2_inbound_address WHERE address=$1",[address])).rows[0].firm_key;
+  await withTenant(runtime,second.context,async db=>{
+    for(const table of ["v2_inbound_address","v2_inbound_item","v2_inbound_command"]){
+      assert.equal((await db.$client.query(`SELECT * FROM app.${table} WHERE firm_key=$1`,[firm])).rowCount,0);
+      assert.equal((await db.$client.query(`SELECT relrowsecurity AND relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass`,[`app.${table}`])).rows[0].forced,true);
+      assert.equal((await db.$client.query(`SELECT has_table_privilege(current_user,$1,'DELETE') allowed`,[`app.${table}`])).rows[0].allowed,false);
+      for(const verb of ["UPDATE","DELETE"]) {
+        if(verb==="UPDATE" && table==="v2_inbound_item")continue;
+        await db.$client.query("SAVEPOINT k6_boundary");
+        const statement=verb==="DELETE"?`DELETE FROM app.${table} WHERE firm_key=$1`:
+          table==="v2_inbound_address"?"UPDATE app.v2_inbound_address SET address=address WHERE firm_key=$1":
+          "UPDATE app.v2_inbound_command SET result=result WHERE firm_key=$1";
+        if(table==="v2_inbound_address"&&verb==="UPDATE" || verb==="DELETE") await assert.rejects(db.$client.query(statement,[firm]),/permission denied/);
+        else assert.equal((await db.$client.query(statement,[firm])).rowCount,0);
+        await db.$client.query("ROLLBACK TO SAVEPOINT k6_boundary");
+      }
+    }
+    assert.equal((await db.$client.query("UPDATE app.v2_inbound_item SET state='dismissed' WHERE firm_key=$1",[firm])).rowCount,0);
+    for(const statement of [
+      "INSERT INTO app.v2_inbound_address(tenant_id,firm_key,address,created_by) VALUES($1,$2,'cross-firm@jobguard-v2.invalid',$3)",
+      "INSERT INTO app.v2_inbound_command(tenant_id,firm_key,command_id,request_hash,result) VALUES($1,$2,$3,repeat('a',64),'{}'::jsonb)",
+    ]) {
+      await db.$client.query("SAVEPOINT k6_foreign_insert");
+      await assert.rejects(db.$client.query(statement,[auth.context.tenantId,firm,auth.membershipId]),/row-level security/);
+      await db.$client.query("ROLLBACK TO SAVEPOINT k6_foreign_insert");
+    }
+    await db.$client.query("SAVEPOINT k6_insert");
+    await assert.rejects(db.$client.query(`INSERT INTO app.v2_inbound_item(tenant_id,firm_key,id,message_id,message_hash,sender,subject,state)
+      VALUES($1,$2,$3,'cross-firm',$4,'unknown@jobguard-v2.invalid','cross firm','needs_job')`,[auth.context.tenantId,firm,randomUUID(),"a".repeat(64)]),/row-level security/);
+    await db.$client.query("ROLLBACK TO SAVEPOINT k6_insert");
+    await db.$client.query("SAVEPOINT k6_delete");
+    await assert.rejects(db.$client.query("DELETE FROM app.v2_inbound_item WHERE firm_key=$1",[firm]),/permission denied/);
+    await db.$client.query("ROLLBACK TO SAVEPOINT k6_delete");
+  });
+  // Force a failure after each domain write, using the command receipt insert
+  // finalisation (which precedes appendAuditBatch) as the failure boundary. No row or audit survives.
+  await admin.query(`CREATE FUNCTION app.k6_fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+    IF NEW.result->>'state' IS NOT NULL THEN RAISE EXCEPTION 'K6_FORCED_FAILURE'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER k6_fail_receipt BEFORE UPDATE ON app.v2_inbound_command FOR EACH ROW EXECUTE FUNCTION app.k6_fail_receipt()`);
+  try {
+    const failing=receive({messageId:"k6-rollback-"+randomUUID()});
+    const before=(await admin.query("SELECT count(*)::int n FROM app.supplier_document_intake WHERE job_id=$1",[jobId])).rows[0].n;
+    await assert.rejects(repo.receive(auth,failing),/K6_FORCED_FAILURE/);
+    assert.equal((await admin.query("SELECT * FROM app.v2_inbound_item WHERE message_id=$1",[failing.messageId])).rowCount,0);
+    assert.equal((await events(failing.commandId)).length,0);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.supplier_document_intake WHERE job_id=$1",[jobId])).rows[0].n,before);
+  } finally {
+    await admin.query("DROP TRIGGER k6_fail_receipt ON app.v2_inbound_command; DROP FUNCTION app.k6_fail_receipt()");
+  }
+  await t.test("an ambiguous known supplier waits without documents or stock changes", async () => {
+    const secondJob = randomUUID(), bindingId = randomUUID(), scopeId = randomUUID();
+    // Owner-connected fictional prerequisites only; the receive below uses the runtime role.
+    await withTenant(admin,auth.context,async db=>{
+      await db.$client.query(`INSERT INTO app.job(tenant_id,id,title,practice_session_digest,practice_scenario)
+        SELECT tenant_id,$2,'ZZ K6A second merchant job',practice_session_digest,'capture'
+        FROM app.job WHERE tenant_id=$1 AND id=$3`,[auth.context.tenantId,secondJob,jobId]);
+      await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,
+        customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance)
+        SELECT b.tenant_id,$2,$3,0,b.customer_id,b.customer_revision_id,b.paying_party_id,
+          b.paying_party_revision_id,b.site_id,b.site_revision_id,'backfilled_synthetic_fixture'
+        FROM app.job_party_current c JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(c.tenant_id,c.binding_id)
+        WHERE c.tenant_id=$1 AND c.job_id=$4`,[auth.context.tenantId,bindingId,secondJob,jobId]);
+      await db.$client.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)",
+        [auth.context.tenantId,secondJob,bindingId]);
+      await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[auth.context.tenantId,secondJob]);
+      await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",
+        [auth.context.tenantId,scopeId,secondJob]);
+      const ownScopeId = randomUUID();
+      await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",
+        [auth.context.tenantId,ownScopeId,jobId]);
+      // Both open jobs need the same fixture merchant's tiles, copied from the seeded job.
+      for (const [target, scope] of [[jobId, ownScopeId], [secondJob, scopeId]]) {
+        await db.$client.query("SELECT set_config('app.practice_material_digest',practice_session_digest,true) FROM app.job WHERE tenant_id=$1 AND id=$2",
+          [auth.context.tenantId,target]);
+        const requirement = await db.$client.query(`INSERT INTO app.material_requirement(tenant_id,id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)
+          SELECT r.tenant_id,$2,$3,$4,r.sku_id,'1',r.unit,1
+          FROM app.material_requirement r JOIN app.merchant_sku s ON(s.tenant_id,s.id)=(r.tenant_id,r.sku_id)
+          JOIN app.merchant m ON(m.tenant_id,m.id)=(s.tenant_id,s.merchant_id)
+          WHERE r.tenant_id=$1 AND r.job_id=$5 AND m.name='Fictional Teacup Tile Merchant' LIMIT 1`,
+          [auth.context.tenantId,randomUUID(),target,scope,k6SeededJob()]);
+        assert.equal(requirement.rowCount,1);
+      }
+    });
+    const beforeView = await repo.view(auth);
+    assert.ok([jobId,secondJob].every(id=>beforeView.jobs.some(job=>job.id===id)));
+    const documentCounts = async () => (await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.supplier_document WHERE tenant_id=$1) AS documents,
+      (SELECT count(*)::int FROM app.supplier_document_intake WHERE tenant_id=$1) AS intakes,
+      (SELECT count(*)::int FROM app.goods_receipt WHERE tenant_id=$1) AS receipts`,[auth.context.tenantId])).rows[0];
+    const beforeDocuments = await documentCounts();
+    const ambiguous = receive({subject:"Merchant invoice without a job reference",body:"",fixtureId:"materials-B-delivery"});
+    const result = await repo.receive(auth,ambiguous);
+    assert.equal(result.state,"needs_job");
+    assert.equal(result.documentId,null);
+    const afterView = await repo.view(auth);
+    assert.equal(afterView.items.length,beforeView.items.length+1);
+    const stored = (await admin.query("SELECT id,state,job_id,document_id FROM app.v2_inbound_item WHERE firm_key=$1 AND message_id=$2",
+      [firm,ambiguous.messageId])).rows;
+    assert.deepEqual(stored,[{id:result.itemId,state:"needs_job",job_id:null,document_id:null}]);
+    assert.deepEqual(await documentCounts(),beforeDocuments);
+  });
+  const http = await request("/api/v2/inbound-mail",{cookies:owner.cookies});
+  assert.equal(http.status,200);
+  assert.equal((await http.json()).address,address);
 });
 
 // must stay the last test: it signs the cached builder out

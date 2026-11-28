@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k6": {
+      "branches": [
+        "codex/sandbox/v2-k6",
+        "claude/project-thread-trp08u-k6"
+      ],
+      "note": "RED. K6A fixture-only inbound routing; no intake changes.",
+      "allow": [
+        "apps/api/src/v2-inbound-mail.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/(designed)/inbound-mail/page.tsx",
+        "apps/web/app/(designed)/inbound-mail/tray.tsx",
+        "apps/web/app/api/v2/inbound-mail/route.ts",
+        "packages/db/migration-notes/2072_v2_inbound_mail.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-inbound-mail.test.ts",
+        "packages/db/src/v2-inbound-mail.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/guard.mjs",
+        "tools/v2/firm-lock/pending/FL-K6.json",
+        "tools/v2/inbound-mail.browser.test.mjs",
+        "tools/v2/migration-proofs/2072_v2_inbound_mail.json",
+        "tools/v2/migrations/2072_v2_inbound_mail.sql",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

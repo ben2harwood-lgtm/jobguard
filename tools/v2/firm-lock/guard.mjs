@@ -1,5 +1,7 @@
 // V2-FL guard: every job-bound app table that jobguard_runtime can touch must carry
 // a working v2_practice_firm lock, unless a pending slice file still names it.
+// A direct table with a nullable job_id may instead lock its NOT NULL firm_key, with a separate
+// restrictive v2_practice_job checking the job whenever one is set (K6 inbound mail).
 import { readdirSync, readFileSync } from "node:fs";
 
 const pendingDir = new URL("./pending/", import.meta.url);
@@ -44,7 +46,13 @@ export async function firmLockCatalog(admin) {
       (SELECT jsonb_build_object('restrictive', NOT p.polpermissive, 'command', p.polcmd::text,
          'roles', (SELECT array_agg(r::regrole::text) FROM unnest(p.polroles) r),
          'using', pg_get_expr(p.polqual, p.polrelid), 'check', pg_get_expr(p.polwithcheck, p.polrelid))
-       FROM pg_policy p WHERE p.polrelid = t.oid AND p.polname = 'v2_practice_firm') AS firm_policy
+       FROM pg_policy p WHERE p.polrelid = t.oid AND p.polname = 'v2_practice_firm') AS firm_policy,
+      (SELECT jsonb_build_object('restrictive', NOT p.polpermissive, 'command', p.polcmd::text,
+         'roles', (SELECT array_agg(r::regrole::text) FROM unnest(p.polroles) r),
+         'using', pg_get_expr(p.polqual, p.polrelid), 'check', pg_get_expr(p.polwithcheck, p.polrelid))
+       FROM pg_policy p WHERE p.polrelid = t.oid AND p.polname = 'v2_practice_job') AS job_policy,
+      (SELECT jsonb_object_agg(a.attname, a.attnotnull) FROM pg_attribute a
+       WHERE a.attrelid = t.oid AND a.attname IN ('job_id', 'firm_key') AND NOT a.attisdropped) AS not_null
     FROM targets t JOIN pg_class c ON c.oid = t.oid ORDER BY 1`);
   return rows;
 }
@@ -121,6 +129,38 @@ function unmatchedParentKeys(row, joins, jobBound, lockedParents) {
   return keys.filter(key => !covered(key)).map(({ parent, pairs }) => `${parent}(${pairs.map(([child]) => child).join(", ")})`);
 }
 
+// The firm-key lock, for a direct table whose job_id may be NULL (mail not yet filed to a job).
+const FIRM_KEY_LOCK = "(firm_key = app.current_firm_profile_key())";
+
+// Shape problems shared by both named policies: restrictive, ALL commands, runtime only.
+function policyShape(name, policy) {
+  const problems = [];
+  if (!policy.restrictive) problems.push(`${name} is permissive`);
+  if (policy.command !== "*") problems.push(`${name} covers ${policy.command}, not ALL`);
+  if (JSON.stringify(policy.roles) !== JSON.stringify(["jobguard_runtime"])) problems.push(`${name} is not for jobguard_runtime only`);
+  return problems;
+}
+
+const isJobJoin = joins => joins && joins.length === 1 && joins[0].parent === "app.job"
+  && samePairs(joins[0].pairs, [["tenant_id", "tenant_id"], ["job_id", "id"]]);
+
+// A nullable-job table: v2_practice_firm is exactly the firm-key lock on a NOT NULL firm_key, and a separate
+// restrictive v2_practice_job is exactly "job_id IS NULL OR <mandatory app.job join on (tenant_id, job_id)>".
+function firmKeyLockProblems(row, table) {
+  const problems = [];
+  if (row.not_null?.firm_key !== true) problems.push("the firm-key lock needs a NOT NULL firm_key");
+  const job = row.job_policy;
+  if (!job) return [...problems, "the firm-key lock needs a separate v2_practice_job policy"];
+  problems.push(...policyShape("v2_practice_job", job));
+  const using = job.using ?? "";
+  const parts = splitTop(unwrap(squash(using)), "OR");
+  if (!(parts.length === 2 && parts[0] === "job_id IS NULL" && isJobJoin(mandatoryJoins(parts[1], table)))) {
+    problems.push("v2_practice_job is not job_id IS NULL OR a mandatory app.job join on (tenant_id, job_id)");
+  }
+  if (job.check !== null && job.check !== using) problems.push("v2_practice_job has a different WITH CHECK");
+  return problems;
+}
+
 // The reasons a table is not truly firm-locked (empty when it is).
 // jobBound: every catalog relation. lockedParents: those that carry a v2_practice_firm policy themselves.
 export function lockProblems(row, lockedParents = new Set(), jobBound = lockedParents) {
@@ -129,15 +169,18 @@ export function lockProblems(row, lockedParents = new Set(), jobBound = lockedPa
   if (!row.rls) problems.push("row security is off, so no policy applies");
   if (!row.runtime_permissive) problems.push("no permissive runtime policy, so zero rows would only look locked");
   if (!policy) return [...problems, "no v2_practice_firm policy"];
-  if (!policy.restrictive) problems.push("v2_practice_firm is permissive");
-  if (policy.command !== "*") problems.push(`v2_practice_firm covers ${policy.command}, not ALL`);
-  if (JSON.stringify(policy.roles) !== JSON.stringify(["jobguard_runtime"])) problems.push("v2_practice_firm is not for jobguard_runtime only");
+  problems.push(...policyShape("v2_practice_firm", policy));
   const using = policy.using ?? "";
   const table = row.relation.replace(/^app\./u, "");
+  // Only a direct table whose job_id is nullable may use the firm-key form; a NOT NULL job_id must join the job.
+  if (row.kind === "direct" && row.not_null?.job_id === false && squash(using) === FIRM_KEY_LOCK) {
+    problems.push(...firmKeyLockProblems(row, table));
+    if (policy.check !== null && policy.check !== using) problems.push("v2_practice_firm has a different WITH CHECK");
+    return problems;
+  }
   const joins = row.kind === "root" ? [] : mandatoryJoins(using, table);
   if (joins === null) problems.push("v2_practice_firm is not only mandatory EXISTS joins on column equalities (an OR or extra condition)");
-  if (row.kind === "direct" && joins && !(joins.length === 1 && joins[0].parent === "app.job"
-    && samePairs(joins[0].pairs, [["tenant_id", "tenant_id"], ["job_id", "id"]]))) {
+  if (row.kind === "direct" && joins && !isJobJoin(joins)) {
     problems.push("v2_practice_firm does not join app.job on (tenant_id, job_id)");
   }
   // app.job is the root: 2001's rule compares the job's own practice digest with the session's firm.
