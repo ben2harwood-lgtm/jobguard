@@ -36,10 +36,13 @@ BEGIN
     UNIQUE (tenant_id, command_id),
     CHECK (expires_at > released_at AND expires_at <= released_at + interval '90 days'),
     FOREIGN KEY (tenant_id, job_id, version) REFERENCES app.v2_handover_version (tenant_id, job_id, version),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id),
     FOREIGN KEY (tenant_id, job_id, party_binding_id) REFERENCES app.job_party_binding (tenant_id, job_id, id),
     FOREIGN KEY (tenant_id, customer_revision_id) REFERENCES app.customer_revision (tenant_id, id)
   );
+  -- A linked V2 builder's membership lives in the identity tenant, not the practice tenant, so a membership FK
+  -- refused every write. As in 2012 and 2071, the actor is the verified v2_work_plan_editor id, unkeyed.
+  -- Dropped here too for a local database that already ran the first version of this file.
+  ALTER TABLE app.v2_handover_release DROP CONSTRAINT IF EXISTS v2_handover_release_tenant_id_actor_membership_id_fkey;
 
   -- Receipt only: one row per release, a time and nothing else. No watchdog trigger
   -- (that guard needs a bound request actor, and a link has none).
