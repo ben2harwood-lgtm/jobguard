@@ -1,5 +1,6 @@
 // V2-K5A: builder-only working payment schedule.
 import { PaymentScheduleApplication } from "./payment-schedule.application.js";
+import { CloseOutApplication } from "./close-out.application.js";
 export type { PaymentScheduleView } from "@jobguard/db";
 import { CommercialIntegrityV3Application } from "../commercial-integrity-v3.application.js";
 import { PaymentFeeApplication } from "../payment-fee.application.js";
@@ -116,6 +117,8 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   return Object.freeze({
     // V2-K5A
     paymentSchedule: new PaymentScheduleApplication(dependencies.pool, dependencies.sessionId),
+    // V2-G6
+    closeOut: new CloseOutApplication(dependencies.pool, dependencies.sessionId),
     workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, commercialIntegrityV3: Object.freeze({
     family: (jobId:string) => commercialIntegrityV3.family(dependencies.sessionId,jobId),
     view: (jobId:string,query:unknown) => commercialIntegrityV3.view(dependencies.sessionId,jobId,query),

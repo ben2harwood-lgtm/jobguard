@@ -8,6 +8,7 @@ import {
   JobWorkStateError, FinalAccountLockError, type FinalAccountLockErrorCode, type FinalAccountLockHashes,
 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { assertNoLiveStageDraft } from "./v2-close-out-repository.js";
 
 export const FINAL_LOCK_UPLOAD_WAIT_MS = 5000;
 const uuid = z.guid({ error: "Invalid uuid" });
@@ -72,6 +73,8 @@ export class FinalAccountLockRepository {
  async lock(context: VerifiedTenantContext, raw: z.infer<typeof lockInput>): Promise<PersistedFinalAccountLock> {
   const input = parse(lockInput, raw);
   try { return await withTenant(this.pool, context, async db => {
+   // V2-G6 (local V2 practice stack only; a no-op elsewhere): no live stage draft at lock, under K5B-1's lock first.
+   await assertNoLiveStageDraft(db.$client, context.tenantId, input.jobId);
    // Evidence writes hold SHARE on the job; the lock takes UPDATE, so it waits for uploads already in progress and then sees them.
    await db.$client.query("SELECT set_config('lock_timeout',$1,true)", [`${Math.trunc(this.lockWaitMs)}ms`]);
    const row = (await db.$client.query<any>(`SELECT l.*,r.source_hash locked_source_hash,to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') locked_at_text FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7) l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)`, [context.tenantId, input.jobId, input.actorMembershipId, input.commandId, input.finalAccountRevisionId, input.expectedRevision, input.declarationVersion])).rows[0]!;

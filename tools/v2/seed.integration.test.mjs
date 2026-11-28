@@ -2144,3 +2144,80 @@ test("K5B-1 a draft lists only extras approved since the schedule; a draft's com
   await assert.rejects(fixture.app.paymentSchedule.set(fixture.draftJob, { ...k5TaskDone(view, { scopeItemId: randomUUID(), taskKey: "fictional-task" }), commandId: used }),
     { code: "SCHEDULE_REPLAY_CONFLICT" });
 });
+
+
+// V2-G6 (Q73): "Before you close this job" and the stage-draft guards around main's lock. Main's final account,
+// lock, Final Check and invoices are unchanged. On V2 a linked session cannot yet build a final account through
+// main's path (42501 from lp6_session_authority, as PX's proof command), so those steps are not exercised here.
+const g6Review = async (app, jobId) => (await app.closeOut.review(jobId)).review;
+const g6Lock = () => ({ version: "final-account.lock.v1", commandId: randomUUID(), finalAccountRevisionId: randomUUID(),
+  expectedRevision: 0, declarationVersion: "final_account_declaration.v1" });
+// Test administrator fixture only: a final-account lock row for this job, as if main's lock had run. Replica role
+// skips the foreign keys and triggers that tie it to a real final account, which V2 cannot build yet.
+async function g6FixtureLock(jobId) {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query(`INSERT INTO app.final_account_lock (tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,
+        capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,
+        onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
+      SELECT tenant_id,id,gen_random_uuid(),gen_random_uuid(),coalesce(baseline_quote_version_id,accepted_quote_version_id),
+        repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64),'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1',
+        'synthetic_final_check_terms.v1',gen_random_uuid(),clock_timestamp(),gen_random_uuid(),gen_random_uuid()
+      FROM app.job WHERE id=$1`, [jobId]);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+test("G6 done when (review): open items are listed as warnings, and only a live stage draft blocks", async () => {
+  const { app, draftJob, cookies } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+  const extra = await k5a1Propose(app, draftJob, 24000);
+  await k5a1Approve(app, draftJob, extra.variationId, extra.revisionId);
+  const before = { effects: await effectCounts(), money: await k5bMoney(draftJob) };
+  const open = await g6Review(app, draftJob);
+  assert.equal(open.blocking, false, "open tasks are a reminder, not a block");
+  assert.deepEqual(open.items.map(item => [item.kind, item.blocking]), [["open_tasks", false]]);
+  assert.ok(open.items[0].count > 0);
+  assert.equal(open.items[0].href, `/jobs/${draftJob}/work`);
+  await app.paymentSchedule.set(draftJob, k5bDraft(0));
+  const drafted = await g6Review(app, draftJob);
+  assert.equal(drafted.blocking, true);
+  assert.deepEqual(drafted.items[0], { kind: "stage_drafts_open", blocking: true, count: 1,
+    label: "1 stage invoice draft is not withdrawn. Withdraw it before you lock the account", href: `/jobs/${draftJob}/money#payment-schedule-heading` });
+  // Over HTTP, the same review; nothing stored.
+  const served = await json(await request(`/api/jobs/${draftJob}/close-out`, { cookies }));
+  assert.deepEqual(served, { version: "v2-close-out-review.v1", environment: "synthetic_demo", review: drafted });
+  await app.paymentSchedule.set(draftJob, k5bWithdraw(0, 1));
+  assert.equal((await g6Review(app, draftJob)).blocking, false);
+  const after = { effects: await effectCounts(), money: await k5bMoney(draftJob) };
+  assert.deepEqual(after.money, before.money, "no invoice or lock");
+  // The second firm cannot read it.
+  const outsider = await signIn("second-builder");
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).closeOut.review(draftJob), { code: "NOT_FOUND" });
+  assert.equal((await request(`/api/jobs/${draftJob}/close-out`, { cookies: outsider.cookies })).status, 404);
+});
+
+test("G6 the lock refuses V2_STAGE_DRAFT_OPEN first while a stage draft is live, and writes nothing", async () => {
+  const { app, draftJob } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+  await app.paymentSchedule.set(draftJob, k5bDraft(0));
+  const before = { effects: await effectCounts(), money: await k5bMoney(draftJob) };
+  await assert.rejects(app.finalAccountLock.lock(draftJob, g6Lock()), { code: "V2_STAGE_DRAFT_OPEN" });
+  assert.deepEqual({ effects: await effectCounts(), money: await k5bMoney(draftJob) }, before, "nothing written");
+  await app.paymentSchedule.set(draftJob, k5bWithdraw(0, 1));
+  // With the draft withdrawn the guard lets the call through to main's own lock, which refuses this stand-in revision.
+  await assert.rejects(app.finalAccountLock.lock(draftJob, g6Lock()), error => error.code !== "V2_STAGE_DRAFT_OPEN");
+});
+
+test("G6 after the final account locks, a new stage draft is refused FINAL_ACCOUNT_LOCKED; a replay still returns", async () => {
+  const { app, draftJob, cookies, csrfToken } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+  const command = k5bDraft(0);
+  const made = await app.paymentSchedule.set(draftJob, command);
+  await app.paymentSchedule.set(draftJob, k5bWithdraw(0, 1));
+  await g6FixtureLock(draftJob);
+  await assert.rejects(app.paymentSchedule.set(draftJob, k5bDraft(0)), { code: "FINAL_ACCOUNT_LOCKED" });
+  assert.equal((await json(await request(`/api/jobs/${draftJob}/payment-schedule`, { cookies, csrf: csrfToken, body: k5bDraft(0) }), 409)).code,
+    "FINAL_ACCOUNT_LOCKED");
+  assert.equal((await app.paymentSchedule.set(draftJob, command)).draftNo, made.draftNo, "a replay of the earlier draft returns it");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_stage_invoice_draft WHERE job_id=$1", [draftJob])).rows[0].n, 1);
+});

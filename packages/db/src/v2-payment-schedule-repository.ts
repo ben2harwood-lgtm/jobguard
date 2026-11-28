@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
+import { assertFinalAccountOpen } from "./v2-close-out-repository.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { initialStageAmounts, paymentScheduleSetV1, paymentScheduleTaskDoneV1, PaymentScheduleError, pounds, projectPaymentSchedule,
   replayPaymentSchedule, stageDraftCommandV1, stageDraftWithdrawCommandV1, type FrozenStage, type PaymentStage,
@@ -184,6 +185,8 @@ export class PaymentScheduleRepository {
       const head = await this.head(client, context.tenantId, jobId);
       const requestDigest = digest({ jobId, actor, command });
       const prior = await this.draftByCommand(client, context.tenantId, command.commandId);
+      // V2-G6: once the final account is locked, no new draft can become a second bill. A replay still returns.
+      if (!prior) await assertFinalAccountOpen(client, context.tenantId, jobId);
       if (prior) {
         if (prior.requestDigest !== requestDigest) throw new PaymentScheduleError("STAGE_DRAFT_COMMAND_CONFLICT");
         return publicDraft(prior);
