@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl-job": {
+      "branches": ["claude/project-thread-trp08u-fljob"],
+      "note": "RED tenancy. Q89 V2-FL-JOB: V2 migration 2090 replaces app.job's v2_practice_firm so an imported job in the shared practice tenant is visible only to its importing firm (0734's owned-job walk), plus the FL guard's root rule and the Q89 seed proofs.",
+      "allow": [
+        "config/lanes/v2-fl-job.json",
+        "packages/db/migration-notes/2090_v2_job_firm_owned_import.md",
+        "packages/db/migrations/2090_v2_job_firm_owned_import.sql",
+        "packages/db/test/migration-proofs/2090_v2_job_firm_owned_import.proof.json",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/guard.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

@@ -108,7 +108,11 @@ const samePairs = (a, b) => {
 };
 
 // app.job's own lock, exactly as 2001 writes it.
-const ROOT_LOCK = "((practice_session_digest IS NULL) OR (app.current_firm_profile_key() = ('practice:'::text || (practice_session_digest)::text)))";
+// 2001's rule as 2090 (Q89) left it: a session job is its digest's firm's; an imported job in the shared practice
+// tenant is the firm's only through the owned-job walk.
+const ROOT_LOCK = `CASE WHEN (practice_session_digest IS NOT NULL) THEN (app.current_firm_profile_key() = ('practice:'::text || (practice_session_digest)::text))
+  WHEN (((provenance)::text = 'imported'::text) AND (tenant_id = '11111111-1111-4111-8111-111111111111'::uuid)) THEN app.v2_firm_owns_imported_job(tenant_id, id)
+  ELSE true END`;
 
 // The foreign keys into job-bound parents that no mandatory join matches exactly (empty when all are).
 // Each must read a firm-locked parent: a row naming two jobs (job_link) needs both to be visible.
@@ -140,8 +144,8 @@ export function lockProblems(row, lockedParents = new Set(), jobBound = lockedPa
     && samePairs(joins[0].pairs, [["tenant_id", "tenant_id"], ["job_id", "id"]]))) {
     problems.push("v2_practice_firm does not join app.job on (tenant_id, job_id)");
   }
-  // app.job is the root: 2001's rule compares the job's own practice digest with the session's firm.
-  if (row.kind === "root" && squash(using) !== squash(ROOT_LOCK)) problems.push("app.job's v2_practice_firm is not 2001's firm rule");
+  // app.job is the root: 2001's rule compares the job's own practice digest with the session's firm (2090 adds imports).
+  if (row.kind === "root" && squash(using) !== squash(ROOT_LOCK)) problems.push("app.job's v2_practice_firm is not 2001's firm rule as 2090 left it");
   // An indirect lock must reach the job through a firm-locked parent it has a foreign key to, on that key's every column.
   if (row.kind === "indirect" && joins) {
     const unmatched = unmatchedParentKeys(row, joins, jobBound, lockedParents);
