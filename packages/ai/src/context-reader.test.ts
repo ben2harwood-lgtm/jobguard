@@ -1,9 +1,17 @@
 import { toJobRecordProposal } from "@jobguard/core";
 import { describe, expect, it } from "vitest";
 import { checkSpokenNumbers, readSpokenJob, spokenNumbers, understoodLabels } from "./context-reader.js";
+import { readFileSync } from "node:fs";
 import { saidAmountOpen } from "./capture-fixture-parser.js";
 
 const SMITH = "Smith house refurb. In the kitchen rip out the old units and fit new ones for 2400, tile the floor about 12 square metres at 60 a metre. Upstairs bathroom strip out, new suite supply and fit 3200, and get the sparky to move two sockets. Paint the hallway and landing, two coats, 650.";
+/** The words either side of a span within its clause, cut where totals() cuts a clause (never inside "1,200" or "4.5k"). */
+const clauseAround = (text: string, start: number, end: number): [string, string] => {
+  const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !(/[.,]/u.test(text[at]!) && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
+  let from = start; while (from > 0 && !boundary(from - 1)) from--;
+  let to = end; while (to < text.length && !boundary(to)) to++;
+  return [text.slice(from, start), text.slice(end, to)];
+};
 const strip = <T extends { timeline: unknown }>({ timeline: _, ...rest }: T) => rest;
 
 describe("V2-SQ-C Reader A", () => {
@@ -61,9 +69,32 @@ describe("V2-SQ-C Reader A", () => {
       const whole = readSpokenJob("e", `Tile the floor. ${said} for the whole job.`);
       expect(whole.wholeJobPrice?.pence ?? null, said).toBeNull();
     }
+    // The other end of a range or alternative, pence beside it, a number after it, or a hedge word: open, as on a line.
+    for (const said of ["five hundred pounds or six hundred", "500 pounds to 600", "five hundred pounds or six", "500 pounds and 50p", "500 pounds 2"]) {
+      const room = readSpokenJob("o", `In the bathroom tile the floor. Bathroom all in ${said}.`);
+      expect(room.areaPrices, said).toEqual([]);
+      expect(toJobRecordProposal(strip(room)).questions.map(question => question.question.value).some(question => question.includes(said)), said).toBe(true);
+      const whole = readSpokenJob("x", `Tile the floor. All in ${said} for the whole job.`);
+      expect(whole.wholeJobPrice?.pence ?? null, said).toBeNull();
+      const line = readSpokenJob("l", `Tile the floor for ${said}.`);
+      expect(line.lines.every(item => item.unitPricePence.value === null), said).toBe(true);
+    }
     // Whole amounts said in full are still read exactly.
     expect(readSpokenJob("r", "In the bathroom tile the floor. Bathroom all in one thousand two hundred pounds.").areaPrices.map(price => price.pence)).toEqual([120000]);
     expect(readSpokenJob("g", "Tile the floor. Six grand for the whole job.").wholeJobPrice?.pence).toBe(600000);
+  });
+
+  it("line prices and room and whole-job totals call one guard function, saidAmountOpen, and nothing else", () => {
+    const parser = readFileSync(new URL("./capture-fixture-parser.ts", import.meta.url), "utf8");
+    const reader = readFileSync(new URL("./context-reader.ts", import.meta.url), "utf8");
+    const body = (source: string, start: string, end: string) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
+    const plain = body(parser, "function plainPrice(", "\n}\n");
+    const totalsBody = body(reader, "function totals(", "\n}\n");
+    for (const source of [plain, totalsBody]) {
+      expect(source).toMatch(/saidAmountOpen\(/u);
+      // No guard is applied beside it, so the two can never drift apart again.
+      expect(source).not.toMatch(/\b(?:readInPart|rangeAfter|numberAfter|loosePence|rateAfter)\b/u);
+    }
   });
 
   it("never reads part of a number: “4.5k” is £4,500 and never “5k”", () => {
@@ -167,7 +198,10 @@ describe("V2-SQ-C Reader A", () => {
       () => `, the ${pick(rooms)} all in ${pick(partly)} ${money()}`, () => ` ${pick(partly)} ${money()} for the whole job`,
       () => `, the ${pick(rooms)} all in ${money()} and ${pick(["five", "fifty", "2", "a half"])}`,
       // Totals followed by a rate qualifier: a rate, never a room or whole-job price.
-      () => `, the ${pick(rooms)} all in ${money()} ${pick(rates)}`, () => ` ${money()} ${pick(rates)} for the whole job`];
+      () => `, the ${pick(rooms)} all in ${money()} ${pick(rates)}`, () => ` ${money()} ${pick(rates)} for the whole job`,
+      // The other end of a range or alternative: never the first amount alone.
+      () => `, the ${pick(rooms)} all in ${money()} or ${pick(["six hundred", "600", "six", "seven hundred pounds"])}`,
+      () => ` for ${money()} or ${pick(["six hundred", "600", "seven hundred pounds"])}`];
     for (let run = 0; run < 400; run++) {
       const parts: string[] = [];
       const count = 1 + Math.floor(random() * 6);
@@ -185,7 +219,7 @@ describe("V2-SQ-C Reader A", () => {
         if (price.provenance.kind !== "extracted") continue;
         const { start, end } = price.provenance.span;
         expect(spokenNumbers.money(text.slice(start, end)), `${text} → ${text.slice(start, end)}`).toBe(price.pence);
-        expect(saidAmountOpen(text.slice(0, start), text.slice(end)), `${text} → ${text.slice(start, end)} was read in part or as a rate`).toBe(false);
+        expect(saidAmountOpen(...clauseAround(text, start, end)), `${text} → ${text.slice(start, end)} was read in part, as a range or as a rate`).toBe(false);
       }
       for (const line of job.lines) {
         for (const [value, provenance, kind] of [[line.quantity.value, line.quantity.provenance, "count"], [line.unitPricePence.value, line.unitPricePence.provenance, "money"]] as const) {
