@@ -87,7 +87,9 @@ function amounts(value: string): Amount[] {
 // A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
 const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|to|or))\\s*$`, "iu");
 // The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
-const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£?\\d|(?:a|${numberWord})(?![\\p{L}]))`, "iu");
+const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
+// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
+const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*$)`, "iu");
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
 const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;

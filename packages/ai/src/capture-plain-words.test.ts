@@ -258,6 +258,12 @@ describe("continuous spoken quotes", () => {
       expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
       expect(result.questions.some(q => q.question.value.startsWith("Confirm price: paint the walls"))).toBe(true);
     });
+  it("reads only an amount as the other end of a range", () => {
+    expect(rows("paint the walls for £500 to a high standard")).toEqual([["paint the walls for £500 to a high standard", "1", "item", 50000]]);
+    for (const text of ["paint the walls for fifty pounds or sixty", "paint the walls for £400 to a thousand pounds"]) {
+      expect(citations(text).lines[0]!.unitPricePence.value).toBeNull();
+    }
+  });
   it.each(["fit six doors at fifty pounds a door plus VAT", "fit six doors at fifty pounds per door inc VAT", "fit six doors at fifty pounds each plus VAT"])(
     "reads a per-item price with VAT words after it, keeps the number and asks about VAT: %s", text => {
       const result = citations(text);
