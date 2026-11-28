@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "ep-d2": {
+      "branches": [
+        "claude/ep-d2-outcomes"
+      ],
+      "note": "EP-D2: hand-worked connector and billing expected outcomes; docs, fixtures and one test only; no product code, no migrations.",
+      "allow": [
+        "docs/contracts/connector-expected-outcomes-v1.md",
+        "docs/fixtures/connector-expected-outcomes-v1.json",
+        "apps/api/src/contractor/connector-expected-outcomes.test.ts"
+      ]
+    }
+  }
+}
