@@ -35,6 +35,12 @@ async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "o
   const result = await response; expect(result.ok(), await result.text()).toBe(true);
   const preview = await result.json() as Preview;
   await click(page, "Simulate sending this quote");
+  if (firm === "shared example") {
+    // The shared example firm is not a blank practice company, so its send waits in the queue for the fake worker
+    // (QuoteApplication.issue runs the fake delivery only for a blank practice company). Advance it as a builder would.
+    await expect(page.locator(".quote-notice")).toHaveText("The exact quote is queued only for the deterministic fake worker. Nothing was sent.");
+    await click(page, "Continue fake worker");
+  }
   await expect(page.locator(".quote-notice")).toHaveText("Simulated delivery — nothing real was sent.");
   return { jobId, preview };
 }

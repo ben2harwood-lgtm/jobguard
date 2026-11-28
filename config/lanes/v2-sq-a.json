@@ -3,7 +3,8 @@
   "lanes": {
     "v2-sq-a": {
       "branches": [
-        "claude/project-thread-trp08u-sqa"
+        "claude/project-thread-trp08u-sqa",
+        "claude/project-thread-trp08u-sqafix"
       ],
       "note": "T2 V2-SQ-A practice Sent list: one read-only repository method and one GET route over the existing quote_send records (no table, grant or migration), a Sent view in the designed Messages panel, and a See it in Sent link after a practice quote send. No write, send or money path changes. SQ-A mount, owned by core index: packages/db/src/index.ts one export line. SQ-A mount, owned by the designed shell: apps/web/app/(designed)/designed-ui.tsx Messages panel and design-fit.css Sent styles. SQ-A mount, owned by the quote editor: apps/web/app/ui/quote-editor.tsx one link after the delivery notice.",
       "allow": [
