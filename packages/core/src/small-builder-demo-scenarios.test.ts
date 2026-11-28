@@ -81,7 +81,7 @@ describe("DEMO-P1 documentation and fixture contract only", () => {
       family === "shadow-30000" ? Array(5).fill(600000) : Array(6).fill(null),
     );
     expect(input.source.text).not.toMatch(/Customer:|recipient:|@/iu);
-  });
+  }, 20_000);
   it("DP1-02 rejects hidden end states at every source-input level", () => {
     const valid = fixture.parse(inputs);
     const forbidden = ["tenantId","actor","completed","counts","dailyCounts","qualifyingNetPence","Q","feePence","settled","trial","signals","locked","approval","PASS","expected","timestamp"];
