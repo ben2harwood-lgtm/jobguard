@@ -2221,3 +2221,54 @@ test("G6 after the final account locks, a new stage draft is refused FINAL_ACCOU
   assert.equal((await app.paymentSchedule.set(draftJob, command)).draftNo, made.draftNo, "a replay of the earlier draft returns it");
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_stage_invoice_draft WHERE job_id=$1", [draftJob])).rows[0].n, 1);
 });
+
+// Q73 plan check, condition 1: a stage draft and the lock started together on two connections. The lock side runs
+// main's lock as the V2 lock path does: G6's guard first, then (as the fixture above, since V2 cannot build a final
+// account yet) the lock row, in one transaction. Exactly one wins each time, and the other is refused with its code.
+test("G6 race: a stage draft and the lock started together, five times; exactly one succeeds each time", async () => {
+  const { assertNoLiveStageDraft } = await import("../../packages/db/dist/index.js");
+  for (let round = 0; round < 5; round += 1) {
+    const { app, draftJob } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+    const lock = (async () => {
+      const client = await admin.connect();
+      try {
+        await client.query("BEGIN");
+        await assertNoLiveStageDraft(client, DEMO_TENANT_ID, draftJob);
+        await client.query("SET LOCAL session_replication_role = replica");
+        await client.query(`INSERT INTO app.final_account_lock (tenant_id,job_id,id,final_account_revision_id,baseline_quote_version_id,
+            capture_register_hash,line_set_hash,scope_disposition_hash,snapshot_digest,snapshot,declaration,declaration_version,
+            onboarding_terms_version,locking_membership_id,locked_at,command_id,audit_event_id)
+          SELECT tenant_id,id,gen_random_uuid(),gen_random_uuid(),coalesce(baseline_quote_version_id,accepted_quote_version_id),
+            repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64),'{}','I''ve reviewed the work and extras on this job and this is my complete final account.','final_account_declaration.v1',
+            'synthetic_final_check_terms.v1',gen_random_uuid(),clock_timestamp(),gen_random_uuid(),gen_random_uuid()
+          FROM app.job WHERE id=$1`, [draftJob]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    })();
+    const [drafted, locked] = await Promise.allSettled([app.paymentSchedule.set(draftJob, k5bDraft(0)), lock]);
+    const { rows: [state] } = await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.v2_stage_invoice_draft WHERE job_id=$1) AS drafts,
+      (SELECT count(*)::int FROM app.final_account_lock WHERE job_id=$1) AS locks`, [draftJob]);
+    if (drafted.status === "fulfilled") {
+      assert.equal(locked.status, "rejected", `round ${round}: both succeeded`);
+      assert.equal(locked.reason.code, "V2_STAGE_DRAFT_OPEN", `round ${round}`);
+      assert.deepEqual(state, { drafts: 1, locks: 0 }, `round ${round}`);
+    } else {
+      assert.equal(drafted.reason.code, "FINAL_ACCOUNT_LOCKED", `round ${round}`);
+      assert.equal(locked.status, "fulfilled", `round ${round}: neither succeeded`);
+      assert.deepEqual(state, { drafts: 0, locks: 1 }, `round ${round}`);
+    }
+  }
+});
+
+// Q73 plan check, condition 3: the other firm's session in the same shared practice tenant gets 404 on a stage draft.
+test("G6 a same-tenant session from a different firm gets 404 on a stage draft, and nothing is written", async () => {
+  const { draftJob } = await k5bSchedule([{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+  const outsider = await signIn("second-builder");
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(context.tenantId, DEMO_TENANT_ID, "both firms' practice sessions share one backing tenant");
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).paymentSchedule.set(draftJob, k5bDraft(0)),
+    { code: "NOT_FOUND" });
+  assert.equal((await request(`/api/jobs/${draftJob}/payment-schedule`, { cookies: outsider.cookies, csrf: outsider.csrfToken, body: k5bDraft(0) })).status, 404);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_stage_invoice_draft WHERE job_id=$1", [draftJob])).rows[0].n, 0);
+});

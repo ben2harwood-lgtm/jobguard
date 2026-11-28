@@ -73,10 +73,10 @@ export class FinalAccountLockRepository {
  async lock(context: VerifiedTenantContext, raw: z.infer<typeof lockInput>): Promise<PersistedFinalAccountLock> {
   const input = parse(lockInput, raw);
   try { return await withTenant(this.pool, context, async db => {
-   // V2-G6 (local V2 practice stack only; a no-op elsewhere): no live stage draft at lock, under K5B-1's lock first.
-   await assertNoLiveStageDraft(db.$client, context.tenantId, input.jobId);
    // Evidence writes hold SHARE on the job; the lock takes UPDATE, so it waits for uploads already in progress and then sees them.
    await db.$client.query("SELECT set_config('lock_timeout',$1,true)", [`${Math.trunc(this.lockWaitMs)}ms`]);
+   // V2-G6 (local V2 practice stack only; a no-op elsewhere): no live stage draft at lock, under K5B-1's lock first, within the timeout.
+   await assertNoLiveStageDraft(db.$client, context.tenantId, input.jobId);
    const row = (await db.$client.query<any>(`SELECT l.*,r.source_hash locked_source_hash,to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') locked_at_text FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7) l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)`, [context.tenantId, input.jobId, input.actorMembershipId, input.commandId, input.finalAccountRevisionId, input.expectedRevision, input.declarationVersion])).rows[0]!;
    const snapshot = createFinalAccountLockSnapshot(row.snapshot);
    if (snapshot.digest !== row.snapshot_digest.trim() || snapshot.captureRegisterHash !== row.capture_register_hash.trim() || snapshot.lineSetHash !== row.line_set_hash.trim() || snapshot.scopeDispositionHash !== row.scope_disposition_hash.trim()) throw new FinalAccountLockError("FINAL_ACCOUNT_SOURCE_CHANGED");
