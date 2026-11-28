@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { HandoverLinkView } from "@jobguard/api/workspace";
 import { Card, Head, Note } from "../../(designed)/designed-ui";
-import { CustomerPack, acknowledgedLine, linkProblem, linkRefused } from "../../ui/v2-handover-release-label";
+import { CustomerPack, acknowledgedLine, linkProblem, linkRefused, newerReadOnly } from "../../ui/v2-handover-release-label";
 
 export function CustomerPackView({ token, view, failure }: { token: string; view: HandoverLinkView | null; failure: "refused" | "problem" | null }) {
   const [acknowledgedAt, setAcknowledgedAt] = useState(view?.acknowledgedAt ?? null);
@@ -31,6 +31,7 @@ export function CustomerPackView({ token, view, failure }: { token: string; view
           <CustomerPack firmName={view.firmName} version={view.version} content={view.content} newer={view.newerAvailable}/>
           <Card title="Receipt"><div className="card-body form">
             {acknowledgedAt ? <p role="status">{acknowledgedLine(acknowledgedAt)}</p>
+              : view.newerAvailable ? <p role="status">{newerReadOnly}</p>
               : <button type="button" className="btn primary" disabled={busy} onClick={() => void acknowledge()}>Acknowledge receipt</button>}
             {error === "problem" && <p role="alert">{linkProblem}</p>}
           </div></Card>

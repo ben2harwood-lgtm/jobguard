@@ -2031,6 +2031,21 @@ test("G3 acknowledgement changes nothing else: snag, variation, lock, invoice an
   assert.match(reloaded, /Refit the hall door stop/u, "the snag is still outstanding: receipt signs nothing off");
 });
 
+test("G3 a superseded link stays read-only: v1 released, v2 released, then v1 cannot be acknowledged", async () => {
+  const f = await g3.ready();
+  const first = await g3.direct(f, g3.release(1));
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const v2 = (await f.post(g2.save({ sections: ["done", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [], certificates: [] }, 1))).saved;
+  const second = await g3.direct(f, g3.release(v2.version));
+  const old = await (await g3.open(first.result.token)).text();
+  assert.match(old, /This version can no longer be acknowledged/u);
+  assert.doesNotMatch(old, />Acknowledge receipt</u, "no receipt button on a superseded link");
+  assert.equal((await g3.acknowledge(first.result.token, 404)).code, "HANDOVER_LINK_REFUSED");
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_handover_acknowledgement WHERE release_id=$1", [first.result.release.releaseId])).rowCount, 0);
+  assert.equal((await g3.acknowledge(second.result.token)).replayed, false, "the newest link still records receipt");
+});
+
 test("G3 firm A/B read check, and migration 2083 reruns without changing policies, triggers or rows", async () => {
   const f = await g3.ready();
   const { result } = await g3.direct(f, g3.release(1));
