@@ -4,7 +4,7 @@ import { divideRounded } from "./rational.js";
 import { moneyFromBigInt } from "./money.js";
 import { sha256 } from "./evidence-pack.js";
 import { dashboardCanonical, dashboardCompareText, dashboardFactsV1, dashboardFreeze, dashboardParse,
-  dashboardPeriodContains, dashboardQueryV1, EnterpriseDashboardError, projectEnterpriseDashboard } from "./enterprise-dashboard.js";
+  dashboardPageLimits, dashboardPeriodContains, dashboardQueryV1, EnterpriseDashboardError, projectEnterpriseDashboard } from "./enterprise-dashboard.js";
 
 const uuid = z.guid();
 const fraction = exactPenceV1;
@@ -26,6 +26,22 @@ function totals(rows: Contribution[]) {
       known: moneyFromBigInt(divideRounded(exact.numerator, exact.denominator, "half_even")) };
   };
   return { billed: stageTotal("billed"), paid: stageTotal("paid") };
+}
+const firstPerStage = <T extends { stage: string }>(rows: readonly T[], limit: number) =>
+  (["billed", "paid"] as const).flatMap(stage => rows.filter(c => c.stage === stage).slice(0, limit));
+/** EP-F6: each group carries the first page of its own billed and paid sources. */
+function groupPage(rows: Contribution[]) {
+  const limit = dashboardPageLimits.groupContributions, contributions = firstPerStage(rows, limit);
+  return { contributions, contributionPage: { limit, complete: contributions.length === rows.length } };
+}
+/** EP-F6: the first page of each stage's drill-down, plus the requested drill-down page; never a silent cut. */
+function pages(all: Contribution[], query: z.infer<typeof dashboardQueryV1>) {
+  const limit = dashboardPageLimits.contributions, d = query.drilldown;
+  const contributions = firstPerStage(all, limit);
+  const selected = d ? all.filter(c => c.stage === d.stage && (d.group === undefined || c.group === d.group)) : [];
+  return { contributions, contributionPage: { limit, complete: contributions.length === all.length },
+    drilldown: d ? { stage: d.stage, ...(d.group === undefined ? {} : { group: d.group }), offset: d.offset, limit: d.limit, total: selected.length,
+      complete: d.offset + d.limit >= selected.length, contributions: selected.slice(d.offset, d.offset + d.limit) } : null };
 }
 /** Supplied rows must come from the scoped stored-fact SELECT. This pure function grants no authority. */
 export function projectStoredDashboardBilling(rawFacts: unknown, rawQuery: unknown, rawRows: unknown) {
@@ -56,10 +72,60 @@ export function projectStoredDashboardBilling(rawFacts: unknown, rawQuery: unkno
     }
   }
   const groups = [...new Set(contributions.map(c => c.group))].sort((a, b) => dashboardCompareText(a ?? "", b ?? ""))
-    .map(id => ({ id, totals: totals(contributions.filter(c => c.group === id)) }));
-  const result = { version: "enterprise-dashboard-stored-billing.v1", method, complete: held.length === 0, held,
+    .map(id => ({ id, totals: totals(contributions.filter(c => c.group === id)), ...groupPage(contributions.filter(c => c.group === id)) }));
+  const result = { version: "enterprise-dashboard-stored-billing.v2", method, complete: held.length === 0, held,
     // Do not bind a moving wall clock: immutable run IDs/hashes and the selected sources bind this report.
     inputHash: sha256(dashboardCanonical({ method, query, extras: [...selected.values()], rows: rows.filter(r => selected.has(r.extraId)) })),
-    totals: totals(contributions), contributions, groups: groups.slice(query.offset, query.offset + query.limit), groupCount: groups.length };
+    totals: totals(contributions), ...pages(contributions, query), groups: groups.slice(query.offset, query.offset + query.limit), groupCount: groups.length };
+  return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
+}
+
+const billingTotalV1 = z.object({ count: z.number().int().nonnegative(), numerator: z.string().regex(/^\d+$/u).max(400) }).strict();
+const billingTotalsV1 = z.partialRecord(z.enum(["billed", "paid"]), billingTotalV1);
+const billingRowV1 = z.object({ stage: z.enum(["billed", "paid"]), jobId: uuid, extraId: uuid, group: z.string().max(200).nullable(),
+  exportLineId: uuid, revisionId: uuid, runId: uuid, factId: uuid, inputHash: z.string().regex(/^[a-f0-9]{64}$/u),
+  allocationIds: z.array(uuid).max(100000), exactPence: fraction }).strict();
+/** Database-grouped stored billing (EP-F6): exact totals over every selected row; only pages of rows are carried. */
+export const storedBillingAggregateV1 = z.object({ version: z.literal("enterprise-dashboard-billing-aggregate.v1"),
+  sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), scale: z.string().regex(/^[1-9]\d*$/u).max(400), totals: billingTotalsV1,
+  groupCount: z.number().int().nonnegative(),
+  groups: z.array(z.object({ id: z.string().max(200).nullable(), totals: billingTotalsV1,
+    contributions: z.array(billingRowV1).max(2 * dashboardPageLimits.groupContributions) }).strict()).max(200),
+  contributions: z.array(billingRowV1).max(2 * dashboardPageLimits.contributions),
+  drilldown: z.object({ total: z.number().int().nonnegative(), contributions: z.array(billingRowV1).max(200) }).strict().nullable(),
+  heldCount: z.number().int().nonnegative(), held: z.array(z.object({ extraId: uuid, runId: uuid }).strict()).max(100000).nullable(),
+}).strict();
+type BillingTotals = z.infer<typeof billingTotalsV1>;
+/** Pure assembly of the bounded database read; numbers equal `projectStoredDashboardBilling` over the same rows. */
+export function assembleStoredDashboardBilling(raw: unknown, rawQuery: unknown) {
+  const agg = dashboardParse(storedBillingAggregateV1, raw), query = dashboardParse(dashboardQueryV1, rawQuery), scale = BigInt(agg.scale);
+  if (agg.held === null) throw new EnterpriseDashboardError("DASHBOARD_SELECTION_TOO_LARGE");
+  const d = query.drilldown;
+  if ((d === undefined) !== (agg.drilldown === null) || agg.held.length !== agg.heldCount) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
+  const stageTotal = (t: BillingTotals, stage: "billed" | "paid") => {
+    const exact = sumExactPence([exactPence(BigInt(t[stage]?.numerator ?? "0"), scale)]);
+    return { count: t[stage]?.count ?? 0, exactPence: serializeExactPence(exact), known: moneyFromBigInt(divideRounded(exact.numerator, exact.denominator, "half_even")) };
+  };
+  const sums = (t: BillingTotals) => ({ billed: stageTotal(t, "billed"), paid: stageTotal(t, "paid") });
+  // Billed balances are reduced (net of credits); paid balances keep their stored fraction, as the reference does.
+  const row = (r: z.infer<typeof billingRowV1>): Contribution => ({ ...r, allocationIds: [...r.allocationIds].sort(dashboardCompareText),
+    exactPence: r.stage === "billed" ? serializeExactPence(exactPence(BigInt(r.exactPence.numerator), BigInt(r.exactPence.denominator))) : r.exactPence });
+  const page = (rows: { stage: string }[], t: BillingTotals, limit: number) => {
+    const complete = (["billed", "paid"] as const).every(stage => {
+      const returned = rows.filter(r => r.stage === stage).length, count = t[stage]?.count ?? 0;
+      if (returned > count || returned > limit || (returned < count && returned < limit)) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
+      return returned === count;
+    });
+    return { limit, complete };
+  };
+  const result = { version: "enterprise-dashboard-stored-billing.v2", method, complete: agg.heldCount === 0, held: agg.held,
+    inputHash: sha256(dashboardCanonical({ method, query, sourceHash: agg.sourceHash })),
+    totals: sums(agg.totals), contributions: agg.contributions.map(row),
+    contributionPage: page(agg.contributions, agg.totals, dashboardPageLimits.contributions),
+    drilldown: d && agg.drilldown ? { stage: d.stage, ...(d.group === undefined ? {} : { group: d.group }), offset: d.offset, limit: d.limit,
+      total: agg.drilldown.total, complete: d.offset + d.limit >= agg.drilldown.total, contributions: agg.drilldown.contributions.map(row) } : null,
+    groups: agg.groups.map(g => ({ id: g.id, totals: sums(g.totals), contributions: g.contributions.map(row),
+      contributionPage: page(g.contributions, g.totals, dashboardPageLimits.groupContributions) })),
+    groupCount: agg.groupCount };
   return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
 }

@@ -8,9 +8,16 @@ const uuid = z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase());
 const moneyV1 = z.object({ pence: z.number().int().nonnegative().max(MAX_MONEY_PENCE), currency: z.literal("GBP") }).strict();
 export const dashboardDimensions = ["region", "team", "operative", "client", "contract", "period"] as const;
 const dimensions = z.object({ region: uuid.nullable(), team: uuid, operative: uuid.nullable(), client: uuid, contract: uuid }).strict();
+/** Activity and stored-billing stages a drill-down may page through. */
+export const dashboardDrilldownStages = ["captured", "approved", "backlog", "overdue", "onTime", "late", "closeoutYes", "closeoutNo", "closeoutMissing", "billed", "paid"] as const;
+/** Offsets are bounded by the server's integer range, not by a row cap. */
+const pageOffset = z.number().int().min(0).max(1_000_000_000);
 export const dashboardQueryV1 = z.object({ version: z.literal("enterprise-dashboard-query.v1"),
   from: instantV1, until: instantV1, dimension: z.enum(dashboardDimensions),
-  filters: dimensions.partial(), offset: z.number().int().min(0).max(100000), limit: z.number().int().min(1).max(200),
+  filters: dimensions.partial(), offset: pageOffset, limit: z.number().int().min(1).max(200),
+  // EP-F6: one drill-down page. `group` absent = the whole total; present (null = unattributed) = that group's figure.
+  drilldown: z.object({ stage: z.enum(dashboardDrilldownStages), group: z.string().min(1).max(200).nullable().optional(),
+    offset: pageOffset, limit: z.number().int().min(1).max(200) }).strict().optional(),
 }).strict().refine(v => compareServerInstants(v.from, v.until) < 0, "Invalid interval");
 const stepV1 = z.object({ id: uuid, dueAt: instantV1.nullable(), completedAt: instantV1.nullable(),
   sourceIds: z.array(uuid).min(1).max(10),
@@ -29,7 +36,7 @@ export const dashboardFactsV1 = z.object({ version: z.literal("enterprise-dashbo
 export type DashboardFacts = z.infer<typeof dashboardFactsV1>;
 export type DashboardExtra = z.infer<typeof dashboardExtraV1>;
 export class EnterpriseDashboardError extends Error {
-  constructor(readonly code: "DASHBOARD_INVALID" | "NOT_FOUND" | "MODE_FORBIDDEN" | "DASHBOARD_PREREQUISITE_REQUIRED" | "DASHBOARD_UNAVAILABLE") { super(code); }
+  constructor(readonly code: "DASHBOARD_INVALID" | "NOT_FOUND" | "MODE_FORBIDDEN" | "DASHBOARD_PREREQUISITE_REQUIRED" | "DASHBOARD_UNAVAILABLE" | "DASHBOARD_SELECTION_TOO_LARGE") { super(code); }
   toJSON() { return { version: "enterprise-dashboard-error.v1", code: this.code }; }
 }
 export function dashboardParse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
@@ -51,9 +58,10 @@ export function dashboardFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object") { for (const child of Object.values(value)) dashboardFreeze(child); Object.freeze(value); }
   return value;
 }
-type Stage = "captured" | "approved" | "backlog" | "overdue" | "onTime" | "late" | "closeoutYes" | "closeoutNo" | "closeoutMissing";
+const activityStages = ["captured", "approved", "backlog", "overdue", "onTime", "late", "closeoutYes", "closeoutNo", "closeoutMissing"] as const;
+type Stage = typeof activityStages[number];
 type Contribution = { stage: Stage; jobId: string; extraIds: string[]; sourceIds: string[]; value: z.infer<typeof moneyV1> | null; group: string | null };
-const stages: Stage[] = ["captured", "approved", "backlog", "overdue", "onTime", "late", "closeoutYes", "closeoutNo", "closeoutMissing"];
+const stages: Stage[] = [...activityStages];
 function totals(rows: Contribution[]) {
   return Object.fromEntries(stages.map(stage => {
     const items = rows.filter(c => c.stage === stage);
@@ -113,6 +121,63 @@ export function projectEnterpriseDashboard(raw: unknown, rawQuery: unknown) {
   const result = { version: "enterprise-dashboard-report.v1", environment: "synthetic_demo", cutoff: input.cutoff, method, inputHash,
     totals: { ...totals(contributions), billed: null, paid: null }, contributions, groups: groups.slice(query.offset, query.offset + query.limit),
     groupCount: groups.length, billing: input.billing, closeoutRate: observedCloseoutRate(contributions) };
+  return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
+}
+/** First-page sizes for each drill-down returned with a report; further pages use `query.drilldown`. */
+export const dashboardPageLimits = Object.freeze({ contributions: 200, groupContributions: 20 });
+type DashboardQuery = z.infer<typeof dashboardQueryV1>;
+/** Server-built selection for the bounded database read. Values come only from the parsed query. */
+export function dashboardSelectionParams(query: DashboardQuery, resource: "activity" | "billing" = "activity") {
+  const d = query.drilldown;
+  return { resource, from: query.from, until: query.until, filters: query.filters, dimension: query.dimension, periodLabel: `${query.from}/${query.until}`,
+    groupOffset: query.offset, groupLimit: query.limit, pageLimit: dashboardPageLimits.contributions, groupPageLimit: dashboardPageLimits.groupContributions,
+    drill: d ? { stage: d.stage, hasGroup: d.group !== undefined, group: d.group ?? null, offset: d.offset, limit: d.limit } : null };
+}
+const stageTotalV1 = z.object({ count: z.number().int().nonnegative(), known: z.string().regex(/^\d+$/u), unknownCount: z.number().int().nonnegative() }).strict();
+const stageTotalsV1 = z.partialRecord(z.enum(activityStages), stageTotalV1);
+const contributionV1 = z.object({ stage: z.enum(activityStages), jobId: uuid, extraIds: z.array(uuid).max(100000), sourceIds: z.array(uuid).max(100000),
+  value: moneyV1.nullable(), group: z.string().max(200).nullable() }).strict();
+const pageRows = z.array(contributionV1).max(activityStages.length * dashboardPageLimits.contributions);
+/** Database-aggregated activity (EP-F6). Totals cover every selected row; only pages of rows are carried. */
+export const dashboardAggregateV1 = z.object({ version: z.literal("enterprise-dashboard-aggregate.v1"), cutoff: instantV1,
+  sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), totals: stageTotalsV1, groupCount: z.number().int().nonnegative(),
+  groups: z.array(z.object({ id: z.string().max(200).nullable(), totals: stageTotalsV1,
+    contributions: z.array(contributionV1).max(activityStages.length * dashboardPageLimits.groupContributions) }).strict()).max(200),
+  contributions: pageRows, drilldown: z.object({ total: z.number().int().nonnegative(), contributions: z.array(contributionV1).max(200) }).strict().nullable(),
+}).strict();
+type AggregateTotals = z.infer<typeof stageTotalsV1>;
+const aggregateTotals = (t: AggregateTotals) => Object.fromEntries(stages.map(stage => [stage, { count: t[stage]?.count ?? 0,
+  known: moneyFromBigInt(BigInt(t[stage]?.known ?? "0")), unknownCount: t[stage]?.unknownCount ?? 0 }])) as Record<Stage, { count: number; known: ReturnType<typeof moneyFromBigInt>; unknownCount: number }>;
+const aggregateRate = (t: AggregateTotals) => {
+  const numerator = t.closeoutYes?.count ?? 0, denominator = numerator + (t.closeoutNo?.count ?? 0);
+  return denominator ? { status: "computed", numerator, denominator } : { status: "not_computable" };
+};
+/** Says, per drill-down, whether the returned page holds every contribution behind its figure. */
+function pageState(rows: readonly { stage: string }[], t: AggregateTotals, limit: number) {
+  const complete = stages.every(stage => {
+    const returned = rows.filter(r => r.stage === stage).length, count = t[stage]?.count ?? 0;
+    if (returned > count || returned > limit || (returned < count && returned < limit)) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
+    return returned === count;
+  });
+  return { limit, complete };
+}
+/** Pure assembly of the bounded database read into the report shape. It is not an authentication boundary. */
+export function assembleEnterpriseDashboardReport(raw: unknown, rawQuery: unknown) {
+  const agg = dashboardParse(dashboardAggregateV1, raw), query = dashboardParse(dashboardQueryV1, rawQuery);
+  const sorted = <T extends { extraIds: string[]; sourceIds: string[] }>(rows: T[]) => rows.map(r => ({ ...r,
+    extraIds: [...r.extraIds].sort(dashboardCompareText), sourceIds: [...r.sourceIds].sort(dashboardCompareText) }));
+  const method = { ...dashboardMethod, hash: sha256(dashboardCanonical(dashboardMethod)) };
+  const inputHash = sha256(dashboardCanonical({ sourceHash: agg.sourceHash, cutoff: agg.cutoff, query, method }));
+  const d = query.drilldown;
+  if ((d === undefined) !== (agg.drilldown === null)) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
+  const result = { version: "enterprise-dashboard-report.v2", environment: "synthetic_demo", cutoff: agg.cutoff, method, inputHash,
+    totals: { ...aggregateTotals(agg.totals), billed: null, paid: null }, contributions: sorted(agg.contributions),
+    contributionPage: pageState(agg.contributions, agg.totals, dashboardPageLimits.contributions),
+    groups: agg.groups.map(g => ({ id: g.id, totals: aggregateTotals(g.totals), closeoutRate: aggregateRate(g.totals), contributions: sorted(g.contributions),
+      contributionPage: pageState(g.contributions, g.totals, dashboardPageLimits.groupContributions) })),
+    groupCount: agg.groupCount, billing: { status: "held", prerequisite: "ENT-6B" } as const, closeoutRate: aggregateRate(agg.totals),
+    drilldown: d && agg.drilldown ? { stage: d.stage, ...(d.group === undefined ? {} : { group: d.group }), offset: d.offset, limit: d.limit, total: agg.drilldown.total,
+      complete: d.offset + agg.drilldown.contributions.length >= agg.drilldown.total, contributions: sorted(agg.drilldown.contributions) } : null };
   return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
 }
 function observedCloseoutRate(rows: Contribution[]) {

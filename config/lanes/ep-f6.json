@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "ep-f6": {
+      "branches": [
+        "claude/ep-f6-dashboard-e4146a"
+      ],
+      "note": "EP-F6 bounded contractor dashboard reads (RED: permission-scoped money facts). Synthetic only. No migration.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
+        "apps/api/src/contractor/full-demo-package.application.test.ts",
+        "apps/web/app/ui/enterprise-dashboard.test.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "docs/contracts/enterprise-dashboard-http-v1.md",
+        "packages/core/src/enterprise-dashboard-bounded.test.ts",
+        "packages/core/src/enterprise-dashboard-stored-billing.ts",
+        "packages/core/src/enterprise-dashboard.ts",
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/src/enterprise-dashboard-repository.ts",
+        "packages/db/test/enterprise-dashboard-bounded-billing.integration.test.ts",
+        "packages/db/test/enterprise-dashboard-bounded-fixtures.ts",
+        "packages/db/test/enterprise-dashboard-bounded.integration.test.ts",
+        "packages/db/test/enterprise-dashboard-plan.integration.test.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

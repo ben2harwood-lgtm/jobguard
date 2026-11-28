@@ -2,12 +2,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { seedNorthsideDemo, PracticeWorkerSwitchRepository, ContractorRepository, SiteExtraRepository, EnterpriseDashboardRepository, contractorSessionContext, withTenant } from "../src/index.js";
-import { enterpriseDashboardSourceSql } from "../src/enterprise-dashboard-queries.js";
+import { enterpriseDashboardSelectionSql, enterpriseDashboardSourceSql } from "../src/enterprise-dashboard-queries.js";
 import { cluster, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { siteExtraContentSha256V1 } from "@jobguard/core";
+import { dashboardQueryV1, dashboardSelectionParams, siteExtraContentSha256V1 } from "@jobguard/core";
 import { photo } from "./site-extra-evidence-fixtures.js";
 import { randomUUID } from "node:crypto";
 let c: Cluster;
+const planQuery = { version: "enterprise-dashboard-query.v1", from: "2000-01-01T00:00:00Z", until: "2099-01-01T00:00:00Z", dimension: "team", filters: {}, offset: 0, limit: 20 };
 let fixture: Awaited<ReturnType<typeof seedFixture>>;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster();
@@ -48,6 +49,11 @@ it("ENT-DASHBOARD-SLOW bounds dashboard plan work on the journey's 2,000 command
       await writeFile(resolve(directory, `${label}.json`), JSON.stringify(plan, null, 2));
     }
     plans.push(plan[0].Plan as PlanNode);
+    // EP-F6: the bounded statement the repository now runs keeps the same fenced authority work.
+    const selection = dashboardSelectionParams(dashboardQueryV1.parse(planQuery));
+    const bounded = await withTenant(c.runtime, context, async db => (await db.$client.query(
+      `EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${enterpriseDashboardSelectionSql}`, [session.session, context.tenantId, selection])).rows[0]["QUERY PLAN"]);
+    plans.push(bounded[0].Plan as PlanNode);
   }
   for (const plan of plans) {
     const nodes = flatten(plan);
@@ -61,7 +67,7 @@ it("ENT-DASHBOARD-SLOW bounds dashboard plan work on the journey's 2,000 command
       + (n["Rows Removed by Join Filter"] ?? 0)) * n["Actual Loops"]);
     expect(Math.max(...examined)).toBeLessThanOrEqual(200_000);
   }
-  const query = { version: "enterprise-dashboard-query.v1", from: "2000-01-01T00:00:00Z", until: "2099-01-01T00:00:00Z", dimension: "team", filters: {}, offset: 0, limit: 20 };
+  const query = planQuery;
   const repo = new EnterpriseDashboardRepository(c.runtime);
   const activity = await repo.read(context, session.session, query);
   expect(activity.report.totals.captured.count).toBe(1);

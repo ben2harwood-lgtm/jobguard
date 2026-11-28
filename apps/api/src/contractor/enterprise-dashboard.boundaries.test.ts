@@ -40,7 +40,7 @@ it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/
           expect(node.expression.name.text).not.toBe("query");
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "query")
-        expect(["enterpriseDashboardScopeLockSql", "enterpriseDashboardSourceSql"]).toContain(node.arguments[0]?.getText(ast));
+        expect(["enterpriseDashboardScopeLockSql", "enterpriseDashboardSourceSql", "enterpriseDashboardSelectionSql"]).toContain(node.arguments[0]?.getText(ast));
       if (ts.isCallExpression(node)) expect(node.expression.kind).not.toBe(ts.SyntaxKind.ImportKeyword);
       if (ts.isNewExpression(node)) expect(node.expression.getText(ast)).not.toMatch(/Pool|Dispatcher|Outbox|Executor|Writer|Worker/u);
       ts.forEachChild(node, visit);
@@ -49,17 +49,21 @@ it("[E9-27 E9-34] advisory/read modules import only pure readers and the tenant/
     expect(text).not.toMatch(/\b(?:fetch|require|appendAuditBatch|dispatch|enqueue|executeCommercial|process\.env\.[A-Z_]*(?:DATABASE|CREDENTIAL))\s*\(/u);
   }
 });
-it("[E9-14 E9-26 E9-27 E9-31] the sole source statement is SELECT-only and calls only existing scoped read functions", async () => {
+it("[E9-14 E9-26 E9-27 E9-31] both source statements are SELECT-only and call only existing scoped read functions", async () => {
   const text = await readFile(new URL("packages/db/src/enterprise-dashboard-queries.ts", root), "utf8");
   const ast = ts.createSourceFile("queries.ts", text, ts.ScriptTarget.Latest, true);
   const declarations = ast.statements.filter(ts.isVariableStatement).flatMap(s => [...s.declarationList.declarations]);
   const lock = declarations.find(d => ts.isIdentifier(d.name) && d.name.text === "enterpriseDashboardScopeLockSql")?.initializer;
   expect(lock && ts.isStringLiteral(lock) ? lock.text : null).toBe("SELECT pg_advisory_xact_lock_shared(hashtextextended($1::uuid::text,54))");
-  const sql = text.slice(text.indexOf("`\n") + 2, text.lastIndexOf("`"));
+  // EP-F6: the statements are composed from shared fragments, so inspect the exact composed SQL text.
+  const queries = await import(/* @vite-ignore */ new URL("packages/db/src/enterprise-dashboard-queries.ts", root).href) as Record<string, string>;
+  expect(Object.keys(queries).filter(k => k.endsWith("Sql")).sort()).toEqual(["enterpriseDashboardScopeLockSql", "enterpriseDashboardSelectionSql", "enterpriseDashboardSourceSql"]);
+  for (const sql of [queries.enterpriseDashboardSourceSql!, queries.enterpriseDashboardSelectionSql!]) {
   const stripped = sql.replace(/--[^\n]*/gu, "").replace(/'(?:[^']|'')*'/gu, "''");
   expect(stripped.trim()).toMatch(/^WITH\s/u);
   expect(stripped).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE|CREATE|ALTER|DROP|GRANT|REVOKE|COPY|CALL|DO|EXECUTE|INTO|FOR\s+UPDATE)\b/iu);
   expect(stripped).not.toContain(";");
   const calls = [...stripped.matchAll(/app\.([a-z_]+)\s*\(/gu)].map(m => m[1]);
   expect([...new Set(calls)].sort()).toEqual(["contractor_job_allowed", "contractor_job_team", "contractor_member_active", "contractor_role_permits", "contractor_session", "xa_decision_id", "xa_wait_deadline"].sort());
+  }
 });
