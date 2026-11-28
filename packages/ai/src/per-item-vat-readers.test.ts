@@ -62,4 +62,13 @@ describe("Reader A per-item reads", () => {
     const other = "fit six switches at fifty pounds a day";
     expect(readChecked(other).lines[0]!.unitPricePence.value).toBeNull();
   });
+  it("reads 'a piece' as each, and leaves two counts of the same thing open", () => {
+    const line = (text: string) => readSpokenJob("source", text).lines[0]!;
+    expect(line("fit six doors at fifty pounds a piece")).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
+    expect(line("fit six doors at fifty pounds a piece plus VAT")).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
+    const text = "fit six doors and two doors at fifty pounds a door";
+    const job = readSpokenJob("source", text);
+    expect(job.lines[0]).toMatchObject({ unitPricePence: { value: null }, priceBasis: "none" });
+    expect(job.questions.map(q => q.text)).toContain(`Confirm price: ${text}`);
+  });
 });

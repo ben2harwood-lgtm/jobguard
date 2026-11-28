@@ -168,7 +168,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
   let unit: Field<string | null> = { value: null, provenance: { kind: "defaulted", note: "Not said; confirm before quoting" } };
   let price: Field<number | null> = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
   let priceBasis: JobUnderstanding["lines"][number]["priceBasis"] = "none";
-  let perWord: string | null = null, vatSaid = false;
+  let perWord: string | null = null, perCountAt = -1, keptCountAt = -1, vatSaid = false;
   const label = () => value.slice(0, descriptionEnd).trim().replace(/[\s,]+$/u, "").slice(0, 160);
 
   const m = measure.exec(value);
@@ -214,7 +214,8 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         priceBasis = each ? "each" : "line";
         descriptionEnd = found.at;
         // Checked again after the count is read: the count kept must be the thing "a <noun>" names.
-        if (each && per) perWord = per[1]!;
+        // "a piece" is "each" and names no counted thing.
+        if (each && per && counted && !eachAfter.test(after)) { perWord = per[1]!; perCountAt = counted.index; }
         if (vatWords.test(after)) vatSaid = true;
       }
     } else if (candidates.length) questions.push(`Confirm price: ${value.slice(0, 450)}`);
@@ -258,11 +259,14 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         break;
       }
       quantity = { value: String(count), provenance: cite(match.index, match[1]!.length) };
+      keptCountAt = match.index;
       unit = { value: counted.slice(0, 40), provenance: cite(match.index + match[0].indexOf(counted, match[1]!.length), Math.min(counted.length, 40)) };
       break;
     }
-    // "six doors and two windows at fifty pounds a window": the count kept is not the priced thing, so the price stays open.
-    if (perWord && !(quantity.value !== null && unit.value && sameUnit(unit.value.split(/\s+/u).at(-1)!, perWord))) {
+    // "six doors and two windows at fifty pounds a window" or "six doors and two doors at fifty pounds a door":
+    // the count kept is not the one the price was read against, so the price stays open.
+    if (perWord && !(quantity.value !== null && unit.value && keptCountAt === perCountAt
+      && sameUnit(unit.value.split(/\s+/u).at(-1)!, perWord))) {
       price = { value: null, provenance: { kind: "defaulted", note: "Price not said exactly; never invented" } };
       priceBasis = "none"; vatSaid = false;
       questions.push(`Confirm price: ${value.slice(0, 450)}`);
