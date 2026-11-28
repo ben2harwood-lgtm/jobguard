@@ -5,8 +5,12 @@
       "branches": [
         "claude/project-thread-trp08u-sqproof"
       ],
-      "note": "T1 Q61 V2-SQ3: spoken quotes save and reopen unchanged on the ordinary V2 New job route, desktop and mobile-360. SPOKEN-QUOTE-1 injects five untouched, sha256-pinned transcripts; SPOKEN-QUOTE-REAL runs the real built-in Vosk worker on a synthetic Flite recording through Chromium's fake microphone (no adapter, no fill). Base claude/project-thread-trp08u-sqrows (SQ2 #1003) at ced8f7c70. New files only; no product change, migration, route or table.",
+      "note": "T1 Q61 V2-SQ3: spoken quotes save and reopen unchanged on the ordinary V2 New job route, desktop and mobile-360. SPOKEN-QUOTE-1 injects five untouched, sha256-pinned transcripts; SPOKEN-QUOTE-REAL runs the real built-in Vosk worker on a synthetic Flite recording through Chromium's fake microphone (no adapter, no fill). Base claude/project-thread-trp08u-sqrows (SQ2 #1003) at ced8f7c70. New files only; no product change, migration, route or table. SQ-C #1016 merged into this branch on 28 Nov; its files are allowed here as inherited.",
       "allow": [
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/plan-safe-category.test.ts",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
         "apps/web/e2e/SPOKEN-QUOTE-1.spec.ts",
         "apps/web/e2e/SPOKEN-QUOTE-REAL.spec.ts",
         "apps/web/e2e/fixtures/spoken-quote-real.wav",
@@ -17,7 +21,22 @@
         "apps/web/e2e/fixtures/spoken-quote/5-whole-job.txt",
         "apps/web/e2e/fixtures/spoken-quote/README.md",
         "apps/web/e2e/helpers/spoken-quote-journey.ts",
-        "apps/web/test/spoken-quote-fixtures.test.ts"
+        "apps/web/test/spoken-quote-fixtures.test.ts",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/README.md",
+        "docs/fixtures/ai/spoken-quote-understanding/cases.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/held-out-2.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/held-out.v1.json",
+        "packages/ai/src/capture-evaluation.test.ts",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader-evaluation.test.ts",
+        "packages/ai/src/context-reader-evaluation.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/index.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/job-understanding.test.ts",
+        "packages/core/src/job-understanding.ts"
       ]
     }
   }
