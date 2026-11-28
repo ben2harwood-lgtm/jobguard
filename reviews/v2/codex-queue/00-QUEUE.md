@@ -93,6 +93,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D33 | Q68 | V2-SQ-J typed/punctuated text gets spoken rooms; room-only sentence never a row; per-unit price never a whole-line price | **Opus** | #1037 (+#1033) | none | T2 |
 | D34 | Q69 | V2-SQ-I-3 designed money tab on V2: invoices card, final account lock, final check reveal, receipts, through to Paid (copied from #918, read only) | **Opus** | SQ-I-2 (Q67) PR | none | T2 |
 | D35 | Q70 | V2-C6 add a line to a priced quote before it is sent (quote editor + prompt onAdd); new confirmed scope item, totals via existing saveDraft | **Opus** | v2/main | none | RED money |
+| D36 | Q71 | V2-SQ-K bathroom suite work gets the Plumbing trade (labels only) | **Opus** | Q68 #1044 | none | T2 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
