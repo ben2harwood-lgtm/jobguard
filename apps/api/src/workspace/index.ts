@@ -135,3 +135,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-K8: builder-only hire application.
+export { HireApplication, type HireItem, type HireTask } from "./hire.application.js";

@@ -1,0 +1,6 @@
+{
+  "migration": "2075_v2_hire.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
