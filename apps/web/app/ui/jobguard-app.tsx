@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobSummary, SessionView } from "../lib/contracts";
 import { jobsResponseV1, sessionResponseV1, UiRequestError } from "../lib/contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
+import { Card, Note } from "../(designed)/designed-ui";
 import { LocalDictation } from "./local-dictation";
 import { DecisionInbox } from "./decision-inbox";
 import { VariationFlow } from "./variation-flow";
@@ -88,7 +89,7 @@ function Logo(){return <span className="logo" aria-hidden="true">JG</span>} func
 
 const referenceWalk=`Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves`;
 type CaptureResult=ReviewCaptureResult;
-export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured, pilotFetch}:{tenantId:string;pilotFetch?: typeof fetch;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
+export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured, pilotFetch, designed=false}:{tenantId:string;designed?:boolean;pilotFetch?: typeof fetch;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
   const [reviewing,setReviewing]=useState(false),
     [textValue,setTextValue]=useState(initialText ?? (mode==="own"?"":referenceWalk)),
     [dictation,setDictation]=useState<{raw:string}|null>(null),
@@ -134,30 +135,34 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
       submitting.current=false;setBusy(false);
     }
   }
-  return <section className="walk">
-    <button type="button" className="back" onClick={close}>← Back to jobs</button>
-    <p className="eyebrow">{pilotFetch ? "New job · free pilot" : "New job · safe demo"}</p><h1>Walk the job</h1>
-    <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p>
-    <LocalDictation applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
-    <div className="walk-grid"><div className="walk-input">
-      <label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label>
-      <textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} disabled={busy} onChange={e=>{if(submitting.current)return;setTextValue(e.target.value);sourceChanged();}} rows={15}/>
-      <p id="walk-help" className="helper">Include the job name, each piece of work and a price if you know it. Missing prices can be added later.</p>
-      <button className="primary wide" type="button" disabled={busy} onClick={()=>void submit()}>Make my draft</button>
-      <p className="helper">This only makes a draft for you to check. It does not send anything.</p>
-      <p className="result-message">{message}</p>
-    </div><div className="proposal" aria-label="Cited proposal">
-      <h2>{result?"Here is the draft JobGuard made":"Your draft will appear here"}</h2>
+  const draft = <>
       {!result?<p>{captureIds.current.size?"Make a draft from these work details. Any previously saved drafts stay in Jobs.":"Nothing has happened yet. Check the example, change it if you want, then tap Make my draft."}</p>:<>
-        <p className="pilot-badge">Draft only · check it first · nothing sent</p>
+        {designed ? <Note>Draft only · check it first · nothing sent</Note> : <p className="pilot-badge">Draft only · check it first · nothing sent</p>}
         <p>Proposal lines: <strong data-testid="proposal-line-count">{result.proposal.lines.length}</strong></p>
         <p>Check every line. You can change, remove or add work on the next screen.</p>
         <ol>{result.proposal.lines.map((line,index)=><li key={index}><strong>{line.description.value}</strong><span>{line.unitPricePence.value===null?"Price needed":`£${(line.unitPricePence.value/100).toFixed(2)}`}</span></li>)}</ol>
         <h3>One thing to check</h3>{result.proposal.questions.map(({question})=><p key={question.value}>? {question.value}</p>)}
         <details><summary>See the original words saved with this draft</summary><pre>{result.source.text}</pre></details>
-        <button className="primary wide" type="button" onClick={()=>location.assign(reviewHref(result.jobId))}>Check and edit my draft</button>
+        <button className={designed ? "btn primary wide" : "primary wide"} type="button" onClick={()=>location.assign(reviewHref(result.jobId))}>Check and edit my draft</button>
         <p className="helper">Next, approve each line and answer anything JobGuard was unsure about.</p>
       </>}
-    </div></div>
+  </>;
+  const draftTitle = result ? "Here is the draft JobGuard made" : "Your draft will appear here";
+  return <section className={designed ? "walk designed-capture" : "walk"}>
+    <button type="button" className={designed ? "btn ghost back" : "back"} onClick={close}>← Back to jobs</button>
+    <p className={designed ? "kicker" : "eyebrow"}>{pilotFetch ? "New job · free pilot" : "New job · safe demo"}</p><h1>Walk the job</h1>
+    <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p>
+    <LocalDictation designed={designed} applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
+    <div className="walk-grid"><div className={designed ? "walk-input card card-body form" : "walk-input"}>
+      <label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label>
+      <textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} disabled={busy} onChange={e=>{if(submitting.current)return;setTextValue(e.target.value);sourceChanged();}} rows={15}/>
+      <p id="walk-help" className="helper">Include the job name, each piece of work and a price if you know it. Missing prices can be added later.</p>
+      <button className={designed ? "btn primary wide" : "primary wide"} type="button" disabled={busy} onClick={()=>void submit()}>Make my draft</button>
+      <p className="helper">This only makes a draft for you to check. It does not send anything.</p>
+      <p className="result-message">{message}</p>
+    </div>{designed
+      ? <Card className="capture-proposal" title={draftTitle}><div className="card-body" aria-label="Cited proposal">{draft}</div></Card>
+      : <div className="proposal" aria-label="Cited proposal"><h2>{draftTitle}</h2>{draft}</div>}
+    </div>
   </section>;
 }
