@@ -246,5 +246,14 @@ export { V2CloseOutRepository, assertNoLiveStageDraft, assertFinalAccountOpen } 
 export { PaymentScheduleError, paymentScheduleSetV1, stageDraftCommandV1, stageDraftWithdrawCommandV1 } from "./v2-payment-schedule.js";
 // V2-K5A-1: the shared approved-extras total.
 export { approvedExtrasTotal, approvedExtrasTotalSql } from "./v2-approved-extras.js";
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsRepository } from "./v2-rams-repository.js";
+export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, ramsPlanHash, RamsError, type RamsDraft } from "./v2-rams-draft.js";
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+export * from "./v2-work-plan-templates.js";
+
+// V2-SQ-A practice Sent list (read only).
+export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";
+// V2-F8 who was on site today.
+export * from "./v2-site-attendance-repository.js";

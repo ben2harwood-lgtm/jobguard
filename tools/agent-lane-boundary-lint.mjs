@@ -1,5 +1,5 @@
 /**
- * Train guide: only unassigned train names on draft pull requests to main use
+ * Train guide: only unassigned train names on draft pull requests to main or v2/main use
  * the train rule. The integrator checks approvals under CHECK-LANES section 9.
  * This tool verified only that every commit is a clean merge of main or an exact current branch tip that passes its own lane check; it does not verify that any piece is approved (verdicts live off-branch).
  */
@@ -127,6 +127,8 @@ export function selectLane(config, branch, requested, eventName) {
 
 export const TRAIN_NOTICE = "This tool verified only that every commit is a clean merge of main or an exact current branch tip that passes its own lane check; it does not verify that any piece is approved (verdicts live off-branch).";
 
+// V2 trains integrate into v2/main the same way main trains do (Ben approved 27 Nov 2026).
+const TRAIN_BASES = new Set(["main", "v2/main"]);
 const isTrainName = (branch) => typeof branch === "string" && branch.length <= 64 &&
   /^train\/[a-z0-9]+(?:-[a-z0-9]+)*$(?![\s\S])/u.test(branch);
 
@@ -149,7 +151,7 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
   const prefix = `Train branch ${JSON.stringify(branch)} refused: `;
   try {
     if (event.pull_request.draft !== true) throw new Error("the event must declare draft as the boolean true.");
-    if (event.pull_request.base.ref !== "main") throw new Error("the base branch must be main.");
+    if (!TRAIN_BASES.has(event.pull_request.base.ref)) throw new Error("the base branch must be main or v2/main.");
     // Preserve the policy-version and no-fallback invariants on this path too.
     try { selectLane(policy, branch, undefined, eventName); }
     catch (error) {
