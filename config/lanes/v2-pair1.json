@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-pair1": {
+      "branches": [
+        "claude/project-thread-trp08u-pair1"
+      ],
+      "note": "Security repair from the desktop Codex review of #1060 (P1 and P2 #2). Every route that builds the workspace checks a linked practice session's exact browser pairing first (workspace-server.ts); practice-sent pairs too; the v2-backend work-plan save needs a configured origin. practiceFailure maps a refused identity sign-in (AuthError) to 401/403. Main-owned shared libs: apps/web/app/lib/workspace-server.ts and synthetic-server.ts.",
+      "allow": [
+        "apps/web/app/api/practice-sent/route.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts",
+        "apps/web/app/lib/synthetic-server.test.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/lib/workspace-server.test.ts",
+        "apps/web/app/lib/workspace-server.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
