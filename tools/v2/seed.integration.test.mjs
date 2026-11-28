@@ -1878,10 +1878,18 @@ test("G2 migration 2082 reruns without changing policies, triggers or rows", asy
 
 // V2-G3 (Q57, migration 2083): release a saved handover version by customer link, and "Acknowledge receipt".
 const g3 = {
-  // No V2 command completes site work yet, so the fixture marks every scope item complete directly
-  // (the same final state main's proof command reaches through app.transition_scope_progress).
-  complete: jobId => admin.query(`UPDATE app.scope_progress SET stage='complete', revision=revision+1, updated_at=clock_timestamp()
-    WHERE job_id=$1 AND stage<>'complete'`, [jobId]),
+  // No V2 command completes site work yet, so the fixture completes every scope item through main's
+  // app.transition_scope_progress, as the job's own practice session (the site-work guard refuses a maintenance write).
+  complete: async f => withTenant(runtime, (await authenticatePracticeSession(runtime, f.sessionId)).context, async db => {
+    const { rows } = await db.$client.query(`SELECT scope_item_id AS id, stage, revision FROM app.scope_progress
+      WHERE job_id=$1 AND stage<>'complete'`, [f.job]);
+    for (const { id, stage, revision } of rows) {
+      if (stage === "not_started") await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'in_progress','start')",
+        [DEMO_TENANT_ID, f.job, id, revision]);
+      await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'complete','complete')",
+        [DEMO_TENANT_ID, f.job, id, revision + (stage === "not_started" ? 1 : 0)]);
+    }
+  }),
   release: (handoverVersion, commandId = randomUUID()) => ({ version: "v2-handover-release-command.v1", commandId, handoverVersion }),
   releases: f => request(`${f.path}/releases`, { cookies: f.owner.cookies }).then(response => json(response)),
   post: (f, body, status = 200) => request(`${f.path}/releases`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
@@ -1901,7 +1909,7 @@ const g3 = {
   },
   async ready() {
     const f = await g2.job();
-    await g3.complete(f.job);
+    await g3.complete(f);
     const view = await json(await request(f.path, { cookies: f.owner.cookies }));
     const line = view.sources.lines[0].id;
     const v1 = (await f.post(g2.save({ sections: ["done", "snags", "contacts"], lineIds: [line], variationIds: [], photoIds: [],
@@ -1972,7 +1980,7 @@ test("G3 release is refused while a scope item is still in progress, with no del
   assert.equal((await g3.post(f, g3.release(saved.version), 409)).code, "HANDOVER_SITE_NOT_COMPLETE");
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_release WHERE job_id=$1", [f.job])).rows[0].n, 0);
   // Never the financial lock: completing the site work alone is enough.
-  await g3.complete(f.job);
+  await g3.complete(f);
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.final_account_lock WHERE job_id=$1", [f.job])).rows[0].n, 0);
   assert.ok((await g3.post(f, g3.release(saved.version))).token);
 });
