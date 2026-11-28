@@ -1568,13 +1568,23 @@ test("K5A-2 frozen rows: second firm can't read or write, runtime can't update o
 // V2-K5A-1 (Q51): the schedule counts every approved extra, whatever its origin, the same way job profit does.
 // Test administrator fixture only: give a builder-logged extra another small-builder origin. Origin is NOT NULL
 // and immutable (0053), and the Final Check path that raises jobguard_catch extras is out of scope here.
+// 0128: a jobguard_catch origin names the shadow signal it came from, so the fixture writes a real signal row for it.
 async function k5a1SetOrigin(variationId, origin) {
   const client = await admin.connect();
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL session_replication_role = replica");
+    const { rows: [extra] } = await client.query("SELECT tenant_id,job_id FROM app.extra_origin WHERE variation_id=$1", [variationId]);
+    let signalId = null;
+    if (origin === "jobguard_catch") {
+      signalId = randomUUID();
+      await client.query(`INSERT INTO app.shadow_commercial_signal
+        (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state,matched_variation_id)
+        VALUES($1,$2,$3,$4,'possible_extra','deterministic','k5a1.fixture.v1',clock_timestamp(),'Fictional K5A-1 caught extra','low','candidate',$5)`,
+      [extra.tenant_id, extra.job_id, signalId, randomUUID(), variationId]);
+    }
     await client.query("UPDATE app.variation SET origin=$2 WHERE id=$1", [variationId, origin]);
-    await client.query("UPDATE app.extra_origin SET kind=$2 WHERE variation_id=$1", [variationId, origin]);
+    await client.query("UPDATE app.extra_origin SET kind=$2, source_signal_id=$3 WHERE variation_id=$1", [variationId, origin, signalId]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
