@@ -152,9 +152,10 @@ test("missing prompts show before sending, stay dismissed after reload and add n
   const blockers = page.locator(".quote-blockers");
   for (const label of labels) await expect(blockers.getByText(label)).toHaveCount(0);
 
-  // Once the scope is confirmed the quote has no add-line route, so the quote panel only reminds or dismisses.
-  await expect(panel.getByRole("button", { name: /^Add a line for/u })).toHaveCount(0);
-  await expect(panel.getByText("Lines are added in Scope review, before the scope is confirmed.")).toBeVisible();
+  // V2-C6: on the quote the prompts can add a line (still unpriced), and nothing is added until one is pressed.
+  await expect(panel.getByRole("button", { name: "Add a line for Making good" })).toBeVisible();
+  await expect(panel.getByText("Lines are added in Scope review, before the scope is confirmed.")).toHaveCount(0);
+  expect(await savedQuote(page, jobId)).toEqual(before);
   checkRequests();
 });
 
