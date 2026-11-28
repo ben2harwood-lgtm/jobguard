@@ -1876,7 +1876,7 @@ test("G2 migration 2082 reruns without changing policies, triggers or rows", asy
   assert.deepEqual(await catalog(), before);
 });
 
-// V2-G3 (Q57, migration 2058): release a saved handover version by customer link, and "Acknowledge receipt".
+// V2-G3 (Q57, migration 2083): release a saved handover version by customer link, and "Acknowledge receipt".
 const g3 = {
   // No V2 command completes site work yet, so the fixture marks every scope item complete directly
   // (the same final state main's proof command reaches through app.transition_scope_progress).
@@ -2031,7 +2031,7 @@ test("G3 acknowledgement changes nothing else: snag, variation, lock, invoice an
   assert.match(reloaded, /Refit the hall door stop/u, "the snag is still outstanding: receipt signs nothing off");
 });
 
-test("G3 firm A/B read check, and migration 2058 reruns without changing policies, triggers or rows", async () => {
+test("G3 firm A/B read check, and migration 2083 reruns without changing policies, triggers or rows", async () => {
   const f = await g3.ready();
   const { result } = await g3.direct(f, g3.release(1));
   await g3.acknowledge(result.token);
@@ -2049,7 +2049,7 @@ test("G3 firm A/B read check, and migration 2058 reruns without changing policie
       'app.v2_handover_acknowledgement'::regclass)) AS acl,
     (SELECT count(*)::int FROM app.v2_handover_release) + (SELECT count(*)::int FROM app.v2_handover_acknowledgement) AS rows`)).rows[0];
   const before = await catalog();
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2058_v2_handover_release.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2083_v2_handover_release.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
