@@ -19,9 +19,12 @@ export class HireApplication {
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
     return this.access.job(jobId);
   }
+  private plan(jobId: string) {
+    return new WorkPlanApplication(this.pool, this.sessionId).read(jobId, { version: "work-plan-query.v1" });
+  }
   async list(jobId: string) {
     const { context } = await this.authorize(jobId);
-    const plan = await new WorkPlanApplication(this.pool, this.sessionId).read(jobId, { version: "work-plan-query.v1" });
+    const plan = await this.plan(jobId);
     return { environment: "synthetic_demo", tasks: plan.tasks.map(task => ({ quoteRevisionId: plan.quoteRevisionId,
       scopeItemId: task.scopeItemId, templateTaskKey: task.key, title: task.title })), items: await this.hires.list(context, jobId, this.sessionId!, new Date(), plan) };
   }
@@ -29,6 +32,8 @@ export class HireApplication {
     const { context } = await this.authorize(jobId);
     const parsed = hireCommandV1.safeParse(raw);
     if (!parsed.success) throw new HireError("HIRE_INVALID");
-    return this.hires.command(context, jobId, this.sessionId!, parsed.data);
+    // A link is checked against the same plan the panel offers, approved extras included.
+    const offered = parsed.data.action === "link" ? await this.plan(jobId) : undefined;
+    return this.hires.command(context, jobId, this.sessionId!, parsed.data, offered);
   }
 }
