@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { csvCell } from "./csv-cell.js";
 import { contractorPermits, type ContractorGrant, type ContractorTarget } from "./contractor.js";
 import { contractorResidentBoundaryV1 } from "./contractor-parties.js";
 import { assertSorQuantity, SorPricingError, sorMoneyV1, sorQuantityV1 } from "./sor-pricing.js";
@@ -161,10 +162,9 @@ export function parseWorkOrderCsv(csv: string): WorkOrderCsvRecord[] {
 }
 /** Takes plain records so a generated fixture can also encode a deliberately malformed row. */
 export function encodeWorkOrderCsv(rows: readonly Readonly<Record<string, unknown>>[]): string {
-  const quote = (value: string) => /[",\r\n]/u.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
   return workOrderCsvColumns.join(",") + "\r\n" + rows.map(row => workOrderCsvColumns.map(column => {
     const value = row[column];
-    return quote(value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value));
+    return csvCell(value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : typeof value === "number" ? value : String(value));
   }).join(",")).join("\r\n") + "\r\n";
 }
 

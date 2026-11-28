@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { csvCell } from "./csv-cell.js";
 import { MAX_MONEY_PENCE, moneyFromBigInt } from "./money.js";
 import { exactPence, serializeExactPence } from "./cumulative-fee.js";
 import { sha256 } from "./evidence-pack.js";
@@ -212,9 +213,8 @@ export function exportBaseline(history: unknown, cohorts: unknown, format: "json
   if (format === "json") return canonical(report) + "\n";
   if (format !== "csv") throw new BaselineError("BASELINE_INVALID");
   // Each record carries the complete method and binding; structured cells preserve exact ratios and drill-downs.
-  const quote = (value: unknown) => '"' + String(value).replaceAll('"', '""') + '"';
-  const rows: unknown[][] = [["version", "environment", "methodVersion", "methodText", "methodHash", "inputHash", "sourceHash", "outputHash", "source", "cohort", "contributions"]];
+  const rows: string[][] = [["version", "environment", "methodVersion", "methodText", "methodHash", "inputHash", "sourceHash", "outputHash", "source", "cohort", "contributions"]];
   for (const cohort of ["pilot", "rest"] as const) rows.push([report.version, report.environment, report.method.version,
     report.method.text, report.method.hash, report.inputHash, report.sourceHash, report.outputHash, canonical(report.source), cohort, canonical(report[cohort])]);
-  return rows.map(row => row.map(quote).join(",")).join("\r\n") + "\r\n";
+  return rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }

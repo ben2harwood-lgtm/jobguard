@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-12": {
+      "branches": [
+        "codex/sandbox/rt-fix-12"
+      ],
+      "note": "RT-FIX-12 repair round 2, final (Codex review #1097), parent ddb340c8: work-order v1 import reads cells literally; export escaping is unchanged. Preserve literal apostrophe reference identity and document accepted export/re-import apostrophe retention. No migration or new web workflow. Own lane file is implicitly editable; no lane-register grant. Commit only; no push.",
+      "test": "pnpm --filter @jobguard/core exec vitest run src/csv-cell.test.ts src/work-order.test.ts src/contractor-billing.test.ts src/enterprise-baseline.test.ts --maxWorkers=2",
+      "allow": [
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "packages/core/src/csv-cell.test.ts",
+        "packages/core/src/csv-cell.ts",
+        "packages/core/src/work-order.test.ts",
+        "packages/core/src/work-order.ts"
+      ]
+    }
+  }
+}
