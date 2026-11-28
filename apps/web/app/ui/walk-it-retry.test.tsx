@@ -410,6 +410,31 @@ it.each(["error", "end"] as const)("RT-FIX-13: %s retains interim-only speech as
   expect(onUse).toHaveBeenCalledExactlyOnceWith("and fit shelf brackets", "");
 });
 
+it.each(["error", "end"] as const)("RT-FIX-13 round 2: %s keeps interrupted kitchen words before resumed bathroom speech", async event => {
+  let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
+  const onUse = vi.fn();
+  const adapter: LocalSpeechAdapter = { ...fakeAdapter("installed"),
+    start: next => { callbacks = next; return { stop: () => callbacks.end(), cancel: () => callbacks.end() }; } };
+  const solo = soloDictation(adapter, { onUse });
+  solo.render(); await flush(); solo.button()!.props.onClick(); await flush();
+  callbacks.final("Kitchen: paint walls", "first"); callbacks.interim("and ceiling");
+  if (event === "error") callbacks.error("not-allowed"); else callbacks.end();
+  solo.button()!.props.onClick(); await flush();
+  callbacks.final("Bathroom: fit shelves", "first"); callbacks.end();
+  const fields = () => all(solo.render(), node => node.type === "textarea");
+  expect(fields().map(node => node.props.value)).toEqual(["Kitchen: paint walls", "and ceiling", "Bathroom: fit shelves"]);
+  solo.button("Use these words")!.props.onClick();
+  expect(onUse).toHaveBeenLastCalledWith("Kitchen: paint walls and ceiling Bathroom: fit shelves", "Kitchen: paint walls Bathroom: fit shelves");
+  fields()[1]!.props.onChange({ target: { value: "and kitchen ceiling" } });
+  solo.button()!.props.onClick(); await flush();
+  callbacks.final("cancelled final", "first"); callbacks.interim("cancelled provisional");
+  solo.button("Cancel dictation")!.props.onClick();
+  callbacks.final("late cancelled words", "late"); callbacks.end();
+  expect(fields().map(node => node.props.value)).toEqual(["Kitchen: paint walls", "and kitchen ceiling", "Bathroom: fit shelves"]);
+  solo.button("Use these words")!.props.onClick();
+  expect(onUse).toHaveBeenLastCalledWith("Kitchen: paint walls and kitchen ceiling Bathroom: fit shelves", "Kitchen: paint walls Bathroom: fit shelves");
+});
+
 it.each(["interim", "final"] as const)("RV4-04: cancelling a second dictation with a %s segment keeps the completed transcript and its raw provenance", async segment => {
   let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
   const cancel = vi.fn(), onUse = vi.fn();
