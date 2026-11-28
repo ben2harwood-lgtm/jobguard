@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-f": {
+      "branches": [
+        "claude/project-thread-trp08u-sqf"
+      ],
+      "note": "T2 V2-SQ-F: work plan by trade and stage. A template registry (splashback-decorating.v1 unchanged, new trades.v1), stored plans always read and refresh through their own template_key, new plans use trades.v1 ordered by stage, and the plan screen labels trades.v1 durations as typical times. Base v2/main. No migration, table, route or money.",
+      "allow": [
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts",
+        "apps/web/e2e/v2-c4.spec.mts",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "packages/db/src/v2-work-plan-templates.test.ts",
+        "packages/db/src/v2-work-plan-templates.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

@@ -1,6 +1,7 @@
 export * from "./application.js";
 export * from "./work-plan.application.js";
 export * from "./crew-contact.application.js";
+export * from "./site-attendance.application.js";
 export * from "./contracts.js";
 export * from "./workspace.service.js";
 export * from "./workspace-session.js";
@@ -134,3 +135,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsApplication, RamsError, type RamsScreen } from "./rams.application.js";
