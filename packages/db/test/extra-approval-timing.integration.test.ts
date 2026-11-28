@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -21,7 +22,7 @@ it.each(["not_started", undefined, "under_way", "finished"] as const)("ENT-5 sha
         note: "Fictional timing evidence", description: "Fictional extra", workStatus })
     : new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, context, w.members.operative.member), direct(w, w.members.operative, { jobId, siteVisitId: visit.visitId }), siteExtraAuthoritySeam);
   const extra = await raise(); await raise(); // Several extras share these bounds; neither has an exact work time.
-  await approvals.priceExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 150000 });
+  await approvals.priceExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 150000 }));
   const request = await approvals.submitExtra(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId });
   const s = { jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 150000 };
   await approvals.approveExtraStep(await testActorContext(c.admin, context, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));

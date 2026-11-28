@@ -391,6 +391,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
   const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
   const receiptDedupSql = await readFile(new URL("../migrations/0783_receipt_duplicate_command.sql", import.meta.url), "utf8");
+  const priceRulesV2GuardBody = (await readFile(new URL("../migrations/0784_extra_price_rules_v2.sql", import.meta.url), "utf8"))
+    .split("CREATE OR REPLACE FUNCTION app.ent3c_pricing_basis_guard(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   const pilotRevealRoutines = new Set([
@@ -437,6 +439,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0775 replaces these exact bodies; the catalogue proof below still checks all routine privileges.
     const identity = `${prior.nspname}.${prior.proname}(${prior.args})`;
+    // EP-CC-S1 (0784) replaces only the ENT-3c pricing-basis guard body; the catalogue proof below still checks its privileges.
+    if (identity === "app.ent3c_pricing_basis_guard()") {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => priceRulesV2GuardBody));
+      expect(current?.source).toBe(priceRulesV2GuardBody);
+      continue;
+    }
     if (identity === "app.record_practice_customer_receipt(p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_paid_on date, p_amount bigint, p_method text, p_reference text)") {
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => receiptDedupBody));

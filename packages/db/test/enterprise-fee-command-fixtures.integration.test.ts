@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
@@ -38,7 +39,7 @@ async function addExtra(t: Setup, net: number, kind: "site_user" | "office_entry
     description: `Fictional separate work ${randomUUID()}`, note: "Made-up command fixture",
   }))).variationId;
   const repo = new ExtraApprovalRepository(c.runtime);
-  await repo.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: net });
+  await repo.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: net }));
   const submitted = await repo.submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId });
   await repo.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 0));
   if (net > 50000) await repo.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.supervisor2.member), w.w.supervisor2.member, approveInput({ jobId: w.s.jobId, requestId: submitted.requestId as string, hash: submitted.revisionHash as string, net }, 1));
@@ -187,9 +188,7 @@ for (const state of ["withdrawn", "rejected", "unexported", "unpaid"] as const) 
   const t = await setup(), approvals = new ExtraApprovalRepository(c.runtime);
   if (state === "withdrawn" || state === "rejected") {
     const extraId = await raiseOn(c, t.w.w, t.w.s.jobId);
-    await approvals.priceExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.surveyor.member), t.w.w.members.surveyor.member, {
-      version: "price-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId, netPence: 15000,
-    });
+    await approvals.priceExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.surveyor.member), t.w.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: t.w.s.jobId, extraId, netPence: 15000, }));
     const request = await approvals.submitExtra(await testActorContext(c.admin, t.w.ctx, t.w.w.members.supervisor.member), t.w.w.members.supervisor.member, {
       version: "submit-extra.v1", commandId: randomUUID(), jobId: t.w.s.jobId, extraId,
     });

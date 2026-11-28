@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -23,9 +24,7 @@ const withdraw = (w: World, extraId: string) => ({
  version: "withdraw-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, reasonCode: "not_done",
 });
 async function submit(w: World, extraId: string) {
- await approvals.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, {
-  version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: 338,
- });
+ await approvals.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: 338, }));
  const result = await approvals.submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, {
   version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId,
  });

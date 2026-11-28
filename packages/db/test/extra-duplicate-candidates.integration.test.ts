@@ -1,3 +1,4 @@
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { readFileSync } from "node:fs";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
@@ -24,7 +25,7 @@ async function pair(w: World, sameCode = true) {
  const result: string[] = [];
  for (const actor of [w.w.members.operative, second]) {
   const raised = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, actor.member), direct(w.w, actor, { jobId: w.s.jobId, ...(sameCode ? { sorItem: { versionId: w.w.demo.sorVersionId, code: "CLEAR-GUTTER" } } : {}) }));
-  await new ExtraApprovalRepository(c.runtime).priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId, netPence: 338 });
+  await new ExtraApprovalRepository(c.runtime).priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId, netPence: 338 }));
   const submitted = await new ExtraApprovalRepository(c.runtime).submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: raised.variationId });
   await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, approveInput({ jobId: w.s.jobId, requestId: String(submitted.requestId), hash: String(submitted.revisionHash), net: 338 }, 0));
   result.push(raised.variationId);
@@ -166,9 +167,7 @@ it("ENT-3 unlink restores separate approved extras through the existing command 
  await new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), await unlinkInput(w, String(linked.linkId)));
  expect((await read(w)).activeLinks).toEqual([]);
  // The original approval remains immutable; revising the formerly duplicate side still requires a new approval.
- const revised = await approvals.reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, {
-  version: "revise-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId: a, netPence: 339,
- });
+ const revised = await approvals.reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member), w.w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: w.s.jobId, extraId: a, netPence: 339, }));
  await approvals.approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.supervisor2.member), w.w.supervisor2.member, approveInput({jobId:w.s.jobId,
   requestId:String(revised.requestId),hash:String(revised.revisionHash),net:339},0));
  await w.exported();
@@ -225,7 +224,7 @@ it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to appr
  const w = await world(c), approvals = new ExtraApprovalRepository(c.runtime);
  const raised = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member),direct(w.w,w.w.members.operative,{jobId:w.s.jobId}));
  const extraId = raised.variationId;
- await approvals.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId,netPence:338});
+ await approvals.priceExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,priceV2({ commandId:randomUUID(),jobId:w.s.jobId,extraId,netPence:338 }));
  const pending = await approvals.submitExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId});
  const linked = await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,markInput(w,extraId,w.s.extraId));
  await new ExtraRepository(c.runtime).unlinkDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),await unlinkInput(w,String(linked.linkId)));
@@ -308,7 +307,7 @@ it("revision changes and a new extra racing dismissal raise the group again and 
  const w=await world(c), [a]=await pair(w), session=await sessionFor(w);
  const run=async(raw:unknown)=>resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,raw);
  const group=(await agreement(w)).groups[0]!; await run(disposition(group));
- await new ExtraApprovalRepository(c.runtime).reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:339});
+ await new ExtraApprovalRepository(c.runtime).reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,await reviseV2(c, { commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:339 }));
  const revised=(await agreement(w)).groups[0]!; expect(revised.fingerprint).not.toBe(group.fingerprint);
  expect(await code(run(disposition(group)))).toBe("STALE_REVISION"); expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
  const input=disposition(revised);

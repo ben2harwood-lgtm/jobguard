@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { requestContext } from "./practice-worker-switch-fixtures.js";
 // Practice sandbox — synthetic data; nothing is sent or charged
 // Real PostgreSQL only. NOT RUN locally; dispatcher/CI owns execution and failing-first database evidence.
@@ -30,7 +31,7 @@ async function world() {
     shownContentSha256: siteExtraContentSha256V1({ jobId, description, note, photoSha256: image.sha256 }) });
   const approval = new ExtraApprovalRepository(c.runtime);
   const surveyor = await act(seed.surveyorMembershipId);
-  await approval.priceExtra(await ctx(), surveyor, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 108000 });
+  await approval.priceExtra(await ctx(), surveyor, priceV2({ commandId: randomUUID(), jobId, extraId: extra.variationId, netPence: 108000 }));
   const supervisor = await act(seed.supervisorMembershipId);
   const submitted = await approval.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId: extra.variationId });
   await approval.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });

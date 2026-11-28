@@ -86,9 +86,14 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await expect(sv.page.getByTestId("approvals-role")).toHaveText("surveyor");
   await sv.page.getByLabel("Rate card item").selectOption("CLEAR-VOID");
   await sv.page.getByLabel("Quantity measured").fill("6");
-  await expect(sv.page.getByTestId("price-preview")).toHaveText(pounds(rate * 6));
+  await expect(sv.page.getByTestId("price-preview")).toHaveText(`6 × ${pounds(rate)} per each`);
   await sv.page.getByRole("button", { name: "Price this extra" }).click();
   await expect(sv.page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
+  // Pricing contract v2: the database priced the rate code (excess over the order, tendered adjustment, exact half-even). Read its answer and check it is the database function's.
+  const priced = (await db.query(`SELECT b.net_pence::text n,app.sor_line_net_pence(b.priced_quantity,b.rate_pence,b.adjustment_numerator,b.adjustment_denominator)::text f,b.claimed_quantity q,b.sor_code c
+    FROM app.extra_pricing_basis b WHERE b.tenant_id=$1 AND b.basis_version='extra-pricing-basis.v2'`, [tenant])).rows;
+  expect(priced).toHaveLength(1); expect(priced[0]).toMatchObject({ q: "6", c: "CLEAR-VOID" }); expect(priced[0].n).toBe(priced[0].f);
+  const extraNet = Number(priced[0].n); expect(extraNet).not.toBe(rate * 6); // the tendered adjustment applies; the screen never multiplied
   await sv.page.reload();
   await expect(sv.page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
 
@@ -96,7 +101,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await switchTo("supervisor");
   const su = { page };
   await su.page.goto("/approvals/extras");
-  await expect(su.page.getByTestId("extra-amount")).toHaveText(pounds(rate * 6));
+  await expect(su.page.getByTestId("extra-amount")).toHaveText(pounds(extraNet));
   await su.page.getByRole("button", { name: "Submit for approval" }).click();
   await expect(su.page.getByTestId("extra-state")).toHaveText("Waiting for approval");
   await su.page.getByRole("button", { name: "Approve as supervisor" }).click();
@@ -119,7 +124,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await customer.getByRole("main").getByRole("button", {name:"Sign in",exact:true}).click();
   await customer.getByRole("main").getByRole("link", {name:"Review client approvals",exact:true}).click();
   await expect(customer.getByRole("main").getByRole("heading", {name:description,exact:true})).toBeVisible();
-  await expect(customer.getByRole("main")).toContainText(pounds(rate * 6));
+  await expect(customer.getByRole("main")).toContainText(pounds(extraNet));
   expect(await noSideScroll(customer)).toBe(true);
   await customer.getByRole("main").getByRole("button", {name:"Approve this exact revision and net",exact:true}).click();
   await expect(customer.getByRole("main").getByRole("status")).toHaveText("Your decision is recorded.");

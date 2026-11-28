@@ -95,9 +95,14 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await expect(sv.page.getByTestId("approvals-role")).toHaveText("surveyor");
   await sv.page.getByLabel("Rate card item").selectOption("CLEAR-VOID");
   await sv.page.getByLabel("Quantity measured").fill("6");
-  await expect(sv.page.getByTestId("price-preview")).toHaveText(pounds(rate * 6));
+  await expect(sv.page.getByTestId("price-preview")).toHaveText(`6 × ${pounds(rate)} per each`);
   await sv.page.getByRole("button", { name: "Price this extra" }).click();
   await expect(sv.page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
+  // Pricing contract v2: the database priced the rate code (excess over the order, tendered adjustment, exact half-even). Read its answer and check it is the database function's.
+  const priced = (await db.query(`SELECT b.net_pence::text n,app.sor_line_net_pence(b.priced_quantity,b.rate_pence,b.adjustment_numerator,b.adjustment_denominator)::text f,b.claimed_quantity q,b.sor_code c
+    FROM app.extra_pricing_basis b WHERE b.tenant_id=$1 AND b.basis_version='extra-pricing-basis.v2'`, [tenant])).rows;
+  expect(priced).toHaveLength(1); expect(priced[0]).toMatchObject({ q: "6", c: "CLEAR-VOID" }); expect(priced[0].n).toBe(priced[0].f);
+  const extraNet = Number(priced[0].n); expect(extraNet).not.toBe(rate * 6); // the tendered adjustment applies; the screen never multiplied
   await sv.page.reload();
   await expect(sv.page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
 
@@ -105,7 +110,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await switchTo("supervisor");
   const su = { page };
   await su.page.goto("/approvals/extras");
-  await expect(su.page.getByTestId("extra-amount")).toHaveText(pounds(rate * 6));
+  await expect(su.page.getByTestId("extra-amount")).toHaveText(pounds(extraNet));
   await su.page.getByRole("button", { name: "Submit for approval" }).click();
   await expect(su.page.getByTestId("extra-state")).toHaveText("Waiting for approval");
   await su.page.getByRole("button", { name: "Approve as supervisor" }).click();
@@ -127,7 +132,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await customer.getByRole("main").getByRole("button", {name:"Sign in",exact:true}).click();
   await customer.getByRole("main").getByRole("link", {name:"Review client approvals",exact:true}).click();
   await expect(customer.getByRole("main").getByRole("heading", {name:description,exact:true})).toBeVisible();
-  await expect(customer.getByRole("main")).toContainText(pounds(rate * 6));
+  await expect(customer.getByRole("main")).toContainText(pounds(extraNet));
   expect(await noSideScroll(customer)).toBe(true);
   await customer.getByRole("main").getByRole("button", {name:"Approve this exact revision and net",exact:true}).click();
   await expect(customer.getByRole("main").getByRole("status")).toHaveText("Your decision is recorded.");
@@ -161,7 +166,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   const order = (await db.query("SELECT id,job_id FROM app.work_order WHERE tenant_id=$1 AND reference='NS-1-0001'", [tenant])).rows[0];
   await page.goto(`/contractor/work-orders/${order.id}`);
   await page.getByRole("link", { name: "Billing and reconciliation", exact: true }).click();
-  await expect(page.getByTestId("approved-not-exported")).toContainText(pounds(rate * 6));
+  await expect(page.getByTestId("approved-not-exported")).toContainText(pounds(extraNet));
   await page.getByTestId("approved-not-exported").locator("summary").click();
   await expect(page.getByTestId("approved-not-exported")).toContainText((await db.query("SELECT variation_id FROM app.extra_origin WHERE tenant_id=$1", [tenant])).rows[0].variation_id.slice(0, 8));
   await page.getByRole("button", { name: "Export approved extras", exact: true }).click();
@@ -176,11 +181,11 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   expect(stored.exports).toHaveLength(1); const line = stored.exports[0].lines[0];
   const match = { exportLineId: line.exportLineId, jobId: line.jobId, extraId: line.extraId, scopeItemId: line.scopeItemId, revisionId: line.revisionId, revisionHash: line.revisionHash };
   const amount = (net: number) => ({ netPence: net, vatPence: net / 5, grossPence: net * 6 / 5 }); // exact fixture integers
-  const total = 100000 + rate * 6;
+  const total = 100000 + extraNet;
   const event = (factType: string, net: number, extra: Record<string, unknown> = {}) => ({ version: "billing-status.v1", clientContractId: line.clientContractId ?? (stored.clientContractIds[0]), source: "northside-fictional", sourceEventId: crypto.randomUUID(), invoiceNumber: "NS-INVOICE-1", factType, effectiveAt: "2026-10-03T12:00:00Z", remittanceReference: null, reconciliationId: null, originalEventId: null, amount: amount(net), composition: null, explicit: null, separateInvoice: false, lineAdjustments: [], ...extra });
   const invoice = event("invoiced", total, { effectiveAt: "2026-10-02T12:00:00Z", composition: { declared: amount(total), lines: [
     { externalInvoiceLineId: "order", kind: "original_order", existedAt: "2026-10-01T00:00:00Z", ...amount(100000), match: null },
-    { externalInvoiceLineId: "extra", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...amount(rate * 6), match },
+    { externalInvoiceLineId: "extra", kind: "extra", existedAt: "2026-10-01T00:00:00Z", ...amount(extraNet), match },
   ] } });
   async function importStatus(value: unknown) {
     await page.getByLabel("Format", { exact: true }).selectOption("json");
@@ -191,7 +196,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   // Every invoice cell and total traces to the two imported composition lines and payments.
   async function traceBilling(paidDivisor: number) {
     const table = page.getByTestId("invoice-NS-INVOICE-1");
-    for (const [lineId, net] of [["order", 100000], ["extra", rate * 6]] as const) {
+    for (const [lineId, net] of [["order", 100000], ["extra", extraNet]] as const) {
       const cells = table.locator("tbody tr").filter({ has: page.getByRole("cell", { name: lineId, exact: true }) }).locator("td");
       await expect(cells.nth(1)).toHaveText(pounds(net));
       await expect(cells.nth(2)).toHaveText(pounds(0));
@@ -208,8 +213,8 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
       await drill.locator("summary").click();
     }
   }
-  await expect(page.getByTestId(`export-${stored.exports[0].id}`)).toContainText(`1 line · net ${pounds(rate * 6)}`);
-  await expect(page.getByTestId("unbilled-exports").locator("summary")).toContainText(`${pounds(rate * 6)} (1)`);
+  await expect(page.getByTestId(`export-${stored.exports[0].id}`)).toContainText(`1 line · net ${pounds(extraNet)}`);
+  await expect(page.getByTestId("unbilled-exports").locator("summary")).toContainText(`${pounds(extraNet)} (1)`);
   await page.getByTestId("unbilled-exports").locator("summary").click();
   await expect(page.getByTestId("unbilled-exports")).toContainText(line.exportLineId.slice(0, 8));
   await importStatus(invoice); await traceBilling(0);
@@ -231,14 +236,14 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   }
   expect(persistedFacts.find(f => f.payload.factType === "invoiced")?.payload.composition.lines).toEqual(expect.arrayContaining([
     expect.objectContaining({ externalInvoiceLineId: "order", ...amount(100000), match: null }),
-    expect.objectContaining({ externalInvoiceLineId: "extra", ...amount(rate * 6), match }),
+    expect.objectContaining({ externalInvoiceLineId: "extra", ...amount(extraNet), match }),
   ]));
   expect(persistedFacts).toHaveLength(3);
   await page.getByRole("link", { name: "Monthly statement", exact: true }).click();
   const period = (await db.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/London','YYYY-MM') p")).rows[0].p;
   await page.getByLabel("Statement month").fill(period);
   await page.getByRole("button", { name: "Derive and prepare statement", exact: true }).click();
-  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(extraNet / 10)}`);
   const details = page.getByRole("region", { name: "Stored statement" });
   await details.locator("summary").first().click();
   await expect(details).toContainText(line.extraId); await expect(details).toContainText(line.exportLineId);
@@ -247,34 +252,34 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await page.getByRole("button", { name: "Approve exact statement (practice)", exact: true }).click();
   await expect(page.getByRole("button", { name: "Post approved statement (practice)" })).toBeVisible();
   await page.getByRole("button", { name: "Post approved statement (practice)" }).click();
-  await expect(page.getByText(`accrual: ${pounds(rate * 6 / 10)}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`accrual: ${pounds(extraNet / 10)}`, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Simulate invoice for approved statement (practice)", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText(`Simulated invoice: ${pounds(rate * 6 / 10)}. No payment due.`);
+  await expect(page.getByRole("status")).toHaveText(`Simulated invoice: ${pounds(extraNet / 10)}. No payment due.`);
   const statementId = (await db.query("SELECT id FROM app.enterprise_fee_statement WHERE tenant_id=$1", [tenant])).rows[0].id;
   const savedStatementUrl = page.url();
   expect(new URL(savedStatementUrl).searchParams.get("statement")).toBe(statementId);
   await page.reload();
-  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(extraNet / 10)}`);
   await page.goto("/contractor/dashboard"); await page.goto(savedStatementUrl);
-  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(extraNet / 10)}`);
   await page.getByLabel("Stored statement ID").fill(statementId);
   await page.getByRole("button", { name: "Reload stored statement", exact: true }).click();
-  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(extraNet / 10)}`);
   const readStatement = await page.request.post("/api/contractor/statements/read", { headers: { origin: baseURL }, data: { version: "enterprise-fee-screen-read.v1", statementId } });
   expect(readStatement.status()).toBe(200);
   const view = await readStatement.json() as StatementView;
   await details.locator("summary").first().click();
   expect(view.statement.period).toBe(period); expect(view.statement.revision).toBe(1);
   await expect(details.getByRole("heading", { level: 2 })).toHaveText(`Statement ${period} · revision 1`);
-  expect(view.statement.totalDeltaPence).toBe(rate * 6 / 10);
+  expect(view.statement.totalDeltaPence).toBe(extraNet / 10);
   expect(view.statement.totalDeltaPence).toBe(view.statement.sections.reduce((sum, section) => sum + section.deltaPence, 0));
   for (const section of view.statement.sections) {
     await expect(details.locator("summary").filter({ hasText: `Agreement ${section.agreementVersionId}` })).toHaveText(`Agreement ${section.agreementVersionId} · delta ${pounds(section.deltaPence)}`);
-    expect(section.cumulativeFeePence).toBe(rate * 6 / 10); expect(section.priorNetPostedPence).toBe(0);
+    expect(section.cumulativeFeePence).toBe(extraNet / 10); expect(section.priorNetPostedPence).toBe(0);
     expect(section.deltaPence).toBe(section.cumulativeFeePence - section.priorNetPostedPence);
     await expect(details).toContainText(`Cumulative fee ${pounds(section.cumulativeFeePence)} less prior net posted ${pounds(section.priorNetPostedPence)}`);
     const derivation = view.derivations.find(d => d.id === section.derivationId)!;
-    expect(BigInt(derivation.qualifyingPrincipal.numerator)).toBe(BigInt(rate * 6) * BigInt(derivation.qualifyingPrincipal.denominator));
+    expect(BigInt(derivation.qualifyingPrincipal.numerator)).toBe(BigInt(extraNet) * BigInt(derivation.qualifyingPrincipal.denominator));
     const sources = (await db.query("SELECT * FROM app.enterprise_fee_contribution WHERE tenant_id=$1 AND derivation_id=$2", [tenant, derivation.id])).rows;
     expect(derivation.contributions).toHaveLength(sources.length); expect(sources.length).toBeGreaterThan(0);
     await expect(details).toContainText(`Qualifying principal: ${exactPounds(derivation.qualifyingPrincipal)}`);
@@ -283,7 +288,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
       numerator = numerator * BigInt(contribution.qualifyingPrincipal.denominator) + BigInt(contribution.qualifyingPrincipal.numerator) * denominator;
       denominator *= BigInt(contribution.qualifyingPrincipal.denominator);
     }
-    expect(numerator).toBe(BigInt(rate * 6) * denominator);
+    expect(numerator).toBe(BigInt(extraNet) * denominator);
     // Principal comes only from this extra's immutable paid allocations, including both part payments.
     for (const contribution of derivation.contributions) {
       expect(contribution.extraId).toBe(line.extraId); expect(contribution.exportLineId).toBe(line.exportLineId);
@@ -330,7 +335,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
       for (const source of contribution.sourceIds) { expect(sourceIds.has(source)).toBe(true); await expect(summary.locator("..")).toContainText(source); }
     }
   }
-  expect(report.totals.captured.count).toBe(1); expect(report.totals.approved.known.pence).toBe(rate * 6);
+  expect(report.totals.captured.count).toBe(1); expect(report.totals.approved.known.pence).toBe(extraNet);
   for (const stage of ["backlog", "overdue", "closeoutYes", "closeoutNo", "closeoutMissing"] as const) expect(report.totals[stage].count).toBe(0);
   await expect(page.getByText("Close-out yes / answered: Not computable.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: `Activity groups (${report.groupCount} total)`, exact: true })).toBeVisible();
@@ -345,14 +350,14 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   }
   for (const stage of ["billed", "paid"]) {
     const summary = page.locator("summary").filter({ hasText: new RegExp(`^${stage}: 1 extras`) });
-    await expect(summary).toHaveText(`${stage}: 1 extras · net ${pounds(rate * 6)}`);
+    await expect(summary).toHaveText(`${stage}: 1 extras · net ${pounds(extraNet)}`);
     await summary.click(); await expect(summary.locator("..")).toContainText(line.extraId); await expect(summary.locator("..")).toContainText(line.exportLineId);
   }
   const billing = await (await billingResponse).json() as ReturnType<typeof projectStoredDashboardBilling>;
   await expect(page.getByRole("heading", { name: `Billing groups (${billing.groupCount} total)`, exact: true })).toBeVisible();
   for (const contribution of billing.contributions) {
     expect(contribution.extraId).toBe(line.extraId); expect(contribution.jobId).toBe(order.job_id);
-    expect(contribution.exactPence).toEqual({ numerator: String(rate * 6), denominator: "1" });
+    expect(contribution.exactPence).toEqual({ numerator: String(extraNet), denominator: "1" });
     expect(persistedFacts.some(f => f.id === contribution.factId)).toBe(true);
     const run = (await db.query("SELECT input_hash FROM app.billing_allocation_run WHERE tenant_id=$1 AND id=$2", [tenant, contribution.runId])).rows;
     expect(run).toEqual([{ input_hash: contribution.inputHash }]);
@@ -361,7 +366,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   }
   for (const group of billing.groups) {
     const summary = page.locator("summary").filter({ hasText: `${group.id ?? "Unattributed"} · billed` });
-    await expect(summary).toHaveText(`${group.id ?? "Unattributed"} · billed ${pounds(rate * 6)} · paid ${pounds(rate * 6)}`);
+    await expect(summary).toHaveText(`${group.id ?? "Unattributed"} · billed ${pounds(extraNet)} · paid ${pounds(extraNet)}`);
     await summary.click(); await expect(summary.locator("..")).toContainText(line.extraId);
   }
   // ENT-9: a matched billed extra is not a missing-extra advisory. All reads use real HTTP.
@@ -397,7 +402,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await expect(page.getByText("Advisory only. These observations never change prices, counts, states, fees or statements.", { exact: true })).toBeVisible();
   expect(await moneyOnDashboard()).toEqual(moneyBeforeAdvisory);
   for (const stage of ["billed", "paid"]) {
-    await expect(page.locator("summary").filter({ hasText: new RegExp(`^${stage}:`) })).toHaveText(`${stage}: 1 extras · net ${pounds(rate * 6)}`);
+    await expect(page.locator("summary").filter({ hasText: new RegExp(`^${stage}:`) })).toHaveText(`${stage}: 1 extras · net ${pounds(extraNet)}`);
   }
   expect(await noSideScroll(page)).toBe(true);
   await page.getByRole("button", { name: "Load fictional Northside baseline sample", exact: true }).click();

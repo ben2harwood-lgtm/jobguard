@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -21,7 +22,7 @@ async function invitation(w: ChainWorld, onJob?: string) {
   let s: Awaited<ReturnType<typeof submitted>>;
   if (onJob) {
     const extraId = await raiseOn(c, w, onJob);
-    await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: onJob, extraId, netPence: 150000 });
+    await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: onJob, extraId, netPence: 150000 }));
     const result = await repo.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: onJob, extraId });
     s = { jobId: onJob, extraId, requestId: result.requestId as string, hash: result.revisionHash as string, net: 150000, result };
   } else s = await submitted(c, w, 150000);

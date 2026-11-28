@@ -1,3 +1,4 @@
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
@@ -33,7 +34,7 @@ it('joins actual immutable origin, revision, requirement and approval facts; rep
   await expect(read({ ...w.members.surveyor.member, tenantId: randomUUID() })).rejects.toBeDefined();
   await expect(read(w.members.surveyor.member, { ...q, jobId: randomUUID() })).rejects.toBeDefined();
   await expect(read(w.members.surveyor.member, { ...q, extraId: randomUUID() })).rejects.toBeDefined();
-  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
+  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 }));
   await expect(read()).rejects.toBeDefined();
 });
 
@@ -61,7 +62,7 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   const actor = w.members.supervisor.member;
   const canonicalId = await raiseOn(c, w, s.jobId);
   // LS-111 requires an approved canonical for an approved duplicate.
-  await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'price-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24000 });
+  await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24000 }));
   const canonical = await approvals.submitExtra(await testActorContext(c.admin, ctx, actor), actor, { version: 'submit-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
   await approvals.approveExtraStep(await testActorContext(c.admin, ctx, actor), actor, approveInput({ jobId: s.jobId, requestId: canonical.requestId as string, hash: canonical.revisionHash as string, net: 24000 }, 0));
   const query = { version: 'contractor-bundle-query.v1', jobId: s.jobId, extraId: s.extraId, requestId: s.requestId };
@@ -103,7 +104,7 @@ it.each(['bundle', 'Northside'] as const)('LATER-SAFETY-47 %s follows exact dupl
   await read('approved');
   // The fixture canonical is no longer linked. Give it an unapproved revision
   // so the billing assertion still concerns only the original approved extra.
-  await approvals.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24001 });
+  await approvals.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 24001 }));
   // The existing billing writer still exports the original approved identity and value.
   const batch = await f.exported();
   const lines = (await f.repo.read(ctx, f.session, s.jobId)).exports.find(row => row.id === batch.batchId)!.artifact.lines;

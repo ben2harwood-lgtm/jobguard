@@ -1,3 +1,4 @@
+import { reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
@@ -35,7 +36,7 @@ it('checks actual approvals read-only, preserves absences, and refuses inaccessi
     await expect(app.check(context, w.members.surveyor.member, { ...query, jobId })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   }
   expect(readObject).not.toHaveBeenCalled();
-  await repo.reviseExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, { version: 'revise-extra.v1', commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 });
+  await repo.reviseExtra(await testActorContext(c.admin, context, w.members.surveyor.member), w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40001 }));
   expect(await app.check(context, w.members.surveyor.member, query)).toMatchObject({ reason: 'APPROVAL_OR_SCOPE_INVALID', manifestDigest: null });
   readObject.mockRestore();
 }, 120_000);

@@ -1341,3 +1341,20 @@ lists exact routine/trigger changes; integration and own-step upgrade coverage
 require real PostgreSQL CI. Forward fix only: retain all disclosure, exclusion,
 firing and audit history; disable detection/support execution if rollback is
 needed, then apply a separately reviewed corrective migration.
+
+### 0784 — EP-CC-S1 pricing contract v2 (Enterprise R1 F, RED money)
+
+`0784_extra_price_rules_v2.sql` adds nullable v2 columns to `app.extra_pricing_basis`
+(every existing row keeps NULL; nothing is back-filled), a v2 shape CHECK and same-tenant
+foreign keys, and replaces `app.ent3c_pricing_basis_guard()` (legacy branch unchanged; v2
+rows are checked against the processing receipt, binding, rate, coverage and
+`app.sor_line_net_pence`, and stamped with time and `basis_hash`). It adds the deferred
+constraint trigger `binding_requires_basis` (`app.xa_require_binding_basis()`, ungranted):
+an ordinary revision binding cannot commit without its v2 basis row, so the unchanged v1
+`app.xa_price` can no longer price (`BASIS_REQUIRED`). The one new writer
+`app.xa_price_v2(...)` is SECURITY DEFINER with the LP-6d prefix, owned by
+`jobguard_migration`, EXECUTE for `jobguard_runtime` only. `app.extra_sor_revision` is not
+widened. Contract: `docs/contracts/extra-price-rules-v2.md`. Forward fix only: keep every
+price, binding, basis and receipt; if rollback is needed, refuse v2 at the repository and
+apply a separately reviewed corrective migration. Upgrade proof:
+`test/extra-price-rules-v2-upgrade.integration.test.ts`.

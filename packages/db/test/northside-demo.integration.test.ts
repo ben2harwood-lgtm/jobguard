@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { bindIssuedCredential } from "../src/tenant-context.js";
 import { requestContext } from "./practice-worker-switch-fixtures.js";
 import { assignedJobsQuery } from "../src/site-visit-repository.js";
@@ -139,7 +140,7 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   const op = await act(seed.journey.operativeMembershipId), extra = await log(seed.journey.jobId, op);
   const originBefore = (await c.admin.query("SELECT row_to_json(o)::text bytes FROM app.extra_origin o WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, extra.extraId])).rows;
   const sv = await act(seed.surveyorMembershipId), priceId = randomUUID();
-  await repo.priceExtra(await ctx(), sv, { version: "price-extra.v1", commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  await repo.priceExtra(await ctx(), sv, priceV2({ commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 }));
   expect((await northsideExtras(c.runtime, sv, "surveyor", await ctx())).find(row => row.extraId === extra.extraId)).toMatchObject({ quotedPence: 108000, state: "logged" });
   const sup = await act(seed.supervisorMembershipId), submitId = randomUUID();
   const submitted = await repo.submitExtra(await ctx(), sup, { version: "submit-extra.v1", commandId: submitId, jobId: extra.jobId, extraId: extra.extraId });
@@ -177,11 +178,11 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
   expect((await c.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1", [f.p.tenantId])).rows[0].n).toBe(0);
   expect((await c.admin.query("SELECT adapter,status FROM app.action_outbox WHERE tenant_id=$1", [f.p.tenantId])).rows).toEqual([{ adapter: "fake_email", status: "pending" }]);
   // A cached fictional actor cannot create a command while the trusted session is acting as somebody else.
-  await expect(repo.priceExtra(await ctx(), sv, { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 })).rejects.toBeDefined();
+  await expect(repo.priceExtra(await ctx(), sv, priceV2({ commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 }))).rejects.toBeDefined();
   const currentActor = await new ContractorRepository(c.runtime).resolveSession(f.session);
   expect(currentActor.membershipId).toBe(client.membershipId);
   await act(seed.surveyorMembershipId);
-  await repo.priceExtra(await ctx(), sv, { version: "price-extra.v1", commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  await repo.priceExtra(await ctx(), sv, priceV2({ commandId: priceId, jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 }));
   expect((await c.admin.query("SELECT * FROM app.northside_action_attribution WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId, priceId])).rows[0].switch_id).toBe(rows[1].switch_id);
 }, 600_000);
 
@@ -204,7 +205,7 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
   const clientId = (await invite({ kind: "member.invite", role: "client_approver", email: "second.approver@fictional.invalid", scope: { kind: "client", id: secondOrder.client_id }, clientId: secondOrder.client_id, contractId: secondOrder.contract_id })).id;
   const op = await act(secondOrder.membership_id), extra = await log(secondOrder.job_id, op);
   const secondSurveyor = await act(sv);
-  await repo.priceExtra(await ctx(), secondSurveyor, { version: "price-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 });
+  await repo.priceExtra(await ctx(), secondSurveyor, priceV2({ commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId, netPence: 108000 }));
   const supervisor = await act(sup);
   const submitted = await repo.submitExtra(await ctx(), supervisor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: extra.jobId, extraId: extra.extraId });
   await repo.approveExtraStep(await ctx(), supervisor, { version: "approve-extra-step.v1", commandId: randomUUID(), jobId: extra.jobId, requestId: submitted.requestId, stepIndex: 0, revisionHash: submitted.revisionHash, netPence: 108000 });

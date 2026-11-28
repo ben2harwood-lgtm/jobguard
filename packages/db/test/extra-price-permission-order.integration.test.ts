@@ -5,14 +5,17 @@ import { ExtraApprovalRepository, canonicalJson, withTenant, type AuthenticatedM
 import { beginRepositoryCommand } from "../src/repository-command.js";
 import { chainWorld, cluster, newJob, raiseOn, submitted, approveInput, command, chain, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
+import { legacyPriceV1, quotedBasis } from "./extra-price-v2-fixtures.js";
 
 let c: Cluster, w: ChainWorld, repo: ExtraApprovalRepository;
 const migration = new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url);
-const methods = [["priceExtra", "price-extra.v1"], ["reviseExtra", "revise-extra.v1"]] as const;
+// Pricing contract v2: the repository methods take v2 bodies. The unchanged v1 writer app.xa_price is still runtime-executable, so its
+// refusal order stays pinned through the merged v1 lifecycle (legacyPriceV1), exactly as the predecessor repository reached it.
+const methods = [["priceExtra", "price-extra.v2"], ["reviseExtra", "revise-extra.v2"]] as const;
 const code = (p: Promise<unknown>) => p.then(() => "ok", (e: { code?: string }) => e.code ?? String(e));
 const actorContext = (actor: AuthenticatedMembership) => testActorContext(c.admin, w.ctx, actor);
-const input = (version: string, jobId: string, extraId: string, netPence = 40000) =>
-  ({ version, commandId: randomUUID(), jobId, extraId, netPence });
+const input = (version: string, jobId: string, extraId: string, netPence = 40000, answersRequestId: string = randomUUID()) =>
+  ({ version, commandId: randomUUID(), jobId, extraId, basis: quotedBasis(netPence), ...(version === "revise-extra.v2" ? { reason: "pricing_error", answersRequestId } : {}) });
 const priceDefinition = async () => (await c.admin.query(`SELECT pg_get_functiondef('app.xa_price(uuid,uuid,uuid,uuid,bigint,boolean)'::regprocedure) definition`)).rows[0].definition as string;
 
 // Snapshot complete persisted rows, including receipts, completion binding and audit.
@@ -40,9 +43,9 @@ it("R183 admission witness: predecessor leaks through the real repository, repai
   const before = await snapshot(), installed = await priceDefinition();
   async function refusals() {
     const results = [];
-    for (const [method, version] of methods) {
-      results.push(await code(repo[method](context, actor, input(version, jobId, existing))));
-      results.push(await code(repo[method](context, actor, input(version, jobId, absent))));
+    for (const revise of [false, true]) {
+      results.push(await code(legacyPriceV1(repo, context, actor, revise, { commandId: randomUUID(), jobId, extraId: existing, netPence: 40000 })));
+      results.push(await code(legacyPriceV1(repo, context, actor, revise, { commandId: randomUUID(), jobId, extraId: absent, netPence: 40000 })));
     }
     return results;
   }
@@ -68,6 +71,9 @@ it("R183 admission witness: predecessor leaks through the real repository, repai
     await c.admin.query(await readFile(migration, "utf8"));
   }
   assertDenied(await refusals());
+  // The v2 repository methods refuse the same actor before disclosing existence too.
+  for (const [method, version] of methods) for (const extraId of [existing, absent])
+    expect(await code(repo[method](context, actor, input(version, jobId, extraId)))).toBe("PERMISSION_DENIED");
   expect(await snapshot()).toEqual(before);
 });
 
@@ -96,14 +102,17 @@ it("R183 authorised surveyor still prices, revises, replays and gets NOT_FOUND o
   const actor = w.members.surveyor.member, context = await actorContext(actor);
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId);
   const origin = (await c.admin.query("SELECT to_jsonb(o) origin FROM app.extra_origin o WHERE variation_id=$1", [extraId])).rows;
-  const price = input("price-extra.v1", jobId, extraId);
+  // The unchanged v1 writer reaches its checks but cannot commit a price without a basis.
+  expect(await code(legacyPriceV1(repo, context, actor, false, { commandId: randomUUID(), jobId, extraId, netPence: 40000 }))).toBe("BASIS_REQUIRED");
+  expect(await code(repo.priceExtra(context, actor, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 40000 }))).toBe("BASIS_REQUIRED");
+  const price = input("price-extra.v2", jobId, extraId);
   const priced = await repo.priceExtra(context, actor, price);
   expect(priced).toMatchObject({ netPence: 40000, bindingId: expect.any(String), revisionId: expect.any(String) });
   const afterPrice = await snapshot();
   expect(await repo.priceExtra(context, actor, price)).toEqual(priced);
   expect(await snapshot()).toEqual(afterPrice);
-  expect(await code(repo.priceExtra(context, actor, { ...price, netPence: 40001 }))).toBe("COMMAND_CONFLICT");
-  expect(await code(repo.priceExtra(context, actor, input("price-extra.v1", jobId, extraId)))).toBe("INVALID_TRANSITION");
+  expect(await code(repo.priceExtra(context, actor, { ...price, basis: quotedBasis(40001) }))).toBe("COMMAND_CONFLICT");
+  expect(await code(repo.priceExtra(context, actor, input("price-extra.v2", jobId, extraId)))).toBe("INVALID_TRANSITION");
   for (const [method, version] of methods) {
     expect(await code(repo[method](context, actor, input(version, jobId, randomUUID())))).toBe("NOT_FOUND");
     // A genuine extra on another valid, covered job is still absent on this job.
@@ -111,11 +120,12 @@ it("R183 authorised surveyor still prices, revises, replays and gets NOT_FOUND o
     expect(await code(repo[method](context, actor, input(version, wrongJob, extraId)))).toBe("NOT_FOUND");
     for (const net of [0, -1, 1.5, 1_000_000_000_001])
       expect(await code(repo[method](context, actor, input(version, jobId, extraId, net)))).toBe("INVALID_COMMAND");
+    expect(await code(repo[method](context, actor, { ...input(version, jobId, extraId), basis: undefined }))).toBe("BASIS_REQUIRED");
   }
   expect((await c.admin.query("SELECT to_jsonb(o) origin FROM app.extra_origin o WHERE variation_id=$1", [extraId])).rows).toEqual(origin);
   const s = await submitted(c, w, 40000), supervisor = w.members.supervisor.member;
   await repo.approveExtraStep(await actorContext(supervisor), supervisor, approveInput(s, 0));
-  const revise = input("revise-extra.v1", s.jobId, s.extraId, 60000);
+  const revise = input("revise-extra.v2", s.jobId, s.extraId, 60000, s.requestId);
   const revised = await repo.reviseExtra(context, actor, revise);
   expect(revised).toMatchObject({ state: "awaiting_approval", requestRevision: 2, netPence: 60000 });
   expect(await repo.reviseExtra(context, actor, revise)).toEqual(revised);

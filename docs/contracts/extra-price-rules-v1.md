@@ -11,3 +11,5 @@ Existing enforcement already implements these rulings: strict core and repositor
 Migration 0859_extra_price_contract_rules is unused: no additional SQL guard or routine recreation is needed. No stored format, grant, existing contract or production switch changes.
 
 ENT-5 is still not complete. Q15 executor/scheduler activation and the wider ENT-5 Done-when requirements remain open; this amendment supplies no independent review, real-provider or release evidence. Q14 and any other questions are outside this slice.
+
+Pricing contract v2 amendment (EP-CC-S1, 28 Nov 2026): new prices and revisions use `price-extra.v2` / `revise-extra.v2` with a recorded basis; see [extra-price-rules-v2.md](extra-price-rules-v2.md). Q01's money rules above still hold. v1 is not redefined: a completed v1 command replays its stored result and a new v1 command is refused `BASIS_REQUIRED`.

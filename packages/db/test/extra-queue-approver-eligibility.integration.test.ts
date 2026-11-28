@@ -1,3 +1,4 @@
+import { reviseV2 } from "./extra-price-v2-fixtures.js";
 // Synthetic PostgreSQL regressions; run in the database-capable check environment.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -23,9 +24,7 @@ async function approve(w: ChainWorld, actor: AuthenticatedMembership, s: Request
 }
 async function revise(w: ChainWorld, s: Request) {
   const actor = w.members.surveyor.member;
-  const result = await repo.reviseExtra(await context(w, actor), actor, {
-    version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60001,
-  });
+  const result = await repo.reviseExtra(await context(w, actor), actor, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60001, }));
   return { ...s, requestId: result.requestId as string, hash: result.revisionHash as string, net: 60001 };
 }
 

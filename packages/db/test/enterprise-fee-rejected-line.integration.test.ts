@@ -1,3 +1,4 @@
+import { fixturePrice } from "./extra-price-v2-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -179,8 +180,8 @@ it("R151-ADJUST: credits and reversals cannot revive rejected principal", async 
 it("R151-MIXED: only the rejected extra is excluded from a mixed invoice", async () => {
   const t = await setup(), w = t.w, extraId = await raiseOn(c, w.w, w.s.jobId);
   const approvals = new ExtraApprovalRepository(c.runtime), actor = w.w.members;
-  await approvals.priceExtra(await testActorContext(c.admin, w.ctx, actor.surveyor.member), actor.surveyor.member,
-    { version: "price-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: 24000 });
+  await fixturePrice(c, approvals, await testActorContext(c.admin, w.ctx, actor.surveyor.member), actor.surveyor.member,
+    { commandId: randomUUID(), jobId: w.s.jobId, extraId, netPence: 24000 });
   const request = await approvals.submitExtra(await testActorContext(c.admin, w.ctx, actor.supervisor.member), actor.supervisor.member,
     { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.s.jobId, extraId });
   await approvals.approveExtraStep(await testActorContext(c.admin, w.ctx, actor.supervisor.member), actor.supervisor.member,

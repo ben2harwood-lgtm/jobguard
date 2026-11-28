@@ -1,3 +1,4 @@
+import { fixturePrice } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-5b fixtures. Every value here is a SYNTHETIC demo fixture value "to be set by Ben before real use" (see docs/verdicts/ENT-5b/BUILDER_RECEIPT.md).
 import { randomUUID, randomBytes } from "node:crypto";
@@ -53,7 +54,7 @@ export async function raiseOn(c: Cluster, w: ChainWorld, jobId: string, by: Role
 export async function submitted(c: Cluster, w: ChainWorld, net: number | null, raiser: Role = "operative") {
   const repo = new ExtraApprovalRepository(c.runtime), ctx = await w.ctx;
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId, raiser);
-  if (net !== null) await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: net });
+  if (net !== null) await fixturePrice(c, repo, await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { commandId: randomUUID(), jobId, extraId, netPence: net });
   const r = await repo.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   return { jobId, extraId, requestId: r.requestId as string, hash: r.revisionHash as string, net: net as number, result: r };
 }

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { sha256 } from "@jobguard/core";
-import { priceExtraV1 } from "../src/extra-approval-chain-repository.js";
+import { priceExtraV1, priceExtraV2 } from "../src/extra-approval-chain-repository.js";
 import { SorSuggestionFixtureProposer } from "../../ai/src/sor-suggestion.js";
 
 it("SOR-2 / Suggestions: candidates cannot enter merged ENT-5b PriceExtra without a separate human amount and command", async () => {
@@ -19,5 +19,12 @@ it("SOR-2 / Suggestions: candidates cannot enter merged ENT-5b PriceExtra withou
   expect(priceExtraV1.safeParse(humanCommand).success).toBe(false);
   expect(priceExtraV1.safeParse({ ...humanCommand, netPence: 2500 }).success).toBe(true);
   expect(priceExtraV1.safeParse({ ...humanCommand, ...candidate, netPence: 2500 }).success).toBe(false);
+  // Pricing contract v2: the human command must carry its own basis; a candidate's fields cannot stand in for it.
+  const humanV2 = { ...humanCommand, version: "price-extra.v2" };
+  expect(priceExtraV2.safeParse(humanV2).success).toBe(false);
+  expect(priceExtraV2.safeParse({ ...humanV2, ...candidate }).success).toBe(false);
+  expect(priceExtraV2.safeParse({ ...humanV2, basis: { kind: "server_sor", ...candidate, claimedQuantity: "1" } }).success).toBe(false);
+  expect(priceExtraV2.safeParse({ ...humanV2, basis: { kind: "server_sor", sorCode: candidate.sorCode, claimedQuantity: "1" } }).success).toBe(true);
+  expect(priceExtraV2.safeParse({ ...humanV2, basis: { kind: "surveyor_quoted", netPence: 2500, method: "quotation", note: "Fictional" } }).success).toBe(true);
   // Schema compatibility only. This does not execute a command or prove PostgreSQL authority checks.
 });

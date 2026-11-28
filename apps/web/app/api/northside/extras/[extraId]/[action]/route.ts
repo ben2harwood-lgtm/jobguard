@@ -28,18 +28,22 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
       : parseDemoBody(z.object(common).strict(), await bodyOf(request));
     const jobId = uuid(body.jobId), commandId = body.commandId ?? randomUUID();
     const repo = new ExtraApprovalRepository(pool);
+    // The v2 result's basis summary always carries the database's net (a late price or a revision answers with the new request instead).
+    const covered = async (job: string) => withTenant(pool, tenant, async db => (await db.$client.query<{ allowed: boolean }>(
+      "SELECT app.xa_covers($1,ARRAY['surveyor']::text[],$2,'extra.price') IS NOT NULL AS allowed", [member.membershipId, job])).rows[0]?.allowed === true);
     const current = async () => { const found = (await northsideExtras(pool, member, role, tenant)).find(x => x.extraId === extraId && x.jobId === jobId); if (!found) throw new DemoError("NOT_FOUND", 404); return found; };
     if (action === "revise") {
       if (role !== "surveyor") throw new DemoError("PERMISSION_DENIED", 403);
       const price = parseDemoBody(z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict(), body);
-      const allowed = await withTenant(pool, tenant, async db => (await db.$client.query<{ allowed: boolean }>(
-        "SELECT app.xa_covers($1,ARRAY['surveyor']::text[],$2,'extra.price') IS NOT NULL AS allowed", [member.membershipId, jobId])).rows[0]?.allowed);
-      if (!allowed) throw new DemoError("PERMISSION_DENIED", 403);
-      const rate = (await northsideRateCard(pool, member, jobId, tenant)).find(r => r.code === price.sorCode);
-      if (!rate) throw new DemoError("NOT_FOUND", 404);
-      const netPence = rate.ratePence * price.quantity;
-      return json({ version: "northside-revised.v1", environment: "synthetic_demo", realExternalActions: 0, netPence,
-        result: await repo.reviseExtra(tenant, member, { version: "revise-extra.v1", commandId, jobId, extraId, netPence }) });
+      if (!await covered(jobId)) throw new DemoError("PERMISSION_DENIED", 403);
+      // Pricing contract v2: the database prices the rate code from the bound rate list and tendered adjustment, and records why the price
+      // changed and which request it answers (the one on screen). A rejection is answered as response_to_rejection; otherwise the
+      // surveyor's re-measure is quantity_corrected. No money is computed here.
+      const extra = await current();
+      if (extra.requestId === null) throw new DemoError("INVALID_TRANSITION", 409);
+      const result = await repo.reviseExtra(tenant, member, { version: "revise-extra.v2", commandId, jobId, extraId, basis: { kind: "server_sor", sorCode: price.sorCode, claimedQuantity: String(price.quantity) },
+        reason: extra.outcome === "rejected" ? "response_to_rejection" : "quantity_corrected", answersRequestId: extra.requestId });
+      return json({ version: "northside-revised.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: (result.basis as { netPence: number }).netPence, result });
     }
     if (action === "withdraw") {
       if (!["supervisor", "surveyor", "commercial_manager"].includes(role)) throw new DemoError("PERMISSION_DENIED", 403);
@@ -69,15 +73,14 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
         result: await repo.rejectExtra(tenant, member, { ...binding, version: "reject-extra.v1", commandId, jobId }) });
     }
     if (action === "price") {
-      // The price is the seeded rate times the quantity the surveyor measured: whole pence, integer arithmetic.
+      // Pricing contract v2: the surveyor names the rate code and the total quantity measured; the database prices only the excess over the
+      // order at the bound rate and tendered adjustment (exact, half-even). No money is computed here.
       if (role !== "surveyor") throw new DemoError("PERMISSION_DENIED", 403);
       const price = body as typeof body & { quantity: number; sorCode: string };
       const quantity = price.quantity; if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000 || typeof price.sorCode !== "string") throw new DemoError("INVALID_COMMAND", 422);
-      const allowed = await withTenant(pool, tenant, async db => (await db.$client.query<{ allowed: boolean }>(
-        "SELECT app.xa_covers($1,ARRAY['surveyor']::text[],$2,'extra.price') IS NOT NULL AS allowed", [member.membershipId, jobId])).rows[0]?.allowed);
-      if (!allowed) throw new DemoError("PERMISSION_DENIED", 403);
-      const rate = (await northsideRateCard(pool, member, jobId, tenant)).find(r => r.code === price.sorCode); if (!rate) throw new DemoError("NOT_FOUND", 404);
-      return json({ version: "northside-priced.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: rate.ratePence * quantity, result: await repo.priceExtra(tenant, member, { version: "price-extra.v1", commandId, jobId, extraId, netPence: rate.ratePence * quantity }) });
+      if (!await covered(jobId)) throw new DemoError("PERMISSION_DENIED", 403);
+      const result = await repo.priceExtra(tenant, member, { version: "price-extra.v2", commandId, jobId, extraId, basis: { kind: "server_sor", sorCode: price.sorCode, claimedQuantity: String(quantity) } });
+      return json({ version: "northside-priced.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: (result.basis as { netPence: number }).netPence, result });
     }
     if (action === "submit") return json({ version: "northside-submitted.v1", environment: "synthetic_demo", realExternalActions: 0, result: await repo.submitExtra(tenant, member, { version: "submit-extra.v1", commandId, jobId, extraId }) });
     if (action === "approve") {

@@ -1,0 +1,146 @@
+{
+  "migration": "0784_extra_price_rules_v2.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.xa_price_v2(uuid,uuid,uuid,uuid,boolean,text,text,text,bigint,text,text,uuid,text,text,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-extra-approval-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.xa_price_v2(uuid,uuid,uuid,uuid,boolean,text,text,text,bigint,text,text,uuid,text,text,uuid)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ent3c_pricing_basis_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "d18adb94cf927bc7a65b502117f2c5ab58a23dd2559ed76f3b81c5daf999bb7c",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.ent3c_pricing_basis_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "7c871a7641c2f61eda30121995027f16f5f1f3d15b9798c08d3d95f8c3a830ba",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.sor_line_net_pence"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xa_price_v2(uuid,uuid,uuid,uuid,boolean,text,text,text,bigint,text,text,uuid,text,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "52d16f51ff991755317930f07aeb53870fd6d4fc1836090212b47fbd79db849d",
+        "staticWrites": [
+          "app.extra_approval_revision_binding",
+          "app.extra_pricing_basis",
+          "app.variation_revision"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp5_bind_effect",
+          "app.sor_line_net_pence",
+          "app.xa_begin",
+          "app.xa_covers",
+          "app.xa_latest_kind",
+          "app.xa_open_request",
+          "app.xa_resolve_decision"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.xa_require_binding_basis()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "d1bba2920604e87910a61cbe242f57aba91fbe21c64b689e141f0db08c17e4e4",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_approval_revision_binding|binding_requires_basis|app.xa_require_binding_basis|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xa_price_v2",
+        "args": "p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_revise boolean, p_kind text, p_sor_code text, p_claimed_quantity text, p_net bigint, p_method text, p_note text, p_evidence uuid, p_reason text, p_reason_note text, p_answers_request uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "xa_require_binding_basis",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

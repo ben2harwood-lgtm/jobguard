@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL tests, NOT RUN in the restricted builder sandbox.
 import { randomUUID } from "node:crypto";
@@ -27,7 +28,7 @@ describe("ENT-8A-P atomic commands",()=>{
   const f=await promptFixture(c),p=await surfaced(f); await repo.confirm(f.sessions.supervisor!,confirmation(f,p));
   const before=(await c.admin.query("SELECT variation_id,origin_hash FROM app.extra_origin WHERE tenant_id=$1",[f.p.tenantId])).rows[0]!;
   const approvals=new ExtraApprovalRepository(c.runtime);
-  await approvals.priceExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member),f.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id,netPence:1000});
+  await approvals.priceExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member),f.members.surveyor.member,priceV2({ commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id,netPence:1000 }));
   const submitted=await approvals.submitExtra(await testActorContext(c.admin, f.ctx, f.members.surveyor.member),f.members.surveyor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:f.jobId,extraId:before.variation_id});
   expect(submitted.state).toBe("awaiting_approval");
   await approvals.approveExtraStep(await testActorContext(c.admin, f.ctx, f.named.member),f.named.member,{version:"approve-extra-step.v1",commandId:randomUUID(),jobId:f.jobId,requestId:submitted.requestId,stepIndex:0,revisionHash:submitted.revisionHash,netPence:1000});
