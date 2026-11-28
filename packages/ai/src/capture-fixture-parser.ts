@@ -116,17 +116,23 @@ const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\
 // A hedge word qualifying the amount itself: "about 500", "roughly £500", "500 or so". "Tile around the bath" is a place.
 const hedgeBefore = /\b(?:about|around|roughly|approximately|approx)\.?\s*$/iu;
 const hedgeAfter = /^\s*(?:-?ish\b|or so\b|(?:roughly|approximately|approx)(?![\p{L}]))/iu;
+// A limit, floor or credit around the amount (V2-SQ-M): a ceiling, a floor or a credit is never a fixed price, and a
+// credit is never read as a charge or worked out as a negative one; the builder is asked. "Paint the ceiling - £200"
+// (a dash with a space after it) is punctuation; "-£50" and "−£50", with the sign against the amount, are a minus.
+const limitBefore = /(?:(?<![\p{L}])(?:up\s+to|at\s+(?:the\s+)?(?:most|least|maximum|minimum|max|min)|no\s+(?:more|less|higher|lower)\s+than|not\s+(?:more|less)\s+than|not\s+(?:over|exceeding)|(?:a\s+|the\s+)?(?:maximum|minimum|max|min)(?:\s+(?:price|cost|charge|budget|spend))?(?:\s+of)?|capped\s+at|starting\s+(?:at|from)|minus|less|(?:a\s+)?credit(?:\s+of)?|under|below|over|above)\s*|(?:^|\s)[-–]|−\s*)$/iu;
+const limitAfter = /^\s*(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|at\s+(?:the\s+)?(?:most|least)|or\s+(?:less|more|under|over|below|above|thereabouts)|credit(?:ed)?|off(?:\s+(?:the\s+)?(?:bill|price|total|invoice|quote))?|discount|refund(?:ed)?|back)(?![\p{L}])/iu;
 /**
  * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
  * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
  * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
- * a hedge word qualifies it ("about 500", "500 or so"); or a rate qualifier follows it (rateAfter).
+ * a hedge word qualifies it ("about 500", "500 or so"); a limit, floor or credit word qualifies it ("up to £200",
+ * "£200 minimum", "minus fifty pounds", "-£50", "£50 off the bill"); or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
   return readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
-    || hedgeBefore.test(before) || hedgeAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
+    || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";

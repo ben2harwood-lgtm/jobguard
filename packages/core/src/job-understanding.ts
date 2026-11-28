@@ -54,7 +54,9 @@ export type UnderstoodLine = JobUnderstanding["lines"][number];
  * Reads the cited words as a number with the parsers that read the transcript (packages/ai supplies them).
  * `money` returns pence, `count` the counted value; null when the words are not exactly one number.
  */
-export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null };
+export type SpokenNumberReader = { money(words: string): number | null; count(words: string): number | null;
+  /** True when the words of the same sentence either side of a cited amount leave it open ("up to £200", "-£50"). */
+  open?(before: string, after: string): boolean };
 
 const NUMBER_WORDS = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|half|point";
 const NUMBER_WORD_BEFORE = new RegExp(`(?:^|[^\\p{L}])(?:${NUMBER_WORDS})(?:[\\s-]+and)?[\\s-]+$`, "iu");
@@ -68,7 +70,7 @@ const NUMBER_WORD_AFTER = new RegExp(`^[\\s-]+(?:and[\\s-]+)?(?:${NUMBER_WORDS})
  */
 export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourceText: string, read: SpokenNumberReader): JobUnderstanding {
   const questions = [...understanding.questions];
-  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: keyof SpokenNumberReader) => {
+  const cites = (provenance: z.infer<typeof provenanceV1>, expected: number, kind: "money" | "count") => {
     if (provenance.kind !== "extracted") return false;
     const { start, end } = provenance.span;
     if (start < 0 || end > sourceText.length || start >= end) return false;
@@ -77,9 +79,18 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     // … nor "five" inside "twenty five", or "twenty" inside "twenty five" or "two hundred".
     // A number word that ends one of the job's own room names ("Bedroom two £500") names the room (V2-SQ-L).
     const before = sourceText.slice(Math.max(0, start - 40), start);
-    const roomBefore = understanding.areas.some(area => /\p{N}|\b(?:one|two|three|four|five)$/iu.test(area.name.value)
-      && new RegExp(`(?<![\\p{L}])${area.name.value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/\s+/gu, "\\s+")}\\s*$`, "iu").test(before));
-    if ((!roomBefore && NUMBER_WORD_BEFORE.test(before)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
+    const ownRoom = understanding.areas.flatMap(area => /\p{N}|\b(?:one|two|three|four|five)$/iu.test(area.name.value)
+      ? [new RegExp(`(?<![\\p{L}])${area.name.value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/\s+/gu, "\\s+")}\\s*$`, "iu")] : [])
+      .find(room => room.test(before));
+    if ((!ownRoom && NUMBER_WORD_BEFORE.test(before)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
+    // … nor an amount the words around it leave open, such as a limit or a credit (V2-SQ-M), within its own sentence.
+    // The room's own name is left out, so its number is not read as a second number.
+    if (kind === "money" && read.open) {
+      let near = sourceText.slice(Math.max(0, start - 80), start);
+      if (ownRoom) near = near.replace(ownRoom, "");
+      const after = sourceText.slice(end, end + 80);
+      if (read.open(near.slice(near.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)))) return false;
+    }
     return read[kind](sourceText.slice(start, end)) === expected;
   };
   const spanOf = (provenance: z.infer<typeof provenanceV1>) => provenance.kind === "extracted" ? provenance.span : null;
