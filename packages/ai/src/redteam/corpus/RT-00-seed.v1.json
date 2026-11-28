@@ -1,0 +1,53 @@
+[
+  {
+    "id": "RT-00-001", "lane": "RT-00",
+    "transcript": "Fit the door for a hundred and fifty quid",
+    "why": "README corpus example: exact spoken pounds, never a smaller or larger amount",
+    "expect": {
+      "lines": [{ "descriptionIncludes": "Fit the door", "room": null, "trade": "Carpentry", "unitPricePence": 15000, "priceBasis": "line" }],
+      "areaPrices": [], "wholeJobPricePence": null, "questionsInclude": [], "neverPence": [150, 1500, 150000], "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-00-002", "lane": "RT-00",
+    "transcript": "Fit the door for a hundred and fifty pound",
+    "why": "RT-01 seed: singular pound is still an exact 150 pounds",
+    "expect": {
+      "lines": [{ "descriptionIncludes": "Fit the door", "unitPricePence": 15000 }],
+      "neverPence": [150, 1500], "lineCount": 1
+    },
+    "status": "open-finding", "finding": "RT-00-F001"
+  },
+  {
+    "id": "RT-00-003", "lane": "RT-00",
+    "transcript": "Paint the kitchen £400, no, make that £450",
+    "why": "RT-03 seed: a correction stays open with a question and never creates two lines",
+    "expect": {
+      "lines": [{ "descriptionIncludes": "Paint", "unitPricePence": null }],
+      "questionsInclude": ["check"], "neverPence": [40000], "lineCount": 1
+    },
+    "status": "open-finding", "finding": "RT-00-F002"
+  },
+  {
+    "id": "RT-00-004", "lane": "RT-00",
+    "transcript": "In bedroom two paint the walls. Bedroom two £500 all in",
+    "why": "RT-04 seed: numbered room total must never price the paint line",
+    "expect": {
+      "lines": [{ "descriptionIncludes": "paint the walls", "room": "Bedroom two", "trade": "Decorating", "unitPricePence": null, "priceBasis": "none" }],
+      "areaPrices": [{ "room": "Bedroom two", "pence": 50000 }], "wholeJobPricePence": null,
+      "neverPence": [250000], "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-00-005", "lane": "RT-00",
+    "transcript": "Run 15mm pipe to the rad £120",
+    "why": "RT-11 seed: pipe diameter is not an item count; the line price is 120 pounds",
+    "expect": {
+      "lines": [{ "descriptionIncludes": "Run 15mm pipe", "quantity": null, "unitPricePence": 12000, "priceBasis": "line" }],
+      "wholeJobPricePence": null, "neverPence": [15, 1500, 120], "lineCount": 1
+    },
+    "status": "open-finding", "finding": "RT-00-F003"
+  }
+]
