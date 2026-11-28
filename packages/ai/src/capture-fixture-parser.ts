@@ -195,6 +195,32 @@ export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|s
 const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|is|are|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
+/** The draft's next-item boundary length, or zero. Shared with numeric checks and total clauses. */
+export function plainItemBoundary(text: string, i: number, start: number,
+  isNext: (value: string) => boolean = workClause): number {
+  const char = text[i] ?? "";
+  const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
+  if (!separator) {
+    // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
+    if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
+      && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
+      return 1;
+    }
+    return 0;
+  }
+  const next = visibleWorkText(text.slice(i + separator.length));
+  // A condition qualifies this clause's price; an explicit next work item still starts a new clause.
+  if (spokenCorrection.exec(next)?.index === 0) return 0;
+  // Keep the disposal phrase attached to the removal it describes.
+  if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) return 0;
+  // "supply and fit one door" is one item.
+  if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) return 0;
+  if (isNext(next)) {
+    return separator.length;
+  }
+  return 0;
+}
+
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
  * every line. Offsets always refer to the untouched source, including prices.
  * ITEM: records never enter this path. No source text is executed or fetched.
@@ -216,6 +242,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
   };
+  const isNext = (next: string) => isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!);
   const party = suggestCapturePartyClause(text);
   const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
     .map(match => [match.index, match.index + match[0].length]));
@@ -235,24 +262,9 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       if (correctionInChunkEnd >= start && !isWork(next) && !roomOnly.test(next.split(/[.!?;\r\n]/u)[0]!)) continue;
       add(start, i); start = i + 1;
     } else {
-      const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
-      if (!separator) {
-        // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
-        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
-          && !awaitingCorrection && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
-          add(start, i); start = i + 1;
-        }
-        continue;
-      }
-      const next = visibleWorkText(text.slice(i + separator.length));
-      // A condition qualifies this clause's price; an explicit next work item still starts a new clause.
-      if (awaitingCorrection || spokenCorrection.exec(next)?.index === 0) continue;
-      // Keep the disposal phrase attached to the removal it describes.
-      if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
-      // "supply and fit one door" is one item.
-      if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) continue;
-      if (isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
-        add(start, i); start = i + separator.length; i = start - 1;
+      const separator = plainItemBoundary(text, i, start, isNext);
+      if (!awaitingCorrection && separator) {
+        add(start, i); start = i + separator; i = start - 1;
       }
     }
   }
