@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-wp-fix": {
+      "branches": [
+        "claude/project-thread-trp08u-wpfix"
+      ],
+      "note": "T2 Q72 V2-WP-FIX: two fixes to merged work-plan code (F8 / SQ-F). The work-plan GET passes the repository's extrasNotPlanned through, and the Plan card lists them under Not planned yet with a plain reason. An open task form sends the approved variation revision it opened on, so the existing stale-revision refusal works. No table, migration, money or server-check change.",
+      "allow": [
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts"
+      ]
+    }
+  }
+}

@@ -2,7 +2,8 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Empty } from "../../../designed-ui";
 import { jobPageFetch } from "../../../../ui/job-page-fetch";
-import { editCommand, editFields, WorkPlan } from "./work-plan";
+import { renderToStaticMarkup } from "react-dom/server";
+import { editCommand, editFields, notPlannedReason, WorkPlan } from "./work-plan";
 
 // Exercise the Plan card's real read handlers with persistent hook slots.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], slot: 0, effects: [] as Array<() => void | (() => void)>, collecting: true }));
@@ -163,6 +164,25 @@ describe("Plan task edits", () => {
     expect(JSON.parse(String(init!.body)).expectedVersion).toBe(1);
   });
 
+  it("V2-WP-FIX: saves against the approved revision the form opened on, so a newer approval is refused as stale", async () => {
+    const newer = "00000000-0000-4000-8000-000000000031";
+    const extra = (revision: string) => ({ ...view("rev-1", "accepted", [task("fit", "Fit doors")]), variationRevisions: { [scopeItemId]: revision } });
+    request.mockResolvedValueOnce(Response.json(extra(approved)));
+    await mount();
+    await vi.waitFor(() => expect(taskKeys()).toEqual([`${scopeItemId}/fit`]));
+    (shown().find(node => node.props["aria-label"] === "Edit task Fit doors")!.props.onClick as () => void)();
+    // A newer approval of the same extra lands while the form is open; the plan's edit version does not move.
+    request.mockResolvedValueOnce(Response.json(extra(newer)));
+    window.dispatchEvent(new CustomEvent("job-saved", { detail: { jobId } }));
+    await vi.waitFor(() => expect(planReads()).toBe(2));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    request.mockResolvedValueOnce(Response.json({ code: "WORK_PLAN_VERSION_CONFLICT" }, { status: 409 }));
+    (shown().find(node => typeof node.props.save === "function")!.props.save as (changes: object) => void)({ trade: "Tiling" });
+    await vi.waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    const [, init] = request.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(init!.body)).variationRevisionId).toBe(approved);
+  });
+
   it("keeps a linked crew member unless the assignee is changed", () => {
     const linked = { ...task("fit", "Fit doors"), assigneeRef: crew };
     const untouched = editFields(form(""), linked);
@@ -170,5 +190,26 @@ describe("Plan task edits", () => {
     expect("assigneeRef" in untouched).toBe(false);
     expect(editFields(form("Sam"), linked).assignee).toBe("Sam");
     expect(editFields(form(""), { ...task("fit", "Fit doors"), assignee: "Sam" }).assignee).toBeNull();
+  });
+});
+
+describe("V2-WP-FIX extras the plan can't place", () => {
+  it.each([
+    [{ reason: "direction_unknown", planningDropped: false }, "Approved extra with no direction yet: say whether it adds work or removes it"],
+    [{ reason: "direction_unknown", planningDropped: true }, "Approved extra with no direction yet, so it was taken out of the plan: say whether it adds work or removes it"],
+    [{ reason: "omission", planningDropped: true }, "Became an omission, so it was taken out of the plan"],
+    [{ reason: "omission", planningDropped: false }, "Approved omission: it removes work, so there is nothing to plan"],
+  ] as const)("gives a plain reason for %o", (item, text) => {
+    expect(renderToStaticMarkup(<p>{notPlannedReason(item)}</p>)).toBe(`<p>${text}</p>`);
+  });
+
+  it("lists each one under Not planned yet, and the card is not empty", async () => {
+    request.mockResolvedValueOnce(Response.json({ ...view("rev-1", "accepted", []), extrasNotPlanned: [
+      { scopeItemId, title: "Leave the old shed", reason: "direction_unknown", planningDropped: false }] }));
+    await mount();
+    await vi.waitFor(() => expect(shown().some(node => node.type === "h3" && node.props.children === "Not planned yet")).toBe(true));
+    expect(shown().some(node => node.type === "h4" && node.props.children === "Leave the old shed")).toBe(true);
+    expect(shown().some(node => node.type === "p" && node.props.children === notPlannedReason({ reason: "direction_unknown", planningDropped: false }))).toBe(true);
+    expect(empty()).toBe(false);
   });
 });
