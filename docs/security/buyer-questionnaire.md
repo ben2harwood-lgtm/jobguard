@@ -208,7 +208,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-16 What can the application’s database login not do?
 
-**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. LP-1 removes direct account/membership creation, promotion, restoration and deletion; LP-4 removes direct audit writes and seals entries through controlled routines. Named tests cover these changes. Later least-privilege pieces LP-5 to LP-13 and a synthetic LP-9 final gate merged after the cutoff (#474–#866; re-checked 28 Nov, see E-71). Lower-trust authority-named audit statements remain permitted; full protection from forged owner approvals, job status/price and downstream authority is not claimed (E-71). Privileged database and identity-service compromise remain outside this limit.
+**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. LP-1 removes direct account/membership creation, promotion, restoration and deletion; LP-4 removes direct audit writes and seals entries through controlled routines. Named tests cover these changes. Evidence rechecked on 28 November: LP-5a to LP-5c and LP-6a were already on `main` at the cutoff (#474, #540, #544); LP-6b to LP-13 and a synthetic LP-9 final gate merged after it (#548–#866; see E-71). Lower-trust authority-named audit statements remain permitted; full protection from forged owner approvals, job status/price and downstream authority is not claimed (E-71). Privileged database and identity-service compromise remain outside this limit.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 

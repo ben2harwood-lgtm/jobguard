@@ -1,6 +1,6 @@
 # Contractor track inventory — 28 November 2026
 
-**Pinned revision:** `main` at `daaa927ca0184cf7d84ada4e79d49b632c98b2f6` (merge of #1017, 28 Nov 2026).
+**Pinned revision:** `main` at `daaa927ca0184cf7d84ada4e79d49b632c98b2f6` (merge of #1017, merged 27 Nov 2026 20:59 UTC); inspected 28 Nov 2026.
 **Piece:** EP-A1 (Enterprise R1 plan, piece A1). Docs only. Supersedes the contractor-track status in `BUILD_PLAN.md` §7.2/§7.3, which was written at #92 (`694e9e1`).
 
 Everything below runs only in `synthetic_demo`. No real customer data, live provider, real send, payment rail or production mode is enabled at this revision. A merged PR is test execution plus merge, not an independent verdict or release approval (AGENTS §5.13).
@@ -121,7 +121,7 @@ The DUI branches form one straight stack, each branch containing the one before:
 
 - **#896** (DUI-2): base `main`, head `8f389fbecfaf0a2f10acdb0d3b16b8ba09403276`, 4 commits. It contains DUI-1a and DUI-1b, so it overlaps #890 and #894.
 - **#902** (DUI-5): base `main`, head `50ab994408fc12a1a35cf49db86fdf0c9e579ea8`, 7 commits. It contains all of #896, plus DUI-3 and DUI-4 (#897, #899).
-- **#918** ("Tommy demo: hardening fixes"): base `codex/sandbox/dui-6` (not `main`), head `b8adc5b5274c035d8ab8e3d2533a5d591bb98599`, 22 commits against main's fork point. It contains `dui-6`, so it contains #902 and #896 as well.
+- **#918** ("Tommy demo: hardening fixes"): base `codex/sandbox/dui-6` (not `main`), head `b8adc5b5274c035d8ab8e3d2533a5d591bb98599`, 30 commits against main's fork point `76e48522b`, of which 22 sit above `dui-6` (`d67e7ef8c`), which itself holds the other eight. It contains `dui-6`, so it contains #902 and #896 as well.
 
 So #918 ⊃ `dui-6` ⊃ #902 ⊃ #896. Merging #918 into its base only updates `dui-6`; nothing reaches `main` until the stack lands there. Choosing one route is plan piece A2.
 
