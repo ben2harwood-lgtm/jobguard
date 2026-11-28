@@ -84,18 +84,23 @@ export function amounts(value: string): Amount[] {
   // "half a thousand pounds", "between 400 and 500 pounds", "four to five hundred pounds": only part of what was said is an amount.
   // Unread number guard: "one thousand and a hundred pounds", "fifty pounds and five": a number said next to the amount
   // but outside it means the amount was read in part, so it has no price.
-  for (const amount of found) {
-    if (fractionOrRange.test(value.slice(0, amount.index)) || unreadBefore.test(value.slice(0, amount.index))
-      || unreadAfter.test(value.slice(amount.index + amount.text.length))) amount.pence = null;
-  }
+  for (const amount of found) if (readInPart(value.slice(0, amount.index), value.slice(amount.index + amount.text.length))) amount.pence = null;
   return found.sort((a, b) => a.index - b.index);
 }
 // A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
 const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|to|or))\\s*$`, "iu");
 // A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
-const unreadNumber = `(?:\\d|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|point|half|halves|quarters?|thirds?|couple|few|dozen)(?![\\p{L}]))`;
+const unreadNumber = `(?:\\d[\\d,.]*k?|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|k|point|half|halves|quarters?|thirds?|couple|few|dozen|score)(?![\\p{L}]))`;
 const unreadBefore = new RegExp(`${unreadNumber}(?:[\\s-]+(?:and|a|an|of))*[\\s-]*$`, "iu");
 const unreadAfter = new RegExp(`^(?:[\\s-]+(?:and|a|an|of)(?![\\p{L}]))*[\\s-]+${unreadNumber}`, "iu");
+/**
+ * The one unread-number guard, for line prices and for room and whole-job totals alike: true when the words just
+ * before or after an amount are a fraction, range, multiplier or another number ("a quarter of a thousand pounds",
+ * "one million two hundred pounds", "fifty pounds and five"). The amount was then read in part, so it has no price.
+ */
+export function readInPart(before: string, after: string): boolean {
+  return fractionOrRange.test(before) || unreadBefore.test(before) || unreadAfter.test(after);
+}
 // The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
 const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
 // Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
