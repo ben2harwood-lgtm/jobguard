@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceDescription, rateAfter, priceCondition, saidAmountOpen, speechComparison, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, boundaryRecognition, correctionQuestion, invisibleFormat, leadingContentOffset, leadingSpokenCorrection, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceDescription, rateAfter, priceCondition, saidAmountOpen, speechComparison, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -29,9 +29,10 @@ function thousands(words: string): number | null {
 const isNextItem = (next: string) => plainNextItem(next, isWork, isTiming);
 function itemClauses(text: string): string[] {
   const clauses: string[] = [];
+  const readNext = boundaryRecognition(text);
   let start = 0;
   for (let i = 0; i < text.length; i++) {
-    const separator = plainItemBoundary(text, i, start, isNextItem);
+    const separator = plainItemBoundary(text, i, start, isNextItem, readNext);
     if (separator) {
       clauses.push(text.slice(start, i)); start = i + separator; i = start - 1;
     }
@@ -135,7 +136,7 @@ function stripLeadingRoom(value: string): { room: string; rest: string; offset: 
 const extraVerb = /^(?:box(?:ing)? in|add|re-?(?:plaster|paint|tile|wire|skim|point|place|felt|grout|hang|fit)|dig|move|get the|have the|knock|take|swap|put|run|board)\b/iu;
 function isVerb(value: string) {
   value = visibleWorkText(value);
-  return spokenCorrection.exec(value)?.index !== 0 && (workClause(value) || extraVerb.test(value));
+  return !leadingSpokenCorrection.test(value) && (workClause(value) || extraVerb.test(value));
 }
 /** "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred": the work starts at the verb. */
 function lateWorkAt(value: string): number | null {
@@ -361,6 +362,7 @@ type TotalPrice = { start: number; end: number; pence: number | null; room: stri
 const besideBefore = /^[\s,]*(?:(?:all in|in total|altogether|total|is|comes to|for|the|about)[\s,]*)*$/iu;
 const besideAfter = /^[\s,]*(?:(?:all in|in total|altogether|for|for the|the)[\s,]*)*$/iu;
 function totals(text: string): TotalPrice[] {
+  const readNext = boundaryRecognition(text);
   const found: TotalPrice[] = [];
   const points = amountPoints(text);
   // A clause ends at punctuation, never at the point or comma inside a number ("4.5k", "1,200").
@@ -373,11 +375,11 @@ function totals(text: string): TotalPrice[] {
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;
     let clauseEnd = phrase.index;
-    while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
+    while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork, readNext)) clauseEnd++;
     // A comma before a qualifier/correction stays with the total. A new work item still ends it.
-    while (text[clauseEnd] === "," && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) {
+    while (text[clauseEnd] === "," && !plainItemBoundary(text, clauseEnd, clauseStart, isWork, readNext)) {
       clauseEnd++;
-      while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
+      while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork, readNext)) clauseEnd++;
     }
     previousEnd = clauseEnd;
     const clause = text.slice(clauseStart, clauseEnd);

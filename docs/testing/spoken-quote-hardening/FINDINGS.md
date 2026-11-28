@@ -1952,10 +1952,10 @@ local Node 24.17.0 measurements, not CI performance certification.
 | ID | Lane | Head sha | Case id | Transcript / input | Expected | Actual | Sev | Status | Fix PR |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RT-06-F001 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-06-057–060 | `Fit the latch for £1\u030150.`, `Fit the latch for £1\u000050.`, `Fit the latch for £1\ud80050.`, `Fit the latch for £1\udfff50.` (escapes denote one combining mark, NUL, lone high surrogate or lone low surrogate) | One open latch line, a price question, no fixed 100/5000/15000 pence: a corrupted literal cannot prove any exact price | Capture keeps **100 pence (£1)** with a citation ending before the corruption. Reader A and the checked reader safely leave the price null. Four cases share the unrecognised non-format-character money boundary defect | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
-| RT-06-F002 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: RT-06-078 (corpus semantic assertions pass) | `'Fit the latch for £25.'.padEnd(50000, ' ')` | Both readers <1000 ms; each regex call <50 ms; same intact £25 item at the exact request limit | Full-suite capture **2612.5 ms**, Reader A **2095.5 ms**. Separate uninstrumented run: 1350.5/1257.9 ms. Slowest profiled regex: `suggestCapturePartyClause`'s for/name/at matcher in `packages/core/src/capture.ts`, **1346.6 ms max**, 2579.3 ms summed across two calls. Trailing whitespace drives expensive unsuccessful party matching | P1 | open | — |
-| RT-06-F003 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: number-words | `'Fit panel ' + F('one hundred and ') + ' end'` (49984 code units) | Each reader <1000 ms and every regex call <50 ms, including unsuccessful number-word matches | Full-suite capture **1000.6 ms**, Reader A **1023.6 ms**. `capture-fixture-parser.ts:spokenAmount` **166.2 ms max** (288.2 ms cumulative); `wholeJobTail` **155.8 ms max** (278.4 ms cumulative). Initial lower-load run also exceeded the regex limit: 122.9/120.5 ms. `priceCondition` had 642.2 ms cumulative across 6246 calls, with no >50 ms individual call | P1 | open | — |
-| RT-06-F004 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: comma-digits | `'Fit panel £' + F('1,111,') + 'x'` (49982 code units) | Each reader <1000 ms; each regex call <50 ms; malformed money stays safe without blocking processing | Full-suite capture **5214.5 ms**, Reader A **5061.7 ms**. Native isolated exec of the current AST's unchanged `capture-fixture-parser.ts:wholeJobTail` initializer took **2076.0 ms**. Other isolated regexes: spokenAmount 0.69 ms, priceLiteral 0.57 ms, fractionOrRange 0.38 ms. Full-parser profiling was stopped by its diagnostic 40 s watchdog; those partial profiling results are not treated as native timings | P1 | open | — |
-| RT-06-F005 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: and-chain | `'Fit panel ' + F('and ') + ' end'` (49984 code units) | Each reader <1000 ms on a repeated recogniser filler; no repeated full-suffix work that exceeds the budget | Full-suite capture **2308.9 ms**, Reader A **2274.2 ms**; initial run 1564.3/1679.6 ms. Slowest cumulative regexes across the two instrumented readers: `priceCondition` **1808.8 ms / 24984 calls**, `spokenCorrection` **1210.0 ms / 24985 calls**, invisible-format recognition **684.6 ms / 87482 calls**. Individual maxima 1.24/1.95/0.83 ms: the defect is repeated scans, not one long regex call | P1 | open | — |
+| RT-06-F002 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: RT-06-078 (corpus semantic assertions pass) | `'Fit the latch for £25.'.padEnd(50000, ' ')` | Both readers <1000 ms; each regex call <50 ms; same intact £25 item at the exact request limit | Full-suite capture **2612.5 ms**, Reader A **2095.5 ms**. Separate uninstrumented run: 1350.5/1257.9 ms. Slowest profiled regex: `suggestCapturePartyClause`'s for/name/at matcher in `packages/core/src/capture.ts`, **1346.6 ms max**, 2579.3 ms summed across two calls. Trailing whitespace drives expensive unsuccessful party matching | P1 | fixed | RT-FIX-10 (#1071); deterministic timing and output-equivalence checks; see receipt below |
+| RT-06-F003 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: number-words | `'Fit panel ' + F('one hundred and ') + ' end'` (49984 code units) | Each reader <1000 ms and every regex call <50 ms, including unsuccessful number-word matches | Full-suite capture **1000.6 ms**, Reader A **1023.6 ms**. `capture-fixture-parser.ts:spokenAmount` **166.2 ms max** (288.2 ms cumulative); `wholeJobTail` **155.8 ms max** (278.4 ms cumulative). Initial lower-load run also exceeded the regex limit: 122.9/120.5 ms. `priceCondition` had 642.2 ms cumulative across 6246 calls, with no >50 ms individual call | P1 | fixed | RT-FIX-10 (#1071); deterministic timing and output-equivalence checks; see receipt below |
+| RT-06-F004 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: comma-digits | `'Fit panel £' + F('1,111,') + 'x'` (49982 code units) | Each reader <1000 ms; each regex call <50 ms; malformed money stays safe without blocking processing | Full-suite capture **5214.5 ms**, Reader A **5061.7 ms**. Native isolated exec of the current AST's unchanged `capture-fixture-parser.ts:wholeJobTail` initializer took **2076.0 ms**. Other isolated regexes: spokenAmount 0.69 ms, priceLiteral 0.57 ms, fractionOrRange 0.38 ms. Full-parser profiling was stopped by its diagnostic 40 s watchdog; those partial profiling results are not treated as native timings | P1 | fixed | RT-FIX-10 (#1071); deterministic timing and output-equivalence checks; see receipt below |
+| RT-06-F005 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: and-chain | `'Fit panel ' + F('and ') + ' end'` (49984 code units) | Each reader <1000 ms on a repeated recogniser filler; no repeated full-suffix work that exceeds the budget | Full-suite capture **2308.9 ms**, Reader A **2274.2 ms**; initial run 1564.3/1679.6 ms. Slowest cumulative regexes across the two instrumented readers: `priceCondition` **1808.8 ms / 24984 calls**, `spokenCorrection` **1210.0 ms / 24985 calls**, invisible-format recognition **684.6 ms / 87482 calls**. Individual maxima 1.24/1.95/0.83 ms: the defect is repeated scans, not one long regex call | P1 | fixed | RT-FIX-10 (#1071); deterministic timing and output-equivalence checks; see receipt below |
 
 Coverage and validation:
 
@@ -2221,3 +2221,118 @@ Local logs: `/tmp/rt-fix-9-followup-red.log`,
 `/tmp/rt-fix-9-followup-green.log`, `/tmp/rt-fix-9-followup-eval.log`,
 `/tmp/rt-fix-9-followup-eval-serial.log`,
 `/tmp/rt-fix-9-followup-core-tests.log`.
+
+
+## RT-FIX-10 performance repair receipt — 28 November 2026
+
+Base: `999cf538b542b9bea9ca1d3effb909e12274262e`, equal to the local pushed
+`origin/codex/sandbox/rt-fix-9` ref; branch `codex/sandbox/rt-fix-10`.
+Performance only: no grammar, result, monetary policy, source citation, budget,
+timeout or expected value changes. RT-06-F002–F005 now have passing timing
+statuses. The RT-06 corpus and limits-and-noise tests already had passing
+semantic statuses and are unchanged. No other finding status changes.
+
+Initial review, **LATER / SIMPLICITY**: `capture-fixture-parser.ts:amounts/wholeJobTail`
+and `context-reader.ts:priceNear` retain separate amount grammars. A future
+bounded change could reuse token enumeration across those existing consumers
+to reduce maintenance drift. Non-blocking; that refactor is outside this repair.
+
+### Profile and implementation
+
+Profiled the unmodified base through the existing per-regex perf harness before
+editing source, after rebuilding core dist. The baseline run returned 8 passes
+and 2 unexpected failures (between-chain and hyphen-words); the four declared
+open timing findings failed their budgets as expected.
+
+- Repeated correction searches dominated number/and/between/room chains:
+  2,664.8 / 4,606.2 / 2,802.9 / 1,517.5 ms cumulative per-regex time across the
+  two instrumented readers. Boundary and verb checks now anchor the existing
+  correction pattern at zero, preserving the former `exec()?.index === 0` rule.
+- Unterminated number chains spent 124.0 ms in one `spokenAmount` call and
+  122.3 ms in one `wholeJobTail` call. Required currency-word and total-ending
+  guards skip impossible matches. A party clause likewise requires `at` plus
+  whitespace, avoiding the padded-source party matcher without altering input.
+- Comma-chain boundary detection split every remaining suffix, including text
+  after the first comma. It now searches only up to the first punctuation mark.
+- Boundary recognition removes format characters once per scan with a UTF-16
+  offset map, then slices that recognition copy. Original text, clauses and
+  citations are untouched. Redundant interior-whitespace boundary probes stop
+  immediately, as their continuous-speech condition cannot succeed.
+- Hyphen-words spent 1,422.3 ms cumulative / 477.0 ms maximum in the core
+  address matcher. A forward lexical scan now tests its unchanged grammar with
+  a sticky regex once per lexical run, instead of retrying at internal hyphens.
+
+### Measured timings
+
+Milliseconds, **capture / Reader A**; same original attack strings and budgets.
+Before is `/tmp/rt-fix10-before.log` on the base. After is the full
+`pnpm eval --maxWorkers=2` run, while package compilation and the output
+comparison also ran. Worker warmup/import time is excluded by the unchanged
+harness. These are measured local timings, not a scheduling guarantee.
+
+| Input / finding | Before ms | After ms |
+| --- | ---: | ---: |
+| RT-06-075 | 36.0 / 33.8 | 4.1 / 18.5 |
+| RT-06-076 | 219.5 / 221.2 | 7.9 / 20.0 |
+| RT-06-077 | 920.9 / 911.5 | 24.0 / 34.6 |
+| RT-06-078 / F002 (50,000 characters) | 2061.4 / 2413.6 | 9.0 / 17.3 |
+| number-words / F003 | 1527.7 / 2000.0 | 58.4 / 88.3 |
+| comma-digits / F004 | 6042.4 / 6568.7 | 259.9 / 373.2 |
+| and-chain / F005 | 1881.8 / 3603.1 | 222.1 / 337.2 |
+| between-chain | 1707.4 / 1833.6 | 52.8 / 88.7 |
+| room-chain | 837.9 / 863.2 | 6.0 / 14.0 |
+| hyphen-words | 482.9 / 966.2 | 9.9 / 18.3 |
+
+All measured readers stay below 500 ms, with the slowest at 373.2 ms against the
+unchanged 1000 ms budget. Largest reported profiled regex call in the final
+run: 2.11 ms, against the unchanged 50 ms limit. Inputs, profiling switches,
+15-second worker watchdog and 20-second test timeout remain unchanged. The
+corpus harness also retains its 5-second timeout.
+
+### Validation and exact-result evidence
+
+Environment: Node `24.17.0`, pinned pnpm `10.28.1`, Vitest `4.1.12`.
+Existing dependency installation used; core dist rebuilt before baseline and
+after its source change. No clean reinstall claimed.
+
+- `pnpm eval --maxWorkers=2`: **exit 0; all 37 files pass; 2,600 passed + 41
+  unchanged declared expected failures = 2,641 tests; zero unexpected failures,
+  no skips**. Every corpus case, focused test, unchanged
+  `capture-qualified-price.test.ts`, limits-and-noise and all ten perf checks
+  ran. Corpus: 1,522 cases, 1,144 pass / 378 declared open; RT-06 is 78/78 pass.
+- `pnpm --filter @jobguard/core test --maxWorkers=2`: **exit 0; 232 files,
+  4,895 tests pass**.
+- `pnpm --filter @jobguard/core typecheck`, `lint`, `build` and
+  `pnpm --filter @jobguard/ai typecheck`, `lint`, `build`: **all exit 0**.
+- Isolated original source/core-dist copies under `/tmp`, compared against the
+  repaired source: **3,528 complete result/error comparisons agree** (all 1,522
+  corpus inputs, six long-input probes, 2,000 generated transcripts), including
+  capture, the internally checked Reader A and an additional shifted-source
+  numeric check. **10,000 extra address-boundary comparisons agree**.
+  No cases or expected outputs were added to repository tests.
+- Regenerated via `runCaptureEvaluation` / `createGoldenRunRecord`: **32/32**;
+  scope recall **41/41**, citations **119/119**, unsupported monetary facts **0**,
+  ambiguities **63/63**. Deep comparison allows exactly the parser SHA-256
+  change, from `aa4f3d762546b7f05b1bb1a86a9daf995df96072726de7cba4b2e7e997c93a6b`
+  to `1933d7e98b171342d167096790e139a2aa95f8ced95983600c8e750029fa4749`.
+  All prediction hashes, labels, metrics, versions and other hashes are identical.
+- `git diff --check`: pass. New lane syntax and its exact changed-path coverage
+  pass through the existing lane-policy functions. No directory grants.
+- Additional `node tools/lint.mjs`: **exit 1**, after core purity passed (434
+  TypeScript files), because the inherited `config/lanes/v2-rt-12.json` grants
+  its own lane file explicitly. `git show HEAD:config/lanes/v2-rt-12.json`
+  confirms that invalid grant is already in the base. The full lane union
+  therefore cannot pass; no unrelated lane or check was changed. Required
+  per-package lint checks above pass.
+
+These are deterministic test and source-inspection results, not independent
+review or release approval. No database, provider, model, web workflow,
+migration, deployment, push or merge change. Commit only; `.pnpm-store/`
+excluded. Independent exact-head review remains separate.
+
+Local evidence: `/tmp/rt-fix10-before.log`, `/tmp/rt-fix10-first.log`,
+`/tmp/rt-fix10-second.log`, `/tmp/rt-fix10-third.log`,
+`/tmp/rt-fix10-eval.log`, `/tmp/rt-fix10-core-tests.log`,
+`/tmp/rt-fix10-build.log`, `/tmp/rt-fix10-repo-lint.log`,
+`/tmp/rt-fix10-equivalence-before.log`,
+`/tmp/rt-fix10-equivalence-after.log`, `/tmp/rt-fix10-equivalence-diff.json`.

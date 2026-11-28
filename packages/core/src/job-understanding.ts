@@ -71,7 +71,21 @@ export function multipleJobQuestion(text: string): string | null {
     const name = match[1]!.toLowerCase();
     if (!customers.includes(name)) customers.push(name);
   }
-  const addresses = distinct(/\b(?:\d+[a-z]?\s+(?:[\p{L}'’-]+\s+){1,4}(?:road|lane|close|avenue|grove|walk|street|drive|way)|(?:[\p{L}'’-]+\s+){1,3}(?:house|cottage)(?=\s+job\b))/giu);
+  // Try each whole lexical run once. Retrying at every internal hyphen/ASCII word boundary is quadratic.
+  // Within a letter run, any suffix that could match is already consumed by its first eligible boundary.
+  const addressAt = /\b(?:\d+[a-z]?\s+(?:[\p{L}'’-]+\s+){1,4}(?:road|lane|close|avenue|grove|walk|street|drive|way)|(?:[\p{L}'’-]+\s+){1,3}(?:house|cottage)(?=\s+job\b))/iyu;
+  const starts = /\b(?:\d+|[\p{L}'’-]+)/giu;
+  const addressValues: string[] = [];
+  let candidate: RegExpExecArray | null;
+  while ((candidate = starts.exec(text))) {
+    addressAt.lastIndex = candidate.index;
+    const match = addressAt.exec(text);
+    if (match) {
+      addressValues.push(match[0].trim().toLowerCase());
+      starts.lastIndex = addressAt.lastIndex;
+    }
+  }
+  const addresses = [...new Set(addressValues)];
   const explicit = /\b(?:two\s+(?:separate\s+)?jobs|(?:first|second)\s+job|customer\s+(?:one|two))\b/iu.test(text);
   if (!explicit && customers.length < 2 && addresses.length < 2) return null;
   const named = [...customers, ...addresses].join(", ").slice(0, 350);
