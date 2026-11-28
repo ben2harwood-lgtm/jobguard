@@ -120,8 +120,8 @@ describe("V2-SQ-C Reader A", () => {
       { start: SMITH.indexOf("Paint the hallway"), description: "Paint the hallway and landing, two coats" },
       { start: null, description: "Review this line" },
     ]);
-    expect(labels).toEqual([{ room: "Kitchen", category: "Strip-out" }, { room: "Upstairs bathroom", category: "Electrics" },
-      { room: "Hallway and landing", category: "Decorating" }, { room: "Whole job", category: "Other" }]);
+    expect(labels).toEqual([{ room: "Kitchen", category: "Strip-out", roomInferred: false }, { room: "Upstairs bathroom", category: "Electrics", roomInferred: false },
+      { room: "Hallway and landing", category: "Decorating", roomInferred: false }, { room: "Whole job", category: "Other", roomInferred: true }]);
   });
 
   it("property: for random transcripts no value in the output fails the money rule", () => {

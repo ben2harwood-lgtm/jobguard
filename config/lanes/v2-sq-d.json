@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-d": {
+      "branches": [
+        "claude/project-thread-trp08u-sqd"
+      ],
+      "note": "RED (money on screen) V2-SQ-D: rooms on the review screen. Rows grouped by room with subtotals, Move to, trade select, rename/add/merge rooms, and one price per room through the existing combine path with merge lineage. Room and whole-job prices said aloud reach the screen as typed data (additive optional fields on the capture workspace response). Base claude/project-thread-trp08u-sqc (#1016). No migration, table, route or column.",
+      "allow": [
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/contracts.ts",
+        "apps/api/src/capture/said-prices.test.ts",
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/review-pricing.test.ts",
+        "apps/web/app/ui/review-pricing.ts",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/V2-SQ-D-rooms.spec.ts",
+        "apps/web/e2e/real-split-review-recovery.spec.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/context-reader.ts"
+      ]
+    }
+  }
+}
