@@ -274,3 +274,4 @@ export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-r
 export * from "./v2-site-attendance-repository.js";
 // V2-C6
 export * from "./v2-quote-add-line-repository.js";
+export * from "./v2-proof-requirement.js";

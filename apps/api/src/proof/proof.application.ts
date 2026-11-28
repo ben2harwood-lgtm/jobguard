@@ -6,7 +6,7 @@ import{createHash}from"node:crypto";import type{Pool}from"pg";import{type Tenant
 export { generatePracticePng } from "@jobguard/db";
 import { generatePracticePng } from "@jobguard/db";
 type StoredObject={key:string;versionId:string;contentType:string;byteLength:number;bytes:Uint8Array};
-class DatabaseSyntheticStorage {
+export class DatabaseSyntheticStorage {
   private readonly access: PracticeAccess;
   private readonly filesystem = V2FilesystemStorage.fromEnvironment();
 

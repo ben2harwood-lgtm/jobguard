@@ -1,0 +1,6 @@
+{
+  "migration": "2089_v2_job_proof_requirement.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

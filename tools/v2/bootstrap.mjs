@@ -80,6 +80,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8"));
   // V2-K5B-1: stage invoice drafts (2071), after their frozen stages.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2071_v2_stage_invoice_draft.sql", import.meta.url), "utf8"));
+  // Q81 V2-AUTH-1: the linked builder's proof requirement read, and the firm lock on stage completions (2089).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2089_v2_job_proof_requirement.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-SYNC-1 (2056): main's snag fence retargeted and its new job tables firm-locked.
