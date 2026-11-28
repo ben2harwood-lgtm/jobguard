@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 // M4-23 contractor sandbox acceptance. Real PostgreSQL; fake export adapter only.
 // M4-10 has no contractor source reader; M4-12 has no persisted ENT-14 collection adapter.
@@ -90,7 +91,7 @@ async function extra(t: Sandbox, origin: "site" | "office" | "client" | "rejecte
     jobId, commandType: origin === "office" ? "RecordOfficeExtra" : "RecordClientInstruction",
     description: "Fictional excluded contractor work", note: "Synthetic acceptance only",
   }));
-  await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
+  await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId, extraId, netPence: 15000 }));
   const r = await approvals.submitExtra(await testActorContext(c.admin, t.ctx, t.w.members.supervisor.member), t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const s = { jobId, extraId, requestId: r.requestId as string, hash: r.revisionHash as string, net: 15000, result: r };
   await approve(t, s);
@@ -269,7 +270,7 @@ it("M4-23 duplicate log: capture replay and an explicit duplicate resolution lea
   const other = await extras.raiseExtra(await testActorContext(c.admin, t.ctx, t.w.members.operative.member), direct(t.w, t.w.members.operative, { jobId, description: "Fictional duplicate work" }));
   const approvals = new ExtraApprovalRepository(c.runtime);
   for (const extraId of [first.variationId, other.variationId]) {
-    await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 15000 });
+    await approvals.priceExtra(await testActorContext(c.admin, t.ctx, t.w.members.surveyor.member), t.w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId, extraId, netPence: 15000 }));
     const r = await approvals.submitExtra(await testActorContext(c.admin, t.ctx, t.w.members.supervisor.member), t.w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
     await approve(t, { jobId, extraId, requestId: r.requestId as string, hash: r.revisionHash as string, net: 15000, result: r });
   }

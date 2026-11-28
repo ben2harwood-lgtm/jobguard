@@ -81,6 +81,7 @@ export { ContractorPracticeSessionApplication, assertContractorPracticeSessionMo
 export { SiteExtraApplication, assertSiteExtraMode, siteExtraHttpFailure } from "../contractor/site-extra.application.js";
 export { sorSiteExtraHttpFailure } from "../contractor/site-extra.application.js";
 export { siteVisitHttpFailure } from "../contractor/site-extra.application.js";
+export { ExtraPricingApplication, ExtraPricingError, assertExtraPricingMode, extraPricingHttpFailure, extraPricingHttpStatus, extraPricingErrorCodes } from "../contractor/extra-pricing.application.js";
 export * from "../auth/sso/scim.application.js";
 export * from "../auth/sso/scim.contracts.js";
 export * from "../recovery-allocation.application.js";

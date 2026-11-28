@@ -428,6 +428,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   lp6dBodies.set("app.record_practice_customer_receipt(p_tenant,p_job,p_invoice,p_actor,p_command,p_paid_on,p_amount,p_method,p_reference)", receiptDedupBody);
+  // EP-CC-S1 (0784) succeeds the ENT-3c pricing-basis guard body (legacy branch unchanged, v2 branch added); catalogue metadata is still checked above.
+  const priceRulesV2Sql = await readFile(new URL("../migrations/0784_extra_price_rules_v2.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.ent3c_pricing_basis_guard()", priceRulesV2Sql.split("CREATE OR REPLACE FUNCTION app.ent3c_pricing_basis_guard(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   // QW-1 (0781) supersedes the LP-11 customer_variation body; catalogue metadata is still checked above.
   const variationPhotoSql = await readFile(new URL("../migrations/0781_variation_revision_photo.sql", import.meta.url), "utf8");
   lp6dBodies.set("identity.customer_variation(t,j,c,digest,command)", variationPhotoSql.split("CREATE OR REPLACE FUNCTION identity.customer_variation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);

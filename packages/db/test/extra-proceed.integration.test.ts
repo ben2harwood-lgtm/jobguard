@@ -1,3 +1,4 @@
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { bindIssuedCredential } from "../src/tenant-context.js";
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // PostgreSQL CI only: this sandbox cannot start PostgreSQL.
@@ -59,7 +60,7 @@ it("refuses wrong tenant/job/extra, unassigned or office actors, revoked members
  const unpriced = await submitted(c, w, null);
  await expect(extraProceed(c.runtime, await testActorContext(c.admin, ctx, actor), actor, unpriced.jobId, unpriced.extraId, { ...body, requestId: unpriced.requestId })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
  const repo = new ExtraApprovalRepository(c.runtime);
- await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: unpriced.jobId, extraId: unpriced.extraId, netPence: 40000 });
+ await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: unpriced.jobId, extraId: unpriced.extraId, netPence: 40000 }));
  await expect(extraProceed(c.runtime, await testActorContext(c.admin, ctx, actor), actor, unpriced.jobId, unpriced.extraId, { ...body, requestId: unpriced.requestId })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
  const saved = await extraProceed(c.runtime, await testActorContext(c.admin, ctx, actor), actor, s.jobId, s.extraId, body);
  const breach = await withTenant(c.runtime, ctx, async db => (await db.$client.query("SELECT app.xa_proceed_breaches($1,$2) ids", [s.jobId, s.extraId])).rows[0].ids);
@@ -89,7 +90,7 @@ it("a required-preapproval statement reaches the client breach view without auth
  expect((await extraProceed(c.runtime, await testActorContext(c.admin, ctx, f.members.operative.member), f.members.operative.member, s.jobId, s.extraId)).history).toEqual(first.history);
  // The link has been consumed, so inspect the same read seam after the authenticated decision.
  expect(await withTenant(c.runtime, ctx, async db => (await db.$client.query("SELECT app.xa_proceed_breaches($1,$2) ids", [s.jobId, s.extraId])).rows[0].ids)).toEqual([s.requestId]);
- await repo.reviseExtra(await testActorContext(c.admin, ctx, f.members.surveyor.member), f.members.surveyor.member, { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40000 });
+ await repo.reviseExtra(await testActorContext(c.admin, ctx, f.members.surveyor.member), f.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 40000 }));
  expect((await extraProceed(c.runtime, await testActorContext(c.admin, ctx, f.members.operative.member), f.members.operative.member, s.jobId, s.extraId)).history).toEqual(first.history);
 });
 

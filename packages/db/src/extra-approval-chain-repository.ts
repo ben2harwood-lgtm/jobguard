@@ -17,6 +17,8 @@ export const extraApprovalErrorCodes = [
   "INVALID_COMMAND", "COMMAND_CONFLICT", "NOT_FOUND", "PERMISSION_DENIED", "INVALID_TRANSITION", "STALE_REVISION", "ALREADY_DECIDED", "HASH_MISMATCH", "UNPRICED",
   "STEP_OUT_OF_ORDER", "CLIENT_STEP_REQUIRES_CLIENT", "SELF_APPROVAL", "REUSED_APPROVER", "REPEAT_HELD", "RULES_NOT_FOUND", "INVALID_RULES",
   "LINK_INVALID", "LINK_EXPIRED", "LINK_REVOKED", "LINK_REPLAYED", "EMAIL_MISMATCH", "SEND_NOT_AUTHORISED", "MODE_FORBIDDEN", "DATABASE_UNAVAILABLE",
+  // Pricing contract v2 (docs/contracts/extra-price-rules-v2.md).
+  "BASIS_REQUIRED", "INVALID_BASIS", "REVISION_REASON_REQUIRED", "RATE_NOT_FOUND", "ALREADY_ON_ORDER", "EVIDENCE_NOT_FOUND", "INVALID_QUANTITY", "EXTRA_NOT_POSITIVE", "MONEY_OUT_OF_RANGE",
 ] as const;
 export type ExtraApprovalErrorCode = typeof extraApprovalErrorCodes[number];
 export class ExtraApprovalError extends Error {
@@ -43,8 +45,24 @@ const reason = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u);
 const pence = z.number().int().min(1).max(1_000_000_000_000);
 const common = { commandId: uuid, jobId: uuid };
 export const submitExtraV1 = z.object({ version: z.literal("submit-extra.v1"), ...common, extraId: uuid }).strict();
+/** v1 is not redefined: a completed v1 command replays to its stored result; a new v1 submission is refused BASIS_REQUIRED. */
 export const priceExtraV1 = z.object({ version: z.literal("price-extra.v1"), ...common, extraId: uuid, netPence: pence }).strict();
 export const reviseExtraV1 = z.object({ version: z.literal("revise-extra.v1"), ...common, extraId: uuid, netPence: pence }).strict();
+/** Pricing contract v2: every price and revision states its basis. The client never submits an amount; only a surveyor may give a quoted net. */
+export const quantityText = z.string().regex(/^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$/u);
+const basisNote = z.string().min(1).max(500).refine(s => s.trim().length > 0);
+export const quoteMethods = ["dayworks", "quotation", "agreed_lump_sum", "materials_plus"] as const;
+export const serverSorBasisV2 = z.object({ kind: z.literal("server_sor"), sorCode: z.string().min(1).max(80), claimedQuantity: quantityText }).strict();
+export const surveyorQuotedBasisV2 = z.object({ kind: z.literal("surveyor_quoted"), netPence: pence, method: z.enum(quoteMethods), note: basisNote, evidenceId: uuid.optional() }).strict();
+export const extraPricingBasisV2 = z.discriminatedUnion("kind", [serverSorBasisV2, surveyorQuotedBasisV2]);
+export const revisionReasons = ["response_to_rejection", "quantity_corrected", "rate_corrected", "pricing_error"] as const;
+export const priceExtraV2 = z.object({ version: z.literal("price-extra.v2"), ...common, extraId: uuid, basis: extraPricingBasisV2 }).strict();
+export const reviseExtraV2 = z.object({ version: z.literal("revise-extra.v2"), ...common, extraId: uuid, basis: extraPricingBasisV2,
+  reason: z.enum(revisionReasons), reasonNote: basisNote.optional(), answersRequestId: uuid }).strict();
+export type ExtraPricingBasisV2 = z.infer<typeof extraPricingBasisV2>;
+export type PriceExtraV2 = z.infer<typeof priceExtraV2>;
+export type ReviseExtraV2 = z.infer<typeof reviseExtraV2>;
+export const extraPricingBasisQueryV1 = z.object({ version: z.literal("extra-pricing-basis-query.v1"), jobId: uuid, extraId: uuid }).strict();
 const bound = { requestId: uuid, stepIndex: z.number().int().min(0).max(20), revisionHash: hash, netPence: pence };
 export const approveExtraStepV1 = z.object({ version: z.literal("approve-extra-step.v1"), ...common, ...bound }).strict();
 export const rejectExtraV1 = z.object({ version: z.literal("reject-extra.v1"), ...common, ...bound, reasonCode: reason }).strict();
@@ -149,19 +167,92 @@ export class ExtraApprovalRepository {
       });
     } catch (error) { failure(error); }
   }
+  /** v1 (netPence only) never prices again: an identical completed v1 command replays its stored result; anything else is BASIS_REQUIRED.
+   * The receipt lifecycle still checks the actor's current grant and the exact v1 payload first (a changed payload is COMMAND_CONFLICT). */
+  private legacyPrice(context: VerifiedTenantContext, actor: AuthenticatedMembership, type: "PriceExtra" | "ReviseExtra", i: z.infer<typeof priceExtraV1> | z.infer<typeof reviseExtraV1>): Promise<Result> {
+    const prefix = type === "PriceExtra" ? "extra-price" : "extra-revise";
+    return this.run(context, actor, type, i.commandId, `${prefix}:${i.jobId}:${i.extraId}:${i.commandId}`, { jobId: i.jobId, extraId: i.extraId, netPence: i.netPence }, async () => {
+      throw new ExtraApprovalError("BASIS_REQUIRED");
+    });
+  }
+  /** A v2 body with no basis is refused as BASIS_REQUIRED; any other shape problem is INVALID_COMMAND. */
+  private parseV2<T>(schema: z.ZodType<T>, version: string, raw: unknown): T {
+    if (raw && typeof raw === "object" && (raw as { version?: unknown }).version === version && ((raw as { basis?: unknown }).basis === undefined || (raw as { basis?: unknown }).basis === null)) {
+      throw new ExtraApprovalError("BASIS_REQUIRED");
+    }
+    return this.parse(schema, raw);
+  }
+  private basisArgs(basis: ExtraPricingBasisV2) {
+    return basis.kind === "server_sor"
+      ? [basis.kind, basis.sorCode, basis.claimedQuantity, null, null, null, null]
+      : [basis.kind, null, null, basis.netPence, basis.method, basis.note, basis.evidenceId ?? null];
+  }
+  private basisContent(basis: ExtraPricingBasisV2) {
+    return basis.kind === "server_sor" ? { kind: basis.kind, sorCode: basis.sorCode, claimedQuantity: basis.claimedQuantity }
+      : { kind: basis.kind, netPence: basis.netPence, method: basis.method, note: basis.note, evidenceId: basis.evidenceId ?? null };
+  }
   async priceExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<Result> {
-    const i = this.parse(priceExtraV1, raw);
-    return this.run(context, actor, "PriceExtra", i.commandId, `extra-price:${i.jobId}:${i.extraId}:${i.commandId}`, { jobId: i.jobId, extraId: i.extraId, netPence: i.netPence }, async (db, _t, m) => {
-      const r = await this.call(db, "SELECT app.xa_price($1,$2,$3,$4,$5,false) r", [i.jobId, i.extraId, i.commandId, m, i.netPence]);
-      return { result: r, audits: [audit(m, "contractor.extra.priced", i.extraId, { command: i.commandId, job: i.jobId, extra: i.extraId, binding: String(r.bindingId) }, { revision: String(r.revisionHash) })] };
+    const legacy = priceExtraV1.safeParse(raw);
+    if (legacy.success) return this.legacyPrice(context, actor, "PriceExtra", legacy.data);
+    const i = this.parseV2(priceExtraV2, "price-extra.v2", raw);
+    return this.run(context, actor, "PriceExtra", i.commandId, `extra-price:${i.jobId}:${i.extraId}:${i.commandId}`, { version: i.version, jobId: i.jobId, extraId: i.extraId, basis: this.basisContent(i.basis) }, async (db, _t, m) => {
+      const r = await this.call(db, "SELECT app.xa_price_v2($1,$2,$3,$4,false,$5,$6,$7,$8,$9,$10,$11,NULL,NULL,NULL) r", [i.jobId, i.extraId, i.commandId, m, ...this.basisArgs(i.basis)]);
+      const basis = r.basis as { basisId: string; basisHash: string };
+      return { result: r, audits: [audit(m, "contractor.extra.priced", i.extraId, { command: i.commandId, job: i.jobId, extra: i.extraId, binding: String(r.bindingId), basis: basis.basisId }, { revision: String(r.revisionHash), basis: basis.basisHash })] };
     });
   }
   async reviseExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<Result> {
-    const i = this.parse(reviseExtraV1, raw);
-    return this.run(context, actor, "ReviseExtra", i.commandId, `extra-revise:${i.jobId}:${i.extraId}:${i.commandId}`, { jobId: i.jobId, extraId: i.extraId, netPence: i.netPence }, async (db, _t, m) => {
-      const r = await this.call(db, "SELECT app.xa_price($1,$2,$3,$4,$5,true) r", [i.jobId, i.extraId, i.commandId, m, i.netPence]);
-      return { result: r, audits: [audit(m, "contractor.extra.revised", i.extraId, { command: i.commandId, job: i.jobId, extra: i.extraId, request: String(r.requestId) }, { revision: String(r.revisionHash) })] };
+    const legacy = reviseExtraV1.safeParse(raw);
+    if (legacy.success) return this.legacyPrice(context, actor, "ReviseExtra", legacy.data);
+    const i = this.parseV2(reviseExtraV2, "revise-extra.v2", raw);
+    const content = { version: i.version, jobId: i.jobId, extraId: i.extraId, basis: this.basisContent(i.basis), reason: i.reason, reasonNote: i.reasonNote ?? null, answersRequestId: i.answersRequestId };
+    return this.run(context, actor, "ReviseExtra", i.commandId, `extra-revise:${i.jobId}:${i.extraId}:${i.commandId}`, content, async (db, _t, m) => {
+      const r = await this.call(db, "SELECT app.xa_price_v2($1,$2,$3,$4,true,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) r",
+        [i.jobId, i.extraId, i.commandId, m, ...this.basisArgs(i.basis), i.reason, i.reasonNote ?? null, i.answersRequestId]);
+      const basis = r.basis as { basisId: string; basisHash: string };
+      return { result: r, audits: [audit(m, "contractor.extra.revised", i.extraId, { command: i.commandId, job: i.jobId, extra: i.extraId, request: String(r.requestId), answers: i.answersRequestId, reason: i.reason, basis: basis.basisId }, { revision: String(r.revisionHash), basis: basis.basisHash })] };
     });
+  }
+  /** Contractor read of each priced binding's basis, oldest first. A binding with no recorded basis reads "basis_not_recorded"; nothing is inferred or back-filled.
+   * Covered surveyors, supervisors and commercial managers only; the client never reaches this read. */
+  async pricingBasis(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<Result> {
+    const i = this.parse(extraPricingBasisQueryV1, raw), member = this.checkActor(context, actor), tenant = lc(context.tenantId);
+    try {
+      return await withTenant(this.pool, context, async db => {
+        const allowed = (await db.$client.query<{ allowed: boolean }>("SELECT app.xa_covers($1,ARRAY['surveyor','supervisor','commercial_manager'],$2,'job.read') IS NOT NULL AS allowed", [member, i.jobId])).rows[0];
+        if (!allowed?.allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
+        const extra = (await db.$client.query("SELECT 1 FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3 AND job_track='contractor' AND provenance='command'", [tenant, i.jobId, i.extraId])).rowCount;
+        if (!extra) throw new ExtraApprovalError("NOT_FOUND");
+        const rows = (await db.$client.query<Record<string, unknown>>(`
+          SELECT b.id "bindingId",b.logical_revision "logicalRevision",b.source_kind "sourceKind",coalesce(s.net_pence,vr.signed_delta_pence)::text "netPence",
+            coalesce(v2.pricing_basis,legacy.pricing_basis) "pricingBasis",v2.id "basisId",v2.basis_hash "basisHash",legacy.id "legacyBasisId",
+            coalesce(v2.sor_code,s.sor_code) "sorCode",coalesce(v2.unit,s.unit) "unit",coalesce(v2.rate_pence,s.rate_pence)::text "ratePence",
+            coalesce(v2.sor_version_id,s.sor_version_id) "sorVersionId",coalesce(v2.work_order_revision_id,s.work_order_revision_id) "workOrderRevisionId",
+            coalesce(v2.adjustment_numerator,s.adjustment_numerator)::text "adjustmentNumerator",coalesce(v2.adjustment_denominator,s.adjustment_denominator)::text "adjustmentDenominator",
+            coalesce(v2.coverage,s.coverage) "coverage",coalesce(v2.instructed_quantity,s.instructed_quantity) "instructedQuantity",coalesce(v2.claimed_quantity,s.claimed_quantity) "claimedQuantity",
+            coalesce(v2.priced_quantity,s.quantity) "pricedQuantity",v2.quote_method "method",v2.basis_note "note",v2.basis_evidence_id "evidenceId",
+            v2.revision_reason "reason",v2.revision_note "reasonNote",v2.answers_request_id "answersRequestId",
+            to_char(coalesce(v2.server_recorded_at,legacy.server_recorded_at) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') "recordedAt"
+          FROM app.extra_approval_revision_binding b
+          LEFT JOIN app.variation_revision vr ON(vr.tenant_id,vr.job_id,vr.id)=(b.tenant_id,b.job_id,b.variation_revision_id)
+          LEFT JOIN app.extra_sor_revision s ON(s.tenant_id,s.job_id,s.id)=(b.tenant_id,b.job_id,b.sor_revision_id)
+          LEFT JOIN app.extra_pricing_basis v2 ON(v2.tenant_id,v2.job_id,v2.variation_id,v2.binding_id)=(b.tenant_id,b.job_id,b.variation_id,b.id) AND v2.basis_version='extra-pricing-basis.v2'
+          LEFT JOIN app.extra_pricing_basis legacy ON b.source_kind='server_sor' AND legacy.basis_version IS NULL
+            AND(legacy.tenant_id,legacy.job_id,legacy.variation_id,legacy.revision,legacy.revision_content_hash)=(s.tenant_id,s.job_id,s.variation_id,s.revision,s.content_hash)
+          WHERE b.tenant_id=$1 AND b.job_id=$2 AND b.variation_id=$3 ORDER BY b.logical_revision`, [tenant, i.jobId, i.extraId])).rows;
+        const prices = rows.map(r => {
+          const recorded = r.pricingBasis !== null;
+          const common = { bindingId: r.bindingId, logicalRevision: r.logicalRevision, netPence: Number(r.netPence) };
+          if (!recorded) return { ...common, basisStatus: "basis_not_recorded" as const };
+          const rate = r.pricingBasis === "server_sor" ? { sorCode: r.sorCode, unit: r.unit, ratePence: Number(r.ratePence), sorVersionId: r.sorVersionId, workOrderRevisionId: r.workOrderRevisionId,
+            adjustment: { numerator: r.adjustmentNumerator, denominator: r.adjustmentDenominator }, coverage: r.coverage, instructedQuantity: r.instructedQuantity, claimedQuantity: r.claimedQuantity, pricedQuantity: r.pricedQuantity }
+            : { method: r.method, note: r.note, evidenceId: r.evidenceId };
+          const revision = r.reason === null ? {} : { revision: { reason: r.reason, note: r.reasonNote, answersRequestId: r.answersRequestId } };
+          return { ...common, basisStatus: "recorded" as const, basis: { kind: r.pricingBasis, source: r.basisId === null ? "origin_capture" : "extra-pricing-basis.v2", recordedAt: r.recordedAt, ...rate }, ...revision };
+        });
+        return { version: "extra-pricing-basis.v1", environment: "synthetic_demo", jobId: i.jobId, extraId: i.extraId, prices };
+      });
+    } catch (error) { failure(error); }
   }
   private async decide(context: VerifiedTenantContext, actor: AuthenticatedMembership, i: z.infer<typeof approveExtraStepV1> | z.infer<typeof rejectExtraV1>, rejecting: boolean): Promise<Result> {
     const type = rejecting ? "RejectExtra" : "ApproveExtraStep", reasonCode = rejecting ? (i as z.infer<typeof rejectExtraV1>).reasonCode : null;

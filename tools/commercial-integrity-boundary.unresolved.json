@@ -72,8 +72,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
-    "line": 97,
-    "fingerprint": "dbc56db77f7b999957958b367a7b55e6ba407567937ca11ab9f776bb23fa86df",
-    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
+    "line": 115,
+    "fingerprint": "b057cc1c56bb9cd2ab480a67d124c5ddce04df9725ca0d61e6934bee05d7a2ee",
+    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged) (EP-CC-S1, 28 Nov 2026: PriceExtra/ReviseExtra now pass literal SELECT app.xa_price_v2 calls; helper unchanged, still nine literal callers)"
   }
 ]

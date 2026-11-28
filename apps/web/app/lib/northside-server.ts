@@ -42,7 +42,7 @@ export async function bodyOf(request: Request): Promise<Record<string, unknown>>
   try { const body = await request.json(); if (body && typeof body === "object" && !Array.isArray(body)) return body as Record<string, unknown>; } catch { /* fall through */ }
   throw new DemoError("INVALID_COMMAND", 422);
 }
-const statusOf: Record<string, number> = { NOT_FOUND: 404, PERMISSION_DENIED: 403, LINK_INVALID: 403, EMAIL_MISMATCH: 403, INVALID_COMMAND: 422, UNPRICED: 409, DATABASE_UNAVAILABLE: 503 };
+const statusOf: Record<string, number> = { NOT_FOUND: 404, PERMISSION_DENIED: 403, LINK_INVALID: 403, EMAIL_MISMATCH: 403, INVALID_COMMAND: 422, BASIS_REQUIRED: 422, INVALID_BASIS: 422, INVALID_QUANTITY: 422, REVISION_REASON_REQUIRED: 422, RATE_NOT_FOUND: 404, EVIDENCE_NOT_FOUND: 404, UNPRICED: 409, DATABASE_UNAVAILABLE: 503 };
 /** Only closed codes leave the server. */
 export function failure(error: unknown) {
   if (error instanceof DemoError) return json({ code: error.code }, error.status);

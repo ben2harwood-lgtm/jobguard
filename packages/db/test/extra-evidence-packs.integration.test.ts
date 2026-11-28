@@ -1,3 +1,4 @@
+import { reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -114,7 +115,7 @@ it("requirement, step actors and outcome are exact persisted versioned sources",
     expect(verifyExtraSourcePack(JSON.stringify(removed)).findings).toContain("Missing original source");
   }
   // A later revision has a new request identity; it cannot satisfy the earlier manifest.
-  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 160000 });
+  await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 160000 }));
   const revised = await loadPackSources(ctx, s.jobId, s.extraId);
   expect(inspectExtraSourcePack(pack, revised.sources).findings).toContain("Missing original source");
   expect(revised.omissions.join(" ")).toContain("pending; 0/3");

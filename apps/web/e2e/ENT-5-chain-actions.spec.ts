@@ -93,6 +93,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
   const revisedBody = (await revisedRequest).postDataJSON();
   await expect(page.locator("main").getByRole("status")).toHaveText("Price revised. A new approval request was created.");
   let revised = (await extras())[0]!; expect(revised.requestId).not.toBe(old.requestId);
+  expect(revisedBody).toMatchObject({ requestId: old.requestId }); // the screen names the request it answers
   const revisionReplay = await post(page, old, "revise", revisedBody); expect(revisionReplay.status()).toBe(200);
   expect((await revisionReplay.json()).result.requestId).toBe(revised.requestId);
   expect((await (await post(page, old, "revise", { ...revisedBody, quantity: 4 })).json()).code).toBe("COMMAND_CONFLICT");
@@ -108,7 +109,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
     expect((await post(page, revised, "approve", { ...bound(revised), [field]: command() })).status()).toBe(422);
   }
   await switchTo(page, "surveyor");
-  const next = await post(page, revised, "revise", { sorCode: "CLEAR-VOID", quantity: 2 }); expect(next.ok()).toBe(true);
+  const next = await post(page, revised, "revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: revised.requestId }); expect(next.ok()).toBe(true);
   revised = (await extras())[0]!;
   await switchTo(page, "supervisor"); // same person may fill the same slot across request revisions
   // Both commands use the real action route. The small price has one company step and no client step.
@@ -151,7 +152,7 @@ test("ENT-5 reject, revise, stale on screen, withdraw, replays and route race", 
     const theirs = await (await otherPage.request.get("/api/contractor")).json();
     expect(theirs.tenantId).not.toBe(mine.tenantId);
     for (const action of ["reject", "withdraw", "revise"]) {
-      const body = action === "reject" ? { ...bound(old), reasonCode: "not_agreed" } : action === "withdraw" ? { reasonCode: "not_done" } : { sorCode: "CLEAR-VOID", quantity: 2 };
+      const body = action === "reject" ? { ...bound(old), reasonCode: "not_agreed" } : action === "withdraw" ? { reasonCode: "not_done" } : { sorCode: "CLEAR-VOID", quantity: 2, requestId: old.requestId };
       expect((await post(otherPage, old, action, body)).ok()).toBe(false);
     }
     expect((await (await otherPage.request.get("/api/northside/extras")).json()).extras).toEqual([]);

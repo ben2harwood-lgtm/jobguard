@@ -105,7 +105,7 @@ beforeEach(() => {
   });
   h.finalize.mockResolvedValue({});
   h.rateCard.mockResolvedValue([{ code: "CLEAR-VOID", ratePence: 100 }]);
-  h.priceExtra.mockResolvedValue({});
+  h.priceExtra.mockResolvedValue({ basis: { netPence: 1 } });
   h.run.mockResolvedValue({ settings: northsideSettings, settingsHash: "a".repeat(64), testerMembershipId: membershipId });
   h.queue.mockResolvedValue([]); h.targets.mockResolvedValue([]); h.ownActions.mockResolvedValue([]);
 });
@@ -161,11 +161,15 @@ describe("Northside price authority", () => {
     expect(h.priceExtra).not.toHaveBeenCalled();
   });
 
-  it("reads the rate card and prices after the job grant check succeeds", async () => {
+  it("sends a rate-code basis after the job grant check succeeds and returns the database's price", async () => {
     h.query.mockResolvedValue({ rows: [{ allowed: true }] });
-    expect((await price()).status).toBe(200);
-    expect(h.rateCard).toHaveBeenCalledWith(pool, member, jobId, context);
-    expect(h.priceExtra).toHaveBeenCalledWith(context, member, expect.objectContaining({ jobId, extraId, netPence: 600 }));
+    h.priceExtra.mockResolvedValue({ netPence: 579, basis: { pricingBasis: "server_sor", netPence: 579 } });
+    const response = await price();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ netPence: 579, result: { basis: { netPence: 579 } } });
+    expect(h.rateCard).not.toHaveBeenCalled();
+    expect(h.priceExtra).toHaveBeenCalledWith(context, member, expect.objectContaining({ version: "price-extra.v2", jobId, extraId, basis: { kind: "server_sor", sorCode: "CLEAR-VOID", claimedQuantity: "6" } }));
+    expect(h.priceExtra.mock.calls[0]![2]).not.toHaveProperty("netPence");
   });
 });
 

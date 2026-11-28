@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL proofs. CI only: this sandbox cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
@@ -56,7 +57,7 @@ it("Q06 thresholds are frozen per rule version; Q16 pricing alone never submits"
   expect((await c.admin.query("SELECT requirement,comparisons FROM app.extra_approval_request WHERE id=$1", [s.requestId])).rows).toEqual(before);
   const { newJob, raiseOn } = await import("./extra-approval-chain-fixtures.js");
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId);
-  await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 100000 });
+  await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId, extraId, netPence: 100000 }));
   expect((await c.admin.query("SELECT id FROM app.extra_approval_request WHERE variation_id=$1", [extraId])).rows).toEqual([]);
 });
 it("Q08 without a backup the mandatory queue stays waiting and overdue, without an escalation fact", async () => {

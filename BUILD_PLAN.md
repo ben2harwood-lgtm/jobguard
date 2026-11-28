@@ -895,6 +895,7 @@ Every card inherits §2.4 C1–C8 and AGENTS §2. Cards reuse the merged command
 
 4 November synthetic client-journey rulings: Q10/Q12/Q13 are recorded in `docs/contracts/extra-client-approval-v1.md`; grant-covered surveyor/commercial-manager sends, seven-day invitations, exact decision retry, own job history and the existing customer sign-in route apply. Q14 export/refusal-audit policy and Q15 executor/scheduler activation remain held. No real delivery or scheduler is enabled.
 Proceed slice (4 Nov 2026): router ruling closes only the Q05 proceed hold. Site staff may record proceeding before approval with a reason as an immutable fact bound to the priced request. It grants no authority and changes no approval, pricing, billing or export; see the two extra-approval contracts. Other holds and ENT-5 acceptance remain open.
+Pricing contract v2 (EP-CC-S1, Enterprise R1 workstream F, 28 Nov 2026): every new price and revision states its basis (`server_sor`: rate code plus total claimed quantity, priced in the database from the bound rate list and tendered adjustment, excess over the order only; or `surveyor_quoted`: net, method, basis note, optional same-job evidence). Revisions record a reason and the request they answer. v1 is not redefined (completed v1 replays; new v1 is `BASIS_REQUIRED`); older prices read their recorded basis or "basis not recorded", with no back-fill. See `docs/contracts/extra-price-rules-v2.md` and migration 0784. Made-up data only; Gate G1 stays closed.
 **Track:** contractor
 **Depends on:** ENT-3, M4-3-S-R
 **Build:**

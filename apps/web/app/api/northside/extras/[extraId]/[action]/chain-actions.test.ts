@@ -31,7 +31,7 @@ beforeEach(() => {
   h.queue.mockResolvedValue([{ variation_id: extra.extraId, job_id: extra.jobId, request_id: extra.requestId, step_index: 0 }]);
   h.extras.mockResolvedValue([extra]); h.query.mockImplementation(async (sql: string) => ({ rows: sql.includes("command_receipt") ? [] : [{ allowed: true }] }));
   h.rates.mockResolvedValue([{ code: "CLEAR-VOID", ratePence: 1000 }]);
-  h.reject.mockResolvedValue({ state: "rejected" }); h.withdraw.mockResolvedValue({ state: "withdrawn" }); h.revise.mockResolvedValue({ requestId: id(8) });
+  h.reject.mockResolvedValue({ state: "rejected" }); h.withdraw.mockResolvedValue({ state: "withdrawn" }); h.revise.mockResolvedValue({ requestId: id(8), basis: { netPence: 1 } });
 });
 it("binds a rejection to the session, displayed revision and eligible step", async () => {
   expect((await call("reject", { ...binding, reasonCode: "not_agreed" })).status).toBe(200);
@@ -62,15 +62,46 @@ it.each(["supervisor", "surveyor", "commercial_manager"])("passes covered %s wit
   expect(h.withdraw).toHaveBeenCalledWith(tenant, member, { ...common, version: "withdraw-extra.v1", extraId: extra.extraId, reasonCode: "not_done" });
   expect((await call("withdraw", { reasonCode: "anything" })).status).toBe(422);
 });
-it.each(["tenantId", "actor", "role", "time", "netPence"])("refuses client supplied %s on revise", async field => {
-  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, [field]: 2000 })).status).toBe(422); expect(h.revise).not.toHaveBeenCalled();
+it.each(["tenantId", "actor", "role", "time", "netPence", "reason", "answersRequestId"])("refuses client supplied %s on revise", async field => {
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId, [field]: 2000 })).status).toBe(422); expect(h.revise).not.toHaveBeenCalled();
 });
-it("calculates a revised amount from the covered job's server rate", async () => {
+it("sends a revised rate-code basis answering the request the browser sent; the database prices it", async () => {
   h.actor.mockResolvedValue({ pool: {}, member, role: "surveyor" });
-  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2 })).status).toBe(200);
-  expect(h.revise).toHaveBeenCalledWith(tenant, member, { ...common, version: "revise-extra.v1", extraId: extra.extraId, netPence: 2000 });
-  h.query.mockResolvedValue({ rows: [{ allowed: false }] }); h.rates.mockClear();
-  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2 })).status).toBe(403); expect(h.rates).not.toHaveBeenCalled();
+  let outcome: string | null = "approved";
+  h.query.mockImplementation(async (sql: string) => ({ rows: sql.includes("extra_approval_outcome") ? [{ kind: outcome }] : sql.includes("command_receipt") ? [] : [{ allowed: true }] }));
+  h.revise.mockResolvedValue({ requestId: id(8), basis: { pricingBasis: "server_sor", netPence: 1930 } });
+  const response = await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId });
+  expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ netPence: 1930 });
+  expect(h.revise).toHaveBeenCalledWith(tenant, member, { ...common, version: "revise-extra.v2", extraId: extra.extraId,
+    basis: { kind: "server_sor", sorCode: "CLEAR-VOID", claimedQuantity: "2" }, reason: "quantity_corrected", answersRequestId: extra.requestId });
+  expect(h.query).toHaveBeenCalledWith(expect.stringContaining("extra_approval_outcome"), [tenant.tenantId, extra.requestId, extra.jobId, extra.extraId]);
+  expect(h.rates).not.toHaveBeenCalled(); expect(h.extras).not.toHaveBeenCalled();
+  outcome = "rejected";
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId })).status).toBe(200);
+  expect(h.revise).toHaveBeenLastCalledWith(tenant, member, expect.objectContaining({ reason: "response_to_rejection", answersRequestId: extra.requestId }));
+  h.revise.mockClear();
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2 })).status).toBe(422); // the answered request is required
+  h.query.mockImplementation(async (sql: string) => ({ rows: sql.includes("extra_approval_outcome") ? [] : [{ allowed: true }] }));
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: id(9) })).status).toBe(404);
+  h.query.mockResolvedValue({ rows: [{ allowed: false }] });
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId })).status).toBe(403);
+  expect(h.revise).not.toHaveBeenCalled();
+});
+it("rebuilds the identical revise command when a committed revision is retried, even though the extra has moved on", async () => {
+  // Review P2 (EP-CC-S1): the retry must not read the newly opened request or its (absent) outcome from current state.
+  h.actor.mockResolvedValue({ pool: {}, member, role: "surveyor" });
+  h.query.mockImplementation(async (sql: string) => ({ rows: sql.includes("extra_approval_outcome") ? [{ kind: "rejected" }] : sql.includes("command_receipt") ? [] : [{ allowed: true }] }));
+  const stored = { requestId: id(8), basis: { pricingBasis: "server_sor", netPence: 1930 } };
+  h.revise.mockResolvedValue(stored);
+  const body = { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId };
+  const first = await call("revise", body);
+  // After success the extra shows the new, undecided request; the retry must still answer the original one.
+  h.extras.mockResolvedValue([{ ...extra, requestId: id(8), outcome: null }]);
+  const retry = await call("revise", body);
+  expect(retry.status).toBe(200); expect(await retry.json()).toEqual(await first.json());
+  expect(h.revise).toHaveBeenCalledTimes(2);
+  expect(h.revise.mock.calls[1]).toEqual(h.revise.mock.calls[0]);
+  expect(h.revise.mock.calls[1]![2]).toMatchObject({ commandId: common.commandId, reason: "response_to_rejection", answersRequestId: extra.requestId });
 });
 it("rejects untrusted origins before resolving the actor", async () => {
   expect((await call("withdraw", { reasonCode: "not_done" }, "https://attacker.invalid")).status).toBe(403); expect(h.actor).not.toHaveBeenCalled();
@@ -92,7 +123,7 @@ it("requires a rejection reason and exact step, and preserves typed command refu
   expect((await call("withdraw", { reasonCode: "not_done" })).status).toBe(403);
   h.actor.mockResolvedValue({ pool: {}, member, role: "surveyor" });
   h.revise.mockRejectedValueOnce({ code: "NOT_FOUND", status: 404 });
-  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2 })).status).toBe(404);
+  expect((await call("revise", { sorCode: "CLEAR-VOID", quantity: 2, requestId: extra.requestId })).status).toBe(404);
 });
 
 it("binds replay to the original URL extra and job rather than trusting a receipt alone", async () => {

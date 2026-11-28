@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test.setTimeout(600_000);
+const pounds = (pence: number) => `£${Math.floor(pence / 100).toLocaleString("en-GB")}.${String(pence % 100).padStart(2, "0")}`;
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 
 test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
@@ -43,8 +44,14 @@ test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
   await expect(page.getByTestId("approvals-role")).toHaveText("surveyor", { timeout: 60_000 });
   await page.getByLabel("Rate card item").selectOption("CLEAR-VOID");
   await page.getByLabel("Quantity measured").fill("6");
-  await expect(page.getByTestId("price-preview")).toHaveText("£1,080.00");
+  // Pricing contract v2: the screen shows the measure only; the database prices it (excess over the order, tendered adjustment).
+  await expect(page.getByTestId("price-preview")).toHaveText("6 × £180.00 per each");
+  const pricedResponse = page.waitForResponse(r => r.url().endsWith("/price") && r.request().method() === "POST");
   await button("Price this extra").click();
+  const pricedBody = await (await pricedResponse).json() as { netPence: number; result: { netPence: number; basis: { pricingBasis: string; netPence: number } } };
+  const extraNet = pricedBody.netPence;
+  expect(pricedBody.result).toMatchObject({ netPence: extraNet, basis: { pricingBasis: "server_sor", netPence: extraNet } });
+  expect(extraNet).not.toBe(108000); // 6 × £180.00 before the contract's tendered adjustment; the database applied it
   await expect(page.getByTestId("extra-state")).toHaveText("Priced - ready to submit");
 
   await switchTo("supervisor");
@@ -78,10 +85,10 @@ test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
   await link(/^Finance:/).and(page.locator('a[href^="/contractor/work-orders"]')).click();
   await expect(link("Billing and reconciliation"), "Finance hub link should open the journey order with billing").toBeVisible({ timeout: 30_000 });
   await link("Billing and reconciliation").click();
-  await expect(page.getByTestId("approved-not-exported")).toContainText("£1,080.00");
+  await expect(page.getByTestId("approved-not-exported")).toContainText(pounds(extraNet));
   await button("Export approved extras").click();
   await expect(page.getByRole("status")).toHaveText("Exported 1 line.");
-  await expect(page.getByText("1 line · net £1,080.00", { exact: false })).toBeVisible();
+  await expect(page.getByText(`1 line · net ${pounds(extraNet)}`, { exact: false })).toBeVisible();
   await button("Approve delivery").click();
   const csvLink = link("Download CSV");
   await expect(csvLink).toHaveAttribute("download", "");
@@ -106,7 +113,7 @@ test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
   const cells = Array.from(row!.matchAll(/"((?:[^"]|"")*)"(?=,|$)/gu), match => match[1]!.replaceAll('""', '"'));
   expect(cells).toHaveLength(columns.length);
   const extra = Object.fromEntries(columns.map((column, index) => [column, cells[index]]));
-  expect(extra).toMatchObject({ description, quantity: "1", approved_net_pence: "108000", currency: "GBP", batch_total_net_pence: "108000" });
+  expect(extra).toMatchObject({ description, quantity: "1", approved_net_pence: String(extraNet), currency: "GBP", batch_total_net_pence: String(extraNet) });
   await info.attach("billing-csv-download", {
     body: JSON.stringify({ filename: csvFile.suggestedFilename(), bytes: csvBytes.length, sha256, disposition, description, netPence: extra.approved_net_pence }),
     contentType: "application/json",
@@ -143,7 +150,7 @@ test("ENT-11b Northside presenter path", async ({ page, browser }, info) => {
   await page.getByLabel("Until, exclusive (UTC)").fill(new Date(now.getTime() + 86400000).toISOString().slice(0, 10));
   await button("Load dashboard").click();
   for (const stage of ["billed", "paid"]) {
-    await expect(page.locator("summary").filter({ hasText: new RegExp(`^${stage}:`) })).toHaveText(`${stage}: 1 extras · net £1,080.00`);
+    await expect(page.locator("summary").filter({ hasText: new RegExp(`^${stage}:`) })).toHaveText(`${stage}: 1 extras · net ${pounds(extraNet)}`);
   }
   await button("Load fictional Northside baseline sample").click();
   await button("Use two practice teams").click();

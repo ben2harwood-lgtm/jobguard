@@ -1,3 +1,4 @@
+import { fixturePrice, fixtureRevise } from "./extra-price-v2-fixtures.js";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
@@ -13,7 +14,7 @@ it("1200 reproduces the populated predecessor failure, changes only two routine 
  c = await startBeforeMigration(migration);
  const w = await world(c), approvals = new ExtraApprovalRepository(c.runtime), extras = new ExtraRepository(c.runtime);
  const a = w.s.extraId, b = await raiseOn(c,w.w,w.s.jobId);
- await approvals.priceExtra(w.ctx,w.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:b,netPence:338});
+ await fixturePrice(c,approvals,w.ctx,w.w.members.surveyor.member,{ commandId:randomUUID(),jobId:w.s.jobId,extraId:b,netPence:338 });
  const submitted = await approvals.submitExtra(w.ctx,w.w.members.supervisor.member,{version:"submit-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:b});
  await approvals.approveExtraStep(w.ctx,w.w.members.supervisor.member,approveInput({jobId:w.s.jobId,requestId:String(submitted.requestId),hash:String(submitted.revisionHash),net:338},0));
  const actor = w.w.members.supervisor.member;
@@ -21,10 +22,10 @@ it("1200 reproduces the populated predecessor failure, changes only two routine 
  const unlink = async (linkId: string) => extras.unlinkDuplicate(w.ctx,{version:"extra-duplicate-unlink.v1",commandId:randomUUID(),jobId:w.s.jobId,actorMembershipId:actor.membershipId,linkId,expectedRevision:(await extras.readDuplicateLinks(w.ctx,w.s.jobId)).revision,reasonCode:"linked_in_error"});
  await unlink(String(first.linkId));
  const same = mark(w,a,b), reverse = mark(w,b,a);
- const revision = {version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:24001};
+ const revision = { commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:24001 };
  expect(await code(approvals.markDuplicate(w.ctx,actor,same))).toBe("INVALID_TRANSITION");
  expect(await code(approvals.markDuplicate(w.ctx,actor,reverse))).toBe("INVALID_TRANSITION");
- expect(await code(approvals.reviseExtra(w.ctx,w.w.members.surveyor.member,revision))).toBe("INVALID_TRANSITION");
+ expect(await code(fixtureRevise(c,approvals,w.ctx,w.w.members.surveyor.member,revision))).toBe("INVALID_TRANSITION");
  const before = await snapshot(c.admin);
  const catalogue = async () => (await c!.admin.query(`SELECT p.oid,p.proname,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY p.oid`)).rows;

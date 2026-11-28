@@ -19,7 +19,7 @@ Q07 (dispatcher): a `contract_rule` fact has no human actor or grant. It may pre
 
 Remaining holds: Q01 pricing inputs/rounding/revision components; Q03 applicable contract; Q04 persisted person/repeat rules; Q05 wider reporting authority (linked-visit timing source resolved by Ben, 3 Nov 2026, card jobguard-ent-5-timing-source); Q06 amounts and T/Y composition; Q08 timer terms/backups; Q10 send/cancel roles/lifetimes/resends; Q11 rejection/wider withdrawal; Q12 client retry/history; Q13 identity bridge; Q14 export/refusal audit; Q15 scheduler/executor; Q16 query/automatic submission. UI is parked. No existing logged extra is submitted automatically.
 
-Q01/Q03 landing amendment: pricing and applicable-contract rules are now enforced for synthetic construction; see [extra-price-rules-v1.md](extra-price-rules-v1.md).
+Q01/Q03 landing amendment: pricing and applicable-contract rules are now enforced for synthetic construction; see [extra-price-rules-v1.md](extra-price-rules-v1.md). Pricing contract v2 (EP-CC-S1): `PriceExtra`/`ReviseExtra` take `price-extra.v2`/`revise-extra.v2` with a recorded basis, and a revision records its reason and the request it answers; new v1 bodies are refused `BASIS_REQUIRED` and completed v1 commands replay. See [extra-price-rules-v2.md](extra-price-rules-v2.md).
 
 Migration 0157 creates only the two issued immutable tables. Runtime SELECT only, FORCE RLS, no callable business writer. Owner-created test specimens are not command or actor authority. Held writers must take every business lock before audit head; existing job advisory lock seed 417 and administration seed 54 remain unchanged. No business locks, audit append or deferred business writer are introduced here.
 

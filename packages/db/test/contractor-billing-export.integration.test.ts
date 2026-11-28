@@ -1,3 +1,4 @@
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
@@ -19,7 +20,7 @@ it("E6-03 E6-10 export guard refuses wrong tenant or client contract",async()=>{
 it("E6-09 an extra revised or withdrawn during finalisation is included at locked revision or excluded",async()=>{
  const {ExtraApprovalRepository}=await import("../src/index.js");
  for(const operation of ["price","withdraw"]){const own=await world(c),approvals=new ExtraApprovalRepository(c.runtime);
-  const change=operation==="price"?async ()=>approvals.priceExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:own.s.extraId,netPence:25000}):async ()=>approvals.withdrawExtra(await testActorContext(c.admin, own.ctx, own.w.members.supervisor.member),own.w.members.supervisor.member,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:own.s.extraId,reasonCode:"not_done"});
+  const change=operation==="price"?async ()=>approvals.priceExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,priceV2({ commandId:randomUUID(),jobId:own.s.jobId,extraId:own.s.extraId,netPence:25000 })):async ()=>approvals.withdrawExtra(await testActorContext(c.admin, own.ctx, own.w.members.supervisor.member),own.w.members.supervisor.member,{version:"withdraw-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:own.s.extraId,reasonCode:"not_done"});
   const results=await Promise.allSettled([own.exported(),change()]);expect(results.some(r=>r.status==="fulfilled")).toBe(true);
   const lines=(await own.repo.read(own.ctx,own.session,own.s.jobId)).exports.flatMap(b=>b.artifact.lines);expect(lines.length).toBeLessThanOrEqual(1);if(lines.length)expect(lines[0]!.approvedNet.pence).toBe(24000);
  }
@@ -59,7 +60,7 @@ it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its
  const read=()=>own.repo.read(own.ctx,own.session,own.s.jobId);
  expect((await read()).reconciliation.approvedNotExported).toEqual(expected);
  const {approveInput}=await import("./extra-approval-chain-fixtures.js");
- await approvals.priceExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,{version:"price-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:338});
+ await approvals.priceExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,priceV2({ commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:338 }));
  const request=await approvals.submitExtra(await testActorContext(c.admin, own.ctx, actor),actor,{version:"submit-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId});
  await approvals.approveExtraStep(await testActorContext(c.admin, own.ctx, actor),actor,approveInput({jobId:own.s.jobId,requestId:String(request.requestId),hash:String(request.revisionHash),net:338},0));
  const linked=await approvals.markDuplicate(await testActorContext(c.admin, own.ctx, actor),actor,{version:"mark-duplicate.v1",commandId:randomUUID(),jobId:own.s.jobId,duplicateId:own.s.extraId,canonicalId:canonical.variationId});
@@ -69,7 +70,7 @@ it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its
  const state=await readExtraDuplicateCandidates(c.runtime,await testActorContext(c.admin, own.ctx, actor),actor,own.s.jobId);
  await extras.unlinkDuplicate(await testActorContext(c.admin, own.ctx, own.w.members.supervisor.member),{version:"extra-duplicate-unlink.v1",commandId:randomUUID(),jobId:own.s.jobId,actorMembershipId:actor.membershipId,linkId:String(linked.linkId),expectedRevision:state.revision,reasonCode:"linked_in_error"});
  // Once unlinked, the canonical may be reopened for review, isolating the restored extra.
- await approvals.reviseExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339});
+ await approvals.reviseExtra(await testActorContext(c.admin, own.ctx, own.w.members.surveyor.member),own.w.members.surveyor.member,await reviseV2(c, { commandId:randomUUID(),jobId:own.s.jobId,extraId:canonical.variationId,netPence:339 }));
  const restored=await read();
  expect(restored.reconciliation.approvedNotExported).toEqual(expected);
  expect(restored.reconciliation.totals.approvedNotExported).toEqual({numerator:"338",denominator:"1"});

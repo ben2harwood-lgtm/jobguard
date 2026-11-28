@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -28,7 +29,7 @@ it("a job-level Northside photo survives a fresh store and yields an intact appr
   expect(original).toEqual({ scope_item_id: null });
   const raised = await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, p.context, w.members.operative.member), w.members.operative.member, v3(w, { photoEvidenceId: p.upload.id }));
   const approvals = new ExtraApprovalRepository(c.runtime), extraId = raised.variationId;
-  await approvals.priceExtra(await testActorContext(c.admin, p.context, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId, netPence: 40000 });
+  await approvals.priceExtra(await testActorContext(c.admin, p.context, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: w.jobId, extraId, netPence: 40000 }));
   const request = await approvals.submitExtra(await testActorContext(c.admin, p.context, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId });
   await approvals.approveExtraStep(await testActorContext(c.admin, p.context, w.members.supervisor.member), w.members.supervisor.member, approveInput({ jobId: w.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 40000 }, 0));
   // No process-level registry is passed from capture: only PostgreSQL can supply this original.

@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -19,7 +20,7 @@ async function linked(approved = false, net = 40000, partial = false) {
  if (approved || partial) await approvals.approveExtraStep(ctx, actor, approveInput(s, 0));
  const canonicalId = await raiseOn(c, w, s.jobId);
  // An approved duplicate must point at an approved canonical extra (LS-111).
- await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 });
+ await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId, netPence: 40000 }));
  const canonical = await approvals.submitExtra(ctx, actor, { version: "submit-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: canonicalId });
  await approvals.approveExtraStep(ctx, actor, approveInput({ jobId: s.jobId, requestId: String(canonical.requestId), hash: String(canonical.revisionHash), net: 40000 }, 0));
  const link = await approvals.markDuplicate(ctx, actor, {

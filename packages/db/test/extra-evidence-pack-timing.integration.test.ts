@@ -1,3 +1,4 @@
+import { priceV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -21,7 +22,7 @@ it.each(["finished_breach", "uncertain_overlap", "no_visit"] as const)("pack sea
     note: "Fictional contractor pack timing", description: "Fictional extra", workStatus: "finished",
   });
   const extraId = extra.variationId;
-  await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 150000 });
+  await approvals.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, priceV2({ commandId: randomUUID(), jobId, extraId, netPence: 150000 }));
   const request = await approvals.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const s = { jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 150000 };
   await approvals.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));

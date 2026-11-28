@@ -1,3 +1,4 @@
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -67,11 +68,11 @@ it("E5B-02 stale revision, wrong hash/net, unpriced and replay semantics", async
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0, { revisionHash: "a".repeat(64) })))).toBe("HASH_MISMATCH");
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0, { netPence: 40001 })))).toBe("HASH_MISMATCH");
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 0)))).toBe("ok"); // approved at 40000 by the supervisor
-  const revise = { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60000 };
+  const revise = await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60000 });
   const second = await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), revise);
   expect(second).toMatchObject({ state: "awaiting_approval", requestRevision: 2, stepCount: 2 });
   expect(await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), revise)).toEqual(second); // replay returns the first answer
-  expect(await code(repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { ...revise, netPence: 60001 }))).toBe("COMMAND_CONFLICT"); // same command id, different content
+  expect(await code(repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { ...revise, basis: { ...revise.basis, netPence: 60001 } }))).toBe("COMMAND_CONFLICT"); // same command id, different content
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(s, 0)))).toBe("STALE_REVISION"); // revision 1 after 2 exists (even though it was decided)
   const s2 = { ...s, requestId: second.requestId as string, hash: second.revisionHash as string, net: 60000 };
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s2, 0)))).toBe("ok"); // Q04: same person can occupy the same slot on a new request revision
@@ -139,7 +140,7 @@ it("LATER-SAFETY-49 refuses another step after a legacy rejection with an unknow
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, sup()), sup(), approveInput(s, 1)))).toBe("ALREADY_DECIDED");
   // A rejection closes its request. A new revision of the SAME extra is the
   // reachable path to another step; the old rejection must still separate people.
-  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), { version: "revise-extra.v1", commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60001 });
+  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, surveyor()), surveyor(), await reviseV2(c, { commandId: randomUUID(), jobId: s.jobId, extraId: s.extraId, netPence: 60001 }));
   const next = { ...s, requestId: revised.requestId as string, hash: revised.revisionHash as string, net: 60001 };
   await repo.approveExtraStep(await testActorContext(c.admin, ctx, sup2()), sup2(), approveInput(next, 0));
   const attempt = approveInput(next, 1);
@@ -316,7 +317,7 @@ it("E5B-11 escalation fires once, only listed alternates gain authority, origina
 it("E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and then approved", async () => {
   await reviseRules(c, w, demoRules); // an earlier test leaves a single surveyor step in force; this one needs the demo bands
   const u = await submitted(c, w, null);
-  const price = async (by: ReturnType<typeof surveyor>, net: number, commandId = randomUUID()) => repo.priceExtra(await testActorContext(c.admin, ctx, by), by, { version: "price-extra.v1", commandId, jobId: u.jobId, extraId: u.extraId, netPence: net });
+  const price = async (by: ReturnType<typeof surveyor>, net: number, commandId = randomUUID()) => repo.priceExtra(await testActorContext(c.admin, ctx, by), by, priceV2({ commandId, jobId: u.jobId, extraId: u.extraId, netPence: net }));
   expect(await code(price(sup(), 60000))).toBe("PERMISSION_DENIED"); // only surveyors price
   expect(await code(price(surveyor(), 0))).toBe("INVALID_COMMAND");
   expect(await code(price(surveyor(), 600.5))).toBe("INVALID_COMMAND"); // whole pence only

@@ -1,3 +1,4 @@
+import { reviseV2 } from "./extra-price-v2-fixtures.js";
 // LATER-SAFETY-184: real PostgreSQL composition; run by CI, never the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -189,7 +190,7 @@ it("recovery refuses missing requests, superseded prices and rejected requests w
     expect(await repo.recoverPricedSubmission(context, h.actor, { ...h.raw, jobId: h.f.jobId })).toEqual({ requestId: request.requestId, state: "approved" });
     const surveyor = h.f.members.surveyor.member;
     await repo.reviseExtra(await testActorContext(c.admin, h.f.ctx, surveyor), surveyor,
-     { version: "revise-extra.v1", commandId: randomUUID(), jobId: h.f.jobId, extraId, netPence: 40000 });
+     await reviseV2(c, { commandId: randomUUID(), jobId: h.f.jobId, extraId, netPence: 40000 }));
    } else {
     const manager = h.f.members.commercial_manager.member;
     await repo.rejectExtra(await testActorContext(c.admin, h.f.ctx, manager), manager,

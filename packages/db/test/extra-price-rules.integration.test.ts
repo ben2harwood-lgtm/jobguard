@@ -3,6 +3,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, withTenant } from "../src/index.js";
+import { priceV2, reviseV2 } from "./extra-price-v2-fixtures.js";
 import { approveInput, chainWorld, cluster, newJob, raiseOn, reviseRules, submitted, type ChainWorld, type Cluster } from "./extra-approval-chain-fixtures.js";
 
 let c: Cluster, w: ChainWorld, repo: ExtraApprovalRepository;
@@ -14,13 +15,15 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 
 it("Q01 only a surveyor can price; re-pricing requires ReviseExtra and preserves the first snapshot and source", async () => {
   const jobId = await newJob(c, w), extraId = await raiseOn(c, w, jobId), ctx = await w.ctx;
-  const price = (netPence: number) => ({ version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence });
+  const price = (netPence: number) => priceV2({ commandId: randomUUID(), jobId, extraId, netPence });
   for (const role of ["owner", "admin", "operative", "supervisor", "commercial_manager", "finance", "read_only", "client_approver"] as const) {
     await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members[role].member), w.members[role].member, price(100))).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   }
   for (const net of [0, -1, 1.5, 1_000_000_000_001]) {
     await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(net))).rejects.toMatchObject({ code: "INVALID_COMMAND" });
   }
+  // Pricing contract v2: a new v1 amount without a basis is refused before anything is written.
+  await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId, extraId, netPence: 25000 })).rejects.toMatchObject({ code: "BASIS_REQUIRED" });
   await repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(25000));
   const first = await repo.submitExtra(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId, extraId });
   const snapshot = async () => (await c.admin.query("SELECT * FROM app.extra_approval_request WHERE id=$1", [first.requestId])).rows[0];
@@ -31,7 +34,7 @@ it("Q01 only a surveyor can price; re-pricing requires ReviseExtra and preserves
   expect(before.comparisons).toMatchObject({ withinProceedLimit: true, aboveClientThreshold: false, aboveClientBeforeWorkThreshold: false });
   await repo.approveExtraStep(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member, approveInput({ jobId, requestId: String(first.requestId), hash: String(first.revisionHash), net: 25000 }, 0));
   await expect(repo.priceExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, price(25001))).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
-  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, { ...price(25001), version: "revise-extra.v1" });
+  const revised = await repo.reviseExtra(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member, await reviseV2(c, { commandId: randomUUID(), jobId, extraId, netPence: 25001 }));
   expect(revised.requestRevision).toBe(2); expect(revised.requestId).not.toBe(first.requestId);
   expect(await snapshot()).toEqual(before); expect(await source()).toEqual(original);
 });
