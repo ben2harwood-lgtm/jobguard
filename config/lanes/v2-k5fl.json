@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k5fl": {
+      "branches": [
+        "claude/project-thread-trp08u-k5fl"
+      ],
+      "note": "Q83 RED money: the restrictive v2_practice_firm firm lock on the K5 line's v2_payment_stage_due (2046), v2_stage_invoice_draft and v2_stage_invoice_draft_withdrawal (2071), edited in place before merge, so v2/main's FL guard holds when the K5 line meets it.",
+      "allow": [
+        "packages/db/migrations/2046_v2_payment_stage_due.sql",
+        "packages/db/migration-notes/2046_v2_payment_stage_due.md",
+        "packages/db/migrations/2071_v2_stage_invoice_draft.sql",
+        "packages/db/migration-notes/2071_v2_stage_invoice_draft.md"
+      ]
+    }
+  }
+}
