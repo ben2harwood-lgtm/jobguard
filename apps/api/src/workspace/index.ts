@@ -25,6 +25,7 @@ export * from "./snag-register.application.js";
 export * from "./handover.application.js";
 export * from "./handover-release.application.js";
 export * from "./review-request.application.js";
+export * from "./aftercare.application.js";
 export * from "./fee-illustration.contracts.js";
 export * from "./fee-illustration.application.js";
 

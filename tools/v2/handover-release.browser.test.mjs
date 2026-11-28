@@ -126,3 +126,21 @@ test("V2-G8 at 360px: switch the review request on after a release; it waits a w
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no sideways scroll at 360px");
   } finally { await context.close(); }
 });
+
+test("V2-G9 at 360px: switch aftercare on after a release; the next offer date shows", { timeout: 120000 }, async () => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
+  try {
+    const jobId = (await (await context.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111")).json()).jobs[0].id;
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/handover`);
+    await page.getByTestId("handover-releases").getByRole("button", { name: /^Release this version · version \d+$/u }).click();
+    await expect(page.getByTestId("handover-link")).toBeVisible();
+    const aftercare = page.getByTestId("aftercare");
+    const toggle = aftercare.getByLabel("Offer the customer a check-up visit 6 and 12 months after the handover release");
+    if (await toggle.isChecked()) { await toggle.uncheck(); await expect(aftercare.getByRole("status")).toContainText("Off."); }
+    await toggle.check();
+    // A release made just now: the first offer is six months away.
+    await expect(aftercare.getByRole("status")).toContainText(/Next offer due|Both offers are done/u);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no sideways scroll at 360px");
+  } finally { await context.close(); }
+});

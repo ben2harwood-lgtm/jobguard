@@ -12,6 +12,8 @@ import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verify
 import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
 // V2-G8
 import { ReviewRequestRepository } from "../../packages/db/dist/index.js";
+// V2-G9
+import { AftercareRepository } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
@@ -2370,6 +2372,137 @@ test("G8 migration 2085 reruns without changing policies, triggers, function bod
     (SELECT count(*)::int FROM app.v2_review_request) + (SELECT count(*)::int FROM app.v2_review_request_switch) AS rows`)).rows[0];
   const before = await catalog();
   await admin.query(readFileSync(new URL("../../packages/db/migrations/2085_v2_review_request.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});
+
+// V2-G9 (migration 2086): after the handover release, one check-up offer at 6 months and one at 12, only
+// with the builder's aftercare switch on, each sent once. Practice only: the send reaches the local catcher.
+// Releases in the past come from G3's past clock, through G8's ready().
+const g9 = {
+  get: f => request(`${f.path}/aftercare`, { cookies: f.owner.cookies }).then(response => json(response)),
+  post: (f, body, status = 200) => request(`${f.path}/aftercare`, { cookies: f.owner.cookies, csrf: f.owner.csrfToken, body })
+    .then(response => json(response, status)),
+  turn: (enabled, commandId = randomUUID()) => ({ version: "v2-aftercare-switch.v1", commandId, enabled }),
+  send: (commandId = randomUUID()) => ({ version: "v2-aftercare-send.v1", commandId }),
+  async direct(f, body) {
+    const auth = await authorizePracticeJob(runtime, f.sessionId, f.job);
+    const repository = new AftercareRepository(practiceMaterialPool(runtime, auth.digest));
+    const captured = [], info = console.info, local = process.env.JOBGUARD_LOCAL_V2;
+    console.info = line => captured.push(JSON.parse(line));
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    try { return { result: await repository.command(auth.context, f.job, f.sessionId, body).catch(error => error), captured }; }
+    finally { console.info = info; if (local === undefined) delete process.env.JOBGUARD_LOCAL_V2; else process.env.JOBGUARD_LOCAL_V2 = local; }
+  },
+  insert: async (f, months) => {
+    const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+    return admin.query(`INSERT INTO app.v2_aftercare_offer (tenant_id, job_id, at_months, release_id, recipient_email, command_id, request_hash,
+      actor_membership_id) VALUES ($1, $2, $3, $4, 'customer@jobguard-v2.invalid', $5, $6, $7)`,
+    [f.context.tenantId, f.job, months, f.releaseId, randomUUID(), "a".repeat(64), actor.id]);
+  },
+  months: async f => (await admin.query("SELECT at_months FROM app.v2_aftercare_offer WHERE job_id=$1 ORDER BY at_months", [f.job])).rows
+    .map(row => row.at_months),
+};
+
+test("G9 done when: off sends nothing, the 6-month offer goes once to the catcher, then the 12-month one waits", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  assert.equal((await g9.get(f)).state, "off");
+  const off = await g9.direct(f, g9.send());
+  assert.deepEqual([off.result.code, off.result.state, off.captured], ["AFTERCARE_NOT_DUE", "off", []]);
+  await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "the database refuses an offer without the switch");
+  await g9.post(f, g9.turn(true));
+  assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 6]);
+  await assert.rejects(g9.insert(f, 12), /V2_AFTERCARE_NOT_DUE/u, "the 12-month offer is not due yet");
+  const body = g9.send();
+  const sent = await g9.direct(f, body);
+  assert.deepEqual(sent.captured, [{ event: "v2.delivery.captured", kind: "v2_aftercare_offer" }], "one catcher delivery, metadata only");
+  assert.equal(sent.result.state, "too_soon");
+  const { rows: [release] } = await admin.query("SELECT released_at + interval '12 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.equal(sent.result.nextAt, release.at.toISOString(), "next is the 12-month point");
+  const replay = await g9.direct(f, body);
+  assert.deepEqual([replay.result.replayed, replay.captured], [true, []]);
+  assert.equal((await g9.post(f, g9.send(), 409)).state, "too_soon");
+  assert.deepEqual(await g9.months(f), [6]);
+  const events = (await admin.query(`SELECT event_type, payload FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.aftercare.%'`, [f.job])).rows;
+  assert.deepEqual(events.map(row => row.event_type).sort(), ["v2.aftercare.offered", "v2.aftercare.switched"]);
+  assert.equal(events.find(row => row.event_type === "v2.aftercare.offered").payload.references.months, "6");
+  assert.doesNotMatch(JSON.stringify(events), /customer@|jobguard-v2\.invalid|check-up visit/u, "no email and no message text");
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G9 after 12 months only the 12-month offer goes, once; the late 6-month one is skipped", async () => {
+  const f = await g8.ready({ daysAgo: 380 });
+  await g9.post(f, g9.turn(true));
+  assert.deepEqual([(await g9.get(f)).state, (await g9.get(f)).months], ["due", 12]);
+  await assert.rejects(g9.insert(f, 6), /V2_AFTERCARE_NOT_DUE/u, "too late for the 6-month offer");
+  const sent = await g9.direct(f, g9.send());
+  assert.deepEqual([sent.result.state, sent.captured.length], ["done", 1]);
+  const again = await g9.direct(f, g9.send());
+  assert.deepEqual([again.result.code, again.result.state, again.captured], ["AFTERCARE_NOT_DUE", "done", []]);
+  // Off and on again changes nothing.
+  await g9.post(f, g9.turn(false)); await g9.post(f, g9.turn(true));
+  assert.equal((await g9.get(f)).state, "done");
+  assert.deepEqual(await g9.months(f), [12]);
+});
+
+test("G9 waits: before 6 months, after a stopped link, and after a changed customer, nothing is sent", async () => {
+  const f = await g8.ready({ daysAgo: 30 });
+  await g9.post(f, g9.turn(true));
+  const soon = await g9.get(f);
+  const { rows: [release] } = await admin.query("SELECT released_at + interval '6 months' AS at FROM app.v2_handover_release WHERE id=$1", [f.releaseId]);
+  assert.deepEqual([soon.state, soon.nextAt], ["too_soon", release.at.toISOString()]);
+  const stopped = await g8.ready({ daysAgo: 200 });
+  await g9.post(stopped, g9.turn(true));
+  await g3.post(stopped, g4.stop(stopped.releaseId));
+  assert.equal((await g9.get(stopped)).state, "no_release");
+  const changed = await g8.ready({ daysAgo: 200 });
+  await g9.post(changed, g9.turn(true));
+  await g4.customer(changed, "replacement@jobguard-v2.invalid");
+  assert.equal((await g9.get(changed)).state, "recipient_changed");
+  for (const job of [f, stopped, changed]) {
+    const { captured } = await g9.direct(job, g9.send());
+    assert.deepEqual(captured, []);
+    assert.deepEqual(await g9.months(job), []);
+  }
+});
+
+test("G9 other firm: 404 on read, switch and send; no aftercare rows seen; UPDATE and DELETE refused", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g9.direct(f, g9.send());
+  const second = await signIn("second-builder");
+  await json(await request(`${f.path}/aftercare`, { cookies: second.cookies }), 404);
+  for (const body of [g9.turn(false), g9.send()])
+    await json(await request(`${f.path}/aftercare`, { cookies: second.cookies, csrf: second.csrfToken, body }), 404);
+  // Rule 30 firm A/B read check: the second firm's runtime sees no switch or offer rows.
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    for (const table of ["app.v2_aftercare_offer", "app.v2_aftercare_switch"])
+      assert.equal((await db.$client.query(`SELECT 1 FROM ${table} WHERE job_id=$1`, [f.job])).rowCount, 0);
+  });
+  for (const table of ["app.v2_aftercare_offer", "app.v2_aftercare_switch"]) {
+    for (const sql of [`UPDATE ${table} SET command_id=command_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+      await assert.rejects(admin.query(sql, [f.job]));
+    }
+    const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual([catalog.relrowsecurity, catalog.relforcerowsecurity], [true, true]);
+  }
+  assert.equal((await g9.post(f, { ...g9.send(), months: 12 }, 400)).code, "AFTERCARE_INVALID_COMMAND");
+});
+
+test("G9 migration 2086 reruns without changing policies, triggers, function bodies or rows", async () => {
+  const f = await g8.ready({ daysAgo: 200 });
+  await g9.post(f, g9.turn(true));
+  await g9.direct(f, g9.send());
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polrelid::regclass::text || ':' || polname, ',' ORDER BY polrelid::regclass::text, polname) FROM pg_policy
+      WHERE polrelid IN ('app.v2_aftercare_offer'::regclass, 'app.v2_aftercare_switch'::regclass)) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid IN ('app.v2_aftercare_offer'::regclass,
+      'app.v2_aftercare_switch'::regclass) AND NOT tgisinternal) AS triggers,
+    (SELECT string_agg(md5(prosrc), ',' ORDER BY proname) FROM pg_proc WHERE proname IN ('v2_aftercare_due', 'v2_aftercare_offer_guard')) AS bodies,
+    (SELECT count(*)::int FROM app.v2_aftercare_offer) + (SELECT count(*)::int FROM app.v2_aftercare_switch) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2086_v2_aftercare_offer.sql", import.meta.url), "utf8"));
   assert.deepEqual(await catalog(), before);
 });
 
