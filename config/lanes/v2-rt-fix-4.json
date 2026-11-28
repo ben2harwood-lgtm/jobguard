@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-4": {
+      "branches": [
+        "codex/sandbox/rt-fix-4"
+      ],
+      "note": "RT-FIX-4 (#1071): RT12-84/85 capture and review controls have a shared 44px minimum height, including the designed skin. CSS only; no dictation, parser, reader or core logic changes. No new web workflow; regression check runs in the existing web unit suite. Local Chromium static-component checks use no server or default Playwright configuration.",
+      "test": "pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/capture-review-tap-targets.test.tsx",
+      "allow": [
+        "apps/web/app/styles.css",
+        "apps/web/app/ui/capture-review-tap-targets.test.tsx"
+      ]
+    }
+  }
+}
