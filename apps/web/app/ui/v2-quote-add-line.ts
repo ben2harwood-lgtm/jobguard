@@ -13,6 +13,21 @@ export function addLineCommand(description: string, promptId?: string) {
     ...(promptId ? { promptId } : {}) };
 }
 
+// A command whose outcome is not known yet (no answer, or an unreadable one) is kept, so a retry of the same line
+// sends the same command id and the server replays it instead of adding a second item.
+type AddLineCommand = ReturnType<typeof addLineCommand>;
+const unsettled = new Map<string, AddLineCommand>();
+const unsettledKey = (jobId: string, description: string, promptId?: string) => JSON.stringify([jobId, description.trim(), promptId ?? null]);
+export function pendingAddLineCommand(jobId: string, description: string, promptId?: string): AddLineCommand {
+  const key = unsettledKey(jobId, description, promptId);
+  const command = unsettled.get(key) ?? addLineCommand(description, promptId);
+  unsettled.set(key, command);
+  return command;
+}
+export function settleAddLineCommand(jobId: string, description: string, promptId?: string) {
+  unsettled.delete(unsettledKey(jobId, description, promptId));
+}
+
 /** The new quote line: added by the builder, included, and not priced yet. */
 export function addedLine(receipt: AddLineReceipt): QuoteLine {
   return { id: crypto.randomUUID(), scopeItemId: receipt.scopeItemId, scopeRevisionId: receipt.scopeRevisionId,
@@ -34,5 +49,6 @@ export function addLineProblemText(code: string | undefined) {
   if (code === "QUOTE_NOT_EDITABLE") return "Not added: this quote has been sent or accepted. Add it as a change to the job instead.";
   if (code === "QUOTE_ADD_LINE_INVALID") return "Not added: describe the line in 1 to 500 characters.";
   if (code === "QUOTE_COMMAND_CONFLICT") return "Not added: that request was already used for a different line. Try again.";
+  if (code === undefined) return "We could not confirm the line was added. Try again: the same line will not be added twice.";
   return "Not added. Nothing was changed. Try again.";
 }

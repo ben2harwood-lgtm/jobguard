@@ -2,19 +2,25 @@
 import { useState } from "react";
 import type { QuoteLine } from "@jobguard/core";
 import { jobPageFetch as fetch } from "./job-page-fetch";
-import { addedLine, addLineAddedText, addLineButton, addLineCommand, addLineHeading, addLineHelp, addLineInputLabel,
-  addLineProblemText, type AddLineReceipt } from "./v2-quote-add-line";
+import { addedLine, addLineAddedText, addLineButton, addLineHeading, addLineHelp, addLineInputLabel,
+  addLineProblemText, pendingAddLineCommand, settleAddLineCommand, type AddLineReceipt } from "./v2-quote-add-line";
 
 /** V2-C6: posts one add-line command and returns the new unpriced line, or the reason it was not added. */
 export async function postAddLine(jobId: string, description: string, promptId?: string):
   Promise<{ line: QuoteLine; notice: string } | { line: null; notice: string }> {
+  const command = pendingAddLineCommand(jobId, description, promptId);
   try {
     const response = await fetch(`/api/v2-backend/jobs/${encodeURIComponent(jobId)}/quotes/lines`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(addLineCommand(description, promptId)),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command),
     });
     const body = await response.json().catch(() => null) as (AddLineReceipt & { code?: string }) | null;
-    if (!response.ok || !body?.scopeItemId) return { line: null, notice: addLineProblemText(body?.code) };
-    return { line: addedLine(body), notice: addLineAddedText(body.description) };
+    if (response.ok && body?.scopeItemId) {
+      settleAddLineCommand(jobId, description, promptId);
+      return { line: addedLine(body), notice: addLineAddedText(body.description) };
+    }
+    // A refusal the server named is final; anything else may have been saved, so the command is kept for a retry.
+    if (response.status < 500 && body?.code) settleAddLineCommand(jobId, description, promptId);
+    return { line: null, notice: addLineProblemText(response.status < 500 ? body?.code : undefined) };
   } catch {
     return { line: null, notice: addLineProblemText(undefined) };
   }

@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { quoteAddLineCommandV1 } from "@jobguard/db";
 import { addedLine, addLineAddedText, addLineCommand, addLineProblemText, withAddedScope } from "./v2-quote-add-line";
-import { V2QuoteAddLine } from "./v2-quote-add-line-panel";
+import { postAddLine, V2QuoteAddLine } from "./v2-quote-add-line-panel";
+
+const sent = vi.hoisted(() => ({ bodies: [] as Array<{ commandId: string }>, answers: [] as Array<() => Promise<Response>> }));
+vi.mock("./job-page-fetch", () => ({ jobPageFetch: (_url: string, init: { body: string }) => {
+  sent.bodies.push(JSON.parse(init.body));
+  return sent.answers.shift()!();
+} }));
 
 const item = { scopeItemId: "10000000-0000-8000-8000-000000000001", scopeRevisionId: "10000000-0000-8000-8000-000000000002",
   description: "Skip or waste removal" };
@@ -36,7 +42,25 @@ describe("V2-C6 add a line to the quote", () => {
     expect(addLineProblemText("QUOTE_NOT_EDITABLE")).toBe("Not added: this quote has been sent or accepted. Add it as a change to the job instead.");
     expect(addLineProblemText("QUOTE_ADD_LINE_INVALID")).toBe("Not added: describe the line in 1 to 500 characters.");
     expect(addLineProblemText("QUOTE_COMMAND_CONFLICT")).toContain("already used");
-    expect(addLineProblemText(undefined)).toBe("Not added. Nothing was changed. Try again.");
+    expect(addLineProblemText("SOMETHING_ELSE")).toBe("Not added. Nothing was changed. Try again.");
+    expect(addLineProblemText(undefined)).toBe("We could not confirm the line was added. Try again: the same line will not be added twice.");
+  });
+
+  it("retries an unconfirmed add with the same command id, and only a settled answer starts a new one", async () => {
+    sent.bodies.length = 0;
+    const receipt = (status: number, body: unknown) => () => Promise.resolve(new Response(JSON.stringify(body), { status }));
+    sent.answers.push(() => Promise.reject(new TypeError("network")), receipt(502, {}), receipt(201, item),
+      receipt(409, { code: "QUOTE_NOT_EDITABLE" }), receipt(201, item));
+    expect((await postAddLine("job-1", "Skip or waste removal", "waste")).line).toBeNull();
+    expect((await postAddLine("job-1", " Skip or waste removal ", "waste")).line).toBeNull();
+    expect((await postAddLine("job-1", "Skip or waste removal", "waste")).line?.scopeItemId).toBe(item.scopeItemId);
+    const refused = await postAddLine("job-1", "Skip or waste removal", "waste");
+    expect(refused.notice).toContain("has been sent or accepted");
+    await postAddLine("job-1", "Skip or waste removal", "waste");
+    const ids = sent.bodies.map(body => body.commandId);
+    expect(new Set(ids.slice(0, 3)).size).toBe(1);
+    expect(ids[3]).not.toBe(ids[0]);
+    expect(ids[4]).not.toBe(ids[3]);
   });
 
   it("renders the box with a labelled input and a disabled button until something is typed", () => {
