@@ -28,8 +28,7 @@ BEGIN
     recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, job_id, id),
     UNIQUE (tenant_id, command_id),
-    FOREIGN KEY (tenant_id, job_id) REFERENCES app.job (tenant_id, id),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    FOREIGN KEY (tenant_id, job_id) REFERENCES app.job (tenant_id, id)
   );
 
   -- One row per offer. The key includes the month, so each offer can be written once only.
@@ -45,9 +44,13 @@ BEGIN
     sent_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, job_id, at_months),
     UNIQUE (tenant_id, command_id),
-    FOREIGN KEY (tenant_id, job_id, release_id) REFERENCES app.v2_handover_release (tenant_id, job_id, id),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    FOREIGN KEY (tenant_id, job_id, release_id) REFERENCES app.v2_handover_release (tenant_id, job_id, id)
   );
+  -- A linked V2 builder's membership lives in the identity tenant, not the practice tenant, so a membership FK
+  -- refused every write. As in 2012 and 2071, the actor is the verified v2_work_plan_editor id, unkeyed.
+  -- Dropped here too for a local database that already ran the first version of this file.
+  ALTER TABLE app.v2_aftercare_switch DROP CONSTRAINT IF EXISTS v2_aftercare_switch_tenant_id_actor_membership_id_fkey;
+  ALTER TABLE app.v2_aftercare_offer DROP CONSTRAINT IF EXISTS v2_aftercare_offer_tenant_id_actor_membership_id_fkey;
 
   ALTER TABLE app.v2_aftercare_switch ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_aftercare_switch FORCE ROW LEVEL SECURITY;

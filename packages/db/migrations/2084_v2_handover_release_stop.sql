@@ -25,9 +25,12 @@ BEGIN
     stopped_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, job_id, release_id),
     UNIQUE (tenant_id, command_id),
-    FOREIGN KEY (tenant_id, job_id, release_id) REFERENCES app.v2_handover_release (tenant_id, job_id, id),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    FOREIGN KEY (tenant_id, job_id, release_id) REFERENCES app.v2_handover_release (tenant_id, job_id, id)
   );
+  -- A linked V2 builder's membership lives in the identity tenant, not the practice tenant, so a membership FK
+  -- refused every write. As in 2012 and 2071, the actor is the verified v2_work_plan_editor id, unkeyed.
+  -- Dropped here too for a local database that already ran the first version of this file.
+  ALTER TABLE app.v2_handover_release_stop DROP CONSTRAINT IF EXISTS v2_handover_release_stop_tenant_id_actor_membership_id_fkey;
   ALTER TABLE app.v2_handover_release_stop ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_handover_release_stop FORCE ROW LEVEL SECURITY;
   -- app.job carries the practice-firm policy, so the job EXISTS also confines the firm.
