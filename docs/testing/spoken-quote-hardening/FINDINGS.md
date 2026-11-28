@@ -1010,3 +1010,28 @@ lane-register path forbidden by the current checker. That file is byte-identical
 and outside this attack's allow-list; it was not changed. A repository-wide lane pass is
 therefore not claimed. The Git index for this linked worktree is outside the writable
 workspace; staging/committing the four authorized files requires filesystem escalation only.
+## RT-FIX-5 repair round 1 — Codex review of PR #1085 at ac8065af
+
+Base `ac8065af`, branch `codex/sandbox/rt-fix-5`. Both reported money/loss paths are repaired locally:
+
+- `context-reader.ts`, existing `totals()` scanner: an extended clause is scanned once, and only a clause with one candidate amount can supply a total. A later overlapping `all in` cannot rescue £600 after the first scan rejected £500/£600. Two or three conflicting/overlapping amounts, including a repeated identical amount in the same extended clause, leave the whole-job price open with a question. Separate identical totals remain deduplicated by the existing reader logic. The proximity heuristic and price-count rescan state are removed; no second guard is introduced.
+- `capture-fixture-parser.ts`, existing `plainDraft()` splitter: conditions no longer veto every subsequent separator or work verb. Explicit `then`, sentence endings, `and` followed by work, and a new untied work verb start the next clause. The existing tied-word list includes `is`/`are`, preserving “provided access is clear” as one conditional clause. The walls' £200 remains open; the separate door line retains its cited £300. The shared `saidAmountOpen()` guard is unchanged; core needs no change.
+- RV-01 adds 12 regression cases: seven overlapping/conflicting/repeated-total variants and five conditional-next-item variants, covering every requested example. Existing corpus cases and test files are unchanged. Before the code repair, the existing runner reported 8 failures / 746 passes with these additions, reproducing both findings; sentence boundaries and separately repeated/conflicting totals already passed.
+
+Commands and deterministic results (Node 24.17.0; pnpm 10.28.1):
+
+| Check | Result |
+| --- | --- |
+| Before: `pnpm eval --maxWorkers=2` | exit 0; 28 files, 1,239 tests passed |
+| Regression reproduction: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2` | suite exit 1; 8 new regression failures, 746 passes |
+| After: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts src/capture-qualified-price.test.ts --maxWorkers=2` | exit 0; 2 files, 773 tests passed |
+| After: `pnpm eval --maxWorkers=2` | exit 0; 28 files, 1,251 tests passed |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai typecheck` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai lint` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai build` | exit 0 |
+| Node before/after evaluation-score equality and fresh-build golden-record verification | exit 0 |
+| `git diff --check` | exit 0 |
+
+Golden scores before and after are identical: 32/32 cases; scope recall 41/41; valid citations 119/119; unsupported monetary facts 0; ambiguity checks 63/63. Only the parser implementation SHA-256 changes in `golden-run.v1.json`; no labels, scores, targets or prediction hashes change. Every existing corpus status/expectation and `capture-qualified-price.test.ts` is preserved. Existing open corpus findings remain open.
+
+Invariants touched: ambiguous money stays open with a question; conditional prices never become exact prices; a separate work item and its cited money are preserved. No migrations, interface changes, new alerts or commercial-policy changes. Database, browser/native and live-provider suites were not run because this is a deterministic parser-only repair with no affected persistence, UI or provider path. These checks are not independent RED review or release approval; review against the final committed head remains required before merge. Commit only, no push. `.pnpm-store/` is excluded.
