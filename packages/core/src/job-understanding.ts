@@ -80,7 +80,8 @@ export function checkUnderstandingNumbers(understanding: JobUnderstanding, sourc
     if (NUMBER_WORD_BEFORE.test(sourceText.slice(Math.max(0, start - 40), start)) || NUMBER_WORD_AFTER.test(sourceText.slice(end, end + 40))) return false;
     // … nor an amount the words around it leave open, such as a limit or a credit (V2-SQ-M), within its own sentence.
     if (kind === "money" && read.open) {
-      const before = sourceText.slice(Math.max(0, start - 80), start), after = sourceText.slice(end, end + 80);
+      // A currency sign just outside a digits-only citation ("up to £" + "200") is part of the amount, not of the words before it.
+      const before = sourceText.slice(Math.max(0, start - 80), start).replace(/[£$€]\s*$/u, ""), after = sourceText.slice(end, end + 80);
       if (read.open(before.slice(before.search(/[^.;!?\n]*$/u)), after.slice(0, after.search(/[.;!?\n]|$/u)))) return false;
     }
     return read[kind](sourceText.slice(start, end)) === expected;

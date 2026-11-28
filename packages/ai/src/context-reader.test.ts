@@ -265,3 +265,25 @@ describe("V2-SQ-M limit and credit words only count beside the amount", () => {
     expect(read.wholeJobPrice).toBeNull();
   });
 });
+
+describe("V2-SQ-M a digits-only citation still sees the words before its currency sign (Codex P2 on #1064)", () => {
+  it.each(["up to ", "minus ", "a credit of ", "-"])("clears a line, room and whole-job price cited as digits after %s£", words => {
+    const pad = " ".repeat(words.length);
+    const exact = `In the kitchen paint the ceiling for ${pad}£200. The kitchen all in ${pad}£300. For the whole job ${pad}£400.`;
+    const { timeline: _timeline, ...original } = readSpokenJob("00000000-0000-4000-8000-000000000002", exact);
+    expect([original.lines[0]!.unitPricePence.value, original.areaPrices[0]?.pence, original.wholeJobPrice?.pence]).toEqual([20000, 30000, 40000]);
+    // Each citation narrowed to its digits, as another reader may cite them; the sign and the words stay outside.
+    type Cited = { provenance: { kind: string } };
+    const digits = <T extends Cited>(field: T): T => {
+      const provenance = field.provenance as { kind: "extracted"; span: { start: number; end: number } };
+      return { ...field, provenance: { ...provenance, span: { ...provenance.span, start: provenance.span.start + 1 } } };
+    };
+    const narrowed = { ...original, lines: original.lines.map(line => ({ ...line, unitPricePence: digits(line.unitPricePence) })),
+      areaPrices: original.areaPrices.map(digits), wholeJobPrice: original.wholeJobPrice && digits(original.wholeJobPrice) };
+    expect(checkSpokenNumbers(narrowed, exact).lines[0]!.unitPricePence.value).toBe(20000);
+    const checked = checkSpokenNumbers(narrowed, exact.replaceAll(`${pad}£`, `${words}£`));
+    expect(checked.lines[0]!.unitPricePence.value).toBeNull();
+    expect(checked.areaPrices).toEqual([]);
+    expect(checked.wholeJobPrice).toBeNull();
+  });
+});
