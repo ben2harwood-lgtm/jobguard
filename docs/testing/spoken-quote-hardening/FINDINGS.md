@@ -6,6 +6,83 @@ to the tracking issue and to the V2 planner.
 Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or wrong firm or job.
 **P1** lost, doubled or misplaced item or price; crash; over 1 s. **P2** confusing but safe.
 
+## RT-10 mobile-360 attack receipt — 28 November 2026 (#1071)
+
+`HEAD_UNDER_TEST` / branch base: `49755b620ccf0223e64575006cd4590c77595ca2`,
+branch `codex/sandbox/rt-10`. Brief read from the newer `lanes-ref` README
+(invariants and corpus format) and `lanes/RT-10-mobile-360.md`.
+**67 attack cases: 67 pass, 0 open findings**, plus one passing markup-render check.
+No new finding rows or IDs are warranted. P0 list: **none**. Existing findings,
+including F-005–F-008, are not re-reported or reclassified.
+
+Passing cases grouped by the highest-risk assertion they exercise (these are
+case groupings, not severity assignments to nonexistent findings):
+
+| Risk covered | Pass | Open |
+| --- | ---: | ---: |
+| P0: exact money / no invented money | 28 | 0 |
+| P1: retained work, source and questions | 31 | 0 |
+| P2: safe fallback, touch targets and readability | 8 | 0 |
+| Total attack cases | 67 | 0 |
+
+- 16 component-handler cases: 1/10/30/100 lines, 500-character descriptions,
+  100-character room names, 20 fully labelled questions, £999,999.99, price
+  editing/save/fresh mount, split/combine lineage, five microphone failure codes
+  retaining completed words, and two injected unsupported-adapter states.
+  Save/reopen uses mocked responses, not database persistence.
+- 51 isolated Chromium layout cases: capture **and** review with 1/10/30/100
+  lines at 360×740, 390×844, 1280×800 and 740×360; long descriptions/rooms;
+  twenty questions; maximum money; 44px controls including the effective
+  associated-label target for radio/checkbox controls; reduced-height editing;
+  640 CSS px desktop zoom equivalent; doubled computed font sizes. Bounds are
+  checked as well as document scroll width, so `overflow-x:hidden` cannot hide
+  escaped controls. Twenty-five normal states and six added capture states have
+  screenshot attachments at 360/1280 with device scale 2 (31 PNGs total).
+- Browser markup is rendered from this branch's **real components and all four
+  production stylesheets**. The opt-in config has no server/global setup. Every
+  request on the permitted preview origin is intercepted; unrelated requests
+  abort. No firm/session is created and no shared practice DB is read or changed.
+  The deployed preview still runs **b25b5ee9**, not this branch; this is not a
+  hosted workflow or parser acceptance claim. Safari/Firefox adapters are injected
+  states, the keyboard is a reduced viewport, and zoom/text enlargement are
+  explicit approximations, not physical-device evidence.
+
+Commands actually run:
+
+- `pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/rt10-mobile.test.tsx app/ui/rt10-mobile-markup.test.tsx app/ui/review-proposal.test.tsx app/ui/walk-it-retry.test.tsx`
+  — **4 files / 78 tests passed** (17 new checks, 61 existing regressions).
+- `pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts'`
+  — **264 files / 3,810 tests passed**. The five DB suites are outside this
+  component-only run; no DB guarantee is claimed. An earlier concurrent run had
+  two timing failures in existing `walk-it-retry.test.tsx`; both passed in the
+  focused run and the complete recheck without competing browser work.
+- `JOBGUARD_RT10=1 pnpm --filter @jobguard/web exec playwright test --config=playwright.rt10.config.ts --workers=2 --trace off`
+  — final **51 passed**, zero skipped/unexpected/flaky. Local diagnostics before
+  this included a macOS launch-permission refusal, an interrupted missing-UTF-8
+  harness run and removal of a speculative expected-failure marker whose
+  assertion passed. These are harness results, not product findings. There were
+  multiple isolated component invocations and **zero un-intercepted hosted runs**;
+  the one-run shared-preview journey was not used.
+- `pnpm --filter @jobguard/web typecheck`, `pnpm --filter @jobguard/web lint`,
+  `NEXT_TELEMETRY_DISABLED=1 pnpm --filter @jobguard/web build` — **passed**.
+  Workspace dependencies had to be built first. The initial Turbo cache resolved
+  outside this worktree and was redirected to `/tmp`; the unneeded mobile build
+  was stopped and the API was built directly. No tracked source changed.
+- `git diff --check` and deterministic lane allow-list validation — **passed**.
+
+The final browser JSON, screenshots and command logs are retained under
+`/tmp/jobguard-rt10-49755b62` and `/tmp/jobguard-rt10-*.log`; screenshot bundle:
+`/tmp/jobguard-rt10-49755b62/rt10-screens.zip`. `/mnt/project-files` is unavailable;
+the bundle is ready to attach as PR evidence. No default Playwright config,
+ports 3000/55432, deployment, paid provider or push was used. `.pnpm-store/`
+remains untracked and is excluded from the commit.
+
+Initial review — **LATER / SIMPLICITY**: the hook/node traversal helpers in
+`apps/web/app/ui/rt10-mobile.test.tsx`, `review-proposal.test.tsx` and
+`walk-it-retry.test.tsx` repeat the same harness pattern. A future test-helper
+extraction could reduce divergent fixes; it is non-blocking and outside this
+tests-only attack.
+
 | ID | Lane | Head sha | Case id | Transcript | Expected | Actual | Sev | Status | Fix PR |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RT-00-F001 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-002 | Fit the door for a hundred and fifty pound | One line priced 15000 pence | Capture and Reader A leave the price null; singular pound is not read as exact money | P1 | open | — |

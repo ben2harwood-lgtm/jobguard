@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-10": {
+      "branches": ["codex/sandbox/rt-10"],
+      "note": "RT-10 mobile-360 component red-team (#1071). HEAD_UNDER_TEST=49755b620ccf0223e64575006cd4590c77595ca2. Tests and findings only. Opt-in browser spec intercepts all requests on the permitted preview origin and renders this branch's components/CSS; deployed preview b25b5ee9 is not tested. No shared database, local servers, source changes, paid API, deployment or push. The lane checker permits this lane's own config file automatically.",
+      "test": "pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/rt10-mobile.test.tsx app/ui/rt10-mobile-markup.test.tsx app/ui/review-proposal.test.tsx app/ui/walk-it-retry.test.tsx",
+      "allow": [
+        "apps/web/app/ui/rt10-mobile.fixtures.ts",
+        "apps/web/app/ui/rt10-mobile.test.tsx",
+        "apps/web/app/ui/rt10-mobile-markup.test.tsx",
+        "apps/web/e2e/RT-10-mobile.spec.ts",
+        "apps/web/playwright.config.ts",
+        "apps/web/playwright.rt10.config.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}

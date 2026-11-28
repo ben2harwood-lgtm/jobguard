@@ -4,6 +4,7 @@ import { E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET, E2E_WORKER_URL } from "./e2e/glo
 const shutdownToken = "sbox-e2e-local-pool-drain";
 
 export default defineConfig({
+  testIgnore: "**/RT-10-mobile.spec.ts",
   testDir: "./e2e", globalSetup: "./e2e/global-setup.ts", fullyParallel: true, retries: 0, expect: { timeout: 10_000 },
   ...(process.env.CI ? { workers: 1, reporter: [["list"], ["html", { open: "never" }]] } : {}),
   use: { baseURL: "http://127.0.0.1:3000", trace: "retain-on-failure" },
