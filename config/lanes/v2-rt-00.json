@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-00": {
+      "branches": ["codex/sandbox/rt-00"],
+      "note": "RT-00 spoken-quote corpus runner and five seeds. HEAD_UNDER_TEST=b25b5ee931ff7bb62bbaa34a47099fddadf514ed. Tests and documentation only. The lane policy automatically permits this lane's own config/lanes/v2-rt-00.json; explicit register grants are forbidden.",
+      "allow": [
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/**"
+      ]
+    }
+  }
+}
