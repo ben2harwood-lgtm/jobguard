@@ -325,3 +325,33 @@ Final validation: `pnpm --dir apps/web exec tsc -p tsconfig.json --noEmit --incr
 PASS (also the web package's lint check); `git diff --check` PASS. Full build, unit, database,
 migration and model-eval suites were not run for this scoped test/documentation repair.
 Only the spec and this findings file are committed; `.pnpm-store/` is excluded.
+
+## RT-12 repair round 2 follow-up — Codex review, PR #1079
+
+Local base `37b6a3053`, branch `codex/sandbox/rt-12`. This is the same repair round.
+Each registered check now has its own soft assertion that its observed result remains failing.
+A repaired check fails with `Unexpected pass: <finding> (<check>)`, even while another finding
+in that journey remains open. Missing registered content checks, unregistered mismatches and
+harness errors still fail. F-005 has its own guard; no journey-wide `test.fail` remains.
+Expected values and finding registrations are unchanged.
+
+RT-12 now runs through `apps/web/playwright.rt12.config.ts`, which reuses the hosted settings
+and selects only this spec. The default hosted config selects only its two existing specs;
+neither existing hosted test was edited. The new config is in the RT-12 lane allow-list.
+The RT-12 origin and deployment-fingerprint guards remain in place.
+
+Commands actually run (Node 24.17.0; pnpm 10.28.1), all exit 0:
+
+```sh
+pnpm --dir apps/web typecheck
+JOBGUARD_HOSTED_URL=https://rt12-discovery.invalid pnpm --dir apps/web exec playwright test --list --config playwright.rt12.config.ts
+# 80 tests in 1 file: RT-12 only, both projects and both modes.
+JOBGUARD_HOSTED_URL=https://other-preview.invalid pnpm --dir apps/web exec playwright test --list --config playwright.hosted.config.ts
+# 4 tests in 2 files: HOSTED-preview-firm-start and SPOKEN-QUOTE-REAL, both projects.
+git diff --check
+```
+
+Discovery only: no browser or preview run, default Playwright config, server, deployment,
+push, paid API or customer data. The requested validation excludes full build, unit,
+database, migration and model-eval suites. No product code, contracts or migrations changed;
+this receipt supplies no new preview results or independent review. `.pnpm-store/` is excluded.

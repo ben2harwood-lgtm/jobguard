@@ -257,7 +257,7 @@ async function layout(page: Page) {
 }
 
 test.describe("RT-12 typed quotes on the hosted preview", () => {
-  test.skip(!process.env.JOBGUARD_HOSTED_URL, "Hosted only: use playwright.hosted.config.ts and JOBGUARD_HOSTED_URL");
+  test.skip(!process.env.JOBGUARD_HOSTED_URL, "Hosted only: use playwright.rt12.config.ts and JOBGUARD_HOSTED_URL");
   test.setTimeout(120_000);
   for (const mode of ["line-content", "layout-save"] as const) for (const quote of cases) test(`${quote.id} @${mode}`, async ({ page }, info) => {
     const layoutSaveOnly = mode === "layout-save";
@@ -395,13 +395,20 @@ test.describe("RT-12 typed quotes on the hosted preview", () => {
     check("page-crashes", [], crashes);
     const evidence = { case: quote.id, viewport: info.project.name, mode, checks, head: HEAD_UNDER_TEST, worker: WORKER, transcript: quote.words, expected: quote, actualRows, questions, saved, known, mismatches, harnessErrors };
     await info.attach("RT12-evidence", { body: JSON.stringify(evidence, (_key, value) => value instanceof RegExp ? value.source : value, 2), contentType: "application/json" });
-    expect(harnessErrors, "Test harness errors are not product findings").toEqual([]);
-    // Assert new mismatches before marking the known ones as expected failures.
+    expect.soft(harnessErrors, "Test harness errors are not product findings").toEqual([]);
+    // Check every finding independently: another mismatch must never hide an unexpected pass.
     const unknown = mismatches.filter(m => !findings[`${quote.id}/${info.project.name}/${m.key}`]);
-    expect(unknown, `Unregistered mismatch: ${JSON.stringify(unknown)}`).toEqual([]);
-    const registered = Object.entries(findings).filter(([key]) => key.startsWith(`${quote.id}/${info.project.name}/`) && (!layoutSaveOnly || checks.some(check => key === `${quote.id}/${info.project.name}/${check.key}`))).map(([, id]) => id);
-    const ids = [...new Set([...registered, ...(known.length && quote.known ? [quote.known] : [])])];
-    test.fail(ids.length > 0, ids.join(", "));
-    expect([...mismatches, ...known], JSON.stringify({ mismatches, known })).toEqual([]);
+    expect.soft(unknown, `Unregistered mismatch: ${JSON.stringify(unknown)}`).toEqual([]);
+    const prefix = `${quote.id}/${info.project.name}/`;
+    for (const [key, id] of Object.entries(findings)) {
+      if (!key.startsWith(prefix)) continue;
+      const observed = checks.find(check => key === `${prefix}${check.key}`);
+      if (layoutSaveOnly && !observed) continue; // Content checks run in @line-content.
+      expect.soft(observed, `${id}: registered check ${key} was not exercised`).toBeDefined();
+      if (observed) expect.soft(observed.pass, `Unexpected pass: ${id} (${key}); update the fixed finding`).toBe(false);
+    }
+    if (!layoutSaveOnly && quote.known) {
+      expect.soft(known, `Unexpected pass: ${quote.known}; update the fixed finding`).not.toEqual([]);
+    }
   });
 });

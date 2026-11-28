@@ -7,6 +7,7 @@
       "allow": [
         "apps/web/e2e/RT-12-right-place.spec.ts",
         "apps/web/playwright.hosted.config.ts",
+        "apps/web/playwright.rt12.config.ts",
         "docs/testing/spoken-quote-hardening/FINDINGS.md",
         "config/lanes/v2-rt-12.json"
       ]
