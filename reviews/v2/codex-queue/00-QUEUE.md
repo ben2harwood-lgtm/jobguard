@@ -111,6 +111,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D51 | Q86 | V2-C3C-UI "Your crew" screen + route over the existing C3C repository; picker lists new crew; dry-check whether G1 snags need part 2 (H1 B5) | **Opus** | v2/main + #1057 | none | T2 |
 | D52 | Q87 | V2-H1-DRY-2 rerun H1 on a train with #1095, #1104, Q85 (+Q86); findings only; 60 s waits | **Opus** | Q80 train rebuilt | none (check only) | T1 |
 | D53 | Q88 | V2-PAIR-1 every V2 jg_session route pairs; every V2 POST origin-gated (pre-existing P1 from #1060 desktop verdict); runs before Q86 PR | **Opus** | v2/main + #1057 | none | T2 security |
+| D54 | Q89 | V2-FL-JOB app.job v2_practice_firm lets imported (digest NULL) jobs through to every firm; fix once with owned-job walk (desktop P2 on #1104) | **Opus** | v2/main + #1057 | 2090 | T3 RED |
 
 > **K5 canonical line (planner, 28 Nov 15:58 UK):** trp08u-k5a1 (2012/2046/2071 → #1059, #1060, #1098, #1099) is the K5 line that lands. The sandbox line (codex/sandbox/v2-k5, #1031, 2070/2080) is not landed and nothing is ported from it; SYNC-1's renumber sets final numbers. Q83 built as #1047 (C6), #1098 (K5 FL + K5A-1), #1099 (catch-up); seed 74/74 with #1057.
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
