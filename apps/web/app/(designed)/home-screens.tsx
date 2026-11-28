@@ -135,8 +135,8 @@ function MoneyHome({ workspace }: { workspace: Workspace }) {
 }
 
 // ---------- More ----------
-export function DesignedMore() {
-  return <Screen title="Built to protect your profit." active="more">{workspace => <More workspace={workspace}/>}</Screen>;
+export function DesignedMore({ crew = false }: { crew?: boolean } = {}) {
+  return <Screen title="Built to protect your profit." active="more">{workspace => <More workspace={workspace} crew={crew}/>}</Screen>;
 }
 const BENEFITS: [string, string, string][] = [
   ["01", "Never miss work at the quote", "Type or paste the job, confirm the list and price it from your own numbers."],
@@ -150,7 +150,10 @@ const BENEFITS: [string, string, string][] = [
 const TOOLS = { proof: "Add a photo", extra: "Add extra work", final: "Prepare the final bill", fee: "See the fee example" } as const;
 const LINKS: [string, string][] = [["/demo-s", "Small-builder practice chooser"], ["/practice-company", "Practice company"], ["/practice-bank", "Practice bank"], ["/value", "Business value"], ["/plans", "Plans"], ["/meter", "Jobs on the go"], ["/things-to-check-report", "Things-to-check report"], ["/admin/contractor", "Contractor organisation practice"], ["/contractor/work-orders", "Contractor work orders"], ["/contractor/dashboard", "Contractor dashboard"], ["/classic", "The original home screen and guided tour"]];
 
-function More({ workspace }: { workspace: Workspace }) {
+// V2-C3C-UI: "Your crew" is listed only on the practice V2 stack, where its route exists.
+const CREW_LINK: [string, string] = ["/crew", "Your crew"];
+
+function More({ workspace, crew }: { workspace: Workspace; crew: boolean }) {
   const router = useRouter();
   const { jobs, failed } = useJobs(workspace.tenantId);
   const [tool, setTool] = useState<keyof typeof TOOLS | null>(null);
@@ -163,7 +166,7 @@ function More({ workspace }: { workspace: Workspace }) {
       {tool === "fee" && <div className="card-body" style={{ paddingTop: 0 }}><Note>The fee example needs a job whose quote has been accepted and started. If nothing appears below, no practice job has reached that step yet.</Note></div>}
     </Card></div>
     {tool && <div style={{ marginTop: 18 }}><Legacy label={TOOLS[tool]} cards>{tool === "proof" ? <ProofCapture close={close}/> : tool === "extra" ? <VariationFlow close={close}/> : tool === "final" ? <FinalAccount close={close}/> : <FeeStatement jobId={jobs?.[0]?.id ?? ""}/>}</Legacy></div>}
-    <div style={{ marginTop: 20 }}><Card title="Other practice views"><div className="work-list">{LINKS.map(([href, label]) => <div className="work-item" key={href}><div className="work-text"><strong>{label}</strong></div><a className="btn small" href={href}>Open →</a></div>)}</div>
+    <div style={{ marginTop: 20 }}><Card title="Other practice views"><div className="work-list">{(crew ? [CREW_LINK, ...LINKS] : LINKS).map(([href, label]) => <div className="work-item" key={href}><div className="work-text"><strong>{label}</strong></div><a className="btn small" href={href}>Open →</a></div>)}</div>
       <div className="card-body"><Note>This is a practice workspace with made-up records. Nothing here sends a real message, takes a payment or creates a JobGuard fee.</Note></div>
     </Card></div>
   </Shell>;
