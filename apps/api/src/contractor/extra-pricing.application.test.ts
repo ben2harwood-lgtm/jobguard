@@ -57,3 +57,16 @@ it("answers closed codes only, with HTTP statuses for the v2 refusals", () => {
   ["ALREADY_ON_ORDER", 409], ["STALE_REVISION", 409], ["COMMAND_CONFLICT", 409], ["INVALID_TRANSITION", 409], ["DATABASE_UNAVAILABLE", 503]] as const) expect(status(new db.ExtraApprovalError(code)).status).toBe(http);
  expect(status(Object.assign(new Error("relation app.secret does not exist"), { code: "42P01" }))).toEqual({ status: 503, body: { version: "extra-pricing-error.v1", code: "DATABASE_UNAVAILABLE" } });
 });
+
+it("an identical retry of a committed revision passes the identical command, so the receipt replays its stored answer", async () => {
+ // Review P2 (EP-CC-S1): the reason and answered request come only from the body, never from the extra's current state.
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const s = setup(), body = { version: "revise-extra.v2", commandId: crypto.randomUUID(), basis: sor, reason: "response_to_rejection", answersRequestId: crypto.randomUUID() };
+ const stored = { requestId: crypto.randomUUID(), basis: { netPence: 9650 } };
+ s.revise.mockResolvedValue(stored);
+ expect(await s.app.revise(s.principal, s.jobId, s.extraId, structuredClone(body))).toEqual(stored);
+ expect(await s.app.revise(s.principal, s.jobId, s.extraId, structuredClone(body))).toEqual(stored);
+ expect(s.revise).toHaveBeenCalledTimes(2);
+ expect(s.revise.mock.calls[1]).toEqual(s.revise.mock.calls[0]);
+ await s.pool.end();
+});

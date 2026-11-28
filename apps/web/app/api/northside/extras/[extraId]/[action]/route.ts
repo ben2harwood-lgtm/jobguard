@@ -20,8 +20,11 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
     const boundSchema = z.object({ ...common, requestId: z.guid({ error: "Invalid uuid" }), revisionHash: z.string().regex(/^[a-f0-9]{64}$/u), netPence: z.number().int().positive().max(1_000_000_000_000), stepIndex: z.number().int().nonnegative().optional() }).strict();
     const rejectSchema = boundSchema.extend({ stepIndex: z.number().int().min(0).max(20), reasonCode: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u) });
     const withdrawSchema = z.object({ ...common, reasonCode: z.enum(["not_done", "raised_in_error", "resident_cancelled", "already_on_order"]) }).strict();
-    const body = action === "price" || action === "revise"
-      ? parseDemoBody(z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict(), await bodyOf(request))
+    const priceSchema = z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict();
+    // A revision names the request it answers (the one on screen), so an identical HTTP retry rebuilds the identical command.
+    const reviseSchema = priceSchema.extend({ requestId: z.guid({ error: "Invalid uuid" }) }).strict();
+    const body = action === "price" ? parseDemoBody(priceSchema, await bodyOf(request))
+      : action === "revise" ? parseDemoBody(reviseSchema, await bodyOf(request))
       : action === "reject" ? parseDemoBody(rejectSchema, await bodyOf(request))
       : action === "withdraw" ? parseDemoBody(withdrawSchema, await bodyOf(request))
       : action === "approve" || action === "send" ? parseDemoBody(boundSchema, await bodyOf(request))
@@ -34,15 +37,18 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
     const current = async () => { const found = (await northsideExtras(pool, member, role, tenant)).find(x => x.extraId === extraId && x.jobId === jobId); if (!found) throw new DemoError("NOT_FOUND", 404); return found; };
     if (action === "revise") {
       if (role !== "surveyor") throw new DemoError("PERMISSION_DENIED", 403);
-      const price = parseDemoBody(z.object({ ...common, quantity: z.number().int().min(1).max(1000), sorCode: z.string().min(1).max(100) }).strict(), body);
+      const price = parseDemoBody(reviseSchema, body), answersRequestId = uuid(price.requestId);
       if (!await covered(jobId)) throw new DemoError("PERMISSION_DENIED", 403);
       // Pricing contract v2: the database prices the rate code from the bound rate list and tendered adjustment, and records why the price
-      // changed and which request it answers (the one on screen). A rejection is answered as response_to_rejection; otherwise the
-      // surveyor's re-measure is quantity_corrected. No money is computed here.
-      const extra = await current();
-      if (extra.requestId === null) throw new DemoError("INVALID_TRANSITION", 409);
+      // changed and which request it answers. Both come only from the request the browser sent and that request's own recorded outcome,
+      // which never changes once decided; never from the extra's current state, which a successful revision moves on. So an identical
+      // retry of a committed revision sends the identical command and replays its stored answer. No money is computed here.
+      const answered = await withTenant(pool, tenant, async db => (await db.$client.query<{ kind: string | null }>(
+        `SELECT o.kind FROM app.extra_approval_request q LEFT JOIN app.extra_approval_outcome o ON(o.tenant_id,o.request_id)=(q.tenant_id,q.id)
+         WHERE q.tenant_id=$1 AND q.id=$2 AND q.job_id=$3 AND q.variation_id=$4`, [tenant.tenantId, answersRequestId, jobId, extraId])).rows[0]);
+      if (!answered) throw new DemoError("NOT_FOUND", 404);
       const result = await repo.reviseExtra(tenant, member, { version: "revise-extra.v2", commandId, jobId, extraId, basis: { kind: "server_sor", sorCode: price.sorCode, claimedQuantity: String(price.quantity) },
-        reason: extra.outcome === "rejected" ? "response_to_rejection" : "quantity_corrected", answersRequestId: extra.requestId });
+        reason: answered.kind === "rejected" ? "response_to_rejection" : "quantity_corrected", answersRequestId });
       return json({ version: "northside-revised.v1", environment: "synthetic_demo", realExternalActions: 0, netPence: (result.basis as { netPence: number }).netPence, result });
     }
     if (action === "withdraw") {

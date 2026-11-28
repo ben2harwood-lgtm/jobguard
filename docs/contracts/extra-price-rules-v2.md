@@ -119,4 +119,4 @@ Failures use `extra-pricing-error.v1` with a closed code. Statuses:
 | 503 | database unavailable |
 | 409 | anything else |
 
-The Northside practice routes now send a `server_sor` basis (rate code plus measured quantity) and show the database's net. They compute no money. A practice revision answers the request on screen, as `response_to_rejection` after a rejection and as `quantity_corrected` otherwise.
+The Northside practice routes now send a `server_sor` basis (rate code plus measured quantity) and show the database's net. They compute no money. A practice revision names the request it answers in its body (the one on screen). Its reason follows that request's own recorded outcome: `response_to_rejection` after a rejection, `quantity_corrected` otherwise. Nothing is read from the extra's current state, so an identical retry of a committed revision rebuilds the identical command and replays its stored answer.

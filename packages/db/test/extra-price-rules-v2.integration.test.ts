@@ -191,7 +191,14 @@ describe("revise-extra.v2", () => {
     const row = (await basisRows(extraId)).find(r => r.revision === 2)!;
     expect(row).toMatchObject({ command_version: "revise-extra.v2", revision_reason: "response_to_rejection", revision_note: "Fictional: client says one door only", answers_request_id: first.requestId, net_pence: "9650", priced_quantity: "1" });
     expect(await history()).toEqual(before);
+    // An identical retry after success replays the stored answer although the extra has moved on to the new, undecided request
+    // (the command names the request it answered, never the current one); the same id answering the new request conflicts.
+    const latestNow = (await c.admin.query("SELECT id FROM app.extra_approval_request WHERE variation_id=$1 ORDER BY request_revision DESC LIMIT 1", [extraId])).rows[0].id;
+    expect(latestNow).toBe(revised.requestId);
+    const receiptsBefore = (await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1", [w.p.tenantId])).rows[0].n;
     expect(await repo.reviseExtra(await as(surveyor()), surveyor(), input)).toEqual(revised);
+    expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1", [w.p.tenantId])).rows[0].n).toBe(receiptsBefore);
+    expect(await code(repo.reviseExtra(await as(surveyor()), surveyor(), { ...input, answersRequestId: latestNow, reason: "quantity_corrected" }))).toBe("COMMAND_CONFLICT");
     expect(await code(repo.reviseExtra(await as(surveyor()), surveyor(), { ...input, reason: "pricing_error" }))).toBe("COMMAND_CONFLICT");
     // The read shows the origin capture's recorded basis and the revision's reason.
     const read = await repo.pricingBasis(await as(supervisor()), supervisor(), { version: "extra-pricing-basis-query.v1", jobId, extraId });

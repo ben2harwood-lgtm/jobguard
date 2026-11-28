@@ -23,6 +23,7 @@
         "apps/web/e2e/ENT-11a.spec.ts",
         "apps/web/e2e/ENT-11b-presenter.spec.ts",
         "apps/web/e2e/ENT-11b.spec.ts",
+        "apps/web/e2e/ENT-5-chain-actions.spec.ts",
         "apps/web/next-env.d.ts",
         "docs/contracts/extra-approval-chain-v1.md",
         "docs/contracts/extra-approval-v1.md",

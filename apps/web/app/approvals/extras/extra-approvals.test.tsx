@@ -47,7 +47,7 @@ const rates = [
   { code: "FICTIONAL-B", description: "Fictional fitting", unit: "fitting", ratePence: 1234 },
 ];
 async function mount(state = "approved", role = "surveyor", availableRates = rates, refusal?: string) {
-  const extra = { extraId: "fictional-extra", jobId: "fictional-job", orderReference: "FICTIONAL-169", description: "Extra fitting", note: "Practice only", state, outcome: state === "logged" ? null : state, quotedPence: state === "logged" ? null : 1000, netPence: state === "logged" ? null : 1000, requestId: null, revisionHash: null, steps: [], nextStepIndex: null, nextStepRole: null, clientRequired: false, linkIssued: false, linkClosed: null, hasPhoto: false, residentConfirmed: false };
+  const extra = { extraId: "fictional-extra", jobId: "fictional-job", orderReference: "FICTIONAL-169", description: "Extra fitting", note: "Practice only", state, outcome: state === "logged" ? null : state, quotedPence: state === "logged" ? null : 1000, netPence: state === "logged" ? null : 1000, requestId: state === "logged" ? null : "fictional-request", revisionHash: null, steps: [], nextStepIndex: null, nextStepRole: null, clientRequired: false, linkIssued: false, linkClosed: null, hasPhoto: false, residentConfirmed: false };
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
     if (options?.method === "POST") {
@@ -77,7 +77,7 @@ it.each(["approved", "rejected"])("shows the measure and posts a surveyor's %s r
   expect(text(render())).toContain("The server prices it from the rate card, beyond the order, with the tendered adjustment.");
   expect(form.button().props.disabled).toBe(false);
   form.button().props.onClick!(); await settle();
-  expect(form.posts).toEqual([{ url: "/api/northside/extras/fictional-extra/revise", body: { version: "northside-command.v1", jobId: "fictional-job", commandId: expect.any(String), sorCode: "FICTIONAL-B", quantity: 3 } }]);
+  expect(form.posts).toEqual([{ url: "/api/northside/extras/fictional-extra/revise", body: { version: "northside-command.v1", jobId: "fictional-job", commandId: expect.any(String), sorCode: "FICTIONAL-B", quantity: 3, requestId: "fictional-request" } }]);
   expect(text(render())).toContain("Price revised. A new approval request was created.");
 });
 
