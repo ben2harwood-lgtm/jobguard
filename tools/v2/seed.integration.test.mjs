@@ -1414,21 +1414,21 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
     version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
     accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
     tasks: [
-      { position: 1, scopeItemId: tilingId, taskKey: "prepare-splashback", title: "Prepare the splashback surface",
+      { position: 1, scopeItemId: tilingId, taskKey: "tiling-prepare", title: "Prepare the surface",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"),
+        durationMinutes: 60, visit: visit("tiling-prepare"), owner: assignee("tiling-prepare"),
         proofNeeded: ["Photo of the prepared surface"] },
-      { position: 2, scopeItemId: tilingId, taskKey: "tile-splashback", title: "Fit and grout the splashback",
+      { position: 2, scopeItemId: tilingId, taskKey: "tiling-tile", title: "Tile and grout",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"),
-        proofNeeded: ["Photo of the finished splashback"] },
+        durationMinutes: 240, visit: visit("tiling-tile"), owner: assignee("tiling-tile"),
+        proofNeeded: ["Photo of the finished tiling"] },
     ],
     photos: [{ evidenceId: tilerPhoto, scopeItemId: tilingId, contentType: "image/jpeg" }],
-    proofNeeded: ["Photo of the prepared surface", "Photo of the finished splashback"],
+    proofNeeded: ["Photo of the prepared surface", "Photo of the finished tiling"],
   });
   const decorator = await crewBriefs.generate(jobId, command("decorator", { photoIds: [hallPhoto] }));
   assert.deepEqual(decorator.content.tasks.map(task => task.title),
-    ["Protect and prepare the hall", "Paint the hall walls and trim"]);
+    ["Protect and prepare", "Paint and finish"]);
   assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
   assert.deepEqual(decorator.content.tasks.map(task => task.scopeItemId), [decoratingId, decoratingId]);
   // Each brief task carries the plan task's key, so progress can name the exact task.
@@ -1486,7 +1486,7 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
 
   // A plan change leaves the stored brief intact but no longer current.
   const plan = await workPlan.read(jobId, planQuery);
-  const task = plan.tasks.find(item => item.trade === "tiler" && item.key === "tile-splashback");
+  const task = plan.tasks.find(item => item.trade === "tiler" && item.key === "tiling-tile");
   await workPlan.edit(jobId, planEdit(plan, task, { scheduledDate: "2026-12-10" }));
   const [stale] = await reopened.read(jobId, { ...briefQuery, trade: "tiler" });
   assert.deepEqual(stale, { ...revised, current: false });
@@ -1780,9 +1780,9 @@ test("D5B-B with C3C: a brief shows the assigned crew record's name and goes out
   const alex = await crew.record(crewCommand({ displayName: "Alex Fictional", phone: "07700900789" }));
   const assign = async assigneeRef => {
     const plan = await workPlan.read(jobId, planQuery);
-    await workPlan.edit(jobId, planEdit(plan, plan.tasks.find(task => task.key === "tile-splashback"), { assigneeRef }));
+    await workPlan.edit(jobId, planEdit(plan, plan.tasks.find(task => task.key === "tiling-tile"), { assigneeRef }));
   };
-  const owner = brief => brief.content.tasks.find(task => task.taskKey === "tile-splashback").owner;
+  const owner = brief => brief.content.tasks.find(task => task.taskKey === "tiling-tile").owner;
   await assign(sam.crewId);
   const forSam = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: (await latest())?.version ?? 0 }));
   assert.equal(owner(forSam), "Sam Fictional");
