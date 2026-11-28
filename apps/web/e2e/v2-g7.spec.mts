@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import { createWorkspaceApplication } from "../../api/dist/workspace/index.js";
+import { authenticatePracticeSession, withTenant } from "../../../packages/db/dist/index.js";
 import { validateSettings } from "../../../tools/v2/settings.mjs";
 
 test.skip(!process.env.V2_TEST_ORIGIN, "Requires the running V2 launcher.");
@@ -71,9 +72,22 @@ test.beforeAll(async ({ browser }) => {
     const pool = new Pool({ connectionString: validateSettings({}).settings.DATABASE_URL, max: 1 });
     try {
       crewName = `Jordan Featherstonehaugh-Cholmondeley ${randomUUID().slice(0, 4)}`;
-      await createWorkspaceApplication({ pool, sessionId: ownerState.cookies.find(cookie => cookie.name === "jg_session")!.value })
+      const sessionId = ownerState.cookies.find(cookie => cookie.name === "jg_session")!.value;
+      await createWorkspaceApplication({ pool, sessionId })
         .crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(), expectedRevision: 0,
           displayName: crewName, trade: "joiner", phone: "07700 900611", email: null });
+      // No V2 command completes site work yet; release needs it. Main's transition, as this practice session (as the G3 seed does).
+      const { context } = await authenticatePracticeSession(pool, sessionId);
+      await withTenant(pool, context, async db => {
+        const { rows } = await db.$client.query<{ id: string; stage: string; revision: number }>(`SELECT scope_item_id AS id, stage, revision
+          FROM app.scope_progress WHERE job_id=$1 AND stage<>'complete'`, [jobId]);
+        for (const { id, stage, revision } of rows) {
+          if (stage === "not_started") await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'in_progress','start')",
+            [tenantId, jobId, id, revision]);
+          await db.$client.query("SELECT app.transition_scope_progress($1,$2,$3,$4,'complete','complete')",
+            [tenantId, jobId, id, revision + (stage === "not_started" ? 1 : 0)]);
+        }
+      });
     } finally { await pool.end(); }
   } finally { await owner.close(); }
 });
@@ -154,12 +168,14 @@ test("Handover: no draft, then a saved version, then the customer's pack current
         await screen.getByRole("button", { name: "Save this version" }).click();
         await page.reload();
         await page.getByTestId("handover-releases").getByRole("button", { name: /^Release this version · version \d+$/u }).first().click();
+        // The new link shows once the release is saved (the history line below can already say "newer" from an earlier round).
+        await expect(page.getByTestId("handover-releases").getByTestId("handover-link")).toBeVisible();
         await expect(page.getByTestId("handover-releases")).toContainText("a newer version was released");
         await pack.reload();
         const alert = view.getByRole("alert");
         await expect(alert).toContainText("Newer version available");
-        // First in the pack content itself (CustomerPack's form), after the page header.
-        expect(await view.locator(".form > :first-child").first().getAttribute("role")).toBe("alert");
+        // First in the pack content itself (CustomerPack's form), after the page header: nothing comes before it.
+        expect(await view.getByTestId("handover-newer").evaluate(node => node.getAttribute("role") === "alert" && !node.previousElementSibling)).toBe(true);
         await phoneReady(pack, view, `pack older ${width}`);
         expect(await view.innerText()).not.toMatch(/£|pence/iu);
         await shot(pack, "pack-older", width);
