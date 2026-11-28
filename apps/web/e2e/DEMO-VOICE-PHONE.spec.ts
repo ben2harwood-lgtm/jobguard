@@ -11,7 +11,7 @@ async function observe(context:BrowserContext){
   context.on("page",p=>p.on("websocket",socket=>sockets.push(socket.url())));
   return {requests,sockets};
 }
-const button = "Talk through the example";
+const button = "Talk through a quote";
 test("real worker recognises fictional microphone audio locally, reviews and saves the guided draft",async({page,context,browser},info)=>{
   const observed=await observe(context);
   page.on("websocket",socket=>observed.sockets.push(socket.url()));
@@ -90,7 +90,7 @@ test("no getUserMedia gives a plain typed fallback without model requests",async
   await page.goto("/practice-company/walkthrough");
   await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
   await page.getByRole("button",{name:button,exact:true}).click();
-  await expect(page.getByText("On-device voice is unavailable in this browser. Type or use the example.",{exact:true})).toBeVisible();
+  await expect(page.getByText("Voice doesn't work in this browser. Type the job below. It works the same way.",{exact:true})).toBeVisible();
   await page.getByLabel("Work details").fill("Fictional typed work remains editable");
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed work remains editable");
   expect(observed.requests.filter(r=>r.url.includes("/local-speech/"))).toEqual([]);
@@ -103,7 +103,7 @@ test("a model download failure preserves typed work",async({page})=>{
   await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
   await page.getByLabel("Work details").fill("Fictional typed draft");
   await page.getByRole("button",{name:button,exact:true}).click();
-  await expect(page.getByText("Microphone unavailable. You can type instead.",{exact:true})).toBeVisible({timeout:60_000});
+  await expect(page.getByText("The microphone stopped. Your words so far are kept. You can try again or type.",{exact:true})).toBeVisible({timeout:60_000});
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed draft");
 });
 
@@ -117,7 +117,7 @@ test("a same-size WASM hash mismatch preserves typing before any model download"
   await page.getByRole("region",{name:"Guided walkthrough"}).getByRole("button",{name:"I'll do it",exact:true}).click();
   await page.getByLabel("Work details").fill("Fictional typed work survives a corrupt download");
   await page.getByRole("button",{name:button,exact:true}).click();
-  await expect(page.getByText("Microphone unavailable. You can type instead.",{exact:true})).toBeVisible({timeout:60_000});
+  await expect(page.getByText("The microphone stopped. Your words so far are kept. You can try again or type.",{exact:true})).toBeVisible({timeout:60_000});
   await expect(page.getByLabel("Work details")).toHaveValue("Fictional typed work survives a corrupt download");
   expect(observed.requests.filter(r=>/\/model\.part-/u.test(r.url))).toEqual([]);
 });

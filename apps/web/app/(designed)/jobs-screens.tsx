@@ -55,8 +55,7 @@ export function DesignedNewJob() {
 function NewJob({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
-    <Head kicker="NEW JOB" title="Describe the work" text="Type or paste what you plan to do. You can check and change everything before a quote."/>
-    <Legacy label="Start a new job" cards><WalkIt mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
+    <WalkIt designed mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/>
   </Shell>;
 }
 
@@ -222,7 +221,8 @@ function WorkTab({ plan, children }: { plan?: ReactNode; children?: ReactNode })
   return <>
     <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
     {plan}
-    <Legacy label="Job workspace" cards>{children}</Legacy>
+    {/* V2-SQ-I-1 (copied from #918): the work page wraps its own legacy panels, so its designed cards are not inside one. */}
+    <section className="job-work-tools" aria-label="Job workspace">{children}</section>
   </>;
 }
 
@@ -235,7 +235,8 @@ export function MoneyTab({ value, facts, children }: { value: JobValue | null; s
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>
-    <div style={{ marginTop: 19 }}><Legacy label="Job money trail" cards>{children}</Legacy></div>
+    {/* V2-SQ-I-3 (copied from #918): the money panels sit outside the legacy block; the money page wraps the mapped value receipt in its own. */}
+    <div className="designed-money-stack">{children}</div>
   </>;
 }
 

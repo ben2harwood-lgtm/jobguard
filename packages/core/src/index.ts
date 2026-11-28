@@ -198,3 +198,4 @@ export * from "./offline-upload-contract.js";
 export * from "./v2-close-out.js";
 export * from "./snag.js";
 export * from "./v2-handover-pack.js";
+export * from "./job-understanding.js";

@@ -1,7 +1,8 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalkIt } from "./jobguard-app";
-import { LocalDictation, type LocalSpeechAdapter } from "./local-dictation";
+import { cancelLocalSpeech, createLocalSpeechAdapter } from "./local-speech";
+import { dictationMessage, LocalDictation, speechFailure, type LocalAvailability, type LocalSpeechAdapter } from "./local-dictation";
 
 // Exercise the real component's handlers using the established review-proposal harness.
 const hooks = vi.hoisted(() => {
@@ -165,7 +166,7 @@ it.each(["Stop listening", "Cancel dictation"])("keeps %s usable during a pendin
   };
   const speechButton = (label: string) => all(dictation(), node => node.type === "button" && text(node.props.children) === label)[0]!;
   dictation(); await flush();
-  speechButton("Talk through the example").props.onClick(); await flush();
+  speechButton("Talk through a quote").props.onClick(); await flush();
   callbacks.final(editedSource, "fictional-speech-1");
   expect(adapter.start).toHaveBeenCalledTimes(1);
   p.button(p.render()).props.onClick();
@@ -181,13 +182,13 @@ it.each(["Stop listening", "Cancel dictation"])("keeps %s usable during a pendin
   expect(speechButton(control).props.disabled).not.toBe(true);
   speechButton(control).props.onClick();
   expect(control === "Stop listening" ? stop : cancel).toHaveBeenCalledTimes(1);
-  expect(speechButton("Talk through the example").props.disabled).toBe(true);
-  speechButton("Talk through the example").props.onClick();
+  expect(speechButton("Talk through a quote").props.disabled).toBe(true);
+  speechButton("Talk through a quote").props.onClick();
   expect(adapter.start).toHaveBeenCalledTimes(1);
   release(); await flush();
   expect(server.saved.size).toBe(1);
   expect(server.requests[0]!.source).toMatchObject({ kind: "text", text: firstSource });
-  expect(speechButton("Talk through the example").props.disabled).toBe(false);
+  expect(speechButton("Talk through a quote").props.disabled).toBe(false);
   if (control === "Stop listening") {
     expect(speechButton("Use these words").props.disabled).toBe(false);
     speechButton("Use these words").props.onClick();
@@ -217,12 +218,12 @@ it("does not install a speech model while a capture is pending", async () => {
   };
   dictation(); await flush();
   p.button(p.render()).props.onClick();
-  const button = all(dictation(), node => node.type === "button" && text(node.props.children) === "Install on-device voice")[0]!;
+  const button = all(dictation(), node => node.type === "button" && text(node.props.children) === "Talk through a quote")[0]!;
   expect(button.props.disabled).toBe(true);
   button.props.onClick(); await flush();
   expect(install).not.toHaveBeenCalled();
   release(new Response(JSON.stringify({ code: "DATABASE_UNAVAILABLE" }), { status: 503 })); await flush();
-  const enabled = all(dictation(), node => node.type === "button" && text(node.props.children) === "Install on-device voice")[0]!;
+  const enabled = all(dictation(), node => node.type === "button" && text(node.props.children) === "Talk through a quote")[0]!;
   expect(enabled.props.disabled).toBe(false);
 });
 
@@ -236,4 +237,91 @@ it("keeps source and gives a recovery step for a typed conflict instead of invit
   expect(text(p.render())).not.toContain("DATABASE_UNAVAILABLE");
   expect(text(p.render())).not.toContain("change it or try again");
   expect(p.button(p.render()).props.disabled).toBe(false);
+});
+
+// V2-SQ1: "Talk through a quote" asks for the microphone, loads the model and listens in one press.
+function soloDictation(adapter: LocalSpeechAdapter | null, props: Partial<React.ComponentProps<typeof LocalDictation>> = {}) {
+  if (adapter) vi.stubGlobal("window", { __JOBGUARD_SPEECH_ADAPTER__: adapter });
+  const render = () => { hooks.render("solo"); return LocalDictation({ onUse: () => {}, ...props }); };
+  const button = (label = props.startLabel ?? "Talk through a quote") => all(render(), node => node.type === "button" && text(node.props.children) === label)[0];
+  return { render, button };
+}
+function fakeAdapter(availability: LocalAvailability, install: LocalSpeechAdapter["install"] = async () => true) {
+  return {
+    configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+    available: async () => availability, install: vi.fn(install),
+    start: vi.fn(() => ({ stop: vi.fn(), cancel: vi.fn() })),
+  } satisfies LocalSpeechAdapter;
+}
+
+it("gives each microphone failure its own message, and says how to allow a refused one", () => {
+  expect(dictationMessage("denied")).toBe("JobGuard can't use your microphone. To allow it, open this site's settings from the address bar, allow Microphone, then press Talk through a quote again. You can type the job below instead.");
+  expect(dictationMessage("no_microphone")).toBe("No microphone found. You can type the job below instead.");
+  expect(dictationMessage("no_speech")).toBe("We didn't hear anything. Press Talk through a quote to try again, or type below.");
+  expect(dictationMessage("unsupported")).toBe("Voice doesn't work in this browser. Type the job below. It works the same way.");
+  expect(dictationMessage("failed")).toBe("The microphone stopped. Your words so far are kept. You can try again or type.");
+  for (const [name, code] of [["NotAllowedError", "denied"], ["SecurityError", "denied"], ["NotFoundError", "no_microphone"],
+    ["OverconstrainedError", "no_microphone"], ["AbortError", "failed"]] as const) expect(speechFailure(new DOMException("x", name))).toBe(code);
+  expect(speechFailure(new Error("worker"))).toBe("failed");
+});
+
+it.each(["downloadable", "installed"] as const)("one press starts listening when the voice model is %s", async availability => {
+  const adapter = fakeAdapter(availability), solo = soloDictation(adapter);
+  solo.render(); await flush();
+  expect(solo.button()!.props.disabled).toBe(false);
+  solo.button()!.props.onClick(); await flush();
+  expect(adapter.install).toHaveBeenCalledTimes(availability === "downloadable" ? 1 : 0);
+  expect(adapter.start).toHaveBeenCalledTimes(1);
+  expect(text(solo.render())).toContain("Listening on this device");
+  expect(solo.button()!.props.disabled).toBe(true);
+  expect(all(solo.render(), node => node.type === "button" && text(node.props.children) === "Install on-device voice")).toEqual([]);
+});
+
+it("is disabled while a draft is saving, and an unsupported browser says to type instead", async () => {
+  const pending = soloDictation(fakeAdapter("downloadable"), { applyDisabled: true });
+  pending.render(); await flush();
+  expect(pending.button()!.props.disabled).toBe(true);
+  hooks.reset();
+  const unsupported = soloDictation(fakeAdapter("unavailable"));
+  unsupported.render(); await flush();
+  expect(unsupported.button()!.props.disabled).toBe(true);
+  expect(text(unsupported.render())).toContain(dictationMessage("unsupported"));
+});
+
+it.each([["NotAllowedError", "denied"], ["NotFoundError", "no_microphone"]] as const)("a microphone %s gives the %s message and can be pressed again", async (name, code) => {
+  const adapter = fakeAdapter("downloadable", async () => { throw new DOMException("refused", name); }), solo = soloDictation(adapter);
+  solo.render(); await flush();
+  solo.button()!.props.onClick(); await flush();
+  expect(adapter.start).not.toHaveBeenCalled();
+  expect(text(solo.render())).toContain(dictationMessage(code));
+  expect(solo.button()!.props.disabled).toBe(false);
+  solo.button()!.props.onClick(); await flush();
+  expect(adapter.install).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the extra-work screen's own button label and uses it in its messages", async () => {
+  const solo = soloDictation(fakeAdapter("downloadable", async () => { throw new DOMException("refused", "NotAllowedError"); }), { startLabel: "Talk through the example" });
+  solo.render(); await flush();
+  expect(solo.button("Talk through a quote")).toBeUndefined();
+  solo.button()!.props.onClick(); await flush();
+  expect(text(solo.render())).toContain("then press Talk through the example again");
+});
+
+// Codex review on #1002: Cancel while the voice model loads must settle the install, or every later press is ignored.
+it("cancelling while the on-device model loads settles the install so it can be tried again", async () => {
+  const track = { stop: vi.fn() };
+  class SilentWorker { onmessage: unknown; onerror: unknown; onmessageerror: unknown; postMessage() {} terminate = vi.fn(); }
+  class Context { sampleRate = 16000; resume() { return Promise.resolve(); } close() { return Promise.resolve(); } }
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track] }) } });
+  vi.stubGlobal("window", { AudioContext: Context });
+  vi.stubGlobal("AudioContext", Context);
+  vi.stubGlobal("Worker", SilentWorker);
+  try {
+    const adapter = createLocalSpeechAdapter(() => {})!;
+    const install = adapter.install();
+    await new Promise(resolve => setTimeout(resolve, 0)); // the microphone is granted and the model is loading
+    cancelLocalSpeech(adapter);
+    await expect(install).rejects.toThrow("Local speech cancelled");
+    expect(track.stop).toHaveBeenCalled();
+  } finally { vi.unstubAllGlobals(); }
 });

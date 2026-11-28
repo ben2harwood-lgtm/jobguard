@@ -1,7 +1,7 @@
 import type { PilotJobAccess } from "../workspace/pilot-job-access.js";
 import { requirePilotG1 } from "@jobguard/config";
 import { PracticeAccess } from "../practice-access.js";
-import type{Pool}from"pg";import { DEMO_MEMBERSHIP_ID, isBlankPracticeCompany, QuoteConflictError, QuoteScopeRevisionError, QuoteRepository, QuoteDeliveryRepository, PilotQuoteDeliveryRepository, QuoteAcceptanceRepository, PracticeActivationRepository, JobPartiesRepository } from "@jobguard/db";import{pilotQuotePreviewCommandV1,quoteDraftCommandV1,quotePreviewCommandV1,quoteSendCommandV1,quoteExecuteCommandV1,quoteAcceptanceCommandV1,quoteDispositionCommandV1,practiceActivationCommandV1,type QuoteWorkspaceResponse}from"./contracts.js";
+import type{Pool}from"pg";import { DEMO_MEMBERSHIP_ID, isBlankPracticeCompany, QuoteConflictError, QuoteLayoutError, QuoteScopeRevisionError, QuoteRepository, QuoteDeliveryRepository, PilotQuoteDeliveryRepository, QuoteAcceptanceRepository, PracticeActivationRepository, JobPartiesRepository } from "@jobguard/db";import{pilotQuotePreviewCommandV1,quoteDraftCommandV1,quotePreviewCommandV1,quoteSendCommandV1,quoteExecuteCommandV1,quoteAcceptanceCommandV1,quoteDispositionCommandV1,practiceActivationCommandV1,type QuoteWorkspaceResponse}from"./contracts.js";
 
 export class QuoteApplicationError extends Error{constructor(readonly code:"INVALID_QUOTE"|"NOT_FOUND"|"QUOTE_REVISION_CONFLICT"){super(code)}}
 export class QuoteApplication{ private readonly access: PracticeAccess; private repo;private delivery;private acceptance;private activation;private parties;constructor(private readonly pool:Pool, sessionId?: string, private readonly pilot?: PilotJobAccess){this.access = new PracticeAccess(pool, sessionId);this.parties=new JobPartiesRepository(pool);this.repo=new QuoteRepository(pool);this.delivery=new QuoteDeliveryRepository(pool);this.acceptance=new QuoteAcceptanceRepository(pool);this.activation=new PracticeActivationRepository(pool)}private async principal(jobId: string, write = false) {
@@ -13,18 +13,21 @@ async get(jobId: string): Promise<QuoteWorkspaceResponse> {
   const actor = await this.principal(jobId);
   const value = await this.repo.readWorkspace(actor.context, jobId);
   if (value.scope.length === 0) throw new QuoteApplicationError("NOT_FOUND");
-  return { version: 1, environment: this.pilot ? "pilot_no_charge" : "synthetic_demo", jobId, ...value } as QuoteWorkspaceResponse;
+  return { version: 1, environment: this.pilot ? "pilot_no_charge" : "synthetic_demo", jobId, roomLayout: process.env.JOBGUARD_LOCAL_V2 === "1", ...value } as QuoteWorkspaceResponse;
 }
 async save(jobId: string, raw: unknown) {
   const actor = await this.principal(jobId, true);
   const parsed = quoteDraftCommandV1.safeParse(raw);
   if (!parsed.success) throw new QuoteApplicationError("INVALID_QUOTE");
   try {
-    await this.repo.saveDraft(actor.context, { jobId, ...parsed.data, effectiveAt: new Date(), pilot: Boolean(this.pilot), actorRef: this.pilot ? `membership:${actor.membershipId}` : DEMO_MEMBERSHIP_ID });
+    // V2-SQ-E: the room layout is kept only where the V2 table exists; elsewhere the quote saves as before.
+    const { sections, ...command } = parsed.data;
+    await this.repo.saveDraft(actor.context, { jobId, ...command, ...(process.env.JOBGUARD_LOCAL_V2 === "1" && sections ? { sections } : {}), effectiveAt: new Date(), pilot: Boolean(this.pilot), actorRef: this.pilot ? `membership:${actor.membershipId}` : DEMO_MEMBERSHIP_ID });
     return this.get(jobId);
   } catch (error) {
     if (error instanceof QuoteScopeRevisionError) throw new QuoteApplicationError("INVALID_QUOTE");
     if (error instanceof QuoteConflictError) throw new QuoteApplicationError("QUOTE_REVISION_CONFLICT");
+    if (error instanceof QuoteLayoutError) throw new QuoteApplicationError("INVALID_QUOTE");
     throw error;
   }
 }

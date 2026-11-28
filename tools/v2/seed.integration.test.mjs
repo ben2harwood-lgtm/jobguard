@@ -6,7 +6,7 @@ import { after, before, test } from "node:test";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
-import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
+import { M1_QUOTE_POLICY, quoteDocumentV1, renderQuotePdf } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
 // V2-G3
 import { HandoverReleaseRepository, authorizePracticeJob, practiceMaterialPool } from "../../packages/db/dist/index.js";
@@ -19,6 +19,8 @@ import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
 // V2-F8
 import { SiteAttendanceRepository } from "../../packages/db/dist/index.js";
+// V2-SQ-E
+import { QuoteDeliveryRepository, QuoteDocumentRepository } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -3989,6 +3991,175 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   const before = await policies();
   await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   assert.deepEqual(await policies(), before);
+});
+
+// V2-SQ-E: the quote laid out by room. Rooms come from the review; the quote stores each room's display.
+const sqeRooms = [["Strip out the bathroom", "Bathroom", "£500.00"], ["Tile the bathroom walls", "Bathroom", "£800.00"],
+  ["Fit the kitchen worktop", "Kitchen", "£450.00"], ["Replace the kitchen shelves", "Kitchen", "£90.00"],
+  ["Paint the hallway", "Hallway", "£300.00"], ["Fit the hallway skirting", "Hallway", "£120.00"]];
+const sqeLayout = (bathroom = "room_total") => ids => [
+  { name: "Bathroom", mode: bathroom, scopeItemIds: [ids[0], ids[1]] },
+  { name: "Kitchen", mode: "itemised", scopeItemIds: [ids[2]] },
+  { name: "Hallway", mode: "itemised", scopeItemIds: [ids[4], ids[5]] }];
+async function sqeQuote(localPart = "builder") {
+  const { sessionId } = await signIn(localPart);
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  const saved = await app.capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(), fixtureId: "v2-sq-e-rooms",
+    source: { kind: "text", text: ["JOB: Three fictional rooms",
+      ...sqeRooms.map(([description, , rate]) => `ITEM: ${description} | QTY: 1 | UNIT: job | RATE: ${rate}`)].join("\n") },
+  });
+  const review = await app.capture.save(saved.jobId, {
+    contractVersion: "proposal_review_command_v1", expectedRevision: 0,
+    review: { version: "proposal_review_v1", jobId: saved.jobId, proposalId: saved.proposalId, reviewId: saved.reviewId, revision: 0,
+      questions: saved.proposal.questions.map(({ question }) => ({ id: randomUUID(), question: question.value, blocking: true,
+        disposition: "answered", answer: "The fictional builder will clear each room." })),
+      lines: saved.proposal.lines.map(line => ({ id: line.id, scopeItemId: line.scopeItemId, origin: "proposal",
+        description: line.description.value, room: sqeRooms.find(([d]) => d === line.description.value)[1], category: "Other",
+        quantity: line.quantity.value, unit: line.unit.value, unitPricePence: line.unitPricePence.value, disposition: "accepted",
+        dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt })) },
+  });
+  await app.capture.confirm(saved.jobId, { contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.review.revision });
+  const partyView = await app.parties.view({ sessionId }, saved.jobId);
+  await app.parties.command({ sessionId }, saved.jobId, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(), expectedJobRevision: partyView.jobRevision,
+    expectedBindingId: null, customerRef: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Rooms Customer", email: "rooms@jobguard-v2.invalid", phone: "+447700900043" },
+    site: { version: "site.v1", addressLines: ["7 Pretend Row"], town: "Sampleford", postcode: "ZY1 0AB" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { scope } = await app.quote.get(saved.jobId);
+  // The kitchen shelves are excluded on the quote: they stay in Exclusions and never sit in a room.
+  const lines = sqeRooms.map(([description]) => ({ ...scope.find(line => line.description === description), id: randomUUID(),
+    origin: "captured", included: description !== "Replace the kitchen shelves",
+    exclusionReason: description === "Replace the kitchen shelves" ? "Customer is keeping the shelves" : null,
+    discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: "entered", category: "Other", region: null }));
+  const ids = lines.map(line => line.scopeItemId), draftId = randomUUID();
+  const save = (expectedRevision, sections) => app.quote.save(saved.jobId, { contractVersion: "quote_draft_command_v1", draftId, expectedRevision,
+    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion, lines, ...(sections && { sections }) });
+  const preview = () => app.quote.preview(saved.jobId, { version: "quote-preview-command.v1", recipient: "rooms@jobguard-v2.invalid" });
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  return { app, context, jobId: saved.jobId, ids, lines, save, preview };
+}
+const sqeSnapshot = async documentId => (await admin.query(
+  "SELECT snapshot, content_hash FROM app.quote_document_version WHERE id=$1", [documentId])).rows[0];
+
+test("SQ-E done when: the customer's quote is laid out by room, the bathroom as one figure, and reopening keeps it", async () => {
+  const { app, context, jobId: roomsJob, ids, save, preview } = await sqeQuote();
+  const layout = sqeLayout()(ids);
+  const saved = await save(0, layout);
+  assert.deepEqual(saved.revisions.at(-1).sections, layout);
+  assert.equal(saved.roomLayout, true);
+  const { view, document } = await preview();
+  assert.deepEqual(document.sections, layout);
+  const { pdf, hash } = await new QuoteDeliveryRepository(runtime).pdf(context, roomsJob, view.documentId);
+  const text = new TextDecoder().decode(pdf);
+  assert.equal(hash, view.contentHash);
+  assert.deepEqual([...text.matchAll(/\(ROOM: ([^)]+)\) Tj/gu)].map(m => m[1]), ["Bathroom", "Kitchen", "Hallway"]);
+  const bathroom = document.lines.filter(line => layout[0].scopeItemIds.includes(line.scopeItemId));
+  assert.equal(bathroom.reduce((sum, line) => sum + line.netPence, 0), 130000);
+  assert.match(text, /\(Room total GBP 1300\.00\) Tj/u);
+  assert.doesNotMatch(text, /Strip out the bathroom \| 1 job \| GBP/u);
+  assert.match(text, /Fit the kitchen worktop \| 1 job \| GBP 450\.00/u);
+  assert.match(text, /\(TOTAL GBP 2604\.00\) Tj/u, "the total is unchanged by the layout");
+  assert.equal(document.totalPence, 260400);
+  assert.ok(!layout.flatMap(room => room.scopeItemIds).includes(ids[3]));
+  assert.ok(document.exclusions.length > 0);
+  const reopened = await app.quote.get(roomsJob);
+  assert.deepEqual(reopened.revisions.at(-1).sections, layout);
+  // The customer's page reads this frozen snapshot.
+  assert.deepEqual((await sqeSnapshot(view.documentId)).snapshot.sections, layout);
+});
+
+test("SQ-E: a new layout is a new document version, and the layout must match the stored rooms", async () => {
+  const { context, jobId: roomsJob, ids, save, preview } = await sqeQuote();
+  await save(0, sqeLayout()(ids));
+  const first = await preview();
+  const changed = await save(1, sqeLayout("itemised")(ids));
+  const revisionId = changed.draft.currentRevisionId;
+  const documents = new QuoteDocumentRepository(runtime);
+  const supplied = { ...first.document, quoteRevisionId: revisionId, sections: sqeLayout("itemised")(ids) };
+  delete supplied.cancellationKit;
+  const create = (document, documentId = randomUUID()) => documents.create(context, { jobId: roomsJob, documentId,
+    quoteRevisionId: revisionId, objectVersionId: randomUUID(), document });
+  await assert.rejects(create(supplied), { message: "QUOTE_DOCUMENT_VERSION_CONFLICT" });
+  const next = { ...supplied, documentVersion: first.document.documentVersion + 1 };
+  await assert.rejects(create({ ...next, sections: sqeLayout()(ids) }), { message: "QUOTE_LAYOUT_MISMATCH" });
+  const { sections, ...withoutRooms } = next;
+  await assert.rejects(create(withoutRooms), { message: "QUOTE_LAYOUT_MISMATCH" });
+  const created = await create(next);
+  assert.notEqual(created.content_hash, first.view.contentHash);
+  assert.deepEqual((await sqeSnapshot(created.id)).snapshot.sections, sections);
+});
+
+test("SQ-E: a quote saved without rooms makes a document without sections, as before", async () => {
+  const { app, jobId: plainJob, save, preview } = await sqeQuote();
+  const saved = await save(0);
+  assert.equal(saved.revisions.at(-1).sections, undefined);
+  const { view, document } = await preview();
+  assert.equal("sections" in document, false);
+  const stored = await sqeSnapshot(view.documentId);
+  assert.equal("sections" in stored.snapshot, false);
+  assert.equal(stored.content_hash, createHash("sha256").update(renderQuotePdf(quoteDocumentV1.parse(stored.snapshot))).digest("hex"));
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.v2_quote_section WHERE job_id=$1", [plainJob])).rows[0].n, 0);
+  await assert.rejects(app.quote.save(plainJob, { contractVersion: "quote_draft_command_v1", draftId: saved.draft.id, expectedRevision: 1,
+    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion, lines: saved.revisions.at(-1).lines,
+    sections: [{ name: "Bathroom", mode: "itemised", scopeItemIds: [saved.revisions.at(-1).lines[0].scopeItemId] }] }),
+  { code: "INVALID_QUOTE" }, "a layout that leaves an included line out of every room is refused");
+});
+
+test("SQ-E: room rows are locked to their own firm, immutable, and refuse an excluded line", async () => {
+  const { context, jobId: roomsJob, ids, save } = await sqeQuote();
+  const saved = await save(0, sqeLayout()(ids));
+  const revisionId = saved.draft.currentRevisionId;
+  const { rows: [{ forced }] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced FROM pg_class WHERE oid='app.v2_quote_section'::regclass`);
+  assert.equal(forced, true);
+  const { realContext, sessionId } = await signIn("second-builder");
+  const { context: secondPractice } = await authenticatePracticeSession(runtime, sessionId);
+  for (const scope of [realContext, secondPractice]) await withTenant(runtime, scope, async db => {
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_quote_section WHERE job_id=$1", [roomsJob])).rowCount, 0);
+  });
+  await withTenant(runtime, context, async db => {
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_quote_section WHERE job_id=$1", [roomsJob])).rowCount, 5);
+  });
+  const attempt = sql => withTenant(runtime, context, db => db.$client.query(sql, [revisionId]));
+  await assert.rejects(attempt("UPDATE app.v2_quote_section SET display_mode='itemised' WHERE quote_revision_id=$1"), { code: "42501" });
+  await assert.rejects(attempt("DELETE FROM app.v2_quote_section WHERE quote_revision_id=$1"), { code: "42501" });
+  await assert.rejects(admin.query("UPDATE app.v2_quote_section SET display_mode='itemised' WHERE quote_revision_id=$1", [revisionId]));
+  const insert = (scopeItemId, name, order, mode) => withTenant(runtime, context, db => db.$client.query(
+    "INSERT INTO app.v2_quote_section(tenant_id,job_id,quote_revision_id,scope_item_id,room_name,room_order,display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    [context.tenantId, roomsJob, revisionId, scopeItemId, name, order, mode]));
+  await assert.rejects(insert(ids[3], "Kitchen", 2, "itemised"), { message: "V2_QUOTE_SECTION_LINE_EXCLUDED" });
+});
+
+test("SQ-E: the room trigger refuses one room with two places or two modes in a revision", async () => {
+  const { context, jobId: roomsJob, ids, save } = await sqeQuote();
+  await save(0);
+  const saved = await save(1);
+  const revisionId = saved.draft.currentRevisionId;
+  const insert = (scopeItemId, name, order, mode) => withTenant(runtime, context, db => db.$client.query(
+    "INSERT INTO app.v2_quote_section(tenant_id,job_id,quote_revision_id,scope_item_id,room_name,room_order,display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    [context.tenantId, roomsJob, revisionId, scopeItemId, name, order, mode]));
+  await insert(ids[0], "Bathroom", 1, "room_total");
+  await assert.rejects(insert(ids[1], "Bathroom", 1, "itemised"), { message: "V2_QUOTE_SECTION_ROOM_INCONSISTENT" });
+  await assert.rejects(insert(ids[1], "Bathroom", 2, "room_total"), { message: "V2_QUOTE_SECTION_ROOM_INCONSISTENT" });
+  await assert.rejects(insert(ids[2], "Kitchen", 1, "itemised"), { message: "V2_QUOTE_SECTION_ROOM_INCONSISTENT" });
+  await insert(ids[1], "Bathroom", 1, "room_total");
+  await insert(ids[2], "Kitchen", 2, "itemised");
+});
+
+test("SQ-E: the room layout migration is safe to run twice", async () => {
+  const shape = async () => (await admin.query(`SELECT
+    (SELECT count(*)::int FROM pg_policy WHERE polrelid='app.v2_quote_section'::regclass) AS policies,
+    (SELECT count(*)::int FROM pg_trigger WHERE tgrelid='app.v2_quote_section'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT count(*)::int FROM app.v2_quote_section) AS rows,
+    (SELECT string_agg(privilege_type, ',' ORDER BY privilege_type) FROM information_schema.role_table_grants
+      WHERE table_schema='app' AND table_name='v2_quote_section' AND grantee='jobguard_runtime') AS grants`)).rows[0];
+  const before = await shape();
+  assert.deepEqual({ policies: before.policies, triggers: before.triggers, grants: before.grants }, { policies: 2, triggers: 2, grants: "INSERT,SELECT" });
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2087_v2_quote_section.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await shape(), before);
 });
 
 // must stay the last test: it signs the cached builder out

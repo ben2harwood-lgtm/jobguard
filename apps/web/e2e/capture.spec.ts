@@ -59,7 +59,7 @@ for (const control of ["Stop listening", "Cancel dictation"] as const) {
     });
     await openCapture(page);
     const source = page.getByLabel("Work details"), firstText = await source.inputValue();
-    await page.getByRole("button", { name: "Talk through the example", exact: true }).click();
+    await page.getByRole("button", { name: "Talk through a quote", exact: true }).click();
     await expect(page.getByText("Listening on this device", { exact: true })).toBeVisible();
     let arrive!: () => void, release!: () => void;
     const arrived = new Promise<void>(resolve => { arrive = resolve; });
@@ -74,7 +74,7 @@ for (const control of ["Stop listening", "Cancel dictation"] as const) {
       await expect(page.getByRole("button", { name: control, exact: true })).toBeEnabled();
       await page.getByRole("button", { name: control, exact: true }).click();
       await expect(page.getByText("Listening on this device", { exact: true })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Talk through the example", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Talk through a quote", exact: true })).toBeDisabled();
       expect(await page.evaluate(() => (window as unknown as { __captureSpeechCounts: object }).__captureSpeechCounts))
         .toEqual({ starts: 1, stops: control === "Stop listening" ? 1 : 0, cancels: control === "Cancel dictation" ? 1 : 0 });
       await expect(source).toHaveValue(firstText);
@@ -83,7 +83,7 @@ for (const control of ["Stop listening", "Cancel dictation"] as const) {
       expect(response.status()).toBe(201);
       expect((await response.json()).source.text).toBe(firstText);
       await expect(page.getByText("Your draft is ready. Check it below — nothing has been sent.", { exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Talk through the example", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Talk through a quote", exact: true })).toBeEnabled();
     } finally { release(); await page.unroute("**/api/jobs/capture"); }
   });
 }

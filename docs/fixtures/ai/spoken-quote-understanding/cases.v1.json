@@ -1,0 +1,210 @@
+{
+  "version": "spoken-quote-understanding-cases.v1",
+  "note": "All fictional. A line the builder corrected while speaking keeps its words but no numbers (open, with a question). Each line: words (a phrase the line's description must contain), room, trade, quantity, unit, pence, basis. A number is right only when it equals the said number exactly; null means nothing may be kept.",
+  "cases": [
+    { "id": "sq-1-four-items", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/1-four-items.txt",
+      "text": "strip out the old kitchen fit six base units hang the new doors paint the walls",
+      "lines": [
+        { "words": "strip out the old kitchen", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit six base units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": "6", "unit": "base units", "pence": null, "basis": "none" },
+        { "words": "hang the new doors", "room": "Kitchen", "trade": "Carpentry", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the walls", "room": "Kitchen", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "sq-2-two-prices-one-open", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/2-two-prices-one-open.txt",
+      "text": "strip out the old kitchen for two hundred pounds fit the new units for six hundred pounds paint the walls",
+      "lines": [
+        { "words": "strip out the old kitchen", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": 20000, "basis": "line" },
+        { "words": "fit the new units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": 60000, "basis": "line" },
+        { "words": "paint the walls", "room": "Kitchen", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "sq-3-two-sixty", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/3-two-sixty.txt",
+      "text": "paint the walls two hundred pounds and fit the door sixty pounds",
+      "lines": [
+        { "words": "paint the walls", "room": "Whole job", "trade": "Decorating", "quantity": null, "unit": null, "pence": 20000, "basis": "line" },
+        { "words": "fit the door", "room": "Whole job", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 6000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "sq-4-supply-and-fit", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/4-supply-and-fit.txt",
+      "text": "supply and fit one door for three hundred pounds",
+      "lines": [
+        { "words": "supply and fit one door", "room": "Whole job", "trade": "Carpentry", "quantity": "1", "unit": "door", "pence": 30000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "sq-5-whole-job", "unpunctuated": true, "source": "apps/web/e2e/fixtures/spoken-quote/5-whole-job.txt",
+      "text": "strip out the old kitchen fit the new units paint the walls eight hundred pounds for the whole job",
+      "lines": [
+        { "words": "strip out the old kitchen", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit the new units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the walls", "room": "Kitchen", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": 80000, "questions": [] },
+    { "id": "smith-three-rooms", "source": "V2-SQ-C packet, verbatim",
+      "text": "Smith house refurb. In the kitchen rip out the old units and fit new ones for 2400, tile the floor about 12 square metres at 60 a metre. Upstairs bathroom strip out, new suite supply and fit 3200, and get the sparky to move two sockets. Paint the hallway and landing, two coats, 650.",
+      "lines": [
+        { "words": "rip out the old units", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit new ones", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": 240000, "basis": "line" },
+        { "words": "tile the floor", "room": "Kitchen", "trade": "Tiling", "quantity": "12", "unit": "m²", "pence": 6000, "basis": "per_unit" },
+        { "words": "strip out", "room": "Upstairs bathroom", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "new suite", "room": "Upstairs bathroom", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "move two sockets", "room": "Upstairs bathroom", "trade": "Electrics", "quantity": "2", "unit": "sockets", "pence": null, "basis": "none" },
+        { "words": "Paint the hallway and landing", "room": "Hallway and landing", "trade": "Decorating", "quantity": null, "unit": null, "pence": 65000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null,
+      "questions": [ { "line": "tile the floor", "contains": "about" }, { "line": "new suite", "contains": "3200" } ] },
+    { "id": "patel-bathroom-room-price", "unpunctuated": true,
+      "text": "mrs patels bathroom rip out the old suite fit a new toilet and basin tile the walls the bathroom all in 4500",
+      "lines": [
+        { "words": "rip out the old suite", "room": "Bathroom", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit a new toilet and basin", "room": "Bathroom", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "tile the walls", "room": "Bathroom", "trade": "Tiling", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Bathroom", "pence": 450000 } ], "wholeJobPence": null, "questions": [] },
+    { "id": "henderson-kitchen-grand", 
+      "text": "Kitchen job for the Hendersons. Strip out the old kitchen, fit the new units and worktops, tile the splashback. Kitchen 6 grand all in.",
+      "lines": [
+        { "words": "Strip out the old kitchen", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit the new units and worktops", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "tile the splashback", "room": "Kitchen", "trade": "Tiling", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Kitchen", "pence": 600000 } ], "wholeJobPence": null, "questions": [] },
+    { "id": "lounge-dining-room-price",
+      "text": "In the lounge skim the ceiling and paint the walls, the lounge all in 900. In the dining room paint the walls for 350.",
+      "lines": [
+        { "words": "skim the ceiling", "room": "Lounge", "trade": "Plastering", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the walls", "room": "Lounge", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the walls", "room": "Dining room", "trade": "Decorating", "quantity": null, "unit": null, "pence": 35000, "basis": "line" }
+      ], "areaPrices": [ { "room": "Lounge", "pence": 90000 } ], "wholeJobPence": null, "questions": [] },
+    { "id": "loft-and-stairs",
+      "text": "Loft conversion. In the loft lay chipboard flooring about 20 square metres, fit two velux windows for 1800, then the stairs fit a new handrail for 250.",
+      "lines": [
+        { "words": "lay chipboard flooring", "room": "Loft", "trade": "Flooring", "quantity": "20", "unit": "m²", "pence": null, "basis": "none" },
+        { "words": "fit two velux windows", "room": "Loft", "trade": "Roofing", "quantity": null, "unit": null, "pence": 180000, "basis": "line" },
+        { "words": "fit a new handrail", "room": "Stairs", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 25000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null,
+      "questions": [ { "line": "lay chipboard flooring", "contains": "about" }, { "line": "fit two velux windows" } ] },
+    { "id": "front-back-bedrooms", "unpunctuated": true,
+      "text": "front bedroom paint the walls and ceiling two coats back bedroom paint the walls and fit a new door for 280",
+      "lines": [
+        { "words": "paint the walls and ceiling", "room": "Front bedroom", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the walls", "room": "Back bedroom", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit a new door", "room": "Back bedroom", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 28000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "patio-out-the-back",
+      "text": "Garden job. Out the back lay a patio about 30 square metres at 45 a square metre, and repoint the garden wall for 600.",
+      "lines": [
+        { "words": "lay a patio", "room": "Back", "trade": "Groundworks", "quantity": "30", "unit": "m²", "pence": 4500, "basis": "per_unit" },
+        { "words": "repoint the garden wall", "room": "Back", "trade": "Brickwork", "quantity": null, "unit": null, "pence": 60000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "lay a patio", "contains": "about" } ] },
+    { "id": "kitchen-correction-count",
+      "text": "In the kitchen fit six base units, no, make that eight, and fit the worktop for 400.",
+      "lines": [
+        { "words": "fit six base units", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit the worktop", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": 40000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "fit six base units", "contains": "make that eight" } ] },
+    { "id": "bedroom-same-again",
+      "text": "Back bedroom paint the walls two coats for 300. Same again in the front bedroom.",
+      "lines": [
+        { "words": "paint the walls two coats", "room": "Back bedroom", "trade": "Decorating", "quantity": null, "unit": null, "pence": 30000, "basis": "line" },
+        { "words": "Same again", "room": "Front bedroom", "trade": "Other", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "Same again", "contains": "Same again" } ] },
+    { "id": "bathroom-shower-room-price",
+      "text": "Bathroom: remove the old bath, fit a walk-in shower for 1200, tile the walls about 18 square metres, the bathroom all in 3800.",
+      "lines": [
+        { "words": "remove the old bath", "room": "Bathroom", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit a walk-in shower", "room": "Bathroom", "trade": "Plumbing", "quantity": null, "unit": null, "pence": 120000, "basis": "line" },
+        { "words": "tile the walls", "room": "Bathroom", "trade": "Tiling", "quantity": "18", "unit": "m²", "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Bathroom", "pence": 380000 } ], "wholeJobPence": null, "questions": [ { "line": "tile the walls", "contains": "about" } ] },
+    { "id": "kitchen-six-grand-unpunctuated", "unpunctuated": true,
+      "text": "kitchen strip out the old units fit new units and worktop kitchen six grand all in",
+      "lines": [
+        { "words": "strip out the old units", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit new units and worktop", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Kitchen", "pence": 600000 } ], "wholeJobPence": null, "questions": [] },
+    { "id": "rewire-consumer-unit",
+      "text": "Full rewire at the Okafor place. Rewire the whole house for 4200, fit a new consumer unit for 650, and add six double sockets at 45 each.",
+      "lines": [
+        { "words": "Rewire the whole house", "room": "Whole job", "trade": "Electrics", "quantity": null, "unit": null, "pence": 420000, "basis": "line" },
+        { "words": "fit a new consumer unit", "room": "Whole job", "trade": "Electrics", "quantity": null, "unit": null, "pence": 65000, "basis": "line" },
+        { "words": "add six double sockets", "room": "Whole job", "trade": "Electrics", "quantity": "6", "unit": "double sockets", "pence": 4500, "basis": "each" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "bare-number-not-price",
+      "text": "In the en suite supply and fit a shower tray 850, and fit a new extractor fan for 180.",
+      "lines": [
+        { "words": "supply and fit a shower tray", "room": "En suite", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit a new extractor fan", "room": "En suite", "trade": "Electrics", "quantity": null, "unit": null, "pence": 18000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "supply and fit a shower tray", "contains": "850" } ] },
+    { "id": "radiators-correction",
+      "text": "Dining room fit three new radiators for 900, sorry, it's four radiators. Then the hall paint the woodwork in gloss for 220.",
+      "lines": [
+        { "words": "fit three new radiators", "room": "Dining room", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "paint the woodwork in gloss", "room": "Hall", "trade": "Decorating", "quantity": null, "unit": null, "pence": 22000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "fit three new radiators", "contains": "four" } ] },
+    { "id": "roof-and-gutters",
+      "text": "Roof job. On the roof replace the broken slates for 450, then fix the guttering at the front for 180 and replace the fascias for 900.",
+      "lines": [
+        { "words": "replace the broken slates", "room": "Roof", "trade": "Roofing", "quantity": null, "unit": null, "pence": 45000, "basis": "line" },
+        { "words": "fix the guttering", "room": "Roof", "trade": "Roofing", "quantity": null, "unit": null, "pence": 18000, "basis": "line" },
+        { "words": "replace the fascias", "room": "Roof", "trade": "Roofing", "quantity": null, "unit": null, "pence": 90000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "utility-plaster-unpunctuated", "unpunctuated": true,
+      "text": "utility room skim the walls for 380 fit a new sink for 160 and lay vinyl flooring about 6 square metres",
+      "lines": [
+        { "words": "skim the walls", "room": "Utility room", "trade": "Plastering", "quantity": null, "unit": null, "pence": 38000, "basis": "line" },
+        { "words": "fit a new sink", "room": "Utility room", "trade": "Plumbing", "quantity": null, "unit": null, "pence": 16000, "basis": "line" },
+        { "words": "lay vinyl flooring", "room": "Utility room", "trade": "Flooring", "quantity": "6", "unit": "m²", "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "lay vinyl flooring", "contains": "about" } ] },
+    { "id": "skirting-linear-metres",
+      "text": "In the living room fit new skirting 14 metres at 12 a metre, and lay laminate flooring 22 square metres at 25 a square metre.",
+      "lines": [
+        { "words": "fit new skirting", "room": "Living room", "trade": "Carpentry", "quantity": "14", "unit": "m", "pence": 1200, "basis": "per_unit" },
+        { "words": "lay laminate flooring", "room": "Living room", "trade": "Flooring", "quantity": "22", "unit": "m²", "pence": 2500, "basis": "per_unit" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "conservatory-whole-job",
+      "text": "Conservatory base. Dig out for the footings, lay the slab, build the dwarf wall in brick. Eleven thousand five hundred pounds for the whole job.",
+      "lines": [
+        { "words": "Dig out for the footings", "room": "Conservatory", "trade": "Groundworks", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "lay the slab", "room": "Conservatory", "trade": "Groundworks", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "build the dwarf wall in brick", "room": "Conservatory", "trade": "Brickwork", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": 1150000, "questions": [] },
+    { "id": "garage-same-as",
+      "text": "In the garage paint the floor for 240. The porch the same as the garage.",
+      "lines": [
+        { "words": "paint the floor", "room": "Garage", "trade": "Decorating", "quantity": null, "unit": null, "pence": 24000, "basis": "line" },
+        { "words": "same as the garage", "room": "Porch", "trade": "Other", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "same as the garage", "contains": "repeats" } ] },
+    { "id": "two-rooms-two-prices",
+      "text": "Downstairs WC, fit a new toilet and basin, the WC all in 1100. Office, fit shelving for 300, and paint the walls, the office 750 all in.",
+      "lines": [
+        { "words": "fit a new toilet and basin", "room": "Downstairs WC", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit shelving", "room": "Office", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 30000, "basis": "line" },
+        { "words": "paint the walls", "room": "Office", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Downstairs WC", "pence": 110000 }, { "room": "Office", "pence": 75000 } ], "wholeJobPence": null, "questions": [] },
+    { "id": "extension-unpunctuated", "unpunctuated": true,
+      "text": "extension plaster the walls for 1400 fit the spotlights for 300 then the kitchen fit the worktop for 500",
+      "lines": [
+        { "words": "plaster the walls", "room": "Extension", "trade": "Plastering", "quantity": null, "unit": null, "pence": 140000, "basis": "line" },
+        { "words": "fit the spotlights", "room": "Extension", "trade": "Electrics", "quantity": null, "unit": null, "pence": 30000, "basis": "line" },
+        { "words": "fit the worktop", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": 50000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [] },
+    { "id": "roughly-price-open",
+      "text": "In the bathroom fit a new vanity unit roughly 400, and tile the floor for 350.",
+      "lines": [
+        { "words": "fit a new vanity unit", "room": "Bathroom", "trade": "Plumbing", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "tile the floor", "room": "Bathroom", "trade": "Tiling", "quantity": null, "unit": null, "pence": 35000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "fit a new vanity unit", "contains": "400" } ] },
+    { "id": "landing-correction-price",
+      "text": "Landing paint the walls and ceiling for 300, actually make it 350, and replace the door for 200.",
+      "lines": [
+        { "words": "paint the walls and ceiling", "room": "Landing", "trade": "Decorating", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "replace the door", "room": "Landing", "trade": "Carpentry", "quantity": null, "unit": null, "pence": 20000, "basis": "line" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "paint the walls and ceiling", "contains": "350" } ] },
+    { "id": "master-bedroom-unpunctuated-ref", "unpunctuated": true,
+      "text": "master bedroom fit a new carpet for 600 and paint the walls for 400 second bedroom same again",
+      "lines": [
+        { "words": "fit a new carpet", "room": "Master bedroom", "trade": "Flooring", "quantity": null, "unit": null, "pence": 60000, "basis": "line" },
+        { "words": "paint the walls", "room": "Master bedroom", "trade": "Decorating", "quantity": null, "unit": null, "pence": 40000, "basis": "line" },
+        { "words": "same again", "room": "Second bedroom", "trade": "Other", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [], "wholeJobPence": null, "questions": [ { "line": "same again", "contains": "repeats" } ] },
+    { "id": "kitchen-k-price",
+      "text": "Kitchen refit. In the kitchen strip out the units, fit the new kitchen, and box in the boiler. The kitchen 4.5k all in.",
+      "lines": [
+        { "words": "strip out the units", "room": "Kitchen", "trade": "Strip-out", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "fit the new kitchen", "room": "Kitchen", "trade": "Kitchen fitting", "quantity": null, "unit": null, "pence": null, "basis": "none" },
+        { "words": "box in the boiler", "room": "Kitchen", "trade": "Carpentry", "quantity": null, "unit": null, "pence": null, "basis": "none" }
+      ], "areaPrices": [ { "room": "Kitchen", "pence": 450000 } ], "wholeJobPence": null, "questions": [] }
+  ]
+}

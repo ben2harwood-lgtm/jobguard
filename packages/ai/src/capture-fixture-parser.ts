@@ -1,6 +1,6 @@
 import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
 
-export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/2" as const;
+export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/3" as const;
 const MAX_PENCE = 1_000_000_000_000n;
 export class CaptureFixtureError extends Error {
   readonly code: "INVALID_FIXTURE_SOURCE" | "FIXTURE_STRUCTURE_REQUIRED";
@@ -8,7 +8,7 @@ export class CaptureFixtureError extends Error {
     super(code); this.code = code; this.name = "CaptureFixtureError";
   }
 }
-type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
+export type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
 function cells(raw: string, start: number): Cell[] {
   let offset = 5;
   return raw.slice(5).split("|").map(part => {
@@ -34,15 +34,15 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 }
 
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
-const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
+export const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
-const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
-const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
+export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 
 // Spoken amounts ("two hundred pounds", "a thousand and fifty quid"): the words are the cited price.
-const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
@@ -66,8 +66,8 @@ export function spokenPounds(words: string): number | null {
   }
   return last === null ? null : totalValue + group;
 }
-type Amount = { text: string; index: number; pence: number | null };
-function amounts(value: string): Amount[] {
+export type Amount = { text: string; index: number; pence: number | null };
+export function amounts(value: string): Amount[] {
   const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
     pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
   for (const match of value.matchAll(spokenAmount)) {
@@ -84,7 +84,7 @@ function amounts(value: string): Amount[] {
 }
 // Continuous speech has no punctuation, so a new work item also starts at one of these verbs
 // unless the word before it ties it to the clause (for example "the", "to" or "and").
-const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
+export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
 const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
@@ -92,7 +92,9 @@ const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${nu
  * every line. Offsets always refer to the untouched source, including prices.
  * ITEM: records never enter this path. No source text is executed or fetched.
  */
-function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cell | null } {
+// `isWork` lets the context reader (SQ-C) also treat "in the kitchen rip out …" as work; the v1 parser passes the default.
+export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
+  isTiming: (value: string) => boolean = value => timing.test(value)): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
@@ -100,7 +102,7 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
     if (!value) return;
     const at = start + raw.length - raw.trimStart().length;
     const tail = wholeJobTail.exec(value);
-    if (tail && tail.index > 0 && workClause(value.slice(0, tail.index).trim())) {
+    if (tail && tail.index > 0 && isWork(value.slice(0, tail.index).trim())) {
       const head = value.slice(0, tail.index).trimEnd();
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
@@ -128,7 +130,7 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
       // "supply and fit one door" is one item.
       if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) continue;
-      if (workClause(next) || timing.test(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
+      if (isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
         add(start, i); start = i + separator.length; i = start - 1;
       }
     }
@@ -138,11 +140,11 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
   const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
   const title = first && titleText ? { value: titleText, start: first.start } : null;
   const work = chunks.filter((chunk, index) => {
-    if (timing.test(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
-    if (!workClause(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
+    if (isTiming(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
+    if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
-    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !workClause(chunk.value));
+    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !isWork(chunk.value));
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
   const cleaned = work.map(chunk => {
@@ -167,10 +169,10 @@ function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null 
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };
 }
 
-const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+export const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, twenty: 20 };
 /** "fit six base units": the stated count and what it counts. Only right after the item's verb. */
-function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
+export function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
   const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(description);
   if (!match || !spokenVerb.test(description)) return null;
   const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];

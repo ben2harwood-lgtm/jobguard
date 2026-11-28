@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { cancellationKitRows, type QuoteDocument } from "@jobguard/core";
+import { QuoteLinesByRoom } from "../../ui/quote-rooms";
 type View = { jobId: string; jobRevision: number; status: string; quote: { id: string; revision: number; hash: string; document: QuoteDocument } | null };
 export default function CustomerQuote({ pilot = false }: { pilot?: boolean }) {
   const [view,setView]=useState<View>(), [message,setMessage]=useState("Loading your quote…"), [busy,setBusy]=useState(false);
@@ -27,7 +28,7 @@ export default function CustomerQuote({ pilot = false }: { pilot?: boolean }) {
   return <main><h1>Your quote</h1><p>{pilot ? "No-charge pilot fixture" : "Synthetic practice only"}</p><p role="status">{message}</p>{quote&&d&&<>
     <h2>{d.reference} · revision {quote.revision}</h2><p>From {d.issuer.name} · {d.issuer.email}</p><p>{d.issuer.address.join(", ")}</p><p>To {d.customer.name} · {d.customer.email}</p><p>{d.customer.address.join(", ")}</p>
     {d.jobParties&&<><p>Paying party: {d.jobParties.payingParty.name}</p><p>Site: {[d.jobParties.site.unit,...d.jobParties.site.addressLines,d.jobParties.site.town,d.jobParties.site.postcode].filter(Boolean).join(", ")}</p></>}
-    <ul>{d.lines.map(line=><li key={line.scopeItemId}>{line.description}: {line.quantity} {line.unit} — {gbp(line.netPence)}</li>)}</ul>
+    <QuoteLinesByRoom document={d} gbp={gbp}/>
     <h3>Exclusions</h3><ul>{d.exclusions.map((text,i)=><li key={i}>{text}</li>)}</ul>
     <h3>Qualifications</h3><ul>{d.qualifications.map((text,i)=><li key={i}>{text}</li>)}</ul>
     <p>Subtotal {gbp(d.subtotalPence)} · Discount {gbp(d.discountPence)}</p><p>Net {gbp(d.netPence)} · VAT {gbp(d.taxPence)} · Total {gbp(d.totalPence)}</p>

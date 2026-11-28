@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-c": {
+      "branches": [
+        "claude/project-thread-trp08u-sqc"
+      ],
+      "note": "T2 V2-SQ-C: job-understanding.v1 contract and money rule in core, Reader A (context reader, code only: no model, network or key) in packages/ai, the 30-transcript understanding set and its eval gate, and the capture workspace view labelling each proposed line with its understood room and trade. Base claude/project-thread-trp08u-sqproof (#1004) at 3278cdf37. No migration, table, route or schema change to proposal_review_line.",
+      "allow": [
+        "apps/api/src/capture/capture.application.ts",
+        "apps/api/src/capture/plan-safe-category.test.ts",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "docs/fixtures/ai/golden-run.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/README.md",
+        "docs/fixtures/ai/spoken-quote-understanding/cases.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/held-out-2.v1.json",
+        "docs/fixtures/ai/spoken-quote-understanding/held-out.v1.json",
+        "packages/ai/src/capture-evaluation.test.ts",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader-evaluation.test.ts",
+        "packages/ai/src/context-reader-evaluation.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/index.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/job-understanding.test.ts",
+        "packages/core/src/job-understanding.ts"
+      ]
+    }
+  }
+}

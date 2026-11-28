@@ -96,6 +96,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2085_v2_review_request.sql", import.meta.url), "utf8"));
   // V2-G9 aftercare check-up offers at 6 and 12 months (2086), after 2085.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2086_v2_aftercare_offer.sql", import.meta.url), "utf8"));
+  // V2-SQ-E quote laid out by room (2087).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2087_v2_quote_section.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
