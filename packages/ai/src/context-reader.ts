@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, priceCondition, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -26,11 +26,12 @@ function thousands(words: string): number | null {
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
 /** Keep number checks inside the same item boundaries that the context reader passes to plainDraft. */
+const isNextItem = (next: string) => plainNextItem(next, isWork, isTiming);
 function itemClauses(text: string): string[] {
   const clauses: string[] = [];
   let start = 0;
   for (let i = 0; i < text.length; i++) {
-    const separator = plainItemBoundary(text, i, start, isWork);
+    const separator = plainItemBoundary(text, i, start, isNextItem);
     if (separator) {
       clauses.push(text.slice(start, i)); start = i + separator; i = start - 1;
     }
@@ -63,8 +64,40 @@ export const spokenNumbers: SpokenNumberReader = {
   },
 };
 /** Reader B (SQ-G) passes its output through the same check. */
-export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: string) =>
-  checkUnderstandingNumbers(understanding, sourceText, spokenNumbers);
+export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: string) => {
+  // Reader B must also reject retracted numbers, even when its own proposed output kept them.
+  // Reuse the draft's correction targets, including back-references across sentences.
+  const corrections = spokenCorrection.test(sourceText) ? plainDraft(sourceText, isWork, isTiming).corrections : [];
+  if (!corrections.length) return checkUnderstandingNumbers(understanding, sourceText, spokenNumbers);
+  const questions = [...understanding.questions];
+  const corrected = (provenance: JobUnderstanding["lines"][number]["description"]["provenance"]) => provenance.kind === "extracted"
+    ? corrections.find(chunk => chunk.start < provenance.span.end && chunk.start + chunk.value.length > provenance.span.start) : undefined;
+  const ask = (chunk: Cell, lineIndex?: number) => {
+    const text = correctionQuestion(chunk.correction!);
+    if (questions.some(question => question.text === text && question.lineIndex === lineIndex)) return;
+    const question = { text, ...(lineIndex === undefined ? {} : { lineIndex }) };
+    if (questions.length < 200) questions.push(question);
+    else {
+      const at = questions.findIndex(item => item.lineIndex === lineIndex);
+      questions[at >= 0 ? at : questions.length - 1] = question;
+    }
+  };
+  const lines = understanding.lines.map((line, index) => {
+    const chunk = corrected(line.description.provenance);
+    if (!chunk) return line;
+    ask(chunk, index);
+    return openNumbers(line);
+  });
+  const areaPrices = understanding.areaPrices.filter(price => {
+    const chunk = corrected(price.provenance);
+    if (chunk) ask(chunk);
+    return !chunk;
+  });
+  let wholeJobPrice = understanding.wholeJobPrice;
+  const whole = wholeJobPrice && corrected(wholeJobPrice.provenance);
+  if (whole) { ask(whole); wholeJobPrice = null; }
+  return checkUnderstandingNumbers({ ...understanding, lines, areaPrices, wholeJobPrice, questions }, sourceText, spokenNumbers);
+};
 
 // ---- Rooms ---------------------------------------------------------------------------------------------------
 const OUTSIDE = /^(?:.*\s)?(?:garden|roof|back|front|outside)$/iu;
@@ -102,7 +135,7 @@ function stripLeadingRoom(value: string): { room: string; rest: string; offset: 
 const extraVerb = /^(?:box(?:ing)? in|add|re-?(?:plaster|paint|tile|wire|skim|point|place|felt|grout|hang|fit)|dig|move|get the|have the|knock|take|swap|put|run|board)\b/iu;
 function isVerb(value: string) {
   value = visibleWorkText(value);
-  return !/^(?:make (?:that|it)|it'?s|i mean)\b/iu.test(value) && (workClause(value) || extraVerb.test(value));
+  return spokenCorrection.exec(value)?.index !== 0 && (workClause(value) || extraVerb.test(value));
 }
 /** "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred": the work starts at the verb. */
 function lateWorkAt(value: string): number | null {
@@ -146,7 +179,6 @@ export function tradeOf(description: string, room: string | null): { trade: JobT
 
 // ---- Lines ----------------------------------------------------------------------------------------------------
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
-const correction = /(?:^|[\s,]+)(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b.*$/iu;
 const reference = /\b(?:same again|same as|ditto|the same in)\b/iu;
 /** After a comma, more work is fine; another amount, an alternative or a correction leaves the price open. */
 const plainCommaTail = /^\s*,(?![^]*(?:\d|\b(?:or|no|nah|actually|sorry|make that|maybe|could be|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|quid|pounds?)\b))/iu;
@@ -420,7 +452,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   const chunks: Cell[] = [];
   for (let chunk of draft.chunks.flatMap(splitWithin)) {
     const cut = priced.find(price => price.phraseStart > chunk.start && price.phraseStart < chunk.start + chunk.value.length);
-    if (cut && !chunk.inferred) chunk = { value: chunk.value.slice(0, cut.phraseStart - chunk.start).replace(/(?:[\s,]+(?:the|for the|for|and))*[\s,]*$/iu, ""), start: chunk.start };
+    if (cut && !chunk.inferred) chunk = { ...chunk, value: chunk.value.slice(0, cut.phraseStart - chunk.start).replace(/(?:[\s,]+(?:the|for the|for|and))*[\s,]*$/iu, ""), start: chunk.start };
     if (!chunk.value || priced.some(price => chunk.start >= price.phraseStart && chunk.start + chunk.value.length <= price.phraseEnd + 1)) continue;
     const before = chunks[chunks.length - 1];
     const gap = before ? text.slice(before.start + before.value.length, chunk.start) : "";
@@ -440,7 +472,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (chunk.inferred || !/^[\s,]*(?:(?:about|around|roughly|approximately)\s+)?\d[\d.]*\s+(?:square|sq\b|m2|m²|linear|met(?:re|er)s?\b)/iu.test(gap)) continue;
     let stop = gap.length;
     for (let at = 0; at < gap.length; at++) if (/[;!?\n]/u.test(gap[at]!) || gap[at] === "." && !(/\d/u.test(gap[at - 1] ?? "") && /\d/u.test(gap[at + 1] ?? ""))) { stop = at; break; }
-    chunks[index] = { value: text.slice(chunk.start, end + stop).replace(/[\s,]+$/u, ""), start: chunk.start };
+    chunks[index] = { ...chunk, value: text.slice(chunk.start, end + stop).replace(/[\s,]+$/u, ""), start: chunk.start };
   }
   // The first clause is the title unless work starts inside it after a name ("Mrs Patel 14 Orchard Road full rewire …").
   let titleCell = draft.title;
@@ -473,7 +505,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (lead) {
       const roomAt = chunk.start + chunk.value.toLowerCase().indexOf(lead.room.toLowerCase());
       current = { key: openArea(lead.room, chunk.start, roomAt, lead.room.length), name: lead.room };
-      chunk = { value: lead.rest, start: chunk.start + lead.offset };
+      chunk = { ...chunk, value: lead.rest, start: chunk.start + lead.offset };
     } else {
       const mention = roomMention.exec(chunk.value);
       if (mention && !trailingRoom(chunk.value)) {
@@ -487,28 +519,15 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (trailing && !/[.,;!?]/u.test(nextChar) && trailing.index > 0) {
       const name = roomName(trailing[2]!);
       pendingRoom = { name, start: chunk.start + trailing.index + trailing[0].lastIndexOf(trailing[2]!), length: trailing[2]!.length };
-      chunk = { value: chunk.value.slice(0, trailing.index), start: chunk.start };
+      chunk = { ...chunk, value: chunk.value.slice(0, trailing.index), start: chunk.start };
     }
-    // A correction belongs to the line before; Reader A never applies it.
-    const fix = chunk.inferred ? null : correction.exec(chunk.value);
-    if (fix && (fix.index === 0 || !workClause(chunk.value.slice(0, fix.index)))) {
-      const target = lines.length - 1;
-      // A total said after the last line is what this corrects (it is left open in totals()); the line keeps its numbers.
-      const lastWords = target >= 0 && lines[target]!.description.provenance.kind === "extracted" ? lines[target]!.description.provenance.span : null;
-      const totalBetween = priced.some(price => price.phraseStart >= (lastWords?.end ?? 0) && price.phraseEnd <= chunk.start);
-      if (totalBetween) { questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check that price.` }); continue; }
-      if (target >= 0) lines[target] = openNumbers(lines[target]!);
-      questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check this line.`, ...(target >= 0 ? { lineIndex: target } : {}) });
-      continue;
-    }
-    if (fix) chunk = { value: chunk.value.slice(0, fix.index), start: chunk.start };
     const areaKey = current?.key ?? wholeJob();
     const inTotal = priced.some(price => chunk.start < price.phraseEnd && chunk.start + chunk.value.length > price.phraseStart);
     const built = readLine(sourceId, chunk, areaKey, current?.name ?? null, inTotal);
-    lines.push(fix ? openNumbers(built.line) : built.line);
+    lines.push(chunk.correction ? openNumbers(built.line) : built.line);
     const lineIndex = lines.length - 1;
     questions.push(...built.questions.map(question => ({ text: question.slice(0, 500), lineIndex })));
-    if (fix) questions.push({ text: `You said “${chunk.value.trim().slice(0, 120)}${text.slice(chunk.start + fix.index, chunk.start + fix.index + 120).trim() ? ` ${text.slice(chunk.start + fix.index, chunk.start + fix.index + 160).trim()}` : ""}”. Corrections are not applied; check this line.`.slice(0, 500), lineIndex });
+    if (chunk.correction) questions.push({ text: correctionQuestion(chunk.correction), lineIndex });
     if (reference.test(chunk.value)) questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Check what this repeats; nothing was copied.`, lineIndex });
   }
   if (!lines.length) {
@@ -524,7 +543,11 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
   let wholeJobConflict = false;
   for (const price of priced) {
-    if (price.pence === null) { questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue; }
+    if (price.pence === null) {
+      // An unresolved whole-job total cannot leave another total looking definite.
+      if (!price.room) wholeJobConflict = true;
+      questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue;
+    }
     const provenance = { kind: "extracted" as const, span: { sourceId, sourceVersion: 1 as const, start: price.start, end: price.end } };
     const tail = price.tail;
     if (vatWords.test(tail)) questions.push({ text: vatQuestion(price.text) });
