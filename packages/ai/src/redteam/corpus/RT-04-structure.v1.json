@@ -1,0 +1,5323 @@
+[
+  {
+    "id": "RT-04-001",
+    "lane": "RT-04",
+    "transcript": "Bathroom: tile walls £600. Kitchen: tile splashback £200. Back in the bathroom, fit extractor £150",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "tile walls",
+          "room": "Bathroom",
+          "unitPricePence": 60000
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": 20000
+        },
+        {
+          "descriptionIncludes": "fit extractor",
+          "room": "Bathroom",
+          "unitPricePence": 15000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F001"
+  },
+  {
+    "id": "RT-04-002",
+    "lane": "RT-04",
+    "transcript": "Kitchen: fit units £800. Bathroom: fit basin £250. Back in the kitchen, paint ceiling £120",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen",
+          "unitPricePence": 80000
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": 25000
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": 12000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F002"
+  },
+  {
+    "id": "RT-04-003",
+    "lane": "RT-04",
+    "transcript": "Hall: paint walls £300. Landing: fit handrail £180. Back in the hall, replace skirting £90",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Hall",
+          "unitPricePence": 30000
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Landing",
+          "unitPricePence": 18000
+        },
+        {
+          "descriptionIncludes": "replace skirting",
+          "room": "Hall",
+          "unitPricePence": 9000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F003"
+  },
+  {
+    "id": "RT-04-004",
+    "lane": "RT-04",
+    "transcript": "Lounge: skim ceiling £450. Study: fit shelves £220. Back in the lounge, paint walls £350",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Lounge",
+          "unitPricePence": 45000
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": 22000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Lounge",
+          "unitPricePence": 35000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F004"
+  },
+  {
+    "id": "RT-04-005",
+    "lane": "RT-04",
+    "transcript": "Bedroom two: paint walls £500. Bedroom three: fit door £160. Back in bedroom two, lay carpet £320",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bedroom two",
+          "unitPricePence": 50000
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Bedroom three",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Bedroom two",
+          "unitPricePence": 32000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F005"
+  },
+  {
+    "id": "RT-04-006",
+    "lane": "RT-04",
+    "transcript": "Garage: paint floor £200. Garden: build brick wall £700. Back in the garage, fit shelves £140",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "paint floor",
+          "room": "Garage",
+          "unitPricePence": 20000
+        },
+        {
+          "descriptionIncludes": "build brick wall",
+          "room": "Garden",
+          "unitPricePence": 70000
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Garage",
+          "unitPricePence": 14000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F006"
+  },
+  {
+    "id": "RT-04-007",
+    "lane": "RT-04",
+    "transcript": "Utility room: fit sink £260. Cloakroom: replace toilet £280. Return to the utility room, tile floor £180",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit sink",
+          "room": "Utility room",
+          "unitPricePence": 26000
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": 28000
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Utility room",
+          "unitPricePence": 18000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F007"
+  },
+  {
+    "id": "RT-04-008",
+    "lane": "RT-04",
+    "transcript": "Dining room: paint ceiling £210. Living room: fit skirting £240. Returning to the dining room, fit door £170",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Dining room",
+          "unitPricePence": 21000
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Living room",
+          "unitPricePence": 24000
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Dining room",
+          "unitPricePence": 17000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F008"
+  },
+  {
+    "id": "RT-04-009",
+    "lane": "RT-04",
+    "transcript": "Front bedroom: fit wardrobe £900. Back bedroom: paint walls £400. Back in the front bedroom, fit shelves £130",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit wardrobe",
+          "room": "Front bedroom",
+          "unitPricePence": 90000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Back bedroom",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Front bedroom",
+          "unitPricePence": 13000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F009"
+  },
+  {
+    "id": "RT-04-010",
+    "lane": "RT-04",
+    "transcript": "Kitchen: strip out units £300. Bathroom: tile floor £450. In the kitchen again, fit worktop £650",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out units",
+          "room": "Kitchen",
+          "unitPricePence": 30000
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": 45000
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": 65000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F010"
+  },
+  {
+    "id": "RT-04-011",
+    "lane": "RT-04",
+    "transcript": "Porch: fit door £350. Conservatory: lay vinyl £480. Now back to the porch, paint ceiling £110",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Porch",
+          "unitPricePence": 35000
+        },
+        {
+          "descriptionIncludes": "lay vinyl",
+          "room": "Conservatory",
+          "unitPricePence": 48000
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Porch",
+          "unitPricePence": 11000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F011"
+  },
+  {
+    "id": "RT-04-012",
+    "lane": "RT-04",
+    "transcript": "Upstairs bathroom: fit shower £600. Downstairs WC: fit basin £200. Back upstairs in the bathroom, tile walls £700",
+    "why": "Room return: three distinct work clauses retain their own area and price.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Upstairs bathroom",
+          "unitPricePence": 60000
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Downstairs WC",
+          "unitPricePence": 20000
+        },
+        {
+          "descriptionIncludes": "tile walls",
+          "room": "Upstairs bathroom",
+          "unitPricePence": 70000
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F012"
+  },
+  {
+    "id": "RT-04-013",
+    "lane": "RT-04",
+    "transcript": "In bedroom one paint the walls. Bedroom one £300 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom one",
+          "pence": 30000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom one",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-014",
+    "lane": "RT-04",
+    "transcript": "In bedroom two paint the walls. Bedroom two £500 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom two",
+          "pence": 50000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom two",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-015",
+    "lane": "RT-04",
+    "transcript": "In bedroom three paint the walls. Bedroom three £350 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom three",
+          "pence": 35000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom three",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-016",
+    "lane": "RT-04",
+    "transcript": "In bedroom four paint the walls. Bedroom four £375 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom four",
+          "pence": 37500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom four",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-017",
+    "lane": "RT-04",
+    "transcript": "In bedroom five paint the walls. Bedroom five five hundred pounds all in",
+    "why": "Spoken numbered room: five names the room and five hundred is its total; exact area price or an explicit question is safe (also checked by the focused alternative test).",
+    "expect": {
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000,
+        550000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom five",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-018",
+    "lane": "RT-04",
+    "transcript": "In bedroom 1 paint the walls. Bedroom 1 £425 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom 1",
+          "pence": 42500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom 1",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-019",
+    "lane": "RT-04",
+    "transcript": "In bedroom 2 paint the walls. Bedroom 2 £450 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom 2",
+          "pence": 45000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom 2",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-020",
+    "lane": "RT-04",
+    "transcript": "In bedroom 3 paint the walls. Bedroom 3 £475 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom 3",
+          "pence": 47500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom 3",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-021",
+    "lane": "RT-04",
+    "transcript": "In bedroom 4 paint the walls. Bedroom 4 £500 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom 4",
+          "pence": 50000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom 4",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-022",
+    "lane": "RT-04",
+    "transcript": "In bedroom 5 paint the walls. Bedroom 5 £525 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Bedroom 5",
+          "pence": 52500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Bedroom 5",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-023",
+    "lane": "RT-04",
+    "transcript": "In first bedroom paint the walls. First bedroom £550 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "First bedroom",
+          "pence": 55000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "First bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-024",
+    "lane": "RT-04",
+    "transcript": "In second bedroom paint the walls. Second bedroom £575 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Second bedroom",
+          "pence": 57500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Second bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-025",
+    "lane": "RT-04",
+    "transcript": "In third bedroom paint the walls. Third bedroom £600 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Third bedroom",
+          "pence": 60000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Third bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-026",
+    "lane": "RT-04",
+    "transcript": "In fourth bedroom paint the walls. Fourth bedroom £625 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Fourth bedroom",
+          "pence": 62500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Fourth bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-027",
+    "lane": "RT-04",
+    "transcript": "In back bedroom paint the walls. Back bedroom £650 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Back bedroom",
+          "pence": 65000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Back bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-028",
+    "lane": "RT-04",
+    "transcript": "In front bedroom paint the walls. Front bedroom £675 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Front bedroom",
+          "pence": 67500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Front bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-029",
+    "lane": "RT-04",
+    "transcript": "In box room paint the walls. Box room £700 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Box room",
+          "pence": 70000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Box room",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F029"
+  },
+  {
+    "id": "RT-04-030",
+    "lane": "RT-04",
+    "transcript": "In spare bedroom paint the walls. Spare bedroom £725 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Spare bedroom",
+          "pence": 72500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Spare bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-031",
+    "lane": "RT-04",
+    "transcript": "In master bedroom paint the walls. Master bedroom £750 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Master bedroom",
+          "pence": 75000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Master bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-032",
+    "lane": "RT-04",
+    "transcript": "In kids bedroom paint the walls. Kids bedroom £775 all in",
+    "why": "Named room total: the room name identifies a place, never a quantity or a price multiplier.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [
+        {
+          "room": "Kids bedroom",
+          "pence": 77500
+        }
+      ],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        250000
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "paint the walls",
+          "room": "Kids bedroom",
+          "unitPricePence": null,
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-033",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. Paint walls for £200. The kitchen all in £200. In the bathroom. Fit door for £150. For the whole job £350.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 20000
+        }
+      ],
+      "wholeJobPricePence": 35000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Kitchen",
+          "unitPricePence": 20000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Bathroom",
+          "unitPricePence": 15000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-034",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. Paint walls for £200. The kitchen all in £250. In the bathroom. Fit door for £150. For the whole job £430.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Kitchen",
+          "pence": 25000
+        }
+      ],
+      "wholeJobPricePence": 43000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Kitchen",
+          "unitPricePence": 20000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Bathroom",
+          "unitPricePence": 15000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F034"
+  },
+  {
+    "id": "RT-04-035",
+    "lane": "RT-04",
+    "transcript": "In the hall. Paint walls for £220. The hall all in £220. In the landing. Fit door for £160. For the whole job £380.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Hall",
+          "pence": 22000
+        }
+      ],
+      "wholeJobPricePence": 38000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Hall",
+          "unitPricePence": 22000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Landing",
+          "unitPricePence": 16000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-036",
+    "lane": "RT-04",
+    "transcript": "In the hall. Paint walls for £220. The hall all in £270. In the landing. Fit door for £160. For the whole job £460.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Hall",
+          "pence": 27000
+        }
+      ],
+      "wholeJobPricePence": 46000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Hall",
+          "unitPricePence": 22000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Landing",
+          "unitPricePence": 16000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F036"
+  },
+  {
+    "id": "RT-04-037",
+    "lane": "RT-04",
+    "transcript": "In the lounge. Paint walls for £240. The lounge all in £240. In the study. Fit door for £170. For the whole job £410.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Lounge",
+          "pence": 24000
+        }
+      ],
+      "wholeJobPricePence": 41000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Lounge",
+          "unitPricePence": 24000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Study",
+          "unitPricePence": 17000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-038",
+    "lane": "RT-04",
+    "transcript": "In the lounge. Paint walls for £240. The lounge all in £290. In the study. Fit door for £170. For the whole job £490.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Lounge",
+          "pence": 29000
+        }
+      ],
+      "wholeJobPricePence": 49000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Lounge",
+          "unitPricePence": 24000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Study",
+          "unitPricePence": 17000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F038"
+  },
+  {
+    "id": "RT-04-039",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. Paint walls for £260. The bedroom two all in £260. In the bedroom three. Fit door for £180. For the whole job £440.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Bedroom two",
+          "pence": 26000
+        }
+      ],
+      "wholeJobPricePence": 44000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Bedroom two",
+          "unitPricePence": 26000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Bedroom three",
+          "unitPricePence": 18000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-040",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. Paint walls for £260. The bedroom two all in £310. In the bedroom three. Fit door for £180. For the whole job £520.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Bedroom two",
+          "pence": 31000
+        }
+      ],
+      "wholeJobPricePence": 52000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Bedroom two",
+          "unitPricePence": 26000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Bedroom three",
+          "unitPricePence": 18000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F040"
+  },
+  {
+    "id": "RT-04-041",
+    "lane": "RT-04",
+    "transcript": "In the utility room. Paint walls for £280. The utility room all in £280. In the cloakroom. Fit door for £190. For the whole job £470.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Utility room",
+          "pence": 28000
+        }
+      ],
+      "wholeJobPricePence": 47000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Utility room",
+          "unitPricePence": 28000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Cloakroom",
+          "unitPricePence": 19000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-042",
+    "lane": "RT-04",
+    "transcript": "In the utility room. Paint walls for £280. The utility room all in £330. In the cloakroom. Fit door for £190. For the whole job £550.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Utility room",
+          "pence": 33000
+        }
+      ],
+      "wholeJobPricePence": 55000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Utility room",
+          "unitPricePence": 28000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Cloakroom",
+          "unitPricePence": 19000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F042"
+  },
+  {
+    "id": "RT-04-043",
+    "lane": "RT-04",
+    "transcript": "In the garage. Paint walls for £300. The garage all in £300. In the porch. Fit door for £200. For the whole job £500.",
+    "why": "Totals coexist: keep line, room and whole-job values on their own levels.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Garage",
+          "pence": 30000
+        }
+      ],
+      "wholeJobPricePence": 50000,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Garage",
+          "unitPricePence": 30000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Porch",
+          "unitPricePence": 20000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-044",
+    "lane": "RT-04",
+    "transcript": "In the garage. Paint walls for £300. The garage all in £350. In the porch. Fit door for £200. For the whole job £580.",
+    "why": "Totals mismatch: ask about the discrepancy without changing any said money.",
+    "expect": {
+      "lineCount": 2,
+      "areaPrices": [
+        {
+          "room": "Garage",
+          "pence": 35000
+        }
+      ],
+      "wholeJobPricePence": 58000,
+      "questionsInclude": [
+        "total"
+      ],
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "room": "Garage",
+          "unitPricePence": 30000,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "Fit door",
+          "room": "Porch",
+          "unitPricePence": 20000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F044"
+  },
+  {
+    "id": "RT-04-045",
+    "lane": "RT-04",
+    "transcript": "Mrs Jones, paint the lounge £300. Mr Smith, paint the hall £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F045"
+  },
+  {
+    "id": "RT-04-046",
+    "lane": "RT-04",
+    "transcript": "For Mrs Jones paint the lounge £300. For Mr Smith paint the hall £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F046"
+  },
+  {
+    "id": "RT-04-047",
+    "lane": "RT-04",
+    "transcript": "Mrs Green job: fit kitchen units £800. Mr Brown job: fit bathroom basin £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F047"
+  },
+  {
+    "id": "RT-04-048",
+    "lane": "RT-04",
+    "transcript": "First customer Alice: paint the bedroom £400. Second customer Bob: tile the kitchen £300",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F048"
+  },
+  {
+    "id": "RT-04-049",
+    "lane": "RT-04",
+    "transcript": "At 12 Orchard Road paint the lounge £300. At 28 Meadow Lane paint the hall £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F049"
+  },
+  {
+    "id": "RT-04-050",
+    "lane": "RT-04",
+    "transcript": "Number 4 Acorn Close: fit a door £180. Number 19 Birch Avenue: fit a shelf £90",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F050"
+  },
+  {
+    "id": "RT-04-051",
+    "lane": "RT-04",
+    "transcript": "Mrs Jones at 12 Orchard Road paint the lounge £300. Mrs Jones at 28 Meadow Lane paint the hall £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F051"
+  },
+  {
+    "id": "RT-04-052",
+    "lane": "RT-04",
+    "transcript": "The first job is at 8 Cedar Grove paint the ceiling £250 and the second job is at 6 Elm Walk tile the floor £600",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F052"
+  },
+  {
+    "id": "RT-04-053",
+    "lane": "RT-04",
+    "transcript": "This is two separate jobs. Fit a kitchen for Mrs Reed £2000. Fit a bathroom for Mr Lake £1800",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F053"
+  },
+  {
+    "id": "RT-04-054",
+    "lane": "RT-04",
+    "transcript": "The Oak House job paint the lounge £300. The Willow Cottage job paint the hall £200",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F054"
+  },
+  {
+    "id": "RT-04-055",
+    "lane": "RT-04",
+    "transcript": "Paint the kitchen at 3 Hazel Street £450 then paint the kitchen at 9 Rowan Street £550",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F055"
+  },
+  {
+    "id": "RT-04-056",
+    "lane": "RT-04",
+    "transcript": "Customer one wants the hall painted for £300. Customer two wants the lounge painted for £400",
+    "why": "Multiple jobs: explicitly question the customer/address boundary; never silently combine one quote.",
+    "expect": {
+      "questionsInclude": [
+        "job"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F056"
+  },
+  {
+    "id": "RT-04-057",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards and then fit base units and then tile splashback and then paint ceiling and then fit worktop and then replace sink and then fit wall units and then bathroom fit basin and then tile floor and then paint walls and then replace toilet and then fit shower and then fit extractor fan and then fit radiator and then hall fit door and then fit skirting and then skim ceiling and then fit shelves and then lay carpet and then fit light and then replace switch",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 21,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F057"
+  },
+  {
+    "id": "RT-04-058",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards and then fit base units and then tile splashback and then paint ceiling and then fit worktop and then replace sink and then fit wall units and then cloakroom fit basin and then tile floor and then paint walls and then replace toilet and then fit shower and then fit extractor fan and then fit radiator and then study fit door and then fit skirting and then skim ceiling and then fit shelves and then lay carpet and then fit light and then replace switch and then study fit handrail",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 22,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-059",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards and then fit base units and then tile splashback and then paint ceiling and then fit worktop and then replace sink and then fit wall units and then bathroom fit basin and then tile floor and then paint walls and then replace toilet and then fit shower and then fit extractor fan and then fit radiator and then hall fit door and then fit skirting and then skim ceiling and then fit shelves and then lay carpet and then fit light and then replace switch and then hall fit handrail and then paint window frame",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 23,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F059"
+  },
+  {
+    "id": "RT-04-060",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards and then fit base units and then tile splashback and then paint ceiling and then fit worktop and then replace sink and then fit wall units and then cloakroom fit basin and then tile floor and then paint walls and then replace toilet and then fit shower and then fit extractor fan and then fit radiator and then study fit door and then fit skirting and then skim ceiling and then fit shelves and then lay carpet and then fit light and then replace switch and then study fit handrail and then paint window frame and then replace architrave",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 24,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace architrave",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-061",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards then fit base units then tile splashback then paint ceiling then fit worktop then replace sink then fit wall units then bathroom fit basin then tile floor then paint walls then replace toilet then fit shower then fit extractor fan then fit radiator then hall fit door then fit skirting then skim ceiling then fit shelves then lay carpet then fit light then replace switch",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 21,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F061"
+  },
+  {
+    "id": "RT-04-062",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards then fit base units then tile splashback then paint ceiling then fit worktop then replace sink then fit wall units then cloakroom fit basin then tile floor then paint walls then replace toilet then fit shower then fit extractor fan then fit radiator then study fit door then fit skirting then skim ceiling then fit shelves then lay carpet then fit light then replace switch then study fit handrail",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 22,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-063",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards then fit base units then tile splashback then paint ceiling then fit worktop then replace sink then fit wall units then bathroom fit basin then tile floor then paint walls then replace toilet then fit shower then fit extractor fan then fit radiator then hall fit door then fit skirting then skim ceiling then fit shelves then lay carpet then fit light then replace switch then hall fit handrail then paint window frame",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 23,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F063"
+  },
+  {
+    "id": "RT-04-064",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards then fit base units then tile splashback then paint ceiling then fit worktop then replace sink then fit wall units then cloakroom fit basin then tile floor then paint walls then replace toilet then fit shower then fit extractor fan then fit radiator then study fit door then fit skirting then skim ceiling then fit shelves then lay carpet then fit light then replace switch then study fit handrail then paint window frame then replace architrave",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 24,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace architrave",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-065",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards fit base units tile splashback paint ceiling fit worktop replace sink fit wall units bathroom fit basin tile floor paint walls replace toilet fit shower fit extractor fan fit radiator hall fit door fit skirting skim ceiling fit shelves lay carpet fit light replace switch",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 21,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F065"
+  },
+  {
+    "id": "RT-04-066",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards fit base units tile splashback paint ceiling fit worktop replace sink fit wall units cloakroom fit basin tile floor paint walls replace toilet fit shower fit extractor fan fit radiator study fit door fit skirting skim ceiling fit shelves lay carpet fit light replace switch study fit handrail",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 22,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-067",
+    "lane": "RT-04",
+    "transcript": "kitchen strip out cupboards fit base units tile splashback paint ceiling fit worktop replace sink fit wall units bathroom fit basin tile floor paint walls replace toilet fit shower fit extractor fan fit radiator hall fit door fit skirting skim ceiling fit shelves lay carpet fit light replace switch hall fit handrail paint window frame",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 23,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Kitchen",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Bathroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Hall",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F067"
+  },
+  {
+    "id": "RT-04-068",
+    "lane": "RT-04",
+    "transcript": "utility room strip out cupboards fit base units tile splashback paint ceiling fit worktop replace sink fit wall units cloakroom fit basin tile floor paint walls replace toilet fit shower fit extractor fan fit radiator study fit door fit skirting skim ceiling fit shelves lay carpet fit light replace switch study fit handrail paint window frame replace architrave",
+    "why": "Long run-on: 21–24 separately said items, with two room switches and no invented prices.",
+    "expect": {
+      "lineCount": 24,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out cupboards",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Strip-out"
+        },
+        {
+          "descriptionIncludes": "fit base units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "fit worktop",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit wall units",
+          "room": "Utility room",
+          "unitPricePence": null,
+          "trade": "Kitchen fitting"
+        },
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Tiling"
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace toilet",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit shower",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit extractor fan",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Cloakroom",
+          "unitPricePence": null,
+          "trade": "Plumbing"
+        },
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Plastering"
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Flooring"
+        },
+        {
+          "descriptionIncludes": "fit light",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "replace switch",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Electrics"
+        },
+        {
+          "descriptionIncludes": "fit handrail",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "paint window frame",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Decorating"
+        },
+        {
+          "descriptionIncludes": "replace architrave",
+          "room": "Study",
+          "unitPricePence": null,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-069",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. strip out units. fit cabinets. tile splashback. For the whole job £1000.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 100000,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out units",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit cabinets",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-070",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. strip out units. fit cabinets. tile splashback. For the lot £1000.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 100000,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out units",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit cabinets",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-071",
+    "lane": "RT-04",
+    "transcript": "In the bathroom. fit basin. tile floor. paint ceiling. For the whole job £1100.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 110000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bathroom",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-072",
+    "lane": "RT-04",
+    "transcript": "In the bathroom. fit basin. tile floor. paint ceiling. For the lot £1100.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 110000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bathroom",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-073",
+    "lane": "RT-04",
+    "transcript": "In the hall. fit door. fit skirting. paint walls. For the whole job £1200.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 120000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Hall",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-074",
+    "lane": "RT-04",
+    "transcript": "In the hall. fit door. fit skirting. paint walls. For the lot £1200.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 120000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Hall",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-075",
+    "lane": "RT-04",
+    "transcript": "In the lounge. skim ceiling. paint walls. fit shelves. For the whole job £1300.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 130000,
+      "lines": [
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Lounge",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-076",
+    "lane": "RT-04",
+    "transcript": "In the lounge. skim ceiling. paint walls. fit shelves. For the lot £1300.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 130000,
+      "lines": [
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Lounge",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-077",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. fit door. lay carpet. paint ceiling. For the whole job £1400.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 140000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-078",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. fit door. lay carpet. paint ceiling. For the lot £1400.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 140000,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-079",
+    "lane": "RT-04",
+    "transcript": "In the utility room. replace sink. fit units. tile floor. For the whole job £1500.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 150000,
+      "lines": [
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Utility room",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-080",
+    "lane": "RT-04",
+    "transcript": "In the utility room. replace sink. fit units. tile floor. For the lot £1500.",
+    "why": "Unpriced bundle: every work clause remains open; the final figure belongs to all the work, not its last item.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": 150000,
+      "lines": [
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Utility room",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-081",
+    "lane": "RT-04",
+    "transcript": "Fit doors skirting and architrave for £600",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit doors skirting and architrave",
+          "unitPricePence": 60000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-082",
+    "lane": "RT-04",
+    "transcript": "Paint walls ceiling and woodwork for £700",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls ceiling and woodwork",
+          "unitPricePence": 70000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-083",
+    "lane": "RT-04",
+    "transcript": "Replace basin toilet and bath for £1200",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Replace basin toilet and bath",
+          "unitPricePence": 120000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-084",
+    "lane": "RT-04",
+    "transcript": "Fit base units wall units and worktop for £2400",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit base units wall units and worktop",
+          "unitPricePence": 240000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-085",
+    "lane": "RT-04",
+    "transcript": "Tile walls floor and splashback for £900",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Tile walls floor and splashback",
+          "unitPricePence": 90000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-086",
+    "lane": "RT-04",
+    "transcript": "Fit handrail banister and spindles for £800",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit handrail banister and spindles",
+          "unitPricePence": 80000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-087",
+    "lane": "RT-04",
+    "transcript": "Replace sockets switches and lights for £650",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Replace sockets switches and lights",
+          "unitPricePence": 65000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-088",
+    "lane": "RT-04",
+    "transcript": "Lay carpet underlay and grippers for £500",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Lay carpet underlay and grippers",
+          "unitPricePence": 50000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-089",
+    "lane": "RT-04",
+    "transcript": "Fit guttering fascias and soffits for £1100",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit guttering fascias and soffits",
+          "unitPricePence": 110000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-090",
+    "lane": "RT-04",
+    "transcript": "Supply and fit door frame and architrave for £450",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Supply and fit door frame and architrave",
+          "unitPricePence": 45000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-091",
+    "lane": "RT-04",
+    "transcript": "Paint hall landing and stairs for £900",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint hall landing and stairs",
+          "unitPricePence": 90000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-092",
+    "lane": "RT-04",
+    "transcript": "Fit shelves rails and brackets for £360",
+    "why": "Combined list: one shared line price covers all named objects, never one object alone.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit shelves rails and brackets",
+          "unitPricePence": 36000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-093",
+    "lane": "RT-04",
+    "transcript": "In the garden. build brick wall £200.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "build brick wall",
+          "room": "Garden",
+          "unitPricePence": 20000,
+          "trade": "Brickwork"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F093"
+  },
+  {
+    "id": "RT-04-094",
+    "lane": "RT-04",
+    "transcript": "In the front. lay paving £230.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay paving",
+          "room": "Front",
+          "unitPricePence": 23000,
+          "trade": "Groundworks"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F094"
+  },
+  {
+    "id": "RT-04-095",
+    "lane": "RT-04",
+    "transcript": "In the back. fit fence £260.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit fence",
+          "room": "Back",
+          "unitPricePence": 26000,
+          "trade": "Other"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F095"
+  },
+  {
+    "id": "RT-04-096",
+    "lane": "RT-04",
+    "transcript": "In the roof. replace slates £290.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "replace slates",
+          "room": "Roof",
+          "unitPricePence": 29000,
+          "trade": "Roofing"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F096"
+  },
+  {
+    "id": "RT-04-097",
+    "lane": "RT-04",
+    "transcript": "In the drive. lay slabs £320.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay slabs",
+          "room": "Drive",
+          "unitPricePence": 32000,
+          "trade": "Groundworks"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F097"
+  },
+  {
+    "id": "RT-04-098",
+    "lane": "RT-04",
+    "transcript": "In the side return. fit drain £350.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit drain",
+          "room": "Side return",
+          "unitPricePence": 35000,
+          "trade": "Other"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F098"
+  },
+  {
+    "id": "RT-04-099",
+    "lane": "RT-04",
+    "transcript": "In the front garden. build brick wall £380.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "build brick wall",
+          "room": "Front garden",
+          "unitPricePence": 38000,
+          "trade": "Brickwork"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F099"
+  },
+  {
+    "id": "RT-04-100",
+    "lane": "RT-04",
+    "transcript": "In the back garden. lay patio £410.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay patio",
+          "room": "Back garden",
+          "unitPricePence": 41000,
+          "trade": "Groundworks"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F100"
+  },
+  {
+    "id": "RT-04-101",
+    "lane": "RT-04",
+    "transcript": "In the driveway. lay slabs £440.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay slabs",
+          "room": "Driveway",
+          "unitPricePence": 44000,
+          "trade": "Groundworks"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F101"
+  },
+  {
+    "id": "RT-04-102",
+    "lane": "RT-04",
+    "transcript": "In the outside. fit gate £470.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit gate",
+          "room": "Outside",
+          "unitPricePence": 47000,
+          "trade": "Other"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F102"
+  },
+  {
+    "id": "RT-04-103",
+    "lane": "RT-04",
+    "transcript": "In the porch. paint ceiling £500.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Porch",
+          "unitPricePence": 50000,
+          "trade": "Decorating"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F103"
+  },
+  {
+    "id": "RT-04-104",
+    "lane": "RT-04",
+    "transcript": "In the garage. fit shelves £530.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Garage",
+          "unitPricePence": 53000,
+          "trade": "Carpentry"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F104"
+  },
+  {
+    "id": "RT-04-105",
+    "lane": "RT-04",
+    "transcript": "In the extension. fit radiator £560.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit radiator",
+          "room": "Extension",
+          "unitPricePence": 56000,
+          "trade": "Plumbing"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F105"
+  },
+  {
+    "id": "RT-04-106",
+    "lane": "RT-04",
+    "transcript": "In the conservatory. lay carpet £590.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Conservatory",
+          "unitPricePence": 59000,
+          "trade": "Flooring"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F106"
+  },
+  {
+    "id": "RT-04-107",
+    "lane": "RT-04",
+    "transcript": "In the front path. lay slabs £620.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "lay slabs",
+          "room": "Front path",
+          "unitPricePence": 62000,
+          "trade": "Groundworks"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F107"
+  },
+  {
+    "id": "RT-04-108",
+    "lane": "RT-04",
+    "transcript": "In the rear yard. fit fence £650.",
+    "why": "Outside area: keep the named place for the work; no previous indoor room leaks into it.",
+    "expect": {
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit fence",
+          "room": "Rear yard",
+          "unitPricePence": 65000,
+          "trade": "Other"
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F108"
+  },
+  {
+    "id": "RT-04-109",
+    "transcript": "£300 for the hall, painting",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "painting",
+          "unitPricePence": [
+            null,
+            30000
+          ]
+        }
+      ],
+      "neverPence": [
+        300,
+        300000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-110",
+    "transcript": "£325 for the kitchen, tiling",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "tiling",
+          "unitPricePence": [
+            null,
+            32500
+          ]
+        }
+      ],
+      "neverPence": [
+        325,
+        325000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-111",
+    "transcript": "£350 for the bathroom, plumbing",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plumbing",
+          "unitPricePence": [
+            null,
+            35000
+          ]
+        }
+      ],
+      "neverPence": [
+        350,
+        350000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-112",
+    "transcript": "£375 for the lounge, decorating",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "decorating",
+          "unitPricePence": [
+            null,
+            37500
+          ]
+        }
+      ],
+      "neverPence": [
+        375,
+        375000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-113",
+    "transcript": "£400 for the bedroom two, painting",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "painting",
+          "unitPricePence": [
+            null,
+            40000
+          ]
+        }
+      ],
+      "neverPence": [
+        400,
+        400000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-114",
+    "transcript": "£425 for the garden, paving",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paving",
+          "unitPricePence": [
+            null,
+            42500
+          ]
+        }
+      ],
+      "neverPence": [
+        425,
+        425000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-115",
+    "transcript": "£450 for the garage, flooring",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "flooring",
+          "unitPricePence": [
+            null,
+            45000
+          ]
+        }
+      ],
+      "neverPence": [
+        450,
+        450000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-116",
+    "transcript": "£475 for the roof, repairs",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "repairs",
+          "unitPricePence": [
+            null,
+            47500
+          ]
+        }
+      ],
+      "neverPence": [
+        475,
+        475000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-117",
+    "transcript": "£500 for the study, shelving",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "shelving",
+          "unitPricePence": [
+            null,
+            50000
+          ]
+        }
+      ],
+      "neverPence": [
+        500,
+        500000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-118",
+    "transcript": "£525 for the landing, painting",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "painting",
+          "unitPricePence": [
+            null,
+            52500
+          ]
+        }
+      ],
+      "neverPence": [
+        525,
+        525000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-119",
+    "transcript": "£550 for the box room, plastering",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plastering",
+          "unitPricePence": [
+            null,
+            55000
+          ]
+        }
+      ],
+      "neverPence": [
+        550,
+        550000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-120",
+    "transcript": "£575 for the side return, drainage",
+    "why": "Leading price: attach the exact money to the named work, or ask about that amount without losing the work.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "drainage",
+          "unitPricePence": [
+            null,
+            57500
+          ]
+        }
+      ],
+      "neverPence": [
+        575,
+        575000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-121",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. strip out units £200. fit cabinets. tile splashback.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out units",
+          "room": "Kitchen",
+          "unitPricePence": 20000
+        },
+        {
+          "descriptionIncludes": "fit cabinets",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-122",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. strip out units. fit cabinets. tile splashback £200.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out units",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit cabinets",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": 20000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-123",
+    "lane": "RT-04",
+    "transcript": "In the bathroom. fit basin £220. tile floor. paint ceiling.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": 22000
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bathroom",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-124",
+    "lane": "RT-04",
+    "transcript": "In the bathroom. fit basin. tile floor. paint ceiling £220.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit basin",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bathroom",
+          "unitPricePence": 22000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-125",
+    "lane": "RT-04",
+    "transcript": "In the hall. fit door £240. fit skirting. paint walls.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": 24000
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Hall",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-126",
+    "lane": "RT-04",
+    "transcript": "In the hall. fit door. fit skirting. paint walls £240.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit skirting",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Hall",
+          "unitPricePence": 24000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-127",
+    "lane": "RT-04",
+    "transcript": "In the lounge. skim ceiling £260. paint walls. fit shelves.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Lounge",
+          "unitPricePence": 26000
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Lounge",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-128",
+    "lane": "RT-04",
+    "transcript": "In the lounge. skim ceiling. paint walls. fit shelves £260.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "skim ceiling",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint walls",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit shelves",
+          "room": "Lounge",
+          "unitPricePence": 26000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-129",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. fit door £280. lay carpet. paint ceiling.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Bedroom two",
+          "unitPricePence": 28000
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-130",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. fit door. lay carpet. paint ceiling £280.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "fit door",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "lay carpet",
+          "room": "Bedroom two",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Bedroom two",
+          "unitPricePence": 28000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-131",
+    "lane": "RT-04",
+    "transcript": "In the utility room. replace sink £300. fit units. tile floor.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": 30000
+        },
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Utility room",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-132",
+    "lane": "RT-04",
+    "transcript": "In the utility room. replace sink. fit units. tile floor £300.",
+    "why": "Unpriced neighbours: exactly one said line price; the other work remains unpriced.",
+    "expect": {
+      "lineCount": 3,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "replace sink",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Utility room",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Utility room",
+          "unitPricePence": 30000
+        }
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-04-133",
+    "lane": "RT-04",
+    "transcript": "Kitchen strip out fit units tile splashback paint ceiling bathroom new suite tile floor",
+    "why": "Lane seed expectation conflict: the plan says seven but speaks six work clauses (four Kitchen, two Bathroom); no seventh item may be invented.",
+    "expect": {
+      "lineCount": 6,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lines": [
+        {
+          "descriptionIncludes": "strip out",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile splashback",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint ceiling",
+          "room": "Kitchen",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "new suite",
+          "room": "Bathroom",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "tile floor",
+          "room": "Bathroom",
+          "unitPricePence": null
+        }
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F133"
+  },
+  {
+    "id": "RT-04-134",
+    "transcript": "Paint the hall, the landing and the stairs, £900 the lot",
+    "why": "Lane seed: one shared price, a whole-job total or a question; never price just the hall.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "hall",
+          "unitPricePence": [
+            null,
+            90000
+          ]
+        }
+      ],
+      "neverPence": [
+        900,
+        900000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-135",
+    "transcript": "Fit doors, skirting and architrave, £600",
+    "why": "Lane seed: a list price covers the full list or is asked about; never price one object alone.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "doors",
+          "unitPricePence": [
+            null,
+            60000
+          ]
+        }
+      ],
+      "neverPence": [
+        600,
+        600000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-136",
+    "transcript": "Bedroom two five hundred pounds all in",
+    "why": "Spoken numbered room: two identifies the bedroom; five hundred is the total, never 250000 pence.",
+    "status": "pass",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "bedroom",
+          "unitPricePence": null
+        }
+      ],
+      "neverPence": [
+        500,
+        500000
+      ]
+    }
+  },
+  {
+    "id": "RT-04-137",
+    "transcript": "Kitchen strip out fit units tile splashback paint ceiling £1200 the lot",
+    "why": "Unpriced run-on work followed by the lot: exact money may cover the whole bundle or remain questioned.",
+    "status": "open-finding",
+    "lane": "RT-04",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "strip out",
+          "unitPricePence": [
+            null,
+            120000
+          ]
+        }
+      ],
+      "neverPence": [
+        1200,
+        1200000
+      ]
+    },
+    "finding": "RT-04-F137"
+  },
+  {
+    "id": "RT-04-138",
+    "lane": "RT-04",
+    "transcript": "In the kitchen. Fit 2 doors for £300. In the bathroom. Tile 6 square metres for £240.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Kitchen",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": 30000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Bathroom",
+          "quantity": "6",
+          "unit": "m²",
+          "unitPricePence": 24000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F138"
+  },
+  {
+    "id": "RT-04-139",
+    "lane": "RT-04",
+    "transcript": "In the bathroom. Tile 6 square metres for £240. In the kitchen. Fit 2 doors for £300.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Bathroom",
+          "quantity": "6",
+          "unit": "m²",
+          "unitPricePence": 24000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Kitchen",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": 30000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F139"
+  },
+  {
+    "id": "RT-04-140",
+    "lane": "RT-04",
+    "transcript": "In the hall. Fit 3 doors for £340. In the landing. Tile 7 square metres for £270.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Hall",
+          "quantity": "3",
+          "unit": "doors",
+          "unitPricePence": 34000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Landing",
+          "quantity": "7",
+          "unit": "m²",
+          "unitPricePence": 27000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F140"
+  },
+  {
+    "id": "RT-04-141",
+    "lane": "RT-04",
+    "transcript": "In the landing. Tile 7 square metres for £270. In the hall. Fit 3 doors for £340.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Landing",
+          "quantity": "7",
+          "unit": "m²",
+          "unitPricePence": 27000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Hall",
+          "quantity": "3",
+          "unit": "doors",
+          "unitPricePence": 34000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F141"
+  },
+  {
+    "id": "RT-04-142",
+    "lane": "RT-04",
+    "transcript": "In the lounge. Fit 4 doors for £380. In the study. Tile 8 square metres for £300.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Lounge",
+          "quantity": "4",
+          "unit": "doors",
+          "unitPricePence": 38000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Study",
+          "quantity": "8",
+          "unit": "m²",
+          "unitPricePence": 30000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F142"
+  },
+  {
+    "id": "RT-04-143",
+    "lane": "RT-04",
+    "transcript": "In the study. Tile 8 square metres for £300. In the lounge. Fit 4 doors for £380.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Study",
+          "quantity": "8",
+          "unit": "m²",
+          "unitPricePence": 30000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Lounge",
+          "quantity": "4",
+          "unit": "doors",
+          "unitPricePence": 38000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F143"
+  },
+  {
+    "id": "RT-04-144",
+    "lane": "RT-04",
+    "transcript": "In the bedroom two. Fit 5 doors for £420. In the bedroom three. Tile 9 square metres for £330.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Bedroom two",
+          "quantity": "5",
+          "unit": "doors",
+          "unitPricePence": 42000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Bedroom three",
+          "quantity": "9",
+          "unit": "m²",
+          "unitPricePence": 33000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F144"
+  },
+  {
+    "id": "RT-04-145",
+    "lane": "RT-04",
+    "transcript": "In the bedroom three. Tile 9 square metres for £330. In the bedroom two. Fit 5 doors for £420.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Bedroom three",
+          "quantity": "9",
+          "unit": "m²",
+          "unitPricePence": 33000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Bedroom two",
+          "quantity": "5",
+          "unit": "doors",
+          "unitPricePence": 42000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F145"
+  },
+  {
+    "id": "RT-04-146",
+    "lane": "RT-04",
+    "transcript": "In the utility room. Fit 6 doors for £460. In the cloakroom. Tile 10 square metres for £360.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Utility room",
+          "quantity": "6",
+          "unit": "doors",
+          "unitPricePence": 46000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Cloakroom",
+          "quantity": "10",
+          "unit": "m²",
+          "unitPricePence": 36000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F146"
+  },
+  {
+    "id": "RT-04-147",
+    "lane": "RT-04",
+    "transcript": "In the cloakroom. Tile 10 square metres for £360. In the utility room. Fit 6 doors for £460.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Cloakroom",
+          "quantity": "10",
+          "unit": "m²",
+          "unitPricePence": 36000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Utility room",
+          "quantity": "6",
+          "unit": "doors",
+          "unitPricePence": 46000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F147"
+  },
+  {
+    "id": "RT-04-148",
+    "lane": "RT-04",
+    "transcript": "In the garage. Fit 7 doors for £500. In the porch. Tile 11 square metres for £390.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Garage",
+          "quantity": "7",
+          "unit": "doors",
+          "unitPricePence": 50000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Porch",
+          "quantity": "11",
+          "unit": "m²",
+          "unitPricePence": 39000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F148"
+  },
+  {
+    "id": "RT-04-149",
+    "lane": "RT-04",
+    "transcript": "In the porch. Tile 11 square metres for £390. In the garage. Fit 7 doors for £500.",
+    "why": "Counted work in separate rooms: retain each explicit quantity, unit and line price when room order reverses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "room": "Porch",
+          "quantity": "11",
+          "unit": "m²",
+          "unitPricePence": 39000,
+          "trade": "Tiling",
+          "priceBasis": "line"
+        },
+        {
+          "descriptionIncludes": "Fit",
+          "room": "Garage",
+          "quantity": "7",
+          "unit": "doors",
+          "unitPricePence": 50000,
+          "trade": "Carpentry",
+          "priceBasis": "line"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null
+    },
+    "status": "open-finding",
+    "finding": "RT-04-F149"
+  }
+]
