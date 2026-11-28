@@ -5,6 +5,17 @@ const id = "11000000-0000-4000-8000-000000000001";
 const other = "11000000-0000-4000-8000-000000000002";
 const row = { version: "work-order-import.v1", clientId: id, contractId: id, workOrderReference: "Fictional-001", issuedOn: "2026-10-08", dueOn: null, priority: "routine", status: "ordered", expectedRevision: 0, siteRevisionId: id, resident: { kind: "none", reason: "void_property" }, teamId: null, assignedMembershipIds: [], lines: [{ clientLineReference: null, sorCode: "REPAIR", quantity: "1" }] };
 describe("ENT-2 import boundaries (DW2, DW6)", () => {
+  it("exports spreadsheet-looking references as text and restores their exact source", () => {
+    for (const whitespace of ["", "\t", " ", "\r", " \t\r "]) for (const starter of ["=", "+", "-", "@"]) {
+      const workOrderReference = `${whitespace}${starter}SUM(1,2)`;
+      const input = { ...row, workOrderReference };
+      const csv = encodeWorkOrderCsv([input]);
+      expect(csv).toContain(`"'${workOrderReference}"`);
+      expect(parseWorkOrderCsv(csv)).toEqual([{ rowNumber: 2, input }]);
+    }
+    expect(encodeWorkOrderCsv([{ ...row, expectedRevision: -1 }])).toContain('"-1"');
+    expect(encodeWorkOrderCsv([{ ...row, expectedRevision: -1 }])).not.toContain('"\'-1"');
+  });
   it("accepts the versioned row and leaves absent parties for the controlled CH-3b refusal", () => {
     expect(workOrderRowV1.safeParse(row).success).toBe(true);
     for (const field of ["clientId", "contractId", "siteRevisionId", "resident"]) {

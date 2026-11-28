@@ -89,7 +89,7 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
   });
 
   it("E6-06 escapes spreadsheet formulas in both CSV writers while retaining exact source text", () => {
-    for (const prefix of ["=", "+", "-", "@", "'", "'=", "''"]) {
+    for (const prefix of ["=", "+", "-", "@", "'", "'=", "''", "\t=", "\t+", "\t-", "\t@", " =", " +", " -", " @", "\r=", "\r+", "\r-", "\r@", " \t\r ="]) {
       const text = `${prefix}SUM(1,2) "fictional"\n第二行`;
       const artifact = renderBillingExport({ version: "billing-export.v1", clientContractId: billingId(1),
         lines: [{ ...exportLine(), description: text, unit: text }] });
@@ -97,7 +97,10 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
       expect(artifact.csv.split(escapedCell)).toHaveLength(3);
       expect(JSON.parse(artifact.json).lines[0].description).toBe(text);
       expect(JSON.parse(artifact.json).lines[0].unit).toBe(text);
-      const sourceId = `${prefix}event`, invoiceNumber = `${prefix}invoice`, lineId = `${prefix}line`;
+      // Identity fields reject control characters; the free-text remittance still
+      // exercises every prefix and must round-trip through the real importer.
+      const identityPrefix = prefix.replace(/[\t\r]/gu, "");
+      const sourceId = `${identityPrefix}event`, invoiceNumber = `${identityPrefix}invoice`, lineId = `${identityPrefix}line`;
       const event = billingEvent({ sourceEventId: sourceId, invoiceNumber, remittanceReference: text,
         reconciliationId: sourceId, originalEventId: sourceId,
         composition: { ...billingEvent().composition, lines: [billingLine("original_order", { externalInvoiceLineId: lineId }), billingLine("extra")] } });

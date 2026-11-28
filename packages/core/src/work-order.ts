@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { csvCell, restoreCsvCell } from "./csv-cell.js";
 import { contractorPermits, type ContractorGrant, type ContractorTarget } from "./contractor.js";
 import { contractorResidentBoundaryV1 } from "./contractor-parties.js";
 import { assertSorQuantity, SorPricingError, sorMoneyV1, sorQuantityV1 } from "./sor-pricing.js";
@@ -148,7 +149,7 @@ export function parseWorkOrderCsv(csv: string): WorkOrderCsvRecord[] {
     const row: Record<string, unknown> = {};
     try {
       workOrderCsvColumns.forEach((column, position) => {
-        const value = cells[position]!;
+        const value = restoreCsvCell(cells[position]!);
         if (["resident", "assignedMembershipIds", "lines"].includes(column)) row[column] = value === "" && column === "resident" ? null : JSON.parse(value);
         else if (column === "expectedRevision") {
           if (!/^(?:0|[1-9]\d{0,9})$/u.test(value)) throw new WorkOrderError("INVALID_ROW");
@@ -161,10 +162,9 @@ export function parseWorkOrderCsv(csv: string): WorkOrderCsvRecord[] {
 }
 /** Takes plain records so a generated fixture can also encode a deliberately malformed row. */
 export function encodeWorkOrderCsv(rows: readonly Readonly<Record<string, unknown>>[]): string {
-  const quote = (value: string) => /[",\r\n]/u.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
   return workOrderCsvColumns.join(",") + "\r\n" + rows.map(row => workOrderCsvColumns.map(column => {
     const value = row[column];
-    return quote(value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value));
+    return csvCell(value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : typeof value === "number" ? value : String(value));
   }).join(",")).join("\r\n") + "\r\n";
 }
 

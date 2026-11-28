@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-12": {
+      "branches": [
+        "codex/sandbox/rt-fix-12"
+      ],
+      "note": "RT-FIX-12 (#1071): one shared CSV text boundary, independent SQL artifact validation, literal escaped-script render regression coverage. F005/F007 parser-only corpus cases stay open because the parser/reader/spoken-quote files are frozen. The lane file is implicitly editable; no lane-register grant. Commit only.",
+      "test": "pnpm --filter @jobguard/ai test --maxWorkers=2 && pnpm --filter @jobguard/core test --maxWorkers=2 && pnpm --filter @jobguard/web test --maxWorkers=2",
+      "allow": [
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "packages/ai/src/redteam/rt07-boundaries.test.ts",
+        "packages/ai/src/redteam/rt07-rendering.spec.mjs",
+        "packages/core/src/contractor-billing.test.ts",
+        "packages/core/src/contractor-billing.ts",
+        "packages/core/src/csv-cell.test.ts",
+        "packages/core/src/csv-cell.ts",
+        "packages/core/src/enterprise-baseline.ts",
+        "packages/core/src/work-order.test.ts",
+        "packages/core/src/work-order.ts",
+        "packages/db/migrations/2028_rt12_csv_whitespace.sql",
+        "packages/db/test/contractor-billing-export.integration.test.ts",
+        "packages/db/test/migration-proofs/2028_rt12_csv_whitespace.proof.json"
+      ]
+    }
+  }
+}

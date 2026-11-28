@@ -48,7 +48,7 @@ const exportFor = (description: string) => renderBillingExport({
 const csvCell = (value: string) => `"${value.replace(/"/gu, '""')}"`;
 
 describe("RT-07 document and spreadsheet boundaries", () => {
-  it.each(["<img src=x onerror=alert(1)>", "<script>alert(1)</script>", "</textarea><script>alert(1)</script>"])("keeps %s as literal immutable quote/PDF text", payload => {
+  it.each(["<img src=x onerror=alert(1)>", "<script>alert(1)</script>", "</textarea><script>alert(1)</script>", "&lt;script&gt;", "&lt;script&gt;alert(1)&lt;/script&gt;"])("keeps %s as literal immutable quote/PDF text", payload => {
     const description = `Fit panel labelled ${payload}`;
     const snapshot = document(description);
     expect(snapshot.lines[0]!.description).toBe(description);
@@ -71,10 +71,10 @@ describe("RT-07 document and spreadsheet boundaries", () => {
     expect(JSON.parse(artifact.json).lines[0].description).toBe(description);
     expect(artifact.csv.length).toBeGreaterThan(0);
   });
-  it.fails.each(["\t=", "\t+", "\t-", "\t@"])('RT-07-F008: exports leading tab plus "%s" as inert CSV', prefix => {
+  it.each(["\t=", "\t+", "\t-", "\t@"])('RT-07-F008: exports leading tab plus "%s" as inert CSV', prefix => {
     const description = `${prefix}SUM(1,2)`;
     const artifact = exportFor(description);
     expect(artifact.csv).toContain(csvCell(`'${description}`));
-    // This is an enforced open finding, not proof that a spreadsheet was opened or a formula executed.
+    // Byte-level protection; not proof that a spreadsheet was opened or a formula executed.
   });
 });
