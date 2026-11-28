@@ -287,3 +287,17 @@ describe("V2-SQ-M a digits-only citation still sees the words before its currenc
     expect(checked.wholeJobPrice).toBeNull();
   });
 });
+
+describe("V2-SQ-M another item's words in the same sentence never open this item's price (Codex P2 on #1064)", () => {
+  it.each(["Paint the walls for £200, fit a handle for twenty pounds and fifty pence",
+    "Paint the walls for £200 and fit a handle for twenty pounds and fifty pence"])("keeps £200 in %s through checkSpokenNumbers", text => {
+    const { timeline: _timeline, ...job } = readSpokenJob("00000000-0000-4000-8000-000000000002", text);
+    const before = job.lines.map(line => line.unitPricePence.value);
+    expect(before[0]).toBe(20000);
+    expect(checkSpokenNumbers(job, text).lines.map(line => line.unitPricePence.value)).toEqual(before);
+  });
+  it("still opens a limit said in the amount's own clause next to another item", () => {
+    const text = "Fit a handle for twenty pounds, paint the walls for up to £200";
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([2000, null]);
+  });
+});
