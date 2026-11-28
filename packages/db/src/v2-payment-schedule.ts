@@ -24,11 +24,20 @@ export const paymentScheduleTaskDoneV1 = z.strictObject({
   quoteRevisionId: z.uuid(), expectedVersion: z.number().int().min(1).max(2_147_483_647),
   scopeItemId: z.uuid(), taskKey: z.string().min(1).max(40),
 });
+// V2-K5B-1: a draft of a deposit or stage invoice, made from the stage's frozen row. Never issued or sent.
+export const stageDraftCommandV1 = z.strictObject({
+  version: z.literal("v2-stage-draft-command.v1"), commandId: z.uuid(), stageIndex: z.number().int().min(0).max(19),
+});
+export const stageDraftWithdrawCommandV1 = z.strictObject({
+  version: z.literal("v2-stage-draft-withdraw-command.v1"), commandId: z.uuid(), stageIndex: z.number().int().min(0).max(19),
+  draftNo: z.number().int().min(1).max(1000), reason: z.string().trim().min(1).max(200),
+});
 export type PaymentStage = z.infer<typeof paymentStageV1>;
 export type PaymentScheduleSet = z.infer<typeof paymentScheduleSetV1>;
 export class PaymentScheduleError extends Error {
   constructor(readonly code: "SCHEDULE_INVALID" | "SCHEDULE_STALE" | "SCHEDULE_REPLAY_CONFLICT" |
-    "SCHEDULE_ACCEPTANCE_REQUIRED" | "SCHEDULE_BUILDER_REQUIRED") { super(code); }
+    "SCHEDULE_ACCEPTANCE_REQUIRED" | "SCHEDULE_BUILDER_REQUIRED" | "STAGE_NOT_DUE" | "STAGE_DRAFT_LIVE" |
+    "STAGE_DRAFT_NOT_FOUND" | "STAGE_DRAFT_COMMAND_CONFLICT" | "V2_STAGE_DRAFT_OPEN" | "FINAL_ACCOUNT_LOCKED") { super(code); }
 }
 export const pounds = (pence: number) => {
   const exact = BigInt(money(pence).pence);
@@ -56,29 +65,55 @@ export function initialStageAmounts(total: number, stages: PaymentStage[]): numb
   });
 }
 export type ScheduleFact = { at: string; kind: "due"; index: number } |
-  { at: string; kind: "extra" | "prior_extra"; variationId: string; pence: number };
+  { at: string; kind: "extra" | "prior_extra"; variationId: string; pence: number; approvalId?: string };
+/** K5A-2: a stage frozen when it became due. Without amountPence it is being frozen now and takes the replayed amount. */
+export type FrozenStage = { index: number; at: string; countedApprovalIds: readonly string[]; amountPence?: number | undefined };
 
-/** Replay server facts in time order. Due stages are frozen even if nobody opened the page. */
-export function projectPaymentSchedule(total: number, stages: PaymentStage[], facts: ScheduleFact[], now: string) {
+type Placed = { slot: number; frozenEvent: boolean; fact: ScheduleFact | { kind: "frozen"; at: string; index: number; amountPence?: number | undefined } };
+
+/**
+ * Order the facts. Frozen rows come first: each approval goes just before the first frozen row that counted it
+ * (condition 2), and an approval no frozen row counted goes after every frozen due fact, whatever its created_at.
+ * Only approvals no frozen row counts, and unfrozen due facts (date stages, or K5A rows from before 2046), use time.
+ */
+function orderFacts(facts: ScheduleFact[], frozen: FrozenStage[], now: string) {
+  const rows = [...frozen].sort((a, b) => a.at.localeCompare(b.at) || a.index - b.index);
+  const frozenIndexes = new Set(rows.map(row => row.index));
+  const placed: Placed[] = rows.map((row, slot) => ({ slot, frozenEvent: true,
+    fact: { kind: "frozen", at: row.at, index: row.index, amountPence: row.amountPence } }));
+  for (const fact of facts) {
+    if (fact.at > now) continue;
+    if (fact.kind === "due" && frozenIndexes.has(fact.index)) continue;
+    let slot: number;
+    if (fact.kind === "extra" && fact.approvalId) {
+      const first = rows.findIndex(row => row.countedApprovalIds.includes(fact.approvalId!));
+      slot = first >= 0 ? first : rows.length;
+    } else {
+      // Unfrozen facts fall between frozen rows by time.
+      slot = rows.filter(row => row.at <= fact.at).length;
+    }
+    placed.push({ slot, frozenEvent: false, fact });
+  }
+  return placed.sort((a, b) => a.slot - b.slot || Number(a.frozenEvent) - Number(b.frozenEvent) ||
+    a.fact.at.localeCompare(b.fact.at) || (a.fact.kind === b.fact.kind ? 0 : a.fact.kind === "due" ? -1 : 1))
+    .map(item => item.fact);
+}
+
+/** Replay server facts in order. Due stages are fixed even if nobody opened the page; frozen stages keep their stored amount. */
+export function replayPaymentSchedule(total: number, stages: PaymentStage[], facts: ScheduleFact[], now: string,
+  frozen: FrozenStage[] = []) {
   const amounts = initialStageAmounts(total, stages);
   const due = stages.map(() => false);
   const variations = new Map<string, number>();
   const priorVariations = new Map<string, number>();
   let extras = 0;
   let unallocated = 0;
-  const ordered = facts.filter(fact => fact.at <= now).sort((a, b) =>
-    a.at.localeCompare(b.at) || (a.kind === b.kind ? 0 : a.kind === "due" ? -1 : 1));
-  for (const fact of ordered) {
-    if (fact.kind === "due") { due[fact.index] = true; continue; }
-    if (fact.kind === "prior_extra") { priorVariations.set(fact.variationId, fact.pence); continue; }
-    const delta = money(fact.pence).pence - (variations.get(fact.variationId) ?? 0);
-    variations.set(fact.variationId, fact.pence);
-    extras = money(extras + delta).pence;
+  // Share a change across the planned stages; an omission cannot reduce a stage already due.
+  const share = (delta: number) => {
     const planned = amounts.map((_, index) => index).filter(index => !due[index]);
     const weight = planned.reduce((sum, index) => sum + amounts[index]!, 0);
     const target = money(weight + delta).pence;
-    // An omission cannot reduce a stage already due. Keep the outstanding adjustment separate.
-    if (!planned.length || target < 0) { unallocated = money(unallocated + delta).pence; continue; }
+    if (!planned.length || target < 0) { unallocated = money(unallocated + delta).pence; return; }
     let prefix = 0n;
     let assigned = 0;
     planned.forEach((index, position) => {
@@ -88,9 +123,35 @@ export function projectPaymentSchedule(total: number, stages: PaymentStage[], fa
       amounts[index] = cumulative - assigned;
       assigned = cumulative;
     });
+  };
+  for (const fact of orderFacts(facts, frozen, now)) {
+    if (fact.kind === "due") { due[fact.index] = true; continue; }
+    if (fact.kind === "frozen") {
+      due[fact.index] = true;
+      // The stored amount is final. Any difference stays in the job total through the remaining stages.
+      if (fact.amountPence !== undefined && fact.amountPence !== amounts[fact.index]) {
+        const difference = money(amounts[fact.index]! - fact.amountPence).pence;
+        amounts[fact.index] = fact.amountPence;
+        share(difference);
+      }
+      continue;
+    }
+    if (fact.kind === "prior_extra") { priorVariations.set(fact.variationId, fact.pence); continue; }
+    const delta = money(fact.pence).pence - (variations.get(fact.variationId) ?? 0);
+    variations.set(fact.variationId, fact.pence);
+    extras = money(extras + delta).pence;
+    share(delta);
   }
-  return { stages: stages.map((stage, index) => ({ ...stage, amount: pounds(amounts[index]!),
-    status: due[index] ? "due" as const : "planned" as const })),
-  extrasBeforeSchedule: pounds([...priorVariations.values()].reduce((sum, pence) => money(sum + pence).pence, 0)),
-  extrasSinceSchedule: pounds(extras), unscheduledExtras: pounds(unallocated) };
+  const before = [...priorVariations.values()].reduce((sum, pence) => money(sum + pence).pence, 0);
+  return { amounts, due, extrasBeforeSchedule: before, extrasSinceSchedule: extras, unscheduledExtras: unallocated };
+}
+
+export function projectPaymentSchedule(total: number, stages: PaymentStage[], facts: ScheduleFact[], now: string,
+  frozen: FrozenStage[] = []) {
+  const result = replayPaymentSchedule(total, stages, facts, now, frozen);
+  const frozenIndexes = new Set(frozen.map(row => row.index));
+  return { stages: stages.map((stage, index) => ({ ...stage, amount: pounds(result.amounts[index]!),
+    status: result.due[index] ? "due" as const : "planned" as const, frozen: frozenIndexes.has(index) })),
+  extrasBeforeSchedule: pounds(result.extrasBeforeSchedule),
+  extrasSinceSchedule: pounds(result.extrasSinceSchedule), unscheduledExtras: pounds(result.unscheduledExtras) };
 }

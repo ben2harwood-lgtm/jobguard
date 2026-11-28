@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialStageAmounts, paymentScheduleSetV1, projectPaymentSchedule, type PaymentStage } from "./v2-payment-schedule.js";
+import { initialStageAmounts, paymentScheduleSetV1, projectPaymentSchedule, replayPaymentSchedule, type PaymentStage } from "./v2-payment-schedule.js";
 const stages: PaymentStage[] = ["30", "40", "30"].map((value, index) => ({ label: `Stage ${index}`, split: { kind: "percentage", value }, trigger: { kind: "acceptance" } }));
 const due = (index: number, at = "2026-11-24T12:00:00.000Z") => ({ kind: "due" as const, index, at });
 const extra = (pence: number, at = "2026-11-24T13:00:00.000Z") => ({ kind: "extra" as const, variationId: "extra", pence, at });
@@ -56,4 +56,84 @@ it("keeps extras from before the schedule separate without folding them into sta
   expect(result.extrasBeforeSchedule).toBe("8.00");
   expect(result.extrasSinceSchedule).toBe("2.00");
   expect(result.stages.map(stage => stage.amount)).toEqual(["30.60", "40.80", "30.60"]);
+});
+
+// V2-K5A-2: frozen due rows decide where an approval goes; created_at only orders approvals no frozen row counts.
+describe("K5A-2 frozen due stages", () => {
+  const quarters: PaymentStage[] = ["25", "25", "25", "25"].map((value, index) => ({ label: `Stage ${index}`,
+    split: { kind: "percentage", value }, trigger: { kind: "acceptance" } }));
+  const t = (minute: number) => `2026-11-24T12:${String(minute).padStart(2, "0")}:00.000000Z`;
+  const approval = (approvalId: string, pence: number, at: string) =>
+    ({ kind: "extra" as const, variationId: approvalId, approvalId, pence, at });
+  const sum = (result: ReturnType<typeof projectPaymentSchedule>) => [...result.stages.map(stage => stage.amount),
+    result.extrasBeforeSchedule, result.unscheduledExtras].reduce((total, amount) => total + Math.round(Number(amount) * 100), 0);
+  const frozen = (index: number, minute: number, counted: string[], amountPence?: number) =>
+    ({ index, at: t(minute), countedApprovalIds: counted, amountPence });
+
+  it("an approval in row k's set but not row k-1's lands between due facts k-1 and k (three frozen rows)", () => {
+    // "a" started before stage 1 froze but committed after it; stage 2's freeze counted it.
+    const facts = [approval("a", 700, t(4)), approval("b", 300, t(5))];
+    const rows = [frozen(0, 1, []), frozen(1, 5, []), frozen(2, 9, ["a"])];
+    const pending = replayPaymentSchedule(10000, quarters, facts.slice(0, 1), t(9), rows);
+    expect(pending.amounts).toEqual([2500, 2500, 2850, 2850]);
+    const stored = rows.map((row, index) => ({ ...row, amountPence: pending.amounts[index] }));
+    const result = projectPaymentSchedule(10000, quarters, facts, t(30), stored);
+    // b is counted by no frozen row, so it goes after every frozen due fact, although its created_at is earlier.
+    expect(result.stages.map(stage => stage.amount)).toEqual(["25.00", "25.00", "28.50", "31.50"]);
+    expect(result.stages.map(stage => stage.frozen)).toEqual([true, true, true, false]);
+    expect(sum(result)).toBe(10000 + 700 + 300);
+    // Ordered only by created_at, a would have changed stage 1, which the builder had already been shown as due.
+    expect(projectPaymentSchedule(10000, quarters, [...facts, ...[0, 1, 2].map(index => ({ kind: "due" as const, index,
+      at: t([1, 5, 9][index]!) }))], t(30)).stages[1]!.amount).not.toBe("25.00");
+  });
+
+  it("the race: B's frozen stage keeps its amount, A goes to the next stage, then to the final account", () => {
+    const facts = [approval("a", 700, t(4))];
+    const twoStages = quarters.slice(0, 2).map(stage => ({ ...stage, split: { kind: "percentage" as const, value: "50" } }));
+    const next = projectPaymentSchedule(10000, twoStages, facts, t(30), [frozen(0, 5, [], 5000)]);
+    expect(next.stages.map(stage => stage.amount)).toEqual(["50.00", "57.00"]);
+    expect(sum(next)).toBe(10700);
+    const last = projectPaymentSchedule(10000, twoStages, facts, t(30), [frozen(0, 1, [], 5000), frozen(1, 5, [], 5000)]);
+    expect(last.stages.map(stage => stage.amount)).toEqual(["50.00", "50.00"]);
+    expect(last.unscheduledExtras).toBe("7.00");
+    expect(sum(last)).toBe(10700);
+  });
+
+  it("a frozen stage shows its stored amount exactly and the job total still adds up", () => {
+    const result = projectPaymentSchedule(10000, quarters, [approval("a", 700, t(2))], t(30), [frozen(0, 5, ["a"], 2600)]);
+    expect(result.stages[0]!.amount).toBe("26.00");
+    expect(sum(result)).toBe(10700);
+  });
+
+  it("D3 midnight: an approval created 23:59:59 before a date stage changes that stage once it commits (known gap, K5B freezes)", () => {
+    const halves = quarters.slice(0, 2).map((stage, index) => ({ ...stage, split: { kind: "percentage" as const, value: "50" },
+      trigger: index ? { kind: "date" as const, date: "2026-11-27" } : stage.trigger }));
+    const midnight = { kind: "due" as const, index: 1, at: "2026-11-27T00:00:00.000000Z" };
+    const accepted = [frozen(0, 1, [], 5000)];
+    const late = approval("a", 700, "2026-11-26T23:59:59.000000Z");
+    // Read at 00:00:01 while the approval transaction is still open: it is not visible yet.
+    const open = projectPaymentSchedule(10000, halves, [midnight], "2026-11-27T00:00:01.000000Z", accepted);
+    expect(open.stages.map(stage => [stage.amount, stage.status])).toEqual([["50.00", "due"], ["50.00", "due"]]);
+    expect(open.unscheduledExtras).toBe("0.00");
+    // After commit its created_at is before midnight, so the date stage's shown amount changes.
+    const committed = projectPaymentSchedule(10000, halves, [midnight, late], "2026-11-27T00:00:02.000000Z", accepted);
+    expect(committed.stages.map(stage => stage.amount)).toEqual(["50.00", "57.00"]);
+    expect(committed.stages[1]!.frozen).toBe(false);
+    expect(sum(committed)).toBe(10700);
+  });
+});
+
+// V2-K5A-1: origin is not a replay input; extras from builder_logged, final_review and jobguard_catch all count.
+describe("K5A-1 every approved extra counts", () => {
+  it("replays a fact set built from three origins to the full total, a later revision replacing the earlier one", () => {
+    const facts = [due(0),
+      { kind: "extra" as const, variationId: "builder_logged", pence: 700, at: "2026-11-24T13:00:00.000Z" },
+      { kind: "extra" as const, variationId: "final_review", pence: 800, at: "2026-11-24T13:01:00.000Z" },
+      { kind: "extra" as const, variationId: "jobguard_catch", pence: 900, at: "2026-11-24T13:02:00.000Z" },
+      { kind: "extra" as const, variationId: "jobguard_catch", pence: 1500, at: "2026-11-24T13:03:00.000Z" }];
+    const result = replayPaymentSchedule(10000, stages, facts, now);
+    expect(result.extrasSinceSchedule).toBe(3000);
+    expect(result.amounts[0]).toBe(3000);
+    expect(result.amounts.reduce((a, b) => a + b, 0) + result.unscheduledExtras).toBe(13000);
+  });
 });
