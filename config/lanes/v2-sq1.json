@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq1": {
+      "branches": ["claude/project-thread-trp08u-sq1"],
+      "note": "RED (AI capture) spoken-quote intake JG-PLATFORM-SPOKEN-QUOTE-20261126, piece 1: the local draft parser turns continuous unpunctuated speech into ordered work items with spoken amounts, counts and a whole-job figure kept for review. Base v2/main 9f43bcdc. The golden record changes only its parser source hash (regenerated per docs/fixtures/ai/EVALUATION.md; every metric and prediction is unchanged).",
+      "allow": [
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}
