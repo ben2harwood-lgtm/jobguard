@@ -17,7 +17,9 @@ async function v2Exclusions(db:TenantTransaction,quoteRevisionId:string){
  if(process.env.JOBGUARD_LOCAL_V2!=="1")return [];
  const rows=(await db.$client.query<{description:string;exclusion_reason:string}>(`SELECT description,exclusion_reason FROM app.quote_line
   WHERE quote_revision_id=$1 AND NOT included AND nullif(exclusion_reason,'') IS NOT NULL ORDER BY ordinal`,[quoteRevisionId])).rows;
- return rows.map(row=>`${row.description}: ${row.exclusion_reason}`.slice(0,500));
+ // Each document entry holds 500 characters. A line's description (500) and reason (200) always fit as two
+ // entries, so when together they are too long they are split, never cut.
+ return rows.flatMap(row=>{const joined=`${row.description}: ${row.exclusion_reason}`;return joined.length<=500?[joined]:[row.description,`Reason: ${row.exclusion_reason}`];});
 }
 export class QuoteDeliveryRepository{
  constructor(private readonly pool:Pool){}
