@@ -5,6 +5,7 @@ import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
+import { workPlanTemplates } from "./v2-work-plan-templates.js";
 import { applyWorkPlanEdits, type WorkPlanEditRow, type WorkPlanScopeRow, type WorkPlanTask } from "./v2-work-plan-edits.js";
 import type { WorkPlanTemplate } from "./v2-work-plan-repository.js";
 
@@ -217,7 +218,9 @@ export class CrewBriefRepository {
       WHERE (j.tenant_id, j.id) = ($1, $2)
     `, [tenantId, jobId]);
     if (!head?.quoteRevisionId || !head.templateKey) throw new CrewBriefError("CREW_BRIEF_ACCEPTED_PLAN_REQUIRED");
-    if (head.templateKey !== this.template.key) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
+    // V2-SQ-F: a stored plan reads through the template its row names, as the work plan does.
+    const template = head.templateKey === this.template.key ? this.template : workPlanTemplates.get(head.templateKey);
+    if (!template) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
     const key: PlanKey = [tenantId, jobId, head.quoteRevisionId];
 
     const { rows: scope } = await client.query<WorkPlanScopeRow>(`
@@ -230,7 +233,7 @@ export class CrewBriefRepository {
     `, key);
     const base = scope.flatMap((row, index): WorkPlanTask[] => {
       if (row.template_task_key === null) return [];
-      const task = this.template.tasks.find(entry => entry.key === row.template_task_key);
+      const task = template.tasks.find(entry => entry.key === row.template_task_key);
       if (!task) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
       const { category: _category, ...details } = task;
       return [{ ...details, position: index + 1, scopeItemId: row.scope_item_id,
