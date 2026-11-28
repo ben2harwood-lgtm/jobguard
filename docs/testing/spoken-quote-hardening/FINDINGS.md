@@ -8,6 +8,9 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 
 | ID | Lane | Head sha | Case id | Transcript | Expected | Actual | Sev | Status | Fix PR |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RT-00-F001 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-002 | Fit the door for a hundred and fifty pound | One line priced 15000 pence | Capture and Reader A leave the price null; singular pound is not read as exact money | P1 | open | — |
+| RT-00-F002 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-003 | Paint the kitchen £400, no, make that £450 | One open line with a question (or 45000 with a question); never 40000 | Capture keeps 40000 and adds a second “make that” line priced 45000, with no correction question; Reader A safely opens one line | P0 | open | — |
+| RT-00-F003 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-005 | Run 15mm pipe to the rad £120 | One line priced 12000; diameter never becomes a count | Capture leaves the price null; Reader A correctly keeps 12000 with quantity null | P1 | open | — |
 | RT12-01 | RT-12 | b25b5ee9 | 01-four-items (desktop, mobile-360); line-4-trade | strip out the old kitchen fit six base units hang the new doors paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-02 | RT-12 | b25b5ee9 | 02-two-prices-open (desktop, mobile-360); line-3-trade | strip out the old kitchen for two hundred pounds fit the new units for six hundred pounds paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-03 | RT-12 | b25b5ee9 | 03-two-sixty (desktop, mobile-360); line-1-trade | paint the walls two hundred pounds and fit the door sixty pounds | Decorating | Other | P1 | open-finding | — |

@@ -161,6 +161,25 @@ Add `packages/ai/src/redteam/corpus.test.ts` and an empty `corpus/` with one see
 from this README. Done when: it runs in `packages/ai` vitest, checks the fields above, enforces M1, S2 and
 S4 on every case, fails an `open-finding` case that starts passing, and prints a per-lane pass/open table.
 
+RT-00 receipt (28 Nov 2026): `HEAD_UNDER_TEST=b25b5ee931ff7bb62bbaa34a47099fddadf514ed`.
+The five seeds exercise the README example and RT-01, RT-03, RT-04 and RT-11; two pass and three remain
+open as RT-00-F001–F003 in `FINDINGS.md`. The runner validates every `corpus/*.v1.json`, checks both
+capture and Reader A, then explicitly rechecks Reader A with `checkSpokenNumbers`. Line count, descriptions,
+quantity, unit, price and question assertions apply to both paths; room, trade, basis and totals apply to
+Reader A, which owns those fields. Omitted expectation fields are not checked. Guard tests exercise
+invariant violations, wrong-word citations, one-to-one line matching, each expectation field and the
+resolved-open-finding failure. The printed table counts declared statuses; unexpected failures fail CI.
+
+Validation: `pnpm --filter @jobguard/core build` (required package dependency),
+`pnpm --filter @jobguard/ai test` (28 files, 508 tests), and the AI package's `typecheck`, `lint` and `build`
+pass. No existing parser, prompt, source fixture or golden threshold changed. This is deterministic fixture
+evidence; no live-model, database, browser, preview or deployment claim is made.
+
+Initial source inspection — LATER / SIMPLICITY: `packages/ai/src/capture-fixture-parser.ts:plainDraft`:
+keep a correction such as “no, make that” attached to its work clause before splitting, rather than
+repairing the extra line afterwards. One split boundary would reduce correction and duplicate-line drift;
+this is a non-blocking follow-up, not a source change or independent review in RT-00.
+
 ## Tracking
 
 - Tracking issue in `ben2harwood-lgtm/jobguard`, "Spoken quote red-team before Tommy", created by Claude at
