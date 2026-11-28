@@ -96,6 +96,23 @@ export function spokenSortUserMessage(cleaned: CleanedTranscript, items: SortIte
   return `<transcript>\n${strip(cleaned.text)}\n</transcript>\n<items>\n${items.map(item => `${item.index}. ${strip(item.words)}`).join("\n")}\n</items>`;
 }
 
+// The clause finder is narrow (capitalised names, one "for … at" clause), so its silence is not proof the customer
+// line is gone. Any sign of a person or a place still in what would be sent keeps the capture on Reader A only:
+// an honorific, a numbered street, a UK postcode, an email address or a phone number, in any casing.
+const STREET = "road|rd|street|st|lane|avenue|ave|close|drive|way|place|court|crescent|gardens|terrace|grove|row|mews|square|hill|park|walk|rise|view";
+const PARTY_CUE = new RegExp([
+  String.raw`\b(?:mr|mrs|ms|miss|mx|dr)\b`,
+  String.raw`\b\d+[a-z]?\s+(?:[\p{L}'’-]+\s+){1,3}(?:${STREET})\b`,
+  String.raw`\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b`,
+  String.raw`@`,
+  String.raw`(?:\+44|\b0)\s*\d(?:[\s-]*\d){8,9}\b`,
+].join("|"), "iu");
+
+/** True only when nothing that would be sent still looks like a customer or a site. Otherwise nothing is sent. */
+export function safeToSend(cleaned: CleanedTranscript, items: SortItem[]): boolean {
+  return !PARTY_CUE.test(spokenSortUserMessage(cleaned, items));
+}
+
 /** Everything that would be sent, in UTF-8 bytes: the cap's input bound is one token per byte of this. */
 export const sentBytes = (cleaned: CleanedTranscript, items: SortItem[]) =>
   new TextEncoder().encode(SPOKEN_SORT_SYSTEM + spokenSortUserMessage(cleaned, items) + JSON.stringify(spokenSortJsonSchema)).length;

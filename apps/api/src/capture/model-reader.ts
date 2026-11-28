@@ -3,7 +3,7 @@ import type { JobUnderstanding } from "@jobguard/core";
 import {
   CONTEXT_READER_VERSION, FixtureAiProvider, LiveAiGateway, MODEL_READER_VERSION, SPOKEN_SORT_MAX_INPUT_BYTES, SPOKEN_SORT_MODEL,
   SPOKEN_SORT_OPERATION, SPOKEN_SORT_PROMPT_VERSION, cleanTranscript, combineModelReading, microPenceFor, reservationMicroPence,
-  sentBytes, sortItems, spokenSortCapPence,
+  safeToSend, sentBytes, sortItems, spokenSortCapPence,
 } from "@jobguard/ai";
 import { createAnthropicLiveSortAdapter } from "@jobguard/ai/live-adapter";
 import type { StoredUnderstanding, V2AiCallLedger, VerifiedTenantContext } from "@jobguard/db";
@@ -42,6 +42,8 @@ export async function readWithModel(ports: ModelReaderPorts, context: VerifiedTe
 
   const cleaned = cleanTranscript(input.text);
   const items = sortItems(input.readerA, input.text, cleaned);
+  // A customer or site still in the words keeps Reader A only, before any money is reserved.
+  if (!safeToSend(cleaned, items)) return { used: false };
   const callId = randomUUID();
   const reservation = await ports.ledger.reserve(context, { callId, captureId: input.captureId, microPence: reservationMicroPence(sentBytes(cleaned, items)), capMicroPence: on.capPence * 1_000_000 });
   // At the cap the reader is dark until the next UTC month; Reader A carries on.

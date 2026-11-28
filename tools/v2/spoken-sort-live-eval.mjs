@@ -13,7 +13,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { V2AiCallLedger, authenticatePracticeSession } from "../../packages/db/dist/index.js";
 import {
   FixtureAiProvider, LiveAiGateway, SPOKEN_SORT_MAX_INPUT_BYTES, SPOKEN_SORT_OPERATION, cleanTranscript, combineModelReading, microPenceFor,
-  readSpokenJob, reservationMicroPence, sentBytes, sortItems, spokenSortCapPence,
+  readSpokenJob, reservationMicroPence, safeToSend, sentBytes, sortItems, spokenSortCapPence,
 } from "../../packages/ai/dist/index.js";
 import { createAnthropicLiveSortAdapter } from "../../packages/ai/dist/anthropic-live-sort.js";
 import { evaluateContextReader, formatContextReaderReport, loadContextReaderCases } from "../../packages/ai/dist/context-reader-evaluation.js";
@@ -49,6 +49,7 @@ try {
     if (new TextEncoder().encode(item.text).length > SPOKEN_SORT_MAX_INPUT_BYTES) { outcomes.push({ id: item.id, outcome: "too_long" }); continue; }
     const cleaned = cleanTranscript(item.text);
     const items = sortItems(readerA, item.text, cleaned);
+    if (!safeToSend(cleaned, items)) { outcomes.push({ id: item.id, outcome: "party_kept" }); continue; }
     const callId = randomUUID(), captureId = randomUUID();
     const reserved = await ledger.reserve(context, { callId, captureId, microPence: reservationMicroPence(sentBytes(cleaned, items)), capMicroPence: capPence * 1_000_000 });
     if (!reserved.reserved) { outcomes.push({ id: item.id, outcome: reserved.reason }); break; }

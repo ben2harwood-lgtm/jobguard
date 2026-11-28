@@ -2,7 +2,7 @@ import { JOB_TRADES, type JobUnderstanding } from "@jobguard/core";
 import { describe, expect, it } from "vitest";
 import { readSpokenJob } from "./context-reader.js";
 import {
-  MISSED_LINE_NOTE, cleanTranscript, combineModelReading, locateQuote, sortItems, spokenSortUserMessage, spokenSortWireV1, toOriginalSpan, type SpokenSortWire,
+  MISSED_LINE_NOTE, cleanTranscript, combineModelReading, locateQuote, safeToSend, sortItems, spokenSortUserMessage, spokenSortWireV1, toOriginalSpan, type SpokenSortWire,
 } from "./locate-model-reading.js";
 
 const SMITH = "Smith house refurb. In the kitchen rip out the old units and fit new ones for 2400, tile the floor about 12 square metres at 60 a metre. Upstairs bathroom strip out, new suite supply and fit 3200, and get the sparky to move two sockets. Paint the hallway and landing, two coats, 650.";
@@ -177,6 +177,20 @@ describe("V2-SQ-G Reader B: locate and combine", () => {
     const after = locateQuote(cleaned.text, "paint the hall")[0]!;
     const original = toOriginalSpan(cleaned, after.start, after.end)!;
     expect(text.slice(original.start, original.end)).toBe("paint the hall");
+  });
+
+  it("a customer or site the clause finder misses keeps the capture off the wire, in any casing", () => {
+    for (const text of ["Kitchen job for mrs patel at 14 orchard road. Paint the walls 300.",
+      "Paint the hall 300, it's 7 acacia avenue", "Customer is Dr Jones, tile the bathroom 900.",
+      "Fit units 2000, postcode sw1a 1aa", "Paint the hall 300, email pat@example.invalid", "Tile the kitchen 900, ring 07700 900123"]) {
+      const cleaned = cleanTranscript(text);
+      expect(safeToSend(cleaned, sortItems(readA(text), text, cleaned)), text).toBe(false);
+    }
+    const removed = "Rewire job for Mrs Patel at 14 Orchard Road and paint the hall 300.";
+    const cleaned = cleanTranscript(removed);
+    expect(safeToSend(cleaned, sortItems(readA(removed), removed, cleaned))).toBe(true);
+    const plain = "In the kitchen fit new units 2000 and paint 2 coats in the hall 300.";
+    expect(safeToSend(cleanTranscript(plain), sortItems(readA(plain), plain, cleanTranscript(plain)))).toBe(true);
   });
 
   it("instructions inside the transcript stay inside the marked data block", () => {

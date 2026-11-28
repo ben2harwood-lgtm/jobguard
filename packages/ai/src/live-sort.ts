@@ -1,6 +1,6 @@
 import { AiGateway, type AiSessionResolver } from "./gateway.js";
 import type { AiProvider } from "./types.js";
-import { SPOKEN_SORT_OPERATION, SPOKEN_SORT_SYSTEM, spokenSortJsonSchema, spokenSortUserMessage, spokenSortWireV1, type CleanedTranscript, type SortItem, type SpokenSortWire } from "./locate-model-reading.js";
+import { SPOKEN_SORT_OPERATION, SPOKEN_SORT_SYSTEM, safeToSend, spokenSortJsonSchema, spokenSortUserMessage, spokenSortWireV1, type CleanedTranscript, type SortItem, type SpokenSortWire } from "./locate-model-reading.js";
 
 /**
  * V2-SQ-G: the one live model route, practice tenant only. Types, gates and prices; the provider adapter is
@@ -62,6 +62,8 @@ export const isConfiguredModel = (returned: string | null) => returned === SPOKE
 /** One call, no retry. The result carries usage whenever the provider returned any. */
 export async function runLiveSort(adapter: LiveSortAdapter, request: LiveSortRequest): Promise<LiveSortResult> {
   if (!liveSortPermitted(request.environment, request.tenantId, request.operation)) return { kind: "failed", reason: "unavailable", modelId: null, usage: null };
+  // Fail closed: a customer or site that the clause finder missed is never sent.
+  if (!safeToSend(request.cleaned, request.items)) return { kind: "failed", reason: "unavailable", modelId: null, usage: null };
   let raw: LiveSortRawResponse;
   try {
     raw = await adapter.send({ model: SPOKEN_SORT_MODEL, system: SPOKEN_SORT_SYSTEM, user: spokenSortUserMessage(request.cleaned, request.items),
