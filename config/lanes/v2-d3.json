@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d3": {
+      "branches": [
+        "claude/project-thread-8zze8p"
+      ],
+      "note": "RED. V2 materials enquiry draft from confirmed measurements and pack sums, grouped by supplier and needed-by date. Never an order. The validator includes config/lanes/v2-d3.json implicitly. Stacked on v2-d1 (codex/sandbox/v2-d1).",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/materials.application.ts",
+        "packages/db/migration-notes/2063_v2_materials_enquiry.md",
+        "packages/db/migrations/2063_v2_materials_enquiry.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-materials-enquiry-repository.ts",
+        "packages/db/test/migration-proofs/2063_v2_materials_enquiry.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-D3.checks.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

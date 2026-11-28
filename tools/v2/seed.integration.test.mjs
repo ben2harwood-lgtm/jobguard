@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
+import { DEMO_TENANT_ID, MaterialsEnquiryRepository, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
 // V2-F8
@@ -1331,6 +1331,481 @@ test("measurement commands remain disabled outside local V2", async () => {
     if (previous === undefined) delete process.env.JOBGUARD_LOCAL_V2;
     else process.env.JOBGUARD_LOCAL_V2 = previous;
   }
+});
+
+const materialsQuery = { version: "v2-materials-query.v1" };
+const tilesLine = { product: "Fictional white metro tile", packSize: { quantity: "1.2", unit: "m²" },
+  wastageMultiplier: "1.10", setAsidePacks: "0", supplier: "Fictional Merchant", neededBy: "2026-12-07" };
+
+async function materialsSetup() {
+  const owner = await signIn("builder");
+  const { materialsEnquiry: materials, measurements } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows } = await admin.query(`SELECT scope_item_id, category FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included`, [DEMO_TENANT_ID, jobId, quoteRevisionId]);
+  const tilingId = rows.find(row => row.category === "Tiling").scope_item_id;
+  const decoratingId = rows.find(row => row.category === "Decorating").scope_item_id;
+  const measure = async (scopeItemId, quantity, unit, confirmed = true) => {
+    const [{ version }] = await measurements.read(jobId, { ...measurementQuery, scopeItemId });
+    return measurements.save(jobId, { version: "v2-measurement-command.v1", scopeItemId, commandId: randomUUID(),
+      expectedVersion: version, quantity, unit, confirmed });
+  };
+  const line = async (scopeItemId, lineKey, changes) => {
+    const view = await materials.read(jobId, materialsQuery);
+    const current = view.lines.find(entry => entry.scopeItemId === scopeItemId && entry.lineKey === lineKey);
+    return materials.saveLine(jobId, { version: "v2-material-line-command.v1", commandId: randomUUID(),
+      scopeItemId, lineKey, expectedVersion: current?.version ?? 0, changes });
+  };
+  const generate = async (commandId = randomUUID()) => {
+    const { enquiry } = await materials.read(jobId, materialsQuery);
+    return materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId,
+      expectedVersion: enquiry?.version ?? 0 });
+  };
+  return { owner, materials, tilingId, decoratingId, measure, line, generate };
+}
+
+const pick = (object, keys) => Object.fromEntries(keys.map(key => [key, object[key]]));
+const auditEvents = async eventType => (await admin.query(`SELECT actor_ref AS "actorRef", payload
+  FROM app.audit_event WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = $2 ORDER BY sequence`,
+[jobId, eventType])).rows;
+
+const enquiryLine = (view, lineKey) => view.enquiry.groups.flatMap(group => group.lines)
+  .find(entry => entry.lineKey === lineKey);
+
+async function capturedDeliveries(work) {
+  const original = console.info;
+  const captured = [];
+  console.info = (...args) => { if (String(args[0]).includes("v2.delivery.captured")) captured.push(args); else original(...args); };
+  try { return { result: await work(), captured }; } finally { console.info = original; }
+}
+
+test("the materials enquiry groups by supplier and needed-by date, leaves out customer-supplied items and generates once", async () => {
+  const { owner, materials, tilingId, decoratingId, measure, line, generate } = await materialsSetup();
+  await measure(tilingId, "6", "m²");
+  await measure(decoratingId, "12", "m²");
+  await line(tilingId, "tiles", tilesLine);
+  await line(tilingId, "adhesive", { product: "Fictional tile adhesive", packSize: { quantity: "3", unit: "m²" },
+    wastageMultiplier: "1.10", supplier: "Fictional Merchant", neededBy: "2026-12-07" });
+  await line(tilingId, "grout", { product: "The customer's chosen grout", suppliedBy: "customer", neededBy: "2026-12-07" });
+  await line(decoratingId, "wall-paint", { product: "Fictional trade emulsion", packSize: { quantity: "25", unit: "m²" },
+    wastageMultiplier: "1.00", supplier: "Fictional Paint Supplier", neededBy: "2026-12-09", notes: "Matt finish" });
+  await line(decoratingId, "filler", { supplier: "Fictional Paint Supplier", neededBy: "2026-12-09" });
+  const before = await materials.read(jobId, materialsQuery);
+  assert.equal(before.enquiry, null);
+  assert.equal(before.lines.length, 5);
+
+  const effects = await effectCounts();
+  const generated = () => auditEvents("v2_materials.enquiry_generated");
+  assert.equal((await generated()).length, 0);
+  const attempt = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: 0 };
+  const rival = { ...attempt, commandId: randomUUID() };
+  // An exact retry shares the outcome; a different command racing from the same version is refused.
+  const { result: results, captured } = await capturedDeliveries(() => Promise.allSettled([
+    materials.generate(jobId, attempt), materials.generate(jobId, attempt), materials.generate(jobId, rival),
+  ]));
+  const won = results.filter(result => result.status === "fulfilled").map(result => result.value);
+  const lost = results.filter(result => result.status === "rejected").map(result => result.reason.code);
+  assert.deepEqual(new Set(lost), new Set(["MATERIALS_VERSION_CONFLICT"]));
+  assert.equal(new Set(won.map(view => view.enquiry.commandId)).size, 1);
+  const [first] = won;
+  for (const view of won) assert.deepEqual(view.enquiry, first.enquiry);
+  const command = first.enquiry.commandId === attempt.commandId ? attempt : rival;
+  assert.equal(won.length, command === attempt ? 2 : 1);
+  assert.equal(first.enquiry.version, 1);
+  assert.equal(first.enquiry.current, true);
+  assert.deepEqual(first.enquiry.outOfDate, []);
+  assert.equal(first.enquiry.generatedByMembershipId, owner.membershipId);
+  assert.deepEqual(first.enquiry.groups.map(({ supplier, neededBy, lines }) => ({ supplier, neededBy,
+    lines: lines.map(entry => [entry.lineKey, entry.neededPacks]).sort() })), [
+    { supplier: "Fictional Merchant", neededBy: "2026-12-07", lines: [["adhesive", "3"], ["tiles", "6"]] },
+    { supplier: "Fictional Paint Supplier", neededBy: "2026-12-09", lines: [["wall-paint", "1"]] },
+  ]);
+  assert.equal(enquiryLine(first, "wall-paint").notes, "Matt finish");
+  assert.deepEqual(first.enquiry.questions, [{ scopeItemId: decoratingId, lineKey: "filler", product: null, reason: "product" }]);
+  assert.deepEqual(first.enquiry.customerSupplied, [{ scopeItemId: tilingId, lineKey: "grout",
+    product: "The customer's chosen grout", neededBy: "2026-12-07", notes: null }]);
+  assert.ok(!JSON.stringify(first.enquiry.groups).includes("grout"));
+  assert.ok(!first.enquiry.questions.some(question => question.lineKey === "grout"));
+
+  const [event] = await generated();
+  assert.equal(event.actorRef, `membership:${owner.membershipId}`);
+  assert.equal(event.payload.references.auditActorKind, "bound_member");
+  assert.deepEqual(pick(event.payload.references, ["commandId", "expectedVersion", "enquiryVersion", "created"]), { commandId: command.commandId, expectedVersion: "0", enquiryVersion: "1",
+    created: "true" });
+  assert.deepEqual((await materials.generate(jobId, command)).enquiry, first.enquiry);
+  assert.equal((await generated()).length, 1);
+  await assert.rejects(materials.generate(jobId, { ...command, expectedVersion: 1 }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  for (const expectedVersion of [0, 2]) {
+    await assert.rejects(materials.generate(jobId, { ...command, commandId: randomUUID(), expectedVersion }),
+      { code: "MATERIALS_VERSION_CONFLICT" }, String(expectedVersion));
+  }
+  const unchanged = { ...command, commandId: randomUUID(), expectedVersion: 1 };
+  const again = await materials.generate(jobId, unchanged);
+  assert.deepEqual(again.enquiry, first.enquiry);
+  assert.deepEqual(pick((await generated()).at(-1).payload.references, ["commandId", "expectedVersion", "enquiryVersion",
+    "created"]), { commandId: unchanged.commandId, expectedVersion: "1",
+    enquiryVersion: "1", created: "false" });
+  const { rows: [{ enquiries }] } = await admin.query(
+    "SELECT count(*)::int AS enquiries FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(enquiries, 1);
+  assert.deepEqual(captured, []);
+  assert.deepEqual(await effectCounts(), effects);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const { materialsEnquiry: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.read(jobId, materialsQuery), first);
+
+  // A command that returned the already-current enquiry replays that result after the inputs change.
+  await line(decoratingId, "filler", { notes: "Two-part filler" });
+  const replayed = await materials.generate(jobId, unchanged);
+  assert.equal(replayed.enquiry.version, 1);
+  assert.equal(replayed.enquiry.current, false);
+  await assert.rejects(materials.generate(jobId, { ...unchanged, expectedVersion: 0 }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  const { rows: [{ total }] } = await admin.query(
+    "SELECT count(*)::int AS total FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(total, 1);
+  assert.equal((await generated()).length, 2);
+  assert.equal((await generate()).enquiry.version, 2);
+  assert.equal((await generated()).length, 3);
+});
+
+test("each sum input takes current off the enquiry and regenerating gives the corrected quantities once", async () => {
+  const { materials, tilingId, measure, line, generate } = await materialsSetup();
+  const effects = await effectCounts();
+  // Saving the same values again bumps revisions but changes no input, so the enquiry stays current.
+  const { enquiry: settled } = await materials.read(jobId, materialsQuery);
+  await measure(tilingId, "6", "m²");
+  await line(tilingId, "tiles", { product: tilesLine.product, supplier: tilesLine.supplier });
+  const resaved = await materials.read(jobId, materialsQuery);
+  assert.equal(resaved.enquiry.current, true);
+  assert.deepEqual(resaved.enquiry.outOfDate, []);
+  assert.equal((await generate()).enquiry.version, settled.version);
+  const steps = [
+    ["measurement", () => measure(tilingId, "7", "m²"), "7"],
+    ["confirmation", () => measure(tilingId, "7", "m²", false), null],
+    ["confirmation", () => measure(tilingId, "7", "m²"), "7"],
+    ["product", () => line(tilingId, "tiles", { product: "Fictional grey metro tile" }), "7"],
+    ["pack_size", () => line(tilingId, "tiles", { packSize: { quantity: "1", unit: "m²" } }), "8"],
+    ["wastage_multiplier", () => line(tilingId, "tiles", { wastageMultiplier: "1.20" }), "9"],
+    ["set_aside_packs", () => line(tilingId, "tiles", { setAsidePacks: "2" }), "7"],
+  ];
+  for (const [input, change, packs] of steps) {
+    const { enquiry: old } = await materials.read(jobId, materialsQuery);
+    assert.equal(old.current, true, input);
+    await change();
+    const stale = await materials.read(jobId, materialsQuery);
+    assert.equal(stale.enquiry.version, old.version, input);
+    assert.equal(stale.enquiry.current, false, input);
+    const tiles = stale.enquiry.outOfDate.find(entry => entry.lineKey === "tiles");
+    assert.ok(tiles.changed.includes(input), `${input}: ${JSON.stringify(tiles)}`);
+    assert.equal(tiles.quantities, true, input);
+
+    const commandId = randomUUID();
+    const [regenerated, retried] = await Promise.all([generate(commandId), generate(commandId)]);
+    assert.equal(regenerated.enquiry.version, old.version + 1, input);
+    assert.deepEqual(retried.enquiry, regenerated.enquiry);
+    assert.equal(regenerated.enquiry.current, true, input);
+    assert.deepEqual(regenerated.enquiry.outOfDate, [], input);
+    if (packs === null) {
+      assert.equal(enquiryLine(regenerated, "tiles"), undefined);
+      assert.ok(regenerated.enquiry.questions.some(entry => entry.lineKey === "tiles" && entry.reason === "measurement"));
+    } else {
+      assert.equal(enquiryLine(regenerated, "tiles").neededPacks, packs, input);
+    }
+    assert.deepEqual((await generate()).enquiry, regenerated.enquiry);
+  }
+  assert.equal(enquiryLine(await materials.read(jobId, materialsQuery), "tiles").product, "Fictional grey metro tile");
+  assert.deepEqual(await effectCounts(), effects);
+});
+
+test("regenerating keeps the builder's edits where they still fit and flags a pack count that clashes", async () => {
+  const { materials, tilingId, measure, line, generate } = await materialsSetup();
+  const read = () => materials.read(jobId, materialsQuery);
+  assert.equal(enquiryLine(await read(), "tiles").calculatedPacks, "7");
+
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  let view = await generate();
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "10", calculatedPacks: "7", builderPacks: "10", packsClash: false });
+
+  await line(tilingId, "tiles", { supplier: "Fictional Second Merchant", notes: "Ask about lead time" });
+  const stale = await read();
+  assert.equal(stale.enquiry.current, false);
+  assert.deepEqual(stale.enquiry.outOfDate, [{ scopeItemId: tilingId, lineKey: "tiles",
+    changed: ["supplier", "notes"], quantities: false }]);
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "10");
+  assert.equal(enquiryLine(view, "tiles").notes, "Ask about lead time");
+  assert.equal(view.enquiry.groups.find(group => group.lines.some(entry => entry.lineKey === "tiles")).supplier,
+    "Fictional Second Merchant");
+
+  await measure(tilingId, "8", "m²");
+  view = await generate();
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "8", calculatedPacks: "8", builderPacks: "10", packsClash: true });
+
+  // Reconfirming the same count against the new sum changes the quantity, so the enquiry is out of date.
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  const reconfirmed = await read();
+  assert.equal(reconfirmed.enquiry.current, false);
+  assert.deepEqual(reconfirmed.enquiry.outOfDate, [{ scopeItemId: tilingId, lineKey: "tiles",
+    changed: ["packs_override"], quantities: true }]);
+  view = await generate();
+  assert.equal(view.enquiry.version, reconfirmed.enquiry.version + 1);
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "10", calculatedPacks: "8", builderPacks: "10", packsClash: false });
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  assert.equal((await read()).enquiry.current, true, "the same count against the same sum stays current");
+
+  await line(tilingId, "tiles", { packsOverride: "9" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "9");
+  assert.equal(enquiryLine(view, "tiles").packsClash, false);
+  await line(tilingId, "tiles", { packsOverride: null, neededBy: "2026-12-08" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "8");
+  assert.equal(enquiryLine(view, "tiles").builderPacks, null);
+  assert.ok(view.enquiry.groups.some(group => group.neededBy === "2026-12-08"));
+
+  await line(tilingId, "tiles", { suppliedBy: "customer" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles"), undefined);
+  assert.ok(view.enquiry.customerSupplied.some(entry => entry.lineKey === "tiles"));
+  await line(tilingId, "tiles", { suppliedBy: "builder" });
+  await line(tilingId, "adhesive", { removed: true });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "8");
+  assert.equal(enquiryLine(view, "adhesive"), undefined);
+
+  const tiles = view.lines.find(entry => entry.lineKey === "tiles");
+  const command = { version: "v2-material-line-command.v1", commandId: randomUUID(), scopeItemId: tilingId,
+    lineKey: "tiles", expectedVersion: tiles.version, changes: { notes: "Confirm colour batch" } };
+  const savedEvents = (await auditEvents("v2_materials.line_saved")).length;
+  const [saved, replay] = await Promise.all([materials.saveLine(jobId, command), materials.saveLine(jobId, command)]);
+  assert.deepEqual(replay, saved);
+  const lineEvents = await auditEvents("v2_materials.line_saved");
+  assert.equal(lineEvents.length, savedEvents + 1);
+  assert.deepEqual(pick(lineEvents.at(-1).payload.references, ["commandId", "scopeItemId", "lineKey", "lineVersion"]), { commandId: command.commandId, scopeItemId: tilingId,
+    lineKey: "tiles", lineVersion: String(saved.version) });
+  assert.ok(!JSON.stringify(lineEvents.at(-1)).includes("colour"));
+  assert.equal(saved.version, tiles.version + 1);
+  await assert.rejects(materials.saveLine(jobId, { ...command, changes: { notes: "Other" } }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID() }), { code: "MATERIALS_VERSION_CONFLICT" });
+  for (const changes of [{}, { packsOverride: "0" }, { setAsidePacks: "-1" }, { wastageMultiplier: "0" },
+    { neededBy: "2026-02-30" }, { suppliedBy: "merchant" }, { packSize: { quantity: "1.2" } }, { price: 100 }]) {
+    await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID(), changes }),
+      { code: "MATERIALS_INVALID_COMMAND" }, JSON.stringify(changes));
+  }
+  await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID(), scopeItemId: randomUUID(),
+    expectedVersion: 0 }), { code: "NOT_FOUND" });
+  await assert.rejects(materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(),
+    expectedVersion: view.enquiry.version - 1 }), { code: "MATERIALS_VERSION_CONFLICT" });
+});
+
+test("forced materials policies hide lines and enquiries and reject changes from the second firm", async () => {
+  const { owner, tilingId } = await materialsSetup();
+  const outsider = await signIn("second-builder");
+  const { materialsEnquiry: materials } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(materials.read(jobId, materialsQuery), { code: "NOT_FOUND" });
+  await assert.rejects(materials.saveLine(jobId, { version: "v2-material-line-command.v1", commandId: randomUUID(),
+    scopeItemId: tilingId, lineKey: "tiles", expectedVersion: 0, changes: { notes: "x" } }), { code: "NOT_FOUND" });
+  await assert.rejects(materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(),
+    expectedVersion: 0 }), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const tables = {
+    "app.v2_material_line": {
+      insert: `INSERT INTO app.v2_material_line (tenant_id, job_id, scope_item_id, line_key, expected_version, command_id,
+        changes, actor_membership_id) VALUES ($1,$2,$3,'tiles',999,$4,'{"notes":"x"}',$5)`,
+      params: () => [DEMO_TENANT_ID, jobId, tilingId, randomUUID(), owner.membershipId],
+      set: "changes = '{\"notes\":\"y\"}'" },
+    "app.v2_material_enquiry": {
+      insert: `INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
+        actor_membership_id) VALUES ($1,$2,999,$3,repeat('0', 64),'[]','{}',$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "content = '{}'" },
+    "app.v2_material_enquiry_command": {
+      insert: `INSERT INTO app.v2_material_enquiry_command (tenant_id, job_id, command_id, expected_version,
+        enquiry_version, actor_membership_id) VALUES ($1,$2,$3,0,1,$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "expected_version = 5" },
+  };
+  for (const [table, { insert, params, set }] of Object.entries(tables)) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false }, table);
+    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
+    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0, table);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+      await assert.rejects(query(scope, insert, params()), { code: "42501", message: /row-level security policy/u }, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET ${set} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+    }
+    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+  }
+});
+
+// Audit-chain evidence for the two materials commands (V2-CI2 guard): one event per accepted command,
+// exact replays append nothing, and a failed audit append rolls back the command's own writes.
+
+test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.saveLine", async () => {
+  const { owner, materials, tilingId } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const lineKey = "audit-chain-sealant";
+  const changes = { product: "Fictional silicone sealant", supplier: "Fictional Merchant", neededBy: "2026-12-07" };
+  const command = { version: "v2-material-line-command.v1", commandId: randomUUID(), scopeItemId: tilingId, lineKey,
+    expectedVersion: 0, changes };
+  const before = await auditEvents("v2_materials.line_saved");
+
+  const saved = await materials.saveLine(jobId, command);
+  const recorded = await auditEvents("v2_materials.line_saved");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "scopeItemId", "lineKey", "lineVersion"]),
+    { commandId: command.commandId, scopeItemId: tilingId, lineKey, lineVersion: String(saved.version) });
+  assert.equal(recorded.at(-1).payload.hashes.changes, createHash("sha256").update(JSON.stringify(
+    Object.fromEntries(Object.entries(changes).sort(([a], [b]) => a.localeCompare(b))))).digest("hex"));
+  assert.doesNotMatch(JSON.stringify(recorded.at(-1).payload), /silicone sealant/u, "free text stays out of the audit payload");
+
+  // Exact retries, including concurrent ones, return the same receipt and append nothing.
+  const replays = await Promise.all([materials.saveLine(jobId, command), materials.saveLine(jobId, command)]);
+  assert.deepEqual(replays, [saved, saved]);
+  await assert.rejects(materials.saveLine(jobId, { ...command, changes: { notes: "different" } }),
+    { code: "MATERIALS_COMMAND_CONFLICT" });
+  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded, "audit-chain: replay");
+
+  // Fail the audit append after the line insert: the transaction keeps neither.
+  const next = { ...command, commandId: randomUUID(), expectedVersion: saved.version, changes: { notes: "Clear finish" } };
+  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).saveLine(context, jobId, owner.sessionId, next),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_material_line WHERE command_id = $1", [next.commandId]);
+  assert.equal(count, 0, "audit-chain: rollback");
+  assert.deepEqual(await auditEvents("v2_materials.line_saved"), recorded);
+  const view = await materials.read(jobId, materialsQuery);
+  assert.equal(view.lines.find(entry => entry.scopeItemId === tilingId && entry.lineKey === lineKey).version, saved.version);
+
+  await materials.saveLine(jobId, next);
+  assert.equal((await auditEvents("v2_materials.line_saved")).length, recorded.length + 1);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsEnquiryRepository.generate", async () => {
+  const { owner, materials, tilingId, line } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  // Change an input so the next generate creates a new enquiry version.
+  await line(tilingId, "audit-chain-spacers", { product: "Fictional tile spacers", supplier: "Fictional Merchant",
+    neededBy: "2026-12-07" });
+  const start = await materials.read(jobId, materialsQuery);
+  const expectedVersion = start.enquiry?.version ?? 0;
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion };
+  const before = await auditEvents("v2_materials.enquiry_generated");
+
+  const generated = await materials.generate(jobId, command);
+  const recorded = await auditEvents("v2_materials.enquiry_generated");
+  assert.equal(recorded.length, before.length + 1, "audit-chain: event");
+  assert.equal(recorded.at(-1).actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(pick(recorded.at(-1).payload.references, ["commandId", "expectedVersion", "enquiryVersion", "created"]),
+    { commandId: command.commandId, expectedVersion: String(expectedVersion),
+      enquiryVersion: String(expectedVersion + 1), created: "true" });
+  assert.match(recorded.at(-1).payload.hashes.basis, /^[0-9a-f]{64}$/u);
+  assert.equal(generated.enquiry.version, expectedVersion + 1);
+
+  // Exact retries return the same enquiry and append nothing.
+  const replays = await Promise.all([materials.generate(jobId, command), materials.generate(jobId, command)]);
+  for (const replay of replays) assert.deepEqual(replay.enquiry, generated.enquiry);
+  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded, "audit-chain: replay");
+
+  // Fail the audit append after the enquiry and command inserts: the transaction keeps neither.
+  await line(tilingId, "audit-chain-spacers", { notes: "3 mm" });
+  const next = { ...command, commandId: randomUUID(), expectedVersion: expectedVersion + 1 };
+  await assert.rejects(new MaterialsEnquiryRepository(failingAuditPool(runtime)).generate(context, jobId, owner.sessionId, next),
+    { code: "FORCED" });
+  const { rows: [kept] } = await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.v2_material_enquiry WHERE command_id = $1 OR (job_id = $2 AND version = $3)) AS enquiries,
+      (SELECT count(*)::int FROM app.v2_material_enquiry_command WHERE command_id = $1) AS commands`,
+  [next.commandId, jobId, expectedVersion + 2]);
+  assert.deepEqual(kept, { enquiries: 0, commands: 0 }, "audit-chain: rollback");
+  assert.deepEqual(await auditEvents("v2_materials.enquiry_generated"), recorded);
+  const stale = await materials.read(jobId, materialsQuery);
+  assert.equal(stale.enquiry.version, expectedVersion + 1);
+  assert.equal(stale.enquiry.current, false);
+
+  const regenerated = await materials.generate(jobId, next);
+  assert.equal(regenerated.enquiry.version, expectedVersion + 2);
+  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, recorded.length + 1);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("a copy of a generate command that loses the receipt race to an unchanged-input copy leaves no extra enquiry", async () => {
+  const { owner, materials, tilingId, line, generate } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await generate();
+  const { enquiry: current } = await materials.read(jobId, materialsQuery);
+  assert.equal(current.current, true);
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: current.version };
+
+  // Copy A records its receipt for the current enquiry, then pauses before its audit append and commit.
+  let paused, resume;
+  const reachedAudit = new Promise(resolve => { paused = resolve; });
+  const gate = new Promise(resolve => { resume = resolve; });
+  const pausing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = async (sql, ...rest) => {
+        if (typeof sql === "string" && sql.includes("app.append_audit(")) { paused(); await gate; }
+        return query(sql, ...rest);
+      };
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const first = new MaterialsEnquiryRepository(pausing).generate(context, jobId, owner.sessionId, command);
+  await reachedAudit;
+
+  // The inputs change, and copy B creates a new version before waiting on A's receipt.
+  await line(tilingId, "audit-chain-spacers", { notes: "2 mm" });
+  const events = (await auditEvents("v2_materials.enquiry_generated")).length;
+  const second = materials.generate(jobId, command);
+  for (let waited = 0; ; waited += 25) {
+    const { rowCount } = await admin.query(`SELECT 1 FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock' AND query LIKE '%v2_material_enquiry_command%'`);
+    if (rowCount) break;
+    assert.ok(waited < 10000, "copy B waits on copy A's receipt");
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  resume();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a.enquiry.version, current.version);
+  assert.equal(a.enquiry.current, true);
+  assert.deepEqual([b.enquiry.version, b.enquiry.commandId, b.enquiry.generatedAt],
+    [a.enquiry.version, a.enquiry.commandId, a.enquiry.generatedAt], "both copies share the first copy's outcome");
+  assert.equal(b.enquiry.current, false, "the second copy reports that the shared enquiry is now out of date");
+
+  const { rows: [{ latest }] } = await admin.query(
+    "SELECT max(version)::int AS latest FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(latest, current.version, "the losing copy's new version rolled back");
+  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, events + 1);
+  const after = await materials.read(jobId, materialsQuery);
+  assert.equal(after.enquiry.version, current.version);
+  assert.equal(after.enquiry.current, false);
+  await verifyTenantChain(context.tenantId);
 });
 
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.

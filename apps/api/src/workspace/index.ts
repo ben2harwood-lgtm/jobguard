@@ -1,6 +1,7 @@
 export * from "./application.js";
 export * from "./work-plan.application.js";
 export * from "./measurement.application.js";
+export * from "./materials.application.js";
 export * from "./crew-contact.application.js";
 export * from "./site-attendance.application.js";
 export * from "./contracts.js";
