@@ -22,9 +22,9 @@
   {
     "id": "RT-00-003", "lane": "RT-00",
     "transcript": "Paint the kitchen £400, no, make that £450",
-    "why": "RT-03 seed: a correction stays open with a question and never creates two lines",
+    "why": "RT-03 seed: a correction gives one line at 450 pounds or left open, with a question, never the old price",
     "expect": {
-      "lines": [{ "descriptionIncludes": "Paint", "unitPricePence": null }],
+      "lines": [{ "descriptionIncludes": "Paint", "unitPricePence": [45000, null] }],
       "questionsInclude": ["check"], "neverPence": [40000], "lineCount": 1
     },
     "status": "open-finding", "finding": "RT-00-F002"
