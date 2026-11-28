@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b1": {
+      "branches": [
+        "claude/project-thread-trp08u-b1b2"
+      ],
+      "note": "Q84 B1: the V2 launcher's local catcher allows the party form's default invented address practice-customer@example.invalid, so a practice quote sends to the default recipient without a workaround. Nothing real is sent.",
+      "allow": [
+        "packages/db/src/v2-local-catcher.ts",
+        "tools/v2-local.test.mjs"
+      ]
+    }
+  }
+}

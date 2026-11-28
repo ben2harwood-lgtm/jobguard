@@ -102,13 +102,13 @@ test("V2 delivery captures approved fictional destinations and refuses unlisted 
     else process.env.JOBGUARD_LOCAL_V2 = previous;
   });
   const localSink = t.mock.method(console, "info", () => undefined);
-  for (const destination of ["customer@jobguard-v2.invalid", '["merchant@jobguard-v2.invalid"]', "+447700900042"]) {
+  for (const destination of ["customer@jobguard-v2.invalid", "practice-customer@example.invalid", '["merchant@jobguard-v2.invalid"]', "+447700900042"]) {
     captureV2Delivery("fixture", destination);
   }
-  for (const destination of ["somewhere@nonlocal.example", "unlisted@jobguard-v2.invalid", '["customer@jobguard-v2.invalid","unknown@elsewhere.invalid"]', "[]", "[bad"]) {
+  for (const destination of ["somewhere@nonlocal.example", "unlisted@jobguard-v2.invalid", "other-customer@example.invalid", '["customer@jobguard-v2.invalid","unknown@elsewhere.invalid"]', "[]", "[bad"]) {
     assert.throws(() => captureV2Delivery("fixture", destination), /V2_RECIPIENT_BLOCKED/u);
   }
-  assert.equal(localSink.mock.callCount(), 3);
+  assert.equal(localSink.mock.callCount(), 4);
   assert.deepEqual(localSink.mock.calls[0].arguments, ['{"event":"v2.delivery.captured","kind":"fixture"}']);
 });
 

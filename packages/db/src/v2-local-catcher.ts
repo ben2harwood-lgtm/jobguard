@@ -8,6 +8,8 @@ const destinations = new Set([
   "merchant@jobguard-v2.invalid",
   "tiler@jobguard-v2.invalid",
   "decorator@jobguard-v2.invalid",
+  // The party form's default invented address (Q84 B1); the .invalid domain can never resolve.
+  "practice-customer@example.invalid",
   "+447700900042",
 ]);
 
