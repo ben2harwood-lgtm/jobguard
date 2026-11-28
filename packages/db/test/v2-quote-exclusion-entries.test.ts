@@ -17,4 +17,10 @@ describe("V2-C6 exclusion entries", () => {
     expect(entries.join(" ")).toBe(`${description}: ${reason}.`);
     expect(entries.flatMap(entry => entry.split(" "))).toEqual(`${description}: ${reason}.`.split(" "));
   });
+
+  it("splits a word longer than a row, so a 500-character description still fits the document", () => {
+    const entries = v2ExclusionEntries("x".repeat(500), "Customer excluded");
+    expect(entries.every(entry => entry.length <= V2_EXCLUSION_ROW_WIDTH)).toBe(true);
+    expect(entries).toEqual([...Array.from({ length: 5 }, () => "x".repeat(84)), `${"x".repeat(80)}:`, "Customer excluded"]);
+  });
 });

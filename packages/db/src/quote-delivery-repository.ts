@@ -14,11 +14,14 @@ export type QuoteDeliveryView={documentId:string;reference?:string;documentVersi
 // V2-C6: on the local V2 launcher a line excluded with a reason reaches the document's exclusions, in the
 // editor's own wording ("description: reason"). The PDF prints each exclusion entry as one row of at most 84
 // characters (the width it wraps included work to), so the text is wrapped at word boundaries into as many entries
-// as it needs. No word is cut; joined with spaces the entries give back the full text. Main's preview is unchanged.
+// as it needs. A word longer than a row is split into row-sized pieces, so no entry passes the row width (and so
+// never the document's 500-character entry limit); other words are not cut. Main's preview is unchanged.
 export const V2_EXCLUSION_ROW_WIDTH=84;
 export function v2ExclusionEntries(description:string,reason:string):string[]{
  const out:string[]=[];let row="";
- for(const word of `${description}: ${reason}`.split(/\s+/u).filter(Boolean)){
+ const words=`${description}: ${reason}`.split(/\s+/u).filter(Boolean)
+  .flatMap(word=>word.length>V2_EXCLUSION_ROW_WIDTH?word.match(new RegExp(`.{1,${V2_EXCLUSION_ROW_WIDTH}}`,"gsu"))??[]:[word]);
+ for(const word of words){
   if(row&&`${row} ${word}`.length>V2_EXCLUSION_ROW_WIDTH){out.push(row);row=word;}else row=row?`${row} ${word}`:word;
  }
  if(row)out.push(row);
@@ -42,7 +45,8 @@ export class QuoteDeliveryRepository{
    const parties=(await db.$client.query(`SELECT app.require_current_job_parties($1,$2) AS snapshot`,[context.tenantId,jobId])).rows[0]?.snapshot;
    if(!parties)throw new Error("JOB_PARTIES_REQUIRED");
    const r=(await db.$client.query<any>(`SELECT qr.*,coalesce(json_agg(json_build_object('id',ql.id,'scopeItemId',ql.scope_item_id,'scopeRevisionId',ql.scope_revision_id,'description',ql.description,'origin',ql.origin,'included',ql.included,'exclusionReason',ql.exclusion_reason,'quantity',ql.quantity_decimal,'unit',ql.unit,'unitRatePence',ql.unit_rate_pence,'discountPercent',ql.discount_decimal,'taxTreatment',ql.tax_treatment,'rateProvenance',ql.rate_provenance,'category',ql.category,'region',ql.region) ORDER BY ql.ordinal) FILTER(WHERE ql.included),'[]') lines FROM app.quote_revision qr JOIN app.quote_draft qd ON(qd.tenant_id,qd.current_revision_id)=(qr.tenant_id,qr.id) LEFT JOIN app.quote_line ql ON(ql.tenant_id,ql.quote_revision_id)=(qr.tenant_id,qr.id) WHERE qr.job_id=$1 AND qr.issuable=true GROUP BY qr.tenant_id,qr.id`,[jobId])).rows[0];
-   if(!r)throw new Error("QUOTE_NOT_ISSUABLE");
+   // The same code as the coverage refusal (quote-repository), so callers can read it the same way.
+   if(!r)throw Object.assign(new Error("QUOTE_NOT_ISSUABLE"),{code:"QUOTE_NOT_ISSUABLE"});
    await assertQuoteScopeCoverage(db,context.tenantId,jobId,r.id);
    const excluded=await v2Exclusions(db,r.id);
    const lines=(r.lines as QuoteLine[]).map(line=>({scopeItemId:line.scopeItemId,description:line.description,quantity:line.quantity,unit:line.unit,netPence:evaluateDraftQuote({currency:r.currency,taxPolicyVersion:r.tax_policy_version,lines:[line]}).totals.net.pence}));

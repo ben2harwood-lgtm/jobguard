@@ -3810,8 +3810,12 @@ test("C6 done when: a line added from a prompt is unpriced, blocks preview until
   assert.ok((await preview()).view.documentId);
   const events = await lineAddedEvents(draftJob);
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].payload.references, { commandId: events[0].payload.references.commandId, jobId: draftJob,
+  // 0758 (main's audit attribution) adds auditActorKind, auditActorRef and auditTrust to every audit's references.
+  const { auditActorKind, auditActorRef, auditTrust, ...references } = events[0].payload.references;
+  assert.deepEqual(references, { commandId: references.commandId, jobId: draftJob,
     scopeItemId: receipt.scopeItemId, scopeRevisionId: receipt.scopeRevisionId, promptId: "waste" });
+  assert.deepEqual([auditActorKind, auditTrust], ["bound_member", "lower_trust"]);
+  assert.match(auditActorRef, /^membership:[0-9a-f-]{36}$/u);
   assert.doesNotMatch(JSON.stringify(events), /Skip|waste removal/iu, "no description text in the audit");
   await verifyTenantChain(DEMO_TENANT_ID);
 });
