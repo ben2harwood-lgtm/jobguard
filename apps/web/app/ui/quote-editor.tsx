@@ -71,10 +71,14 @@ const[saving,setSaving]=useState(false);const savingRef=useRef(false);const[prev
           const deliveryResponse=await fetch(`/api/jobs/${jobId}/quotes/delivery`,{cache:"no-store"});
           if(!currentJob())return;if(!deliveryResponse.ok)throw new Error("Delivery read failed");if(deliveryResponse.ok){const deliveryView=await deliveryResponse.json();if(!currentJob())return;if(deliveryView){setDelivery(deliveryView.status);setSavedDocument(deliveryView);}}const acceptanceResponse=await fetch(`/api/jobs/${jobId}/quotes/acceptance`,{cache:"no-store"});if(acceptanceResponse.ok){const view=await acceptanceResponse.json();if(!currentJob()||readEpoch!==acceptanceEpoch.current)return;setAcceptanceView(view);setAcceptance(view.activeAcceptance);setAcceptanceEvents(view.events.map((event:any)=>event.kind==="acceptance_cancelled"?`Acceptance cancelled for document v${event.documentVersion}`:event.kind==="declined"?`Declined document v${event.documentVersion}`:event.kind==="superseded"?`Superseded document v${event.documentVersion}`:`Accepted document v${event.documentVersion} by ${event.actor==="Customer (authenticated)"?"authenticated customer":"builder attestation"}`));}
         } else {
-          setLines((all) => all.map((line) => ({
-            ...line,
-            scopeRevisionId: parsed.scope.find((item) => item.scopeItemId === line.scopeItemId)?.scopeRevisionId ?? line.scopeRevisionId,
-          })));
+          setLines((all) => {
+            const refreshed = all.map((line) => ({
+              ...line,
+              scopeRevisionId: parsed.scope.find((item) => item.scopeItemId === line.scopeItemId)?.scopeRevisionId ?? line.scopeRevisionId,
+            }));
+            // V2-C6: an added line also shows before the first draft revision is saved.
+            return v2AddLine ? withAddedScope(refreshed, parsed.scope) : refreshed;
+          });
         }
       } catch {
         if(!currentJob())return;setNotice("Quote data could not be loaded. Nothing was changed.");
