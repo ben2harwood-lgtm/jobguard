@@ -76,8 +76,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   // V2-SYNC-1 (2056): main's snag fence retargeted and its new job tables firm-locked.
   await client.query(readFileSync(new URL("./migrations/2056_v2_sync1_fences_and_locks.sql", import.meta.url), "utf8"));
-  // V2-G1 snag register (2042), after 2056 brings main's snag list into V2.
-  await client.query(readFileSync(new URL("../../packages/db/migrations/2042_v2_snag_register.sql", import.meta.url), "utf8"));
+  // V2-G1 snag register (2081), after 2056 brings main's snag list into V2.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

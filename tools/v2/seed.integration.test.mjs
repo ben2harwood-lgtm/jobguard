@@ -1151,7 +1151,7 @@ test("a snag is recorded, revised and marked fixed on the V2 practice job, and t
   }
 });
 
-// V2-G1 (Q53, migration 2042): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
+// V2-G1 (Q53, migration 2081): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
 const g1Tables = ["app.v2_snag_owner", "app.v2_snag_event_person", "app.v2_snag_agreed"];
 const g1 = {
   path: () => `/api/jobs/${jobId}/snag-register`,
@@ -1277,7 +1277,7 @@ test("G1 tables are forced, append only, firm-locked; person rows bind their own
   await assert.rejects(admin.query(`INSERT INTO app.v2_snag_event_person (tenant_id, job_id, snag_id, event_sequence, person_kind, firm_key, command_id)
     SELECT tenant_id, job_id, $2, event_sequence, person_kind, firm_key, $3 FROM app.v2_snag_event_person WHERE snag_id = $1`,
   [snagId, other, randomUUID()]));
-  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2042 rerun.
+  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2081 rerun.
   const catalog = async () => (await admin.query(`SELECT
     (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname) FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname LIKE 'snag\\_%') functions,
     (SELECT jsonb_agg(c.relname || '.' || a.attname || ':' || format_type(a.atttypid, a.atttypmod) ORDER BY c.relname, a.attnum)
@@ -1287,8 +1287,8 @@ test("G1 tables are forced, append only, firm-locked; person rows bind their own
     (SELECT count(*)::int FROM pg_trigger WHERE tgname LIKE 'v2_snag_%') triggers`)).rows[0];
   const before = await catalog();
   assert.ok(before.functions.length >= 4 && !before.functions.some(text => /v2_snag/u.test(text)), "no main snag routine names the V2 register");
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2042_v2_snag_register.sql", import.meta.url), "utf8"));
-  assert.deepEqual(await catalog(), before, "2042 reruns without change and never touches main's snag schema");
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2081_v2_snag_register.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before, "2081 reruns without change and never touches main's snag schema");
   assert.ok(!before.columns.some(column => column.startsWith("v2_")), "no V2 column on main's snag tables");
   // Rule 29: GET refuses no session, an invalid session and the second firm.
   const typed = async cookies => { const response = await request(g1.path(), cookies ? { cookies } : {});

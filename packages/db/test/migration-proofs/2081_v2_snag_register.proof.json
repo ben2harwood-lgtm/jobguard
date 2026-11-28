@@ -1,5 +1,5 @@
 {
-  "migration": "2042_v2_snag_register.sql",
+  "migration": "2081_v2_snag_register.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []

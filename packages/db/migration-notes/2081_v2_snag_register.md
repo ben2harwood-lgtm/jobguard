@@ -1,6 +1,8 @@
-# 2042 · V2 snag register
+# 2081 · V2 snag register
 
-The checked V2 bootstrap applies 2042 after 2056, which brings main's QW-4 snag
+The three tables carry the same restrictive `v2_practice_firm` lock as every V2 table, joined to `app.job`.
+
+The checked V2 bootstrap applies 2081 after 2056, which brings main's QW-4 snag
 list into V2. The shared runner leaves databases without the dedicated V2
 database name, the firm policy, main's snag tables or the V2 crew records
 untouched.
