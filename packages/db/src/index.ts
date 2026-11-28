@@ -248,6 +248,9 @@ export * from "./v2-crew-contact-repository.js";
 // V2-K4: fictional automatic chasing; never a production send capability.
 export { V2ChaseRepository } from "./v2-chase-repository.js";
 export { V2ChaseError, requireV2Chasing } from "./v2-chase-policy.js";
+export * from "./v2-work-plan-templates.js";
 
+// V2-SQ-A practice Sent list (read only).
+export { PracticeSentRepository, type PracticeSentItem } from "./practice-sent-repository.js";
 // V2-F8 who was on site today.
 export * from "./v2-site-attendance-repository.js";
