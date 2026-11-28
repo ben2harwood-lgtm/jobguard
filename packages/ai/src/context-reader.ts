@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, invisibleFormat, leadingContentOffset, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -25,8 +25,20 @@ function thousands(words: string): number | null {
   const value = spoken && !/\d/u.test(spoken[1]!) ? spokenPounds(spoken[1]!) : null;
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
-/** Where one work item ends and the next begins inside a sentence: a comma, or "and"/"then" before a work verb. */
-const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
+/** Keep number checks inside the same item boundaries that the context reader passes to plainDraft. */
+const isNextItem = (next: string) => plainNextItem(next, isWork, isTiming);
+function itemClauses(text: string): string[] {
+  const clauses: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const separator = plainItemBoundary(text, i, start, isNextItem);
+    if (separator) {
+      clauses.push(text.slice(start, i)); start = i + separator; i = start - 1;
+    }
+  }
+  clauses.push(text.slice(start));
+  return clauses;
+}
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
     if (invisibleFormat.test(words)) return null;
@@ -46,14 +58,46 @@ export const spokenNumbers: SpokenNumberReader = {
   },
   // The same said-amount guards as the reader's own line prices (V2-SQ-M), on the amount's own work clause only:
   // another item in the same sentence ("…, fit a handle for twenty pounds and fifty pence") never opens this one.
-  open: (before, after) => {
-    const ownBefore = before.split(itemBreak).at(-1) ?? before, ownAfter = after.split(itemBreak)[0] ?? after;
-    return saidAmountOpen(ownBefore, ownAfter, "line");
+  open: (before, after, unit) => {
+    const ownBefore = itemClauses(before).at(-1) ?? before, ownAfter = itemClauses(after)[0] ?? after;
+    return saidAmountOpen(ownBefore, ownAfter, unit === undefined ? "open" : "line", unit);
   },
 };
 /** Reader B (SQ-G) passes its output through the same check. */
-export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: string) =>
-  checkUnderstandingNumbers(understanding, sourceText, spokenNumbers);
+export const checkSpokenNumbers = (understanding: JobUnderstanding, sourceText: string) => {
+  // Reader B must also reject retracted numbers, even when its own proposed output kept them.
+  // Reuse the draft's correction targets, including back-references across sentences.
+  const corrections = spokenCorrection.test(sourceText) ? plainDraft(sourceText, isWork, isTiming).corrections : [];
+  if (!corrections.length) return checkUnderstandingNumbers(understanding, sourceText, spokenNumbers);
+  const questions = [...understanding.questions];
+  const corrected = (provenance: JobUnderstanding["lines"][number]["description"]["provenance"]) => provenance.kind === "extracted"
+    ? corrections.find(chunk => chunk.start < provenance.span.end && chunk.start + chunk.value.length > provenance.span.start) : undefined;
+  const ask = (chunk: Cell, lineIndex?: number) => {
+    const text = correctionQuestion(chunk.correction!);
+    if (questions.some(question => question.text === text && question.lineIndex === lineIndex)) return;
+    const question = { text, ...(lineIndex === undefined ? {} : { lineIndex }) };
+    if (questions.length < 200) questions.push(question);
+    else {
+      const at = questions.findIndex(item => item.lineIndex === lineIndex);
+      questions[at >= 0 ? at : questions.length - 1] = question;
+    }
+  };
+  const lines = understanding.lines.map((line, index) => {
+    const chunk = corrected(line.description.provenance);
+    if (!chunk) return line;
+    ask(chunk, index);
+    return openNumbers(line);
+  });
+  const areaPrices = understanding.areaPrices.filter(price => {
+    const chunk = corrected(price.provenance);
+    if (chunk) ask(chunk);
+    return !chunk;
+  });
+  let wholeJobPrice = understanding.wholeJobPrice;
+  const whole = wholeJobPrice && corrected(wholeJobPrice.provenance);
+  if (whole) { ask(whole); wholeJobPrice = null; }
+  return checkUnderstandingNumbers({ ...understanding, lines, areaPrices, wholeJobPrice, questions }, sourceText, spokenNumbers);
+};
 
 // ---- Rooms ---------------------------------------------------------------------------------------------------
 const OUTSIDE = /^(?:.*\s)?(?:garden|roof|back|front|outside)$/iu;
@@ -91,7 +135,7 @@ function stripLeadingRoom(value: string): { room: string; rest: string; offset: 
 const extraVerb = /^(?:box(?:ing)? in|add|re-?(?:plaster|paint|tile|wire|skim|point|place|felt|grout|hang|fit)|dig|move|get the|have the|knock|take|swap|put|run|board)\b/iu;
 function isVerb(value: string) {
   value = visibleWorkText(value);
-  return !/^(?:make (?:that|it)|it'?s|i mean)\b/iu.test(value) && (workClause(value) || extraVerb.test(value));
+  return spokenCorrection.exec(value)?.index !== 0 && (workClause(value) || extraVerb.test(value));
 }
 /** "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred": the work starts at the verb. */
 function lateWorkAt(value: string): number | null {
@@ -135,9 +179,7 @@ export function tradeOf(description: string, room: string | null): { trade: JobT
 
 // ---- Lines ----------------------------------------------------------------------------------------------------
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
-const correction = /(?:^|[\s,]+)(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b.*$/iu;
 const reference = /\b(?:same again|same as|ditto|the same in)\b/iu;
-const approximate = /\b(?:about|around|roughly|approximately|approx)\s+$/iu;
 /** After a comma, more work is fine; another amount, an alternative or a correction leaves the price open. */
 const plainCommaTail = /^\s*,(?![^]*(?:\d|\b(?:or|no|nah|actually|sorry|make that|maybe|could be|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|quid|pounds?)\b))/iu;
 const measure = new RegExp(`(?:(about|around|roughly|approximately)\\s+)?(\\d{1,4}(?:\\.\\d{1,2})?|${numberWord})\\s+(square\\s+met(?:re|er)s?|sq(?:uare)?\\.?\\s?m|m2|m²|linear\\s+met(?:re|er)s?|met(?:re|er)s?)(?![\\p{L}])`, "iu");
@@ -149,7 +191,8 @@ const strayWords = new RegExp(`(?:(?:${numberWord}|a)[\\s-]+(?:and\\s+)?)+(?:hun
 // VAT words after a price never change the number; they add a VAT question (the parser's rule, #1033).
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
 const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
-const vatOnly = new RegExp(`^${vatTail}\\.?$`, "iu");
+const vatOnly = new RegExp(`^[\\s,]*${vatTail}\\.?$`, "iu");
+const includedTail = /^[\s,]*(?:plus(?:\s+materials)?|labour only)\s*$/iu;
 const eachAfter = new RegExp(`^\\s*(?:each|apiece|a piece)${vatTail}?\\.?\\s*$`, "iu");
 const perAfter = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu");
 /** "a door" or "per door" is per-item only for the line's own counted thing: "six doors at fifty pounds a door". */
@@ -215,14 +258,15 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     // "bedroom two £300": the room's number is its name, not a second number (V2-SQ-L).
     const shown = hideRoomNumbers(value);
     const open = (found: { text: string; at: number }) => saidAmountOpen(shown.slice(0, found.at), shown.slice(found.at + found.text.length), "line");
-    if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at)) && !open(candidates[0]!)) {
+    if (candidates.length === 1 && candidates[0]!.pence !== null && !open(candidates[0]!)) {
       const found = candidates[0]!;
-      const after = value.slice(found.at + found.text.length);
+      const tail = value.slice(found.at + found.text.length);
+      const after = tail.replace(/^[\s,]+/u, " ");
       const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
       const per = whole ?? perAnyAfter.exec(after);
       const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
       const vat = vatOnly.test(after);
-      if (after.trim() && !each && !vat && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      if (after.trim() && !each && !vat && !includedTail.test(after) && !plainCommaTail.test(tail)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
       else {
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";
@@ -231,6 +275,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
         // "a piece" is "each" and names no counted thing.
         if (each && per && counted && !eachAfter.test(after)) { perWord = per[1]!; perCountAt = counted.index; }
         if (vatWords.test(after)) vatSaid = true;
+        else if (includedTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}; confirm what the stated amount includes.`);
         // "a door including hinges": per door, but the words after it are not part of the line, so they are asked about.
         if (each && per && !whole && !eachAfter.test(after)) questions.push(`Check “${value.slice(0, 400)}”: the words after the price were not read into this line.`);
       }
@@ -305,8 +350,8 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
 }
 
 // ---- Room and whole-job prices -----------------------------------------------------------------------------------
-const priceNear = new RegExp(`£?\\d[\\d,]*(?:\\.\\d{1,2})?(?:\\s*(?:grand|k|pounds|quid))?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid|grand)`, "giu");
-type TotalPrice = { start: number; end: number; pence: number | null; room: string | null; text: string; clauseStart: number; clauseEnd: number;
+const priceNear = new RegExp(`£?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?(?:\\s*(?:grand|k|pounds|quid))?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid|grand)`, "giu");
+type TotalPrice = { start: number; end: number; pence: number | null; room: string | null; text: string; clauseStart: number; clauseEnd: number; tail: string;
   /** Where the spoken total starts and ends ("the bathroom all in 4500"); line words are cut before it. */
   phraseStart: number; phraseEnd: number };
 const besideBefore = /^[\s,]*(?:(?:all in|in total|altogether|total|is|comes to|for|the|about)[\s,]*)*$/iu;
@@ -317,11 +362,20 @@ function totals(text: string): TotalPrice[] {
   // A clause ends at punctuation, never at the point or comma inside a number ("4.5k", "1,200").
   const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !points.has(at)
     && !(text[at] === "," && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
+  let previousEnd = -1;
   for (const phrase of text.matchAll(new RegExp(total.source, "giu"))) {
+    // Scan an extended clause once: rescanning its tail must never rescue one of several overlapping amounts.
+    if (phrase.index < previousEnd) continue;
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;
     let clauseEnd = phrase.index;
-    while (clauseEnd < text.length && !boundary(clauseEnd)) clauseEnd++;
+    while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
+    // A comma before a qualifier/correction stays with the total. A new work item still ends it.
+    while (text[clauseEnd] === "," && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) {
+      clauseEnd++;
+      while (clauseEnd < text.length && !boundary(clauseEnd) && !plainItemBoundary(text, clauseEnd, clauseStart, isWork)) clauseEnd++;
+    }
+    previousEnd = clauseEnd;
     const clause = text.slice(clauseStart, clauseEnd);
     const phraseAt = phrase.index - clauseStart, phraseEnd = phraseAt + phrase[0].length;
     // A measure or a count ("12 square metres", "6 doors") is never a total price.
@@ -342,16 +396,14 @@ function totals(text: string): TotalPrice[] {
     const phraseStart = clauseStart + Math.min(lo, room?.index ?? lo);
     const phraseStop = clauseStart + Math.max(hi, room && room.index >= hi ? room.index + room[0].length : hi);
     // "all in about 4500", "all in 4500, no, make that 5000": approximate or corrected totals stay open and are asked about.
-    const unsure = !!price && (/\b(?:about|around|roughly|approximately|approx|say|call it|maybe|reckon)\s+$/iu.test(clause.slice(0, price.index))
-      || /^[\s,]*(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b/iu.test(text.slice(clauseStart + priceEnd, clauseStart + priceEnd + 60)));
-    const single = !!price && (prices.length === 1 || prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1);
+    const single = !!price && prices.length === 1;
     // Totals call the same function as line prices (saidAmountOpen), with the words of the same clause either side:
     // "a quarter of a thousand pounds", "five hundred pounds or six hundred", "500 pounds per day" all stay open and
-    // are asked about with the whole phrase. The unsure words and corrections above are extra, for totals only.
+    // are asked about with the whole phrase, including comma-separated qualifications and corrections.
     const partial = !!price && saidAmountOpen(read.slice(0, priceAt), read.slice(priceEnd));
-    const pence = single && !unsure && !partial ? spokenNumbers.money(words) : null;
+    const pence = single && !partial ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
-      text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
+      text: clause.trim(), tail: clause.slice(priceEnd), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
   }
   return found;
 }
@@ -369,7 +421,7 @@ function splitWithin(chunk: Cell): Cell[] {
   // "…3200, and get the sparky to move two sockets": a new item the v1 splitter keeps with the last.
   // "… for 400 second bedroom same again": a reference starts its own item.
   const at = /,?\s+and\s+(?=(?:get|have|ask)\s+the\b)/iu.exec(chunk.value) ?? sameAgain.exec(chunk.value);
-  if (!at || at.index === 0 || chunk.inferred || !isWork(chunk.value.slice(0, at.index))) return [chunk];
+  if (!at || at.index === 0 || priceCondition.test(chunk.value.slice(0, at.index)) || chunk.inferred || !isWork(chunk.value.slice(0, at.index))) return [chunk];
   const head = chunk.value.slice(0, at.index), tailStart = at.index + at[0].length;
   return [{ value: head, start: chunk.start }, ...splitWithin({ value: chunk.value.slice(tailStart), start: chunk.start + tailStart })];
 }
@@ -400,7 +452,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   const chunks: Cell[] = [];
   for (let chunk of draft.chunks.flatMap(splitWithin)) {
     const cut = priced.find(price => price.phraseStart > chunk.start && price.phraseStart < chunk.start + chunk.value.length);
-    if (cut && !chunk.inferred) chunk = { value: chunk.value.slice(0, cut.phraseStart - chunk.start).replace(/(?:[\s,]+(?:the|for the|for|and))*[\s,]*$/iu, ""), start: chunk.start };
+    if (cut && !chunk.inferred) chunk = { ...chunk, value: chunk.value.slice(0, cut.phraseStart - chunk.start).replace(/(?:[\s,]+(?:the|for the|for|and))*[\s,]*$/iu, ""), start: chunk.start };
     if (!chunk.value || priced.some(price => chunk.start >= price.phraseStart && chunk.start + chunk.value.length <= price.phraseEnd + 1)) continue;
     const before = chunks[chunks.length - 1];
     const gap = before ? text.slice(before.start + before.value.length, chunk.start) : "";
@@ -420,7 +472,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (chunk.inferred || !/^[\s,]*(?:(?:about|around|roughly|approximately)\s+)?\d[\d.]*\s+(?:square|sq\b|m2|m²|linear|met(?:re|er)s?\b)/iu.test(gap)) continue;
     let stop = gap.length;
     for (let at = 0; at < gap.length; at++) if (/[;!?\n]/u.test(gap[at]!) || gap[at] === "." && !(/\d/u.test(gap[at - 1] ?? "") && /\d/u.test(gap[at + 1] ?? ""))) { stop = at; break; }
-    chunks[index] = { value: text.slice(chunk.start, end + stop).replace(/[\s,]+$/u, ""), start: chunk.start };
+    chunks[index] = { ...chunk, value: text.slice(chunk.start, end + stop).replace(/[\s,]+$/u, ""), start: chunk.start };
   }
   // The first clause is the title unless work starts inside it after a name ("Mrs Patel 14 Orchard Road full rewire …").
   let titleCell = draft.title;
@@ -453,7 +505,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (lead) {
       const roomAt = chunk.start + chunk.value.toLowerCase().indexOf(lead.room.toLowerCase());
       current = { key: openArea(lead.room, chunk.start, roomAt, lead.room.length), name: lead.room };
-      chunk = { value: lead.rest, start: chunk.start + lead.offset };
+      chunk = { ...chunk, value: lead.rest, start: chunk.start + lead.offset };
     } else {
       const mention = roomMention.exec(chunk.value);
       if (mention && !trailingRoom(chunk.value)) {
@@ -467,28 +519,15 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (trailing && !/[.,;!?]/u.test(nextChar) && trailing.index > 0) {
       const name = roomName(trailing[2]!);
       pendingRoom = { name, start: chunk.start + trailing.index + trailing[0].lastIndexOf(trailing[2]!), length: trailing[2]!.length };
-      chunk = { value: chunk.value.slice(0, trailing.index), start: chunk.start };
+      chunk = { ...chunk, value: chunk.value.slice(0, trailing.index), start: chunk.start };
     }
-    // A correction belongs to the line before; Reader A never applies it.
-    const fix = chunk.inferred ? null : correction.exec(chunk.value);
-    if (fix && (fix.index === 0 || !workClause(chunk.value.slice(0, fix.index)))) {
-      const target = lines.length - 1;
-      // A total said after the last line is what this corrects (it is left open in totals()); the line keeps its numbers.
-      const lastWords = target >= 0 && lines[target]!.description.provenance.kind === "extracted" ? lines[target]!.description.provenance.span : null;
-      const totalBetween = priced.some(price => price.phraseStart >= (lastWords?.end ?? 0) && price.phraseEnd <= chunk.start);
-      if (totalBetween) { questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check that price.` }); continue; }
-      if (target >= 0) lines[target] = openNumbers(lines[target]!);
-      questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Corrections are not applied; check this line.`, ...(target >= 0 ? { lineIndex: target } : {}) });
-      continue;
-    }
-    if (fix) chunk = { value: chunk.value.slice(0, fix.index), start: chunk.start };
     const areaKey = current?.key ?? wholeJob();
     const inTotal = priced.some(price => chunk.start < price.phraseEnd && chunk.start + chunk.value.length > price.phraseStart);
     const built = readLine(sourceId, chunk, areaKey, current?.name ?? null, inTotal);
-    lines.push(fix ? openNumbers(built.line) : built.line);
+    lines.push(chunk.correction ? openNumbers(built.line) : built.line);
     const lineIndex = lines.length - 1;
     questions.push(...built.questions.map(question => ({ text: question.slice(0, 500), lineIndex })));
-    if (fix) questions.push({ text: `You said “${chunk.value.trim().slice(0, 120)}${text.slice(chunk.start + fix.index, chunk.start + fix.index + 120).trim() ? ` ${text.slice(chunk.start + fix.index, chunk.start + fix.index + 160).trim()}` : ""}”. Corrections are not applied; check this line.`.slice(0, 500), lineIndex });
+    if (chunk.correction) questions.push({ text: correctionQuestion(chunk.correction), lineIndex });
     if (reference.test(chunk.value)) questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Check what this repeats; nothing was copied.`, lineIndex });
   }
   if (!lines.length) {
@@ -504,8 +543,15 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
   let wholeJobConflict = false;
   for (const price of priced) {
-    if (price.pence === null) { questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue; }
+    if (price.pence === null) {
+      // An unresolved whole-job total cannot leave another total looking definite.
+      if (!price.room) wholeJobConflict = true;
+      questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue;
+    }
     const provenance = { kind: "extracted" as const, span: { sourceId, sourceVersion: 1 as const, start: price.start, end: price.end } };
+    const tail = price.tail;
+    if (vatWords.test(tail)) questions.push({ text: vatQuestion(price.text) });
+    else if (includedTail.test(tail)) questions.push({ text: `Confirm price: ${price.text.slice(0, 400)}; confirm what the stated amount includes.` });
     // "the WC all in 1100" after "Downstairs WC": the room already open whose name ends with the said words.
     const room = price.room ? areas.find(area => area.key === keyOf(price.room!)) ?? areas.find(area => area.key.endsWith(`-${keyOf(price.room!)}`)) : undefined;
     if (price.room && !room) {

@@ -51,7 +51,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F001"
   },
   {
@@ -214,7 +214,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F002"
   },
   {
@@ -377,7 +377,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F003"
   },
   {
@@ -540,7 +540,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F004"
   },
   {
@@ -777,7 +777,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F005"
   },
   {
@@ -854,7 +854,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F006"
   },
   {
@@ -981,7 +981,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F007"
   },
   {
@@ -1006,7 +1006,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F008"
   },
   {
@@ -1089,7 +1089,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F009"
   },
   {
@@ -1114,7 +1114,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F010"
   },
   {
@@ -1142,7 +1142,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F011"
   },
   {
@@ -1167,7 +1167,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F012"
   },
   {
@@ -1195,7 +1195,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F013"
   },
   {
@@ -1220,7 +1220,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F014"
   },
   {
@@ -1248,7 +1248,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F015"
   },
   {
@@ -1273,7 +1273,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F016"
   },
   {
@@ -1301,7 +1301,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F017"
   },
   {
@@ -1326,7 +1326,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F018"
   },
   {
@@ -1378,7 +1378,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F019"
   },
   {
@@ -1410,7 +1410,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F020"
   },
   {
@@ -1442,7 +1442,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F021"
   },
   {
@@ -1474,7 +1474,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F022"
   },
   {
@@ -1506,7 +1506,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F023"
   },
   {
@@ -1538,7 +1538,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F024"
   },
   {
@@ -1570,7 +1570,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F025"
   },
   {
@@ -1602,7 +1602,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F026"
   },
   {
@@ -1634,7 +1634,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F027"
   },
   {
@@ -1662,7 +1662,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F028"
   },
   {
@@ -1690,7 +1690,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F029"
   },
   {
@@ -1718,7 +1718,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F030"
   },
   {
@@ -1746,7 +1746,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F031"
   },
   {
@@ -1774,7 +1774,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F032"
   },
   {
@@ -1802,7 +1802,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F033"
   },
   {
@@ -1830,7 +1830,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F034"
   },
   {
@@ -1858,7 +1858,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F035"
   },
   {
@@ -1912,7 +1912,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F036"
   },
   {
@@ -1966,7 +1966,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F037"
   },
   {
@@ -2155,7 +2155,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F038"
   },
   {
@@ -2182,7 +2182,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F039"
   },
   {
@@ -2345,7 +2345,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F040"
   },
   {
@@ -2427,7 +2427,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F041"
   },
   {
@@ -2482,7 +2482,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F042"
   },
   {
@@ -2510,7 +2510,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F043"
   },
   {
@@ -2546,7 +2546,7 @@
       ],
       "lineCount": 3
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F044"
   },
   {
@@ -2582,7 +2582,7 @@
       ],
       "lineCount": 3
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F045"
   },
   {
@@ -2626,7 +2626,7 @@
       ],
       "lineCount": 5
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F046"
   },
   {
@@ -2670,7 +2670,7 @@
       ],
       "lineCount": 5
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F047"
   },
   {
@@ -2722,7 +2722,7 @@
       ],
       "lineCount": 7
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F048"
   },
   {
@@ -2774,7 +2774,7 @@
       ],
       "lineCount": 7
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F049"
   },
   {
@@ -2834,7 +2834,7 @@
       ],
       "lineCount": 9
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F050"
   },
   {
@@ -2894,7 +2894,7 @@
       ],
       "lineCount": 9
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F051"
   },
   {
@@ -3041,7 +3041,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F052"
   },
   {
@@ -3069,7 +3069,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F053"
   },
   {
@@ -3096,6 +3096,480 @@
         "eighty pence"
       ],
       "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-209",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-210",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh, it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh, it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-211",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. It's actually £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "It's actually £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-212",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Sorry it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Sorry it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-213",
+    "lane": "RT-03",
+    "transcript": "Paint the hall £200, actually £250. Kitchen. Fit the sink £300",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the sink",
+          "room": "Kitchen",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-214",
+    "lane": "RT-03",
+    "transcript": "Paint the lounge £400, sorry £450. In the bathroom. Tile the walls £600",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Tile the walls",
+          "room": "Bathroom",
+          "unitPricePence": 60000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-215",
+    "lane": "RT-03",
+    "transcript": "Skim the hall £300, make that £350. Upstairs bedroom. Fit the shelves £150",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Skim the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the shelves",
+          "room": "Upstairs bedroom",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-216",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that wall good for £200.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that wall good",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-217",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that opening wider for £300.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that opening wider",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-218",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make it watertight for £250.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make it watertight",
+          "unitPricePence": 25000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-219",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that £250",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that £250"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-220",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that two fifty",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that two fifty"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-221",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make it 300",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it 300"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-222",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a hundred and twenty pounds",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a hundred and twenty pounds"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-223",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a grand",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a grand"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-224",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a couple of hundred",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a couple of hundred"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-225",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make it a thousand and fifty quid",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it a thousand and fifty quid"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-226",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, cancel that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "cancel that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-227",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, scrap that and paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "scrap that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-228",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, forget that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "forget that"
+      ],
+      "neverPence": [
+        10000
+      ]
     },
     "status": "pass"
   }
