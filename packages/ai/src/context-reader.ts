@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceDescription, rateAfter, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -235,9 +235,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const tail = value.slice(rate.index + rate[0].length);
       const vat = vatOnly.test(tail);
       const at = rate.index + rate[0].indexOf(rate[1]!);
-      if (pence !== null && saidAmountOpen(hideRoomNumbers(value).slice(0, at), hideRoomNumbers(value).slice(at + rate[1]!.length), "line")) questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
+      if (pence !== null && saidAmountOpen(hideRoomNumbers(value).slice(0, at), hideRoomNumbers(value).slice(at + rate[1]!.length), "line", unit.value)) questions.push(`Confirm the rate and unit: ${value.slice(0, 450)}`);
       else if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
-        questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
+        questions.push(`Confirm the rate and unit: ${value.slice(0, 450)}`);
       else if (pence !== null) {
         price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit";
         if (vat) vatSaid = true;
@@ -256,6 +256,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     }
     // Every said-amount guard, the same function the draft path and the totals call (V2-SQ-M: "up to £200" is asked about).
     // "bedroom two £300": the room's number is its name, not a second number (V2-SQ-L).
+    if (candidates.length === 1) descriptionEnd = candidates[0]!.at;
     const shown = hideRoomNumbers(value);
     const open = (found: { text: string; at: number }) => saidAmountOpen(shown.slice(0, found.at), shown.slice(found.at + found.text.length), "line");
     if (candidates.length === 1 && candidates[0]!.pence !== null && !open(candidates[0]!)) {
@@ -288,7 +289,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     }
   }
   // Trim the price words ("for", "at", a comma) left at the end of the description; it stays a prefix of the source.
-  let description = value.slice(0, descriptionEnd).replace(/(?:\s+(?:for|at)|[\s,]+)+$/iu, "");
+  let description = priceDescription(value, descriptionEnd);
   if (!description) description = value;
   description = description.slice(0, 500);
 
@@ -336,6 +337,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     }
     if (priceBasis === "each" && quantity.value === null) questions.push(`Confirm how many: “${label()}” is priced each.`);
   }
+  const firstAmount = amounts(value)[0];
+  if (price.value === null && firstAmount && rateAfter(value.slice(firstAmount.index + firstAmount.text.length)))
+    questions.push(`Confirm the counted unit and rate unit: ${value.slice(0, 400)}`);
   if (vatSaid) questions.push(vatQuestion(value));
   const { trade, word } = tradeOf(description, room);
   return {
@@ -576,7 +580,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (!keep.length) questions.push({ text: `You said more than one price for ${areas.find(area => area.key === key)?.name.value ?? key}. Check which applies.`.slice(0, 500), areaKey: key });
     areaPrices.splice(0, areaPrices.length, ...areaPrices.filter(price => price.areaKey !== key || keep.includes(price)));
   }
-  for (const note of draft.notes) if (/^Confirm timing/u.test(note)) questions.push({ text: note.slice(0, 500) });
+  for (const note of draft.notes) if (/^Confirm (?:timing|the currency)/u.test(note)) questions.push({ text: note.slice(0, 500) });
   const title = titleCell && titleCell.value && (titleCell !== draft.title || !isWork(text)) ? titleCell : null;
   const understanding = jobUnderstandingV1.parse({
     version: JOB_UNDERSTANDING_VERSION,

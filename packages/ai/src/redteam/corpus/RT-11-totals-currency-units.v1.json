@@ -728,7 +728,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F025"
   },
   {
@@ -754,7 +754,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F026"
   },
   {
@@ -780,7 +780,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F027"
   },
   {
@@ -806,7 +806,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F028"
   },
   {
@@ -832,7 +832,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F029"
   },
   {
@@ -858,7 +858,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F030"
   },
   {
@@ -884,7 +884,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F031"
   },
   {
@@ -910,7 +910,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F032"
   },
   {
@@ -936,7 +936,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F033"
   },
   {
@@ -962,7 +962,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F034"
   },
   {
@@ -988,7 +988,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F035"
   },
   {
@@ -1014,7 +1014,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F036"
   },
   {
@@ -1118,7 +1118,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F040"
   },
   {
@@ -1144,7 +1144,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F041"
   },
   {
@@ -1170,7 +1170,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F042"
   },
   {
@@ -1196,7 +1196,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F043"
   },
   {
@@ -1222,7 +1222,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F044"
   },
   {
@@ -1248,7 +1248,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F045"
   },
   {
@@ -1274,7 +1274,7 @@
         200050
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F046"
   },
   {
@@ -1491,7 +1491,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F055"
   },
   {
@@ -1516,7 +1516,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F056"
   },
   {
@@ -1541,7 +1541,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F057"
   },
   {
@@ -1566,7 +1566,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F058"
   },
   {
@@ -1592,7 +1592,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F059"
   },
   {
@@ -1618,7 +1618,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F060"
   },
   {
@@ -1644,7 +1644,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F061"
   },
   {
@@ -1670,7 +1670,7 @@
         30000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F062"
   },
   {
@@ -1697,7 +1697,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F063"
   },
   {
@@ -1724,7 +1724,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F064"
   },
   {
@@ -1751,7 +1751,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F065"
   },
   {
@@ -1778,7 +1778,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F066"
   },
   {
@@ -1805,7 +1805,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F067"
   },
   {
@@ -1832,7 +1832,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F068"
   },
   {
@@ -1859,7 +1859,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F069"
   },
   {
@@ -1886,7 +1886,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F070"
   },
   {
@@ -1913,7 +1913,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F071"
   },
   {
@@ -1940,7 +1940,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F072"
   },
   {
@@ -1967,7 +1967,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F073"
   },
   {
@@ -1994,7 +1994,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F074"
   },
   {
@@ -2021,7 +2021,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F075"
   },
   {
@@ -2048,7 +2048,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F076"
   },
   {
@@ -2075,7 +2075,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F077"
   },
   {
@@ -2102,7 +2102,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F078"
   },
   {
@@ -2129,7 +2129,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F079"
   },
   {
@@ -2156,7 +2156,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F080"
   },
   {
@@ -2183,7 +2183,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F081"
   },
   {
@@ -2210,7 +2210,7 @@
         50000
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-11-F082"
   },
   {

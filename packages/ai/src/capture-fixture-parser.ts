@@ -1,5 +1,5 @@
-import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
-import { hideRoomNumbers, roomOnly } from "./room-words.js";
+import { multipleJobQuestion, suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
+import { hideRoomNumbers, roomOnly, roomPart } from "./room-words.js";
 
 export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/3" as const;
 const MAX_PENCE = 1_000_000_000_000n;
@@ -153,7 +153,8 @@ const hedgeBefore = new RegExp(`\\b(?:${hedgeWords})\\.?[\\s,]*$`, "iu");
 const hedgeAfter = new RegExp(`^[\\s,]*(?:-?ish\\b|or so\\b|(?:${hedgeWords})(?![\\p{L}]))`, "iu");
 // Also used by clause splitting: a verb inside a condition is not another work item.
 export const priceCondition = /\b(?:if|unless|provided|subject to|depending on|assuming|conditional on)\b/iu;
-const nonPriceWords = /[%€$]|\b(?:percent|euros?|dollars?|cashback|discount|deposit of|paid\b[^;!?\n]*\balready|day rate|rate of)\b|\bminus the deposit\b/iu;
+export const foreignCurrency = /[€$]|\b(?:euros?|dollars?|USD|EUR|CAD|AUD)\b/iu;
+const nonPriceWords = /[%]|\b(?:percent|cashback|discount|deposit of|paid\b[^;!?\n]*\balready|day rate|rate of)\b|\bminus the deposit\b/iu;
 // A limit, floor or credit around the amount (V2-SQ-M): a ceiling, a floor or a credit is never a fixed price, and a
 // credit is never read as a charge or worked out as a negative one; the builder is asked. "Paint the ceiling - £200"
 // (a dash with a space after it) is punctuation; "-£50" and "−£50", with the sign against the amount, are a minus.
@@ -178,11 +179,10 @@ export function saidAmountOpen(before: string, after: string, rates: "open" | "l
   const rate = rateAfter(after);
   const normalUnit = (word: string) => word.toLowerCase().replace(/^(?:square met(?:re|er)s?|m2|m²)$/u, "m²")
     .replace(/^(?:linear )?met(?:re|er)s?$/u, "m").split(/\s+/u).at(-1)!;
-  const rateOpen = !!rate && (unit !== undefined ? !!rate[1] && rate[1].toLowerCase() !== "piece" && (!unit || !(sameUnit(normalUnit(unit), normalUnit(rate[1]))
-      || normalUnit(unit) === "m²" && normalUnit(rate[1]) === "m"))
+  const rateOpen = !!rate && (unit !== undefined ? !!rate[1] && rate[1].toLowerCase() !== "piece" && (!unit || !sameUnit(normalUnit(unit), normalUnit(rate[1])))
     : rates === "open" || /^(?:days?|hours?)$/iu.test(rate[1] ?? "") || /^\s*\//u.test(after));
-  return priceCondition.test(before) || priceCondition.test(after) || nonPriceWords.test(`${before} ${after}`)
-    || /^[km½]/iu.test(after) || /[€$]\s*$/u.test(before)
+  return foreignCurrency.test(`${before} ${after}`) || priceCondition.test(before) || priceCondition.test(after) || nonPriceWords.test(`${before} ${after}`)
+    || /^[km½]/iu.test(after)
     || spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
     || invisibleFormat.test(priceBefore) || invisibleFormat.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || rateOpen;
@@ -196,10 +196,16 @@ export const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|s
 const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|is|are|it|them|old|new|existing|fresh|wet|loose|damaged|broken|all|any|some|more)$/iu;
 const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
+const nextRoomLead = new RegExp(`^(?:(?:and|then)\\s+)?in\\s+(?:the\\s+)?${roomPart}[,:]?\\s+`, "iu");
+
 /** The draft's next-item boundary length, or zero. Shared with numeric checks and total clauses. */
 export function plainItemBoundary(text: string, i: number, start: number,
   isNext: (value: string) => boolean = workClause): number {
   const char = text[i] ?? "";
+  if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && i > start) {
+    const next = text.slice(i + 1), room = nextRoomLead.exec(next);
+    if (room && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2 && isNext(next.slice(room[0].length))) return 1;
+  }
   const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
   if (!separator) {
     // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
@@ -236,6 +242,9 @@ export function plainNextItem(next: string, isWork: (value: string) => boolean,
 export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
   isTiming: (value: string) => boolean = value => timing.test(visibleWorkText(value))): { chunks: Cell[]; corrections: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
+  const boundary = multipleJobQuestion(text);
+  if (boundary) notes.push(boundary);
+  if (foreignCurrency.test(text)) notes.push("Confirm the currency: only an unambiguous GBP price can be kept.");
   const points = amountPoints(text);
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
@@ -334,6 +343,8 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       if (vatWords.test(chunk.value)) notes.push(`Confirm VAT: you said “${chunk.value.slice(0, 400)}”. VAT is not added or taken off.`);
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
+    if (index > 0 && !isWork(chunk.value) && !chunk.correction && !amounts(chunk.value).length
+      && /^(?:the customer['’]s (?:dog|cat|pet) is (?:called|named) [\p{L}'’-]+|er|erm|um)[\s.]*$/iu.test(chunk.value)) return false;
     return !/^JOB:/u.test(visibleWorkText(chunk.value)) && !(index === 0 && !isWork(chunk.value) && !chunk.correction);
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
@@ -344,6 +355,21 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     return { ...chunk, value: before + after, start: chunk.start, inferred: !!after.trim(), originalValue: chunk.value };
   });
   return { chunks: cleaned, corrections: corrected.filter(chunk => !!chunk.correction), notes, title };
+}
+
+/** Cut only a suffix: descriptions always remain a prefix-cited span of the untouched item. */
+export function priceDescription(value: string, at: number): string {
+  const shorthand = /(?<![\p{L}\p{N}])\d+(?:\.\d+)?\s*k\b/iu.exec(value);
+  const bare = new RegExp(`\\s+(?:for|at)\\s+((?:\\d+(?:\\.\\d+)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*))(?=\\s*$|\\s+(?:(?:and|then)\\s+)?in\\s)`, "iu").exec(value);
+  if (shorthand) at = Math.min(at, shorthand.index);
+  if (bare) at = Math.min(at, bare.index);
+  let prefix = value.slice(0, at);
+  const lead = [...prefix.matchAll(/\s+(?:for|at)\b/giu)].reverse().find(match => {
+    const tail = prefix.slice(match.index + match[0].length);
+    return !tail.trim() || limitBefore.test(tail) || hedgeBefore.test(tail);
+  });
+  if (lead) prefix = prefix.slice(0, lead.index);
+  return prefix.replace(/(?:\s+(?:for|at)|[\s,]+)+$/iu, "");
 }
 
 function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null {
@@ -414,6 +440,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   let plainTitle: Cell | null = null;
   if (!items.length) {
     const draft = plainDraft(text);
+    questions.push(...draft.notes.filter(note => /^(?:This sounds|Confirm the currency)/u.test(note)).map(question));
     for (const chunk of draft.chunks) if (chunk.correction) {
       questions.push(question(correctionQuestion(chunk.correction)));
     }
@@ -430,8 +457,9 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     if ((said >= 2 && draft.chunks.length > 0) || single) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
-      questions.push(...draft.notes.map(question));
+      questions.push(...draft.notes.filter(note => !questions.some(item => item.question.value === note)).map(question));
       lines = draft.chunks.map(chunk => {
+        const firstAmount = amounts(chunk.value)[0];
         const found = plainPrice(chunk);
         const after = found ? chunk.value.slice(found.at + found.value.length) : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
@@ -445,6 +473,8 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         const each = new RegExp(`^\\s+(?:each|apiece|a piece)${vatTail}?\\.?$`, "iu").test(after) || (!!per && !!perCount && !!per[1] && sameUnit(perCount.unit, per[1]));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
         const rate = found && (each || (!per && !/\b(?:each|apiece|per)\b/iu.test(chunk.value))) ? found : null;
+        if (!rate && firstAmount && rateAfter(chunk.value.slice(firstAmount.index + firstAmount.text.length)))
+          questions.push(question(`Confirm the counted unit and rate unit: ${chunk.value.slice(0, 400)}`));
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         // "a door including hinges": per door, but the words after it are not part of the line, so they are asked about.
         if (rate && each && per && !whole) questions.push(question(`Check “${chunk.value.slice(0, 400)}”: the words after the price were not read into this line.`));
@@ -452,8 +482,10 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         if (rate && vatWords.test(after)) questions.push(question(`Confirm VAT: you said “${chunk.value.slice(0, 400)}”. The price is kept as said; VAT is not added or taken off.`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
-        const description = rate && (each || !after)
-          ? chunk.value.slice(0, rate.at).trimEnd().replace(/\s+(?:for|at)$/iu, "") : chunk.value;
+        const description = !chunk.correction
+          ? priceDescription(chunk.value, firstAmount?.index ?? chunk.value.length) || chunk.value : chunk.value;
+        if (!rate && !firstAmount && description.length < chunk.value.length)
+          questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         const kept = description.slice(0, 500);
         if (kept.length < description.length) questions.push(question(`Confirm the description for ${kept.slice(0, 160)}; it is longer than one description and was shortened`));
         // A spoken count is kept when no price is stated, or when the price is for one. A price for several is a line price.
@@ -475,7 +507,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         };
       });
     } else {
-      if (total.test(text)) questions.push(...draft.notes.map(question));
+      if (total.test(text)) questions.push(...draft.notes.filter(note => !questions.some(item => item.question.value === note)).map(question));
       const description = trimSourceText(text);
       const kept = description.slice(0, 500);
       if (kept.length < description.length) questions.push(question("Confirm the work items; the source note is longer than one description and was shortened"));

@@ -264,7 +264,7 @@
       "wholeJobPricePence": null,
       "questionsInclude": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F002"
   },
   {
@@ -289,7 +289,7 @@
       "wholeJobPricePence": null,
       "questionsInclude": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F002"
   },
   {
@@ -631,7 +631,7 @@
       "wholeJobPricePence": null,
       "questionsInclude": []
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F003"
   },
   {
@@ -1083,7 +1083,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   },
   {
@@ -1110,7 +1110,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   },
   {
@@ -1137,7 +1137,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   },
   {
@@ -1164,7 +1164,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   },
   {
@@ -1191,7 +1191,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   },
   {
@@ -1227,7 +1227,7 @@
         "price"
       ]
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-13-F005"
   }
 ]

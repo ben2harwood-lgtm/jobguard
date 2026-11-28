@@ -139,7 +139,7 @@ describe("RT-13 seeded generated truth", () => {
     if (count === 1000) expect(elapsed).toBeLessThan(20000);
   }, 600000);
 
-  it.fails("RT-13-F005: qualified counted work keeps its capture quantity and unit", () => {
+  it("RT-13-F005: qualified counted work keeps its capture quantity and unit", () => {
     const count = Number(process.env.RT13_FUZZ_CASES ?? "1000");
     const pick = random(seed), started = performance.now();
     let changed = 0, changedQuotes = 0;
