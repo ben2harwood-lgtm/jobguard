@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-09": {
+      "branches": ["codex/sandbox/rt-09"],
+      "note": "RT-09 exactly-once spoken-quote attacks (#1071). HEAD_UNDER_TEST=49755b620ccf0223e64575006cd4590c77595ca2. Tests and findings only; isolated browser port 3199, no deployment or push. The lane checker automatically permits this lane's own file.",
+      "allow": [
+        "packages/core/src/RT-09-offline-exactly-once.test.ts",
+        "packages/db/test/RT-09-exactly-once.integration.test.ts",
+        "apps/web/e2e/RT-09-exactly-once.spec.ts",
+        "apps/web/e2e/RT-09.playwright.config.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
