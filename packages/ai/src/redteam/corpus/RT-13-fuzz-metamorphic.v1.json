@@ -1,0 +1,1233 @@
+[
+  {
+    "id": "RT-13-001",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each.",
+    "why": "Known truth: two doors, \u00a3150 each, no room or total; no multiplication.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-002",
+    "lane": "RT-13",
+    "transcript": "FIT TWO DOORS AT \u00a3150 EACH.",
+    "why": "Metamorphic from RT-13-001: case folding",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "DOORS",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-003",
+    "lane": "RT-13",
+    "transcript": "fit two doors at \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: lower case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-004",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each",
+    "why": "Metamorphic from RT-13-001: punctuation removed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-005",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at 150 pounds each.",
+    "why": "Metamorphic from RT-13-001: symbol to digits with pounds",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-006",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at one hundred and fifty pounds each.",
+    "why": "Metamorphic from RT-13-001: digits to number words",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-007",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at a hundred and fifty pounds each.",
+    "why": "Metamorphic from RT-13-001: a hundred form",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-008",
+    "lane": "RT-13",
+    "transcript": "Er, fit two doors at \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: harmless leading filler; extends existing single-item prefix fallback finding",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-13-009",
+    "lane": "RT-13",
+    "transcript": "Like, fit two doors at \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: harmless leading filler; extends existing single-item prefix fallback finding",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-13-010",
+    "lane": "RT-13",
+    "transcript": "Right then, fit two doors at \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: harmless leading filler; extends existing single-item prefix fallback finding",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-13-011",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each. The customer's dog is called Max.",
+    "why": "Metamorphic from RT-13-001: unrelated sentence adds no work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F002"
+  },
+  {
+    "id": "RT-13-012",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each. Er.",
+    "why": "Metamorphic from RT-13-001: a standalone filler is no work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F002"
+  },
+  {
+    "id": "RT-13-013",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at erm \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: filler between count and exact rate cannot change the unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F004"
+  },
+  {
+    "id": "RT-13-014",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at er \u00a3150 each.",
+    "why": "Metamorphic from RT-13-001: filler between count and exact rate cannot change the unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F004"
+  },
+  {
+    "id": "RT-13-015",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each er.",
+    "why": "Metamorphic from RT-13-001: trailing filler cannot erase an exact rate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F004"
+  },
+  {
+    "id": "RT-13-016",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each and paint three walls at \u00a3200 each.",
+    "why": "Known truth: two separately counted work items, no inferred total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-017",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each and er paint three walls at \u00a3200 each.",
+    "why": "Metamorphic from RT-13-016: connective filler cannot erase the preceding exact rate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F004"
+  },
+  {
+    "id": "RT-13-018",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each, like, paint three walls at \u00a3200 each.",
+    "why": "Metamorphic from RT-13-016: comma filler cannot erase the preceding exact rate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F004"
+  },
+  {
+    "id": "RT-13-019",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each paint three walls at \u00a3200 each",
+    "why": "Metamorphic from RT-13-016: remove punctuation and connective without changing work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-020",
+    "lane": "RT-13",
+    "transcript": "FIT TWO DOORS AT 150 POUNDS EACH AND PAINT THREE WALLS AT TWO HUNDRED POUNDS EACH.",
+    "why": "Metamorphic from RT-13-016: combined case and amount notation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "DOORS",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "WALLS",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-021",
+    "lane": "RT-13",
+    "transcript": "In the kitchen. Fit two doors at \u00a3150 each. In bedroom two. Paint three walls at \u00a3200 each.",
+    "why": "Known truth: each room heading owns only its following work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": "Kitchen",
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": "Bedroom two",
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-022",
+    "lane": "RT-13",
+    "transcript": "In bedroom two. Paint three walls at \u00a3200 each. In the kitchen. Fit two doors at \u00a3150 each.",
+    "why": "Metamorphic from RT-13-021: reorder rooms and preserve ownership",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": "Bedroom two",
+          "trade": "Decorating",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": "Kitchen",
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-023",
+    "lane": "RT-13",
+    "transcript": "In the kitchen fit two doors at \u00a3150 each in bedroom two paint three walls at \u00a3200 each",
+    "why": "Metamorphic from RT-13-021: remove all punctuation; next room must not steal preceding doors",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": "Kitchen",
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": "Bedroom two",
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F003"
+  },
+  {
+    "id": "RT-13-024",
+    "lane": "RT-13",
+    "transcript": "IN THE KITCHEN. FIT TWO DOORS AT \u00a3150 EACH. IN BEDROOM TWO. PAINT THREE WALLS AT \u00a3200 EACH.",
+    "why": "Metamorphic from RT-13-021: case folding across numbered rooms",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "DOORS",
+          "room": "Kitchen",
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "WALLS",
+          "room": "Bedroom two",
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-025",
+    "lane": "RT-13",
+    "transcript": "In the kitchen. Fit two doors at one hundred and fifty pounds each. In bedroom two. Paint three walls at two hundred pounds each.",
+    "why": "Metamorphic from RT-13-021: word amounts retain room ownership",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": "Kitchen",
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": "Bedroom two",
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-026",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for up to \u00a3150.",
+    "why": "Known truth: up to is qualified money; leave open and ask.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-027",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for up to er \u00a3150.",
+    "why": "Metamorphic from RT-13-026: filler cannot remove the qualifier or turn credit into charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F001"
+  },
+  {
+    "id": "RT-13-028",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for minus \u00a3150.",
+    "why": "Known truth: minus is qualified money; leave open and ask.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-029",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for minus er \u00a3150.",
+    "why": "Metamorphic from RT-13-028: filler cannot remove the qualifier or turn credit into charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F001"
+  },
+  {
+    "id": "RT-13-030",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for about \u00a3150.",
+    "why": "Known truth: about is qualified money; leave open and ask.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-031",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for about er \u00a3150.",
+    "why": "Metamorphic from RT-13-030: filler cannot remove the qualifier or turn credit into charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F001"
+  },
+  {
+    "id": "RT-13-032",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for a maximum of \u00a3150.",
+    "why": "Known truth: a maximum of is qualified money; leave open and ask.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-033",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for a maximum of er \u00a3150.",
+    "why": "Metamorphic from RT-13-032: filler cannot remove the qualifier or turn credit into charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F001"
+  },
+  {
+    "id": "RT-13-034",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for up to, er, \u00a3150.",
+    "why": "Metamorphic from RT-13-026: pause and filler cannot remove a limit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F001"
+  },
+  {
+    "id": "RT-13-035",
+    "lane": "RT-13",
+    "transcript": "Paint the walls for \u00a3150 if er it stays dry.",
+    "why": "A filler within a condition still leaves a qualified amount open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-036",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each. Paint three walls at \u00a3200 each.",
+    "why": "Known truth: sentence breaks separate two counted items.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-037",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at \u00a3150 each Paint three walls at \u00a3200 each",
+    "why": "Metamorphic from RT-13-036: remove sentence punctuation without merging work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-038",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at a hundred and fifty pounds each. Paint three walls at two hundred pounds each.",
+    "why": "Metamorphic from RT-13-036: equivalent word amounts on two separate items",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "unitPricePence": 15000,
+          "quantity": "2",
+          "unit": "doors",
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "each"
+        },
+        {
+          "descriptionIncludes": "Paint three walls",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "walls",
+          "room": null,
+          "trade": "Decorating",
+          "priceBasis": "each"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-13-039",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at up to \u00a3150 each.",
+    "why": "Count and counted object remain known even when a qualified rate is left open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  },
+  {
+    "id": "RT-13-040",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at minus \u00a3150 each.",
+    "why": "Count and counted object remain known even when a qualified rate is left open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  },
+  {
+    "id": "RT-13-041",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at about \u00a3150 each.",
+    "why": "Count and counted object remain known even when a qualified rate is left open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  },
+  {
+    "id": "RT-13-042",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at at most \u00a3150 each.",
+    "why": "Count and counted object remain known even when a qualified rate is left open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  },
+  {
+    "id": "RT-13-043",
+    "lane": "RT-13",
+    "transcript": "Fit two doors at a maximum of \u00a3150 each.",
+    "why": "Count and counted object remain known even when a qualified rate is left open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": "2",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": null,
+          "trade": "Carpentry",
+          "priceBasis": "none"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  },
+  {
+    "id": "RT-13-044",
+    "lane": "RT-13",
+    "transcript": "In the bedroom two. Fit four doors at minus \u00a396 each. In the kitchen. Paint seven walls at up to eight hundred and thirty two quid each.",
+    "why": "Seed 0x13c0ffee index 0: the independent generator carries counts and units through qualified prices.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four doors",
+          "quantity": "4",
+          "unit": "doors",
+          "unitPricePence": null,
+          "room": "Bedroom two",
+          "priceBasis": "none",
+          "trade": "Carpentry"
+        },
+        {
+          "descriptionIncludes": "Paint seven walls",
+          "quantity": "7",
+          "unit": "walls",
+          "unitPricePence": null,
+          "room": "Kitchen",
+          "priceBasis": "none",
+          "trade": "Decorating"
+        }
+      ],
+      "lineCount": 2,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-13-F005"
+  }
+]

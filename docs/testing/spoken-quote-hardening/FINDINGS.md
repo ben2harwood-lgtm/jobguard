@@ -1261,6 +1261,88 @@ LATER / SIMPLICITY (initial review, non-blocking): `packages/ai/src/capture-fixt
 candidate words repeatedly. This would simplify the matching pass and reduce repeated parsing;
 no unrelated parser refactor is included in this repair.
 
+## RT-13 fuzz and metamorphic attack (#1071)
+
+HEAD_UNDER_TEST / branch base: `ac8065af7305d9cc3db110eff4eb38d47248fa51`.
+Expected values below come from the words spoken, independently of parser output.
+Related variants share one finding; every failing corpus case names its finding.
+
+| ID | Lane | Head sha | Case id | Transcript | Expected | Actual | Sev | Status | Fix PR |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RT-13-F001 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-027, RT-13-029, RT-13-031, RT-13-033, RT-13-034 | `Paint the walls for up to er £150.`; `Paint the walls for minus er £150.`; `Paint the walls for about er £150.`; `Paint the walls for a maximum of er £150.`; `Paint the walls for up to, er, £150.` | Each amount stays open with a price question. Removing a hesitation does not remove a limit, hedge or deduction. In particular a credit never becomes a positive charge. | Capture and Reader A retain positive 15000 pence; Reader A gives line basis and no price question. The filler separates the qualifier from the amount; the comma variation also bypasses it. The numeric check does not remove the retained price. Corresponding filler-free bases remain open. | P0 | open | — |
+| RT-13-F002 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-011, RT-13-012 | `Fit two doors at £150 each. The customer's dog is called Max.`; `Fit two doors at £150 each. Er.` | Exactly one door-fitting work line, quantity 2, unit doors, 15000 pence each. Neither an unrelated dog sentence nor a standalone hesitation is work. | Capture and Reader A both append a second unpriced work line containing the dog sentence or `Er`. The numeric check retains the extra line. The source contains only one work item. | P1 | open | — |
+| RT-13-F003 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-023 | `In the kitchen fit two doors at £150 each in bedroom two paint three walls at £200 each` | Two doors at 15000 pence each belong to Kitchen; three walls at 20000 pence each belong to Bedroom two. Removing punctuation from RT-13-021 preserves ownership and exact prices. | Reader A assigns BOTH lines to Bedroom two and leaves the door price open; the numeric check preserves that misplaced room. Capture also loses the door rate. Unlike RV2-06's forward room transition after a full stop, the next room here steals the preceding work when full stops are removed. | P1 | open | — |
+| RT-13-F004 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-013, RT-13-014, RT-13-015, RT-13-017, RT-13-018 | `Fit two doors at erm £150 each.`; `Fit two doors at er £150 each.`; `Fit two doors at £150 each er.`; `Fit two doors at £150 each and er paint three walls at £200 each.`; `Fit two doors at £150 each, like, paint three walls at £200 each.` | A nonleading hesitation preserves the counted object (2 doors), its exact 15000-pence rate, and the separate wall item where said. These fillers introduce neither a new unit nor a qualification. | Before the amount, capture extracts unit `doors at erm` or `doors at er`, while Reader A keeps doors. After `each`, or in the connective to the next item, capture and Reader A clear the door rate; capture changes the count/unit to 1/item. Both paths keep the following wall rate where present. The numeric check does not restore the lost fields. | P1 | open | — |
+| RT-13-F005 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-039–044; seeded capture-measure property | `Fit two doors at up to £150 each.`; also minus/about/at most/a maximum of; seed 0: `In the bedroom two. Fit four doors at minus £96 each. In the kitchen. Paint seven walls at up to eight hundred and thirty two quid each.` | Qualification opens the price, but the explicit count and counted object survive: 2 doors (seed 0: 4 doors and 7 walls). | Capture safely leaves the prices null but replaces each explicit count/unit with default 1/item. Reader A and its numeric check preserve the correct counts and units. This loss occurs even without any filler and differs from F004's changed unit text or lost exact rate. | P1 | open | — |
+
+RT-13-008/009/010 exercise the existing `RV2-03` single-item prefix fallback with
+`Er`, `Like`, and `Right then` in place of a room heading. They reference `RV2-03`
+as open findings; no duplicate finding row is added. F-005/F-006/F-007/F-008 are not
+reported again.
+
+The corpus contains 44 cases: 22 pass and 22 open (P0: 5 cases / 1 new finding;
+P1: 17 cases / 4 new findings plus 3 variants of existing RV2-03; P2: 0).
+Passing cases are ungraded. Metamorphic pairs additionally run as focused tests;
+open pairs use `it.fails` with their finding id, so a repair requires updating
+both status and finding. Normal tests validate pair references and parsing outside
+expected-failure assertions to avoid mistaking a harness error for a finding.
+
+The independent seeded generator constructs 2–4 work items per transcript from
+counts, integer pound amounts, five money notations, six rooms (including numbered
+bedrooms), four work objects, and direct qualifications. It checks capture, Reader A
+and the numeric check against those parts, including exact money spans, all work
+items, quantities, units and room ownership. Clean money may stay open only with a
+question carrying its said amount; qualified money must stay open. Unspecified
+window material does not establish a particular trade, so window trade is not
+asserted. No production number reader computes the oracle. Fixed seed:
+`0x13c0ffee` (`331415534`). `RT13_FUZZ_CASES=100000` selects the long run; default CI
+runs 1,000 cases with a 20-second assertion. No dependency was added.
+
+The generated capture count/unit property is separately enforced as `it.fails`
+with RT-13-F005; the money/room/citation property remains a normal passing test.
+Minimal counterexamples for each direct qualifier and the full first seeded
+input are retained as RT-13-039–044. Subsequent amount/count variants reproduce
+the same finding and are counted by quote and by changed measure in test output.
+
+Validation receipt (Node 24.17.0, pnpm 10.28.1; no source changes):
+
+- Initial package test startup failed because this fresh checkout lacked the core
+  compiled exports; `pnpm --filter @jobguard/core... build` passed and resolved it.
+- Baseline: `pnpm --filter @jobguard/ai test --maxWorkers=2` — exit 0,
+  28 files / 1,239 tests. Final same command — exit 0, 29 files /
+  1,316 tests (1,299 passed and 17 enforced expected failures).
+- Default seed: 1,000 unique generated quotes in 1,020 ms for money, room and
+  citation checks, below 20 s. Capture measures separately: 79 pass, 921 open P1
+  quotes / 1,851 changed measures (RT-13-F005), in 45 ms.
+- `RT13_FUZZ_CASES=100000 pnpm --filter @jobguard/ai exec vitest run src/redteam/fuzz.test.ts --maxWorkers=2`
+  — exit 0; 100,000 unique quotes passed money/room/citation checks in 105,945 ms.
+  This run preceded addition of the separate capture-measure property.
+- `RT13_FUZZ_CASES=100000 pnpm --filter @jobguard/ai exec vitest run src/redteam/fuzz.test.ts --maxWorkers=2 -t RT-13-F005`
+  — exit 0 with one enforced expected failure. Capture measures: 6,957 pass,
+  93,043 open P1 quotes / 187,823 changed measures in 4,133 ms. These reproduce
+  RT-13-F005; generated P0/P2 counts are zero.
+- `pnpm --filter @jobguard/ai typecheck`, `lint`, and `build` — each exit 0.
+- `node packages/ai/dist/evaluation-cli.js` — exit 0; unchanged golden record
+  verifies 32/32 cases, scope 41/41, citations 119/119, ambiguities 63/63,
+  unsupported money 0. Reader A main set: room/trade 82/82, missed work 0,
+  questions 15/15. Held-out 1: room 30/40, trade 28/40, missed work 9,
+  missed numbers 3, questions 7/9. Held-out 2: room 15/30, trade 14/30,
+  missed work 9, missed numbers 9, questions 2/4. All sets have zero wrong
+  numbers and invented work. Baseline and final evaluation tests pass;
+  implementation, labels, fixtures and golden hash are unchanged.
+- `git diff --check`, finding/case reference and severity checks — pass.
+  The full lane-policy loader is blocked by the pre-existing
+  `config/lanes/v2-rt-12.json` grant of its own lane file (the checker forbids
+  grants under config/lanes). That file is unchanged from this branch base.
+  Isolated RT-13 schema/branch validation with the existing checker functions,
+  plus boundary checks against the exact four changed paths — pass.
+  `.pnpm-store/` is generated local cache and is excluded from the commit.
+
+P0 list: **RT-13-F001** (RT-13-027/029/031/033/034).
+No application workflow, database, model, prompt, migration or release changes;
+root application builds, database suites, browser tests and live evaluation were
+not run for this test-only lane. No servers, paid APIs, deploy, push or merge.
+Open findings remain unresolved; passing expected-failure tests are not fixes.
 ## RT-FIX-5 repair round 1 — Codex review of PR #1085 at ac8065af
 
 Base `ac8065af`, branch `codex/sandbox/rt-fix-5`. Both reported money/loss paths are repaired locally:
