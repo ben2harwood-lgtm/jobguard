@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rams-trades": {
+      "branches": [
+        "claude/project-thread-gx1825"
+      ],
+      "note": "Fix-forward after K9 #934 and SQ-F #1020 met on v2/main: RAMS standard hazards keyed to the trades.v1 task keys (splashback keys kept), a test that every template task has hazards, and the Q06 seed tests updated to the trades.v1 keys.",
+      "allow": [
+        "packages/db/src/v2-rams-hazards.ts",
+        "packages/db/test/v2-rams-draft.test.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
