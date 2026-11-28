@@ -1865,11 +1865,12 @@
     "id": "RT-03-169",
     "lane": "RT-03",
     "transcript": "Hang four doors, actually five doors, at £45 each",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about five doors (corrected quantity 5; never superseded quantity 4); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Hang",
+          "quantity": null,
           "unitPricePence": [
             4500,
             null
@@ -1884,17 +1885,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F080"
   },
   {
     "id": "RT-03-170",
     "lane": "RT-03",
     "transcript": "Fit eight sockets, sorry ten sockets, at £30 each",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about ten sockets (corrected quantity 10; never superseded quantity 8); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Fit",
+          "quantity": null,
           "unitPricePence": [
             3000,
             null
@@ -1916,11 +1919,12 @@
     "id": "RT-03-171",
     "lane": "RT-03",
     "transcript": "Install three radiators, no, make that two radiators, at £95 each",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about two radiators (corrected quantity 2; never superseded quantity 3); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Install",
+          "quantity": null,
           "unitPricePence": [
             9500,
             null
@@ -1935,17 +1939,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F081"
   },
   {
     "id": "RT-03-172",
     "lane": "RT-03",
     "transcript": "Lay twelve square metres, wait fourteen square metres, at £25 per square metre",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about fourteen square metres (corrected quantity 14; never superseded quantity 12); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Lay",
+          "quantity": null,
           "unitPricePence": [
             2500,
             null
@@ -1967,11 +1973,12 @@
     "id": "RT-03-173",
     "lane": "RT-03",
     "transcript": "Fit 4 doors at £45 each. No, make that 5 doors",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about 5 doors (corrected quantity 5; never superseded quantity 4); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Fit",
+          "quantity": null,
           "unitPricePence": [
             4500,
             null
@@ -1986,17 +1993,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F082"
   },
   {
     "id": "RT-03-174",
     "lane": "RT-03",
     "transcript": "Fit six metres of skirting at £12 per metre, sorry eight metres",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about eight metres (corrected quantity 8; never superseded quantity 6); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Fit",
+          "quantity": null,
           "unitPricePence": [
             1200,
             null
@@ -2011,17 +2020,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F083"
   },
   {
     "id": "RT-03-175",
     "lane": "RT-03",
     "transcript": "Install 2 lights at £35 each, actually 3 lights",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about 3 lights (corrected quantity 3; never superseded quantity 2); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Install",
+          "quantity": null,
           "unitPricePence": [
             3500,
             null
@@ -2036,17 +2047,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F084"
   },
   {
     "id": "RT-03-176",
     "lane": "RT-03",
     "transcript": "Hang five doors at £45 each, no, that is four doors",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about four doors (corrected quantity 4; never superseded quantity 5); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Hang",
+          "quantity": null,
           "unitPricePence": [
             4500,
             null
@@ -2061,17 +2074,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F085"
   },
   {
     "id": "RT-03-177",
     "lane": "RT-03",
     "transcript": "Tile twenty square metres at £30 per square metre, no, fifteen square metres",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about fifteen square metres (corrected quantity 15; never superseded quantity 20); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Tile",
+          "quantity": null,
           "unitPricePence": [
             3000,
             null
@@ -2086,17 +2101,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F086"
   },
   {
     "id": "RT-03-178",
     "lane": "RT-03",
     "transcript": "Fit three shelves at £20 each, I mean four shelves",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about four shelves (corrected quantity 4; never superseded quantity 3); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Fit",
+          "quantity": null,
           "unitPricePence": [
             2000,
             null
@@ -2111,17 +2128,19 @@
       ],
       "lineCount": 1
     },
-    "status": "pass"
+    "status": "open-finding",
+    "finding": "RT-03-F087"
   },
   {
     "id": "RT-03-179",
     "lane": "RT-03",
     "transcript": "Paint two coats for £180, sorry three coats",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about three coats (corrected quantity 3; never superseded quantity 2); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Paint",
+          "quantity": null,
           "unitPricePence": [
             18000,
             null
@@ -2143,11 +2162,12 @@
     "id": "RT-03-180",
     "lane": "RT-03",
     "transcript": "Lay 12 square metres for £360, actually 14 square metres",
-    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "why": "M2/M5/S3: clear quantity and ask about 14 square metres (corrected quantity 14; never superseded quantity 12); keep at most the exact stated price, never calculate a new total.",
     "expect": {
       "lines": [
         {
           "descriptionIncludes": "Lay",
+          "quantity": null,
           "unitPricePence": [
             36000,
             null

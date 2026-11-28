@@ -130,7 +130,9 @@ describe("RT-03 semantic correction alternatives", () => {
     for (const item of all.filter(item => item.status === "open-finding")) {
       const rows = findings.split("\n").filter(row => row.startsWith(`| ${item.finding} | RT-03 |`));
       expect(rows, `${item.id} needs exactly one finding at the tested base`).toHaveLength(1);
-      expect(rows[0]).toContain(`| a44f5d35b363a5182b166ff724d2d09ca5c1060f | ${item.id} |`);
+      const countCorrection = Number(item.id.slice(-3)) >= 169 && Number(item.id.slice(-3)) <= 180;
+      const head = countCorrection ? "3d43d1d7" : "a44f5d35b363a5182b166ff724d2d09ca5c1060f";
+      expect(rows[0]).toContain(`| ${head} | ${item.id} |`);
     }
   });
 });
