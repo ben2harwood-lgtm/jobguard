@@ -45,8 +45,10 @@ Every lane tests against these. A case fails if any one breaks.
 
 - **M1 No invented money.** Every kept pence value cites a transcript span whose words read to exactly that
   value. No arithmetic, no guessing, no rounding.
-- **M2 Qualified money stays open.** Any amount with a limit, range, hedge, rate, condition, credit, VAT,
-  "plus materials", currency other than pounds, or a correction near it is left unpriced and asked about.
+- **M2 Qualified money stays open.** Any amount with a limit, range, hedge, condition, credit, deduction,
+  percentage, currency other than pounds, or a correction near it is left unpriced and asked about. Two exceptions
+  keep the number exactly as said **and** ask a question: VAT words ("plus VAT", "inc VAT") and "plus materials" /
+  "labour only". A rate ("a door", "per metre") is kept only when its unit is the line's own counted thing.
 - **M3 A credit is never a charge.** Minus, off, discount, credit, knock off: never a positive price.
 - **M4 Totals are never forced.** A said total that differs from the sum of the lines raises a question;
   neither the total nor any line is changed to fit.
