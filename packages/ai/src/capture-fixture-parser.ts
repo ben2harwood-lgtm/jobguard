@@ -9,12 +9,17 @@ export class CaptureFixtureError extends Error {
     super(code); this.code = code; this.name = "CaptureFixtureError";
   }
 }
+// Source-facing trimming keeps format characters, including the whitespace BOM, in the cited text.
+export const trimSourceText = (value: string) => value.replace(/^[^\S\uFEFF]+|[^\S\uFEFF]+$/gu, "");
+// Offset calculations use the original prefix length, never indices from a shortened recognition copy.
+export const leadingContentOffset = (value: string) => /^[\s\p{Cf}\p{Default_Ignorable_Code_Point}]*/u.exec(value)![0].length;
 export type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
 function cells(raw: string, start: number): Cell[] {
   let offset = 5;
   return raw.slice(5).split("|").map(part => {
-    const leading = part.length - part.trimStart().length;
-    const cell = { value: part.trim(), start: start + offset + leading };
+    const value = trimSourceText(part);
+    const leading = part.indexOf(value);
+    const cell = { value, start: start + offset + leading };
     offset += part.length + 1;
     return cell;
   });
@@ -30,17 +35,32 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
   if (candidates.length !== 1) return null;
   const cell = candidates[0]!;
   const content = cell.value.slice(prefix.length);
-  const leading = content.length - content.trimStart().length;
-  return { value: content.trim(), start: cell.start + prefix.length + leading };
+  const value = trimSourceText(content);
+  return { value, start: cell.start + prefix.length + content.indexOf(value) };
 }
 
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
 export const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
-export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+// Recognition only: never use this copy for source spans or amount parsing.
+export const visibleWorkText = (value: string) => value.replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, "").trimStart();
+export const workClause = (value: string) => {
+  const visible = visibleWorkText(value);
+  return workWord.test(visible) || spokenVerb.test(visible) || /^woodwork\s+in\s+gloss\b/iu.test(visible);
+};
 export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
-const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+// Keep corrupted literals whole so they produce an open price, never a valid prefix or a second work line.
+export const invisibleFormat = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
+const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?=[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]*[\p{Cf}\p{Default_Ignorable_Code_Point}])[\d.,\p{Cf}\p{Default_Ignorable_Code_Point}]+|£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2}|\.{2,}\d+)?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+/** Decimal punctuation, including malformed repeated dots, belongs to the amount rather than a new clause. */
+export function amountPoints(text: string): Set<number> {
+  const points = new Set<number>();
+  for (const match of text.matchAll(/\d(\.+)(?=\d)/gu)) {
+    for (let offset = 1; offset <= match[1]!.length; offset++) points.add(match.index + offset);
+  }
+  return points;
+}
 
 // Spoken amounts ("two hundred pounds", "a thousand and fifty quid"): the words are the cited price.
 export const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
@@ -121,19 +141,25 @@ const hedgeAfter = /^\s*(?:-?ish\b|or so\b|(?:roughly|approximately|approx)(?![\
 // A limit, floor or credit around the amount (V2-SQ-M): a ceiling, a floor or a credit is never a fixed price, and a
 // credit is never read as a charge or worked out as a negative one; the builder is asked. "Paint the ceiling - £200"
 // (a dash with a space after it) is punctuation; "-£50" and "−£50", with the sign against the amount, are a minus.
-const limitBefore = /(?:(?<![\p{L}])(?:up\s+to|at\s+(?:the\s+)?(?:most|least|maximum|minimum|max|min)|no\s+(?:more|less|higher|lower)\s+than|not\s+(?:more|less)\s+than|not\s+(?:over|exceeding)|(?:a\s+|the\s+)?(?:maximum|minimum|max|min)(?:\s+(?:price|cost|charge|budget|spend))?(?:\s+of)?|capped\s+at|starting\s+(?:at|from)|minus|less|(?:a\s+)?credit(?:\s+of)?|under|below|over|above)\s*|(?:^|\s)[-–]|−\s*)$/iu;
-const limitAfter = /^\s*(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|at\s+(?:the\s+)?(?:most|least)|or\s+(?:less|more|under|over|below|above|thereabouts)|credit(?:ed)?|off(?:\s+(?:the\s+)?(?:bill|price|total|invoice|quote))?|discount|refund(?:ed)?|back)(?![\p{L}])/iu;
+const limitBefore = /(?:(?<![\p{L}])(?:up\s+to|at\s+(?:the\s+)?(?:most|least|maximum|minimum|max|min)|no\s+(?:more|less|higher|lower)\s+than|not\s+(?:more|less)\s+than|not\s+(?:over|exceeding)|(?:a\s+|the\s+)?(?:maximum|minimum|max|min)(?:\s+(?:price|cost|charge|budget|spend))?(?:\s+of)?|capped\s+at|starting\s+(?:at|from)|(?:take|knock)\s+off|deduct(?:ion)?(?:\s+of)?|discount(?:\s+of)?|minus(?:\s+the)?|less|rebate(?:\s+of)?|refund(?:\s+of)?|back\s+for|(?:a\s+)?credit(?:\s+of)?|under|below|over|above)\s*|(?:^|\s)[-–]|−\s*|\(\s*)$/iu;
+const limitAfter = /^\s*(?:[-–−)]|(?:pounds?\s+|quid\s+)?(?:minimum|maximum|min|max|tops|at\s+(?:the\s+)?(?:most|least)|or\s+(?:less|more|under|over|below|above|thereabouts)|credit(?:ed)?|off(?:\s+(?:the\s+)?(?:bill|price|total|invoice|quote))?|discount|rebate|refund(?:ed)?|back)(?![\p{L}]))/iu;
 /**
  * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
  * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
  * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
  * a hedge word qualifies it ("about 500", "500 or so"); a limit, floor or credit word qualifies it ("up to £200",
- * "£200 minimum", "minus fifty pounds", "-£50", "£50 off the bill"); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
+ * "£200 minimum", "take off £50", "-£50", "(£50)", "£50-", "£50 off the bill"); invisible format characters
+ * occur in its clause (except before its leading text; never stripped from the source); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
+  // A prefix before a work/title/room clause is harmless, even when the numeric checker includes the title.
+  // Keep a prefix directly beside the amount, and every invisible character inside the clause or amount.
+  const content = before.slice(leadingContentOffset(before));
+  const priceBefore = /^\p{L}/u.test(content) ? content : before;
   return spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+    || invisibleFormat.test(priceBefore) || invisibleFormat.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
@@ -151,15 +177,17 @@ const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${nu
  */
 // `isWork` lets the context reader (SQ-C) also treat "in the kitchen rip out …" as work; the v1 parser passes the default.
 export function plainDraft(text: string, isWork: (value: string) => boolean = workClause,
-  isTiming: (value: string) => boolean = value => timing.test(value)): { chunks: Cell[]; notes: string[]; title: Cell | null } {
+  isTiming: (value: string) => boolean = value => timing.test(visibleWorkText(value))): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
+  const points = amountPoints(text);
   const add = (start: number, end: number) => {
     // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
-    const raw = text.slice(start, end), value = raw.trim().replace(/\s+and$/iu, "");
+    // U+FEFF is both whitespace and a format character: retain it for the price guard and the source span.
+    const raw = text.slice(start, end), value = trimSourceText(raw).replace(/\s+and$/iu, "");
     if (!value) return;
-    const at = start + raw.length - raw.trimStart().length;
+    const at = start + raw.indexOf(value);
     const tail = wholeJobTail.exec(value);
-    if (tail && tail.index > 0 && isWork(value.slice(0, tail.index).trim())) {
+    if (tail && tail.index > 0 && isWork(value.slice(0, tail.index))) {
       const head = value.slice(0, tail.index).trimEnd();
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
@@ -175,21 +203,21 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     if (correctionEnd !== undefined) { i = correctionEnd - 1; continue; }
     const char = text[i]!;
     // A decimal point or thousands separator belongs to the amount.
-    if (/[.!?;\r\n]/u.test(char) && !(char === "." && /\d/u.test(text[i - 1] ?? "") && /\d/u.test(text[i + 1] ?? ""))) {
+    if (/[.!?;\r\n]/u.test(char) && !points.has(i)) {
       // A correction may follow a pause or sentence end: it still retracts the preceding item's price.
-      if (spokenCorrection.exec(text.slice(i + 1).trimStart())?.index === 0) continue;
+      if (spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) continue;
       add(start, i); start = i + 1;
     } else {
       const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
       if (!separator) {
         // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
-        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(text.slice(i + 1))
-          && !tiedBefore.test(text.slice(start, i)) && text.slice(start, i).trim().split(/\s+/u).length >= 2) {
+        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
+          && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
           add(start, i); start = i + 1;
         }
         continue;
       }
-      const next = text.slice(i + separator.length).trimStart();
+      const next = visibleWorkText(text.slice(i + separator.length));
       if (spokenCorrection.exec(next)?.index === 0) continue;
       // Keep the disposal phrase attached to the removal it describes.
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
@@ -202,14 +230,15 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   }
   add(start, text.length);
   const first = chunks[0];
-  const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
-  const title = first && titleText ? { value: titleText, start: first.start } : null;
+  const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200);
+  const titleValue = titleText === undefined ? undefined : trimSourceText(titleText);
+  const title = first && titleValue ? { value: titleValue, start: first.start + first.value.indexOf(titleValue) } : null;
   const work = chunks.filter((chunk, index) => {
     if (isTiming(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
-    if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
+    if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(visibleWorkText(chunk.value)))) {
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
-    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !isWork(chunk.value));
+    return !/^JOB:/u.test(visibleWorkText(chunk.value)) && !(index === 0 && !isWork(chunk.value));
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
   const cleaned = work.map(chunk => {
@@ -237,8 +266,10 @@ export const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, f
   eleven: 11, twelve: 12, twenty: 20 };
 /** "fit six base units": the stated count and what it counts. Only right after the item's verb. */
 export function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
-  const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(description);
-  if (!match || !spokenVerb.test(description)) return null;
+  const offset = leadingContentOffset(description);
+  const visible = description.slice(offset);
+  const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(visible);
+  if (!match || !spokenVerb.test(visible)) return null;
   const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];
   if (!count || match[2]!.length > 40 || /^(?:the|a|an|of|for|and|in|on|out|up|off|down)\b/iu.test(match[2]!)) return null;
   // "twenty one doors", "one hundred doors": a count of several words is not read, rather than read in part.
@@ -263,13 +294,14 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   }
   let offset = 0;
   const sourceLines = text.split("\n").map(raw => {
-    const line = { raw, start: offset }; offset += raw.length + 1; return line;
+    const leading = leadingContentOffset(raw);
+    const line = { raw: raw.slice(leading), start: offset + leading }; offset += raw.length + 1; return line;
   });
   const items = sourceLines.filter(line => /^ITEM:/u.test(line.raw));
   if (items.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
   const titles = sourceLines.filter(line => /^JOB:[ \t]*\S/u.test(line.raw));
   const title = titles[0];
-  const titleValue = title?.raw.slice(4).trim();
+  const titleValue = title ? trimSourceText(title.raw.slice(4)) : undefined;
   if (titleValue && titleValue.length > 200) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
   const extracted = (start: number, length: number) => ({
     kind: "extracted" as const,
@@ -293,10 +325,11 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     // after it (Reader A labels them); it is never a work row itself.
     // The row decision below still counts the room clause, so "Jones flat. In the kitchen. Fit six doors …" keeps its parsed row.
     const said = draft.chunks.length;
-    draft.chunks = draft.chunks.filter(chunk => chunk.inferred || !roomOnly.test(chunk.value));
-    if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
+    draft.chunks = draft.chunks.filter(chunk => chunk.inferred || !roomOnly.test(visibleWorkText(chunk.value)));
+    if (draft.chunks.length && workClause(text)) plainTitle = draft.title;
     // One spoken item with a stated price ("supply and fit one door for three hundred pounds") is a line too; an unclear price stays open.
-    const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
+    const single = draft.chunks.length === 1 && workClause(text)
+      && leadingContentOffset(text.slice(0, draft.chunks[0]!.start)) === draft.chunks[0]!.start
       && amounts(draft.chunks[0]!.value).length > 0;
     if ((said >= 2 && draft.chunks.length > 0) || single) {
       plainTitle = draft.title;
@@ -345,7 +378,7 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         };
       });
     } else {
-      const description = text.trim();
+      const description = trimSourceText(text);
       const kept = description.slice(0, 500);
       if (kept.length < description.length) questions.push(question("Confirm the work items; the source note is longer than one description and was shortened"));
       lines = [{

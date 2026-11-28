@@ -11,54 +11,6 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RT-00-F001 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-002 | Fit the door for a hundred and fifty pound | One line priced 15000 pence | Capture and Reader A leave the price null; singular pound is not read as exact money | P1 | open | — |
 | RT-00-F002 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-003 | Paint the kitchen £400, no, make that £450 | One open line with a question (or 45000 with a question); never 40000 | Capture keeps 40000 and adds a second “make that” line priced 45000, with no correction question; Reader A safely opens one line | P0 | fixed (local tests; golden gate held) | RT-FIX-2 / #1071 (commit only) |
 | RT-00-F003 | RT-00 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-00-005 | Run 15mm pipe to the rad £120 | One line priced 12000; diameter never becomes a count | Capture leaves the price null; Reader A correctly keeps 12000 with quantity null | P1 | open | — |
-
-## RT-FIX-2 receipt (28 Nov 2026, #1071)
-
-Changed `packages/ai/src/capture-fixture-parser.ts`, the RT-03 correction seed corpus, RT-00-003's status,
-this findings file, and `config/lanes/v2-rt-fix-2.json`. The already-staged RT-00 runner and plan files
-are included unchanged. No push, live model, paid API, deployment, database or browser action.
-
-One shared correction-marker guard keeps corrections attached before splitting and feeds the existing
-`saidAmountOpen` price guard. The capture price stays null and an explicit question says a spoken
-correction was made. It never chooses between the old and new figures. The 24 corpus cases cover
-`no make that`, `actually`, `sorry I mean`, `scratch that`, `not X Y`, `change that to`, `or rather`,
-and `call it X instead`, including omitted replacement currency, punctuation, unpunctuated speech,
-and an independent following item. Original source words and citation offsets are retained.
-
-Before → after:
-
-| Check | Before | After |
-| --- | --- | --- |
-| Existing AI suite | 28 files, 508 tests pass | 528 pass / 4 fail out of 532 including 24 new cases; all four failures are the unchanged golden hash gate |
-| RT-00 corpus | 2 pass / 3 open | 3 pass / 2 open (F001 and F003 unchanged) |
-| New RT-03 regressions | 12 pass / 12 fail against original parser | 24 pass / 0 open; explicit capture correction questions checked on 24/24 |
-| Qualified-price tests (unchanged) | 19/19 | 19/19 |
-| Capture evaluation | 32/32 cases; scope 41/41; citations 119/119; ambiguities 63/63; unsupported money 0 | Identical |
-| Reader A main set | 30 cases; room 82/82; trade 82/82; wrong numbers 0; invented work 0; missed work 0; questions 15/15 | Identical |
-| Reader A held-out 1 | 10 cases; room 30/40; trade 28/40; wrong numbers 0; invented work 0; missed work 9; missed numbers 3; questions 7/9 | Identical |
-| Reader A held-out 2 | 10 cases; room 15/30; trade 14/30; wrong numbers 0; invented work 0; missed work 9; missed numbers 8; questions 2/4 | Identical |
-
-Validation: built `@jobguard/core` once to provide the existing package dependency; ran
-`pnpm --filter @jobguard/ai test --maxWorkers=1` before the repair (508/508), the new corpus before
-the repair (12 failures), and the corpus plus unchanged `capture-qualified-price.test.ts` after
-(54/54). `pnpm eval --maxWorkers=1` ran all 532 AI tests with one worker: 528 pass, four golden-gate failures.
-No whole-repository tests ran. Before/after evaluator reports were compared using the original parser
-from Git HEAD through a temporary Node loader and the repaired compiled parser; the reports are identical.
-The AI package's `build`, `typecheck` and `lint` pass.
-
-Golden hash note: the parser SHA-256 changes from
-`bbdcc67597d8298f6f4dcb6a3ed5dcd59bca44982f51d556558ca2b9cab8aaee` to
-`b2f5f2c9a91c25d2a5a2d3f221da9bd9baf49b6e05dc4cf6fa085b19ee614841`.
-A full golden-record comparison confirms that this one source hash is the only difference; predictions,
-labels, metrics, versions, thresholds and other source hashes are identical. The checked-in golden record
-is outside this order's five-file edit scope and is unchanged. Its two direct equality tests and the two
-CLI tests that invoke the same verification fail until that record is refreshed and reviewed. This is a
-held gate, not a green `pnpm eval` claim. Independent review and merge are not claimed.
-
-Initial review — LATER / SIMPLICITY: `packages/ai/src/context-reader.ts:correction` and `totals` have
-older, narrower correction patterns. A future reader change could reuse the shared correction marker
-rather than maintain separate vocabularies, reducing grammar drift. Outside this fix's allowed files;
-non-blocking.
 | RT-01-F002 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-002 | Fit the door for one pound | One line priced 100 pence; never 1, 1000 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F003 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-003 | Fit the door for a pound | One line priced 100 pence; never 1, 1000 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F032 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-032 | Fit the door for one-hundred-and-fifty pounds | One line priced 15000 pence; never 150, 150000 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
@@ -126,7 +78,7 @@ non-blocking.
 | RT-01-F118 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-118 | Fit the door for £150,50 | One unpriced line and an explicit price question; never 15050, 15000, 5000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F119 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-119 | Fit the door for £.50 | One unpriced line and an explicit price question; never 50, 5000 pence | Capture: 2 line(s), pence [null, null]; no explicit price question; descriptions ["Fit the door for £", "50"]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F120 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-120 | Fit the door for £1.2.3 | One unpriced line and an explicit price question; never 120, 123, 300 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
-| RT-01-F121 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-121 | Fit the door for £150..50 | One unpriced line and an explicit price question; never 15000, 15050, 5000 pence | Capture: 2 line(s), pence [15000, null]; no explicit price question; descriptions ["Fit the door", "50"]; Reader A: 1 line(s), pence [15000] | P0 | open | — |
+| RT-01-F121 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-121 | Fit the door for £150..50 | One unpriced line and an explicit price question; never 15000, 15050, 5000 pence | Capture: 2 line(s), pence [15000, null]; no explicit price question; descriptions ["Fit the door", "50"]; Reader A: 1 line(s), pence [15000] | P0 | fixed | RT-FIX-3 (#1071; local commit) |
 | RT-01-F123 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-123 | Fit the door for £1<NBSP U+00A0>500 | One line priced 150000 pence; never 100, 50000, 1500 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F124 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-124 | Fit the door for £1<NNBSP U+202F>500 | One line priced 150000 pence; never 100, 50000, 1500 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F125 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-125 | Fit the door for £<NBSP U+00A0>150 | One line priced 15000 pence; never 100, 50000, 1500 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
@@ -137,17 +89,17 @@ non-blocking.
 | RT-01-F130 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-130 | Fit the door for £۱۵۰ | One unpriced line and an explicit price question; never 1, 5, 10, 150 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
 | RT-01-F131 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-131 | Fit the door for £1５0 | One unpriced line and an explicit price question; never 100, 500, 0 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
 | RT-01-F132 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-132 | Fit the door for £１５０.５０ | One unpriced line and an explicit price question; never 150, 5000 pence | Capture: 2 line(s), pence [null, null]; no explicit price question; descriptions ["Fit the door for £１５０", "５０"]; Reader A: 2 line(s), pence [null, null]; no explicit price question; descriptions ["Fit the door for £１５０", "５０"] | P1 | open | — |
-| RT-01-F133 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-133 | Fit the door for £1<ZWSP U+200B>500 | One unpriced line and an explicit price question; never 100, 50000 pence | Capture: 1 line(s), pence [100]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | open | — |
-| RT-01-F134 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-134 | Fit the door for £1<WORD JOINER U+2060>500 | One unpriced line and an explicit price question; never 100, 50000 pence | Capture: 1 line(s), pence [100]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | open | — |
+| RT-01-F133 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-133 | Fit the door for £1<ZWSP U+200B>500 | One unpriced line and an explicit price question; never 100, 50000 pence | Capture: 1 line(s), pence [100]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | fixed | RT-FIX-3 (#1071; local commit) |
+| RT-01-F134 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-134 | Fit the door for £1<WORD JOINER U+2060>500 | One unpriced line and an explicit price question; never 100, 50000 pence | Capture: 1 line(s), pence [100]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | fixed | RT-FIX-3 (#1071; local commit) |
 | RT-01-F135 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-135 | Fit the door for £-150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F136 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-136 | Fit the door for £−150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F140 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-140 | Fit the door for less 150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F141 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-141 | Fit the door for take off 150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
-| RT-01-F142 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-142 | Fit the door for take off £150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | open | — |
-| RT-01-F143 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-143 | Fit the door for knock off 150 pounds | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | open | — |
-| RT-01-F144 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-144 | Fit the door for a deduction of £150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | open | — |
-| RT-01-F145 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-145 | Fit the door for (£150) | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | open | — |
-| RT-01-F146 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-146 | Fit the door for £150- | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | open | — |
+| RT-01-F142 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-142 | Fit the door for take off £150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | fixed | RT-FIX-3 (#1071; local commit) |
+| RT-01-F143 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-143 | Fit the door for knock off 150 pounds | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | fixed | RT-FIX-3 (#1071; local commit) |
+| RT-01-F144 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-144 | Fit the door for a deduction of £150 | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [15000]; no explicit price question | P0 | fixed | RT-FIX-3 (#1071; local commit) |
+| RT-01-F145 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-145 | Fit the door for (£150) | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | fixed | RT-FIX-3 (#1071; local commit) |
+| RT-01-F146 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-146 | Fit the door for £150- | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [15000]; no explicit price question; Reader A: 1 line(s), pence [null] | P0 | fixed | RT-FIX-3 (#1071; local commit) |
 | RT-01-F147 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-147 | Fit the door for £-1,500.50 | One unpriced line and an explicit price question; never 150050 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F148 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-148 | Fit the door for minus a hundred and fifty pound | One unpriced line and an explicit price question; never 15000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null] | P2 | open | — |
 | RT-01-F151 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-151 | Fit the door for one pound and one penny | One line priced 101 pence; never 2000, 205000, 505000 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
@@ -168,6 +120,54 @@ non-blocking.
 | RT-01-F190 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-190 | Fit kitchen units for three grand | One line priced 300000 pence; never 300 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F191 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-191 | Fit kitchen units two and a half grand | One unpriced line and an explicit price question; never 200000, 250 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
 | RT-01-F192 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-192 | Fit the door a ton | One unpriced line and an explicit price question; never 10000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
+
+## RT-FIX-2 receipt (28 Nov 2026, #1071)
+
+Changed `packages/ai/src/capture-fixture-parser.ts`, the RT-03 correction seed corpus, RT-00-003's status,
+this findings file, and `config/lanes/v2-rt-fix-2.json`. The already-staged RT-00 runner and plan files
+are included unchanged. No push, live model, paid API, deployment, database or browser action.
+
+One shared correction-marker guard keeps corrections attached before splitting and feeds the existing
+`saidAmountOpen` price guard. The capture price stays null and an explicit question says a spoken
+correction was made. It never chooses between the old and new figures. The 24 corpus cases cover
+`no make that`, `actually`, `sorry I mean`, `scratch that`, `not X Y`, `change that to`, `or rather`,
+and `call it X instead`, including omitted replacement currency, punctuation, unpunctuated speech,
+and an independent following item. Original source words and citation offsets are retained.
+
+Before → after:
+
+| Check | Before | After |
+| --- | --- | --- |
+| Existing AI suite | 28 files, 508 tests pass | 528 pass / 4 fail out of 532 including 24 new cases; all four failures are the unchanged golden hash gate |
+| RT-00 corpus | 2 pass / 3 open | 3 pass / 2 open (F001 and F003 unchanged) |
+| New RT-03 regressions | 12 pass / 12 fail against original parser | 24 pass / 0 open; explicit capture correction questions checked on 24/24 |
+| Qualified-price tests (unchanged) | 19/19 | 19/19 |
+| Capture evaluation | 32/32 cases; scope 41/41; citations 119/119; ambiguities 63/63; unsupported money 0 | Identical |
+| Reader A main set | 30 cases; room 82/82; trade 82/82; wrong numbers 0; invented work 0; missed work 0; questions 15/15 | Identical |
+| Reader A held-out 1 | 10 cases; room 30/40; trade 28/40; wrong numbers 0; invented work 0; missed work 9; missed numbers 3; questions 7/9 | Identical |
+| Reader A held-out 2 | 10 cases; room 15/30; trade 14/30; wrong numbers 0; invented work 0; missed work 9; missed numbers 8; questions 2/4 | Identical |
+
+Validation: built `@jobguard/core` once to provide the existing package dependency; ran
+`pnpm --filter @jobguard/ai test --maxWorkers=1` before the repair (508/508), the new corpus before
+the repair (12 failures), and the corpus plus unchanged `capture-qualified-price.test.ts` after
+(54/54). `pnpm eval --maxWorkers=1` ran all 532 AI tests with one worker: 528 pass, four golden-gate failures.
+No whole-repository tests ran. Before/after evaluator reports were compared using the original parser
+from Git HEAD through a temporary Node loader and the repaired compiled parser; the reports are identical.
+The AI package's `build`, `typecheck` and `lint` pass.
+
+Golden hash note: the parser SHA-256 changes from
+`bbdcc67597d8298f6f4dcb6a3ed5dcd59bca44982f51d556558ca2b9cab8aaee` to
+`b2f5f2c9a91c25d2a5a2d3f221da9bd9baf49b6e05dc4cf6fa085b19ee614841`.
+A full golden-record comparison confirms that this one source hash is the only difference; predictions,
+labels, metrics, versions, thresholds and other source hashes are identical. The checked-in golden record
+is outside this order's five-file edit scope and is unchanged. Its two direct equality tests and the two
+CLI tests that invoke the same verification fail until that record is refreshed and reviewed. This is a
+held gate, not a green `pnpm eval` claim. Independent review and merge are not claimed.
+
+Initial review — LATER / SIMPLICITY: `packages/ai/src/context-reader.ts:correction` and `totals` have
+older, narrower correction patterns. A future reader change could reuse the shared correction marker
+rather than maintain separate vocabularies, reducing grammar drift. Outside this fix's allowed files;
+non-blocking.
 
 RT-01 receipt (#1071, 28 Nov 2026): `HEAD_UNDER_TEST=b25b5ee931ff7bb62bbaa34a47099fddadf514ed`.
 192 unique fictional transcripts; 83 declared pass and 109 open-finding cases
@@ -198,6 +198,127 @@ them. Only AI package tests ran; no repository-wide, browser, database or paid/l
 The 21 other inherited staged RT-00/plan files were hash-checked byte-for-byte, and the original
 `FINDINGS.md` content remains an unchanged prefix. The attack adds only its corpus, lane config and
 findings/receipt; the inherited staged files are included by Ben's explicit commit instruction.
+
+
+## RT-FIX-3 repair receipt (28 Nov 2026, #1071)
+
+Fixed RT-01-F121, F133, F134 and F142–F146. Their original expected values are unchanged; their
+corpus statuses now pass. The supplied staged RT-01 corpus and findings are included in this commit. The staged attack copy
+had overwritten RT-FIX-2's status/receipt; those existing HEAD records are preserved here.
+RT-01-193–268 add 76 regression cases for deduction words, bracket/trailing-minus notation, repeated
+points and eleven invisible format/default-ignorable characters before, within and after an amount.
+All require one open line and an explicit `Confirm price` question on both readers and the checked reader.
+
+`capture-fixture-parser.ts:saidAmountOpen` retains the single Q77 limit/credit guard: take off, knock
+off, deduct, deduction, less, discount, minus the, rebate, refund and back for extend that guard rather
+than introducing another deduction check. Brackets and trailing minus signs open the price there too.
+Malformed decimal tokens stay whole; both splitters use the same decimal-point positions. Format
+characters are rejected, never normalized away. This includes U+FEFF, which ordinary whitespace
+trimming and the validator's currency-prefix removal used to discard. Source offsets stay unchanged.
+
+The core number validator also rejects either fragment of a repeated-point amount. Its existing
+`read.open` hook still calls the same guard; rejected spoken line prices ask `Confirm price`.
+The core edit is needed for reader/model candidates citing just `£150` or `50` in `£150..50`, and
+for digit-only citations immediately after `£` plus U+FEFF. No duplicated money/deduction guard was added.
+
+Initial source inspection — LATER / SIMPLICITY: `packages/ai/src/context-reader.ts:priceNear` and
+`capture-fixture-parser.ts:amounts`: consider reusing one token enumeration for line and total amounts,
+retaining the context reader's bare-number/thousands support. This would reduce future differences in
+partial-token handling. Non-blocking follow-up; this repair keeps their existing contracts.
+
+Executed validation (one Vitest worker; no repository-wide, DB, browser or paid/live-model tests):
+
+- Baseline: `pnpm --filter @jobguard/ai test --maxWorkers=1`: 28 files / 724 tests pass;
+  RT-01 83 pass / 109 open, RT-00 3 pass / 2 open, RT-03 24 pass / 0 open.
+- Targeted: `pnpm --filter @jobguard/ai test --maxWorkers=1 src/redteam/corpus.test.ts src/capture-qualified-price.test.ts`:
+  2 files / 322 tests pass. Q77's test file is unchanged.
+- Final `pnpm --filter @jobguard/ai test --maxWorkers=1` and `pnpm eval --maxWorkers=1`:
+  both pass 28 files / 800 tests; RT-01 167 pass / 101 open;
+  other lane counts unchanged. Open findings remain enforced failing examples, not resolved findings.
+- Required local dependency compilation: `pnpm --filter @jobguard/core build`; AI compilation:
+  `pnpm --filter @jobguard/ai build`; both pass. No source test files or evaluation floors changed.
+- Direct compiled-AI adversarial matrix (`node /tmp/jobguard-rt-fix-3-check.mjs`): all 84 repaired/new
+  inputs retain untouched capture descriptions, reject 194 unsafe positive line-price candidates
+  (including digit-only citations) with `Confirm price`, and reject 194 unsafe room/whole-job candidates.
+  Both readers' total paths also keep all 84 variants open. This is an executed deterministic check,
+  not an independent review.
+- Regenerated `golden-run.v1.json` through `runCaptureEvaluation` / `createGoldenRunRecord`:
+  only the capture parser implementation hash changes; all 32 predictions are identical. Before/after:
+  scope recall 41/41, valid citations 119/119, unsupported monetary facts 0, ambiguity checks 63/63.
+
+The lane policy loads successfully and its boundary check covers exactly the seven authorized files.
+`git diff --check` passes. The package manager's generated cache was preserved under `/tmp`, outside
+the worktree.
+
+Parser/validator repair only: no database migration, provider action, web workflow or commercial-policy
+change. No push, merge, deployment, independent review, acceptance or production readiness is claimed.
+
+
+### RT-FIX-3 review repair round 1 (#1077, 28 Nov 2026)
+
+Work recognition ignores leading and inner invisible format characters in a temporary comparison
+copy. The source and work-description spans retain them. Leading characters before a work verb do
+not open an otherwise intact price; characters inside or beside an amount still do. The title span
+now accounts for a trimmed BOM. No parser or policy version changes.
+
+Added RT-01-269–271 for the requested BOM/zero-width prefixes, each retaining two lines priced
+15000 and 20000 pence, and RT-01-272 for invisible characters inside both work verbs. The three
+requested cases fail before the repair and pass afterward through capture, Reader A and its numeric
+checker, including source-span invariants.
+
+Executed locally with at most two Vitest workers:
+- `pnpm --filter @jobguard/ai test --maxWorkers=2`: 28 files / 804 tests pass.
+- `pnpm eval --maxWorkers=2`: 28 files / 804 tests pass.
+- `pnpm --filter @jobguard/ai typecheck`, `lint` and `build`: pass.
+- Golden record: only the parser implementation SHA-256 changed; all 32 fixture predictions and
+  evaluation totals remain unchanged (recall 41/41, citations 119/119, unsupported money 0,
+  ambiguities 63/63). Existing open findings remain open.
+
+Deterministic local verification only. No push, merge, release or independent review claimed.
+
+### RT-FIX-3 review repair round 2, final allowed (#1077, 28 Nov 2026)
+
+Fixed the single-item start comparison: the prefix before the original chunk must contain only
+whitespace/format/default-ignorable characters. It no longer compares a preserved chunk offset
+against `trimStart()`'s BOM-stripped offset. Recognition copies are shared for clause starts,
+timing, titles, room checks and work/trade checks; offset-bearing matches stay on the original
+text with the original leading-prefix length. Source-facing trimming preserves BOMs consistently
+in titles, cells, fallbacks and total-price tokens. No source text is normalized for citations or
+amount parsing, and no parser/policy version changes.
+
+The amount guard ignores a leading invisible prefix only when actual clause text follows it,
+including a title/room before work. The numeric checker can supply that whole clause for late work;
+a BOM before the title must not clear the later intact price. A format character directly beside
+or inside an amount, or inside the clause, still opens the price. Existing deduction, bracket,
+trailing-minus and malformed-amount checks remain enforced.
+
+Added RT-01-273–302: no-prefix controls plus BOM, zero-width space, non-joiner, joiner and word-joiner
+variants for the requested single item, title, room-led and two-item notes, plus a late-work title.
+The corpus checks both parsers and the checked reader, including line counts and original-source
+span invariants. No existing expectations or open-finding statuses were weakened.
+
+Parity means each reader keeps its no-invisible behavior: the single item is 15000 pence on all
+paths and the two items are 15000/20000. Capture retains its existing unpriced fallback for the
+single title/room-led notes; Reader A retains 20000/90000. Those differing baselines are unchanged.
+A compiled-AI matrix also explicitly compares line descriptions, prices, quantities, units, titles,
+rooms and trades against each path's control, including a mixed whitespace/invisible prefix.
+It passed 35 inputs, 105 path comparisons and 301 citation checks. Its checker excludes Reader A's
+internal timeline before revalidating the public understanding contract.
+
+Executed final validation with at most two Vitest workers:
+- `pnpm --filter @jobguard/ai test --maxWorkers=2`: 28 files / 834 tests pass.
+- `pnpm eval --maxWorkers=2`: 28 files / 834 tests pass.
+- `pnpm --filter @jobguard/ai typecheck`, `lint` and `build`: pass.
+- `node /tmp/rt-fix-3-round2-parity.mjs`: passes the matrix described above.
+- Regenerated the golden record through `runCaptureEvaluation` / `createGoldenRunRecord`:
+  only the parser implementation SHA-256 changes. All 32 predictions and totals are unchanged:
+  recall 41/41, citations 119/119, unsupported money 0, ambiguity checks 63/63.
+- Corpus: RT-01 201 pass / 101 open; RT-00 and RT-03 unchanged. Existing open findings remain open.
+- `git diff --check`: pass. Generated pnpm cache preserved under `/tmp`, outside the worktree.
+
+Deterministic local verification only. Five requested files changed; no database, web, provider,
+commercial-policy or release change. Commit only; no push, merge, acceptance or independent review
+claimed. This exhausts the two allowed review-repair rounds for this piece.
 | RT12-01 | RT-12 | b25b5ee9 | 01-four-items (desktop, mobile-360); line-4-trade | strip out the old kitchen fit six base units hang the new doors paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-02 | RT-12 | b25b5ee9 | 02-two-prices-open (desktop, mobile-360); line-3-trade | strip out the old kitchen for two hundred pounds fit the new units for six hundred pounds paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-03 | RT-12 | b25b5ee9 | 03-two-sixty (desktop, mobile-360); line-1-trade | paint the walls two hundred pounds and fit the door sixty pounds | Decorating | Other | P1 | open-finding | — |

@@ -2947,8 +2947,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F121"
+    "status": "pass"
   },
   {
     "id": "RT-01-122",
@@ -3258,8 +3257,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F133"
+    "status": "pass"
   },
   {
     "id": "RT-01-134",
@@ -3284,8 +3282,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F134"
+    "status": "pass"
   },
   {
     "id": "RT-01-135",
@@ -3481,8 +3478,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F142"
+    "status": "pass"
   },
   {
     "id": "RT-01-143",
@@ -3506,8 +3502,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F143"
+    "status": "pass"
   },
   {
     "id": "RT-01-144",
@@ -3531,8 +3526,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F144"
+    "status": "pass"
   },
   {
     "id": "RT-01-145",
@@ -3556,8 +3550,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F145"
+    "status": "pass"
   },
   {
     "id": "RT-01-146",
@@ -3581,8 +3574,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
-    "finding": "RT-01-F146"
+    "status": "pass"
   },
   {
     "id": "RT-01-147",
@@ -4707,5 +4699,2700 @@
     },
     "status": "open-finding",
     "finding": "RT-01-F192"
+  },
+  {
+    "id": "RT-01-193",
+    "lane": "RT-01",
+    "transcript": "Fit the door for take off 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-194",
+    "lane": "RT-01",
+    "transcript": "Fit the door for take off one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-195",
+    "lane": "RT-01",
+    "transcript": "Fit the door for knock off £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-196",
+    "lane": "RT-01",
+    "transcript": "Fit the door for knock off one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-197",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduct £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-198",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduct 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-199",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduct one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-200",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduction £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-201",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduction 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-202",
+    "lane": "RT-01",
+    "transcript": "Fit the door for deduction one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-203",
+    "lane": "RT-01",
+    "transcript": "Fit the door for a deduction of 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-204",
+    "lane": "RT-01",
+    "transcript": "Fit the door for a deduction of one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-205",
+    "lane": "RT-01",
+    "transcript": "Fit the door for less £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-206",
+    "lane": "RT-01",
+    "transcript": "Fit the door for less 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-207",
+    "lane": "RT-01",
+    "transcript": "Fit the door for less one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-208",
+    "lane": "RT-01",
+    "transcript": "Fit the door for discount £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-209",
+    "lane": "RT-01",
+    "transcript": "Fit the door for discount 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-210",
+    "lane": "RT-01",
+    "transcript": "Fit the door for discount one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-211",
+    "lane": "RT-01",
+    "transcript": "Fit the door for minus the £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-212",
+    "lane": "RT-01",
+    "transcript": "Fit the door for minus the 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-213",
+    "lane": "RT-01",
+    "transcript": "Fit the door for minus the one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-214",
+    "lane": "RT-01",
+    "transcript": "Fit the door for rebate £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-215",
+    "lane": "RT-01",
+    "transcript": "Fit the door for rebate 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-216",
+    "lane": "RT-01",
+    "transcript": "Fit the door for rebate one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-217",
+    "lane": "RT-01",
+    "transcript": "Fit the door for refund £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-218",
+    "lane": "RT-01",
+    "transcript": "Fit the door for refund 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-219",
+    "lane": "RT-01",
+    "transcript": "Fit the door for refund one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-220",
+    "lane": "RT-01",
+    "transcript": "Fit the door for back for £150",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-221",
+    "lane": "RT-01",
+    "transcript": "Fit the door for back for 150 pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-222",
+    "lane": "RT-01",
+    "transcript": "Fit the door for back for one hundred and fifty pounds",
+    "why": "Deduction words share the Q77 guard; never keep a positive charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-223",
+    "lane": "RT-01",
+    "transcript": "Fit the door for (150 pounds)",
+    "why": "Negative notation or a malformed decimal stays whole and open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-224",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150−",
+    "why": "Negative notation or a malformed decimal stays whole and open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-225",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150–",
+    "why": "Negative notation or a malformed decimal stays whole and open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-226",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150...50",
+    "why": "Negative notation or a malformed decimal stays whole and open.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-227",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ​£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-228",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £​150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-229",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150​",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-230",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ‌£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-231",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £‌150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-232",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1‌500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-233",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150‌",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-234",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ‍£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-235",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £‍150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-236",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1‍500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-237",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150‍",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-238",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ⁠£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-239",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £⁠150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-240",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150⁠",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-241",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ⁦£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-242",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £⁦150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-243",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1⁦500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-244",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150⁦",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-245",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ⁩£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-246",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £⁩150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-247",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1⁩500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-248",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150⁩",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-249",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ­£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-250",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £­150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-251",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1­500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-252",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150­",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-253",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ﻿£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-254",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £﻿150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-255",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1﻿500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-256",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150﻿",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-257",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ͏£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-258",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £͏150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-259",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1͏500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-260",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150͏",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-261",
+    "lane": "RT-01",
+    "transcript": "Fit the door for ️£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-262",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £️150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-263",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1️500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-264",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150️",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-265",
+    "lane": "RT-01",
+    "transcript": "Fit the door for 󠄀£150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-266",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £󠄀150",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-267",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £1󠄀500",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-268",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150󠄀",
+    "why": "Invisible format characters beside or inside money remain in the untouched source and require confirmation.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "neverPence": [
+        100,
+        15000,
+        50000,
+        150000
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-269",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-270",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. ​Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-271",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150. Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-272",
+    "lane": "RT-01",
+    "transcript": "F​it the door for £150. Pa​int the wall for £200",
+    "why": "Invisible characters inside work verbs never hide an item; source spans and conservative open-price checks remain intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "F​it the door",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Pa​int the wall",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-273",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-274",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-275",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-276",
+    "lane": "RT-01",
+    "transcript": "‌Fit the door for £150",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-277",
+    "lane": "RT-01",
+    "transcript": "‍Fit the door for £150",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-278",
+    "lane": "RT-01",
+    "transcript": "⁠Fit the door for £150",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-279",
+    "lane": "RT-01",
+    "transcript": "Jones flat. Paint the hall £200",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-280",
+    "lane": "RT-01",
+    "transcript": "﻿Jones flat. Paint the hall £200",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-281",
+    "lane": "RT-01",
+    "transcript": "​Jones flat. Paint the hall £200",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-282",
+    "lane": "RT-01",
+    "transcript": "‌Jones flat. Paint the hall £200",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-283",
+    "lane": "RT-01",
+    "transcript": "‍Jones flat. Paint the hall £200",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-284",
+    "lane": "RT-01",
+    "transcript": "⁠Jones flat. Paint the hall £200",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-285",
+    "lane": "RT-01",
+    "transcript": "Kitchen: fit units £900",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-286",
+    "lane": "RT-01",
+    "transcript": "﻿Kitchen: fit units £900",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-287",
+    "lane": "RT-01",
+    "transcript": "​Kitchen: fit units £900",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-288",
+    "lane": "RT-01",
+    "transcript": "‌Kitchen: fit units £900",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-289",
+    "lane": "RT-01",
+    "transcript": "‍Kitchen: fit units £900",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-290",
+    "lane": "RT-01",
+    "transcript": "⁠Kitchen: fit units £900",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text. Capture keeps its existing unpriced fallback; Reader A retains the stated price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit units",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-291",
+    "lane": "RT-01",
+    "transcript": "Fit the door for £150. Paint the wall for £200",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-292",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. Paint the wall for £200",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-293",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150. Paint the wall for £200",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-294",
+    "lane": "RT-01",
+    "transcript": "‌Fit the door for £150. Paint the wall for £200",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-295",
+    "lane": "RT-01",
+    "transcript": "‍Fit the door for £150. Paint the wall for £200",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-296",
+    "lane": "RT-01",
+    "transcript": "⁠Fit the door for £150. Paint the wall for £200",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-297",
+    "lane": "RT-01",
+    "transcript": "Jones flat full rewire £900",
+    "why": "Leading none never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-298",
+    "lane": "RT-01",
+    "transcript": "﻿Jones flat full rewire £900",
+    "why": "Leading BOM never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-299",
+    "lane": "RT-01",
+    "transcript": "​Jones flat full rewire £900",
+    "why": "Leading zero-width space never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-300",
+    "lane": "RT-01",
+    "transcript": "‌Jones flat full rewire £900",
+    "why": "Leading non-joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-301",
+    "lane": "RT-01",
+    "transcript": "‍Jones flat full rewire £900",
+    "why": "Leading joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-302",
+    "lane": "RT-01",
+    "transcript": "⁠Jones flat full rewire £900",
+    "why": "Leading word joiner never changes single-item, title, room or late-work recognition; source citations still match the original text.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "full rewire"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
   }
 ]

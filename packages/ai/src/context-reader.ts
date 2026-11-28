@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, invisibleFormat, leadingContentOffset, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -29,6 +29,7 @@ function thousands(words: string): number | null {
 const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
+    if (invisibleFormat.test(words)) return null;
     const text = words.trim();
     const found = amounts(text);
     if (found.length === 1 && found[0]!.text === text) return found[0]!.pence;
@@ -76,29 +77,31 @@ const roomName = (words: string) => {
 };
 const keyOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 80) || "area";
 function stripLeadingRoom(value: string): { room: string; rest: string; offset: number } | null {
-  const match = leadingRoom.exec(value);
+  const leading = leadingContentOffset(value);
+  const match = leadingRoom.exec(value.slice(leading));
   if (!match) return null;
   // "the kitchen first take out …", "Downstairs WC just a new toilet": filler words before the work.
-  const filler = /^(?:(?:first|next|then|now|also|just)\s+)+/iu.exec(value.slice(match[0].length))?.[0] ?? "";
-  const rest = value.slice(match[0].length + filler.length);
+  const filler = /^(?:(?:first|next|then|now|also|just)\s+)+/iu.exec(value.slice(leading + match[0].length))?.[0] ?? "";
+  const rest = value.slice(leading + match[0].length + filler.length);
   // "Kitchen refit", "Loft conversion": a job title, not work in a room.
   if (/^(?:refit|re-fit|refurb(?:ishment)?|job|conversion|renovation|makeover|works?)\b[\s.]*$/iu.test(rest)) return null;
-  return rest && (isVerb(rest) || filler && /^a\s+new\b/iu.test(rest)) ? { room: roomName(match[1]!), rest, offset: match[0].length + filler.length } : null;
+  return rest && (isVerb(rest) || filler && /^a\s+new\b/iu.test(rest)) ? { room: roomName(match[1]!), rest, offset: leading + match[0].length + filler.length } : null;
 }
 /** The reader's extra work verbs; "make that eight" or "it's four" are corrections, never work. */
 const extraVerb = /^(?:box(?:ing)? in|add|re-?(?:plaster|paint|tile|wire|skim|point|place|felt|grout|hang|fit)|dig|move|get the|have the|knock|take|swap|put|run|board)\b/iu;
 function isVerb(value: string) {
+  value = visibleWorkText(value);
   return !/^(?:make (?:that|it)|it'?s|i mean)\b/iu.test(value) && (workClause(value) || extraVerb.test(value));
 }
 /** "Mrs Patel 14 Orchard Road full rewire of the house five thousand two hundred": the work starts at the verb. */
 function lateWorkAt(value: string): number | null {
   const at = /\s(?:(?:full|complete|whole)\s+)?(?=(?:re-?wire|rewiring|re-?plaster|strip|rip|fit|paint|tile|plaster|skim|lay|build|replace|decorate)\b)/iu.exec(value);
-  if (!at || value.slice(0, at.index).trim().split(/\s+/u).length < 2 || isVerb(value)) return null;
+  if (!at || visibleWorkText(value.slice(0, at.index)).trimEnd().split(/\s+/u).length < 2 || isVerb(value)) return null;
   return /\d|\b(?:hundred|thousand|grand|pounds|quid)\b/iu.test(value.slice(at.index)) ? at.index + 1 : null;
 }
 const isWork = (value: string) => isVerb(value) || stripLeadingRoom(value) !== null;
 /** "take down the old fence" is work, not a timing note. */
-const isTiming = (value: string) => timing.test(value) && !/^take\s+(?:down|out|up|off|away)\b/iu.test(value);
+const isTiming = (value: string) => timing.test(visibleWorkText(value)) && !/^take\s+(?:down|out|up|off|away)\b/iu.test(visibleWorkText(value));
 
 // ---- Trades ---------------------------------------------------------------------------------------------------
 /** Checked word list; the first match wins. Strip-out is the verb at the start. */
@@ -120,13 +123,13 @@ const TRADE_WORDS: [JobTrade, RegExp][] = [
 ];
 export function tradeOf(description: string, room: string | null): { trade: JobTrade; word: string | null } {
   for (const [trade, words] of TRADE_WORDS) {
-    const match = words.exec(description);
+    const match = words.exec(visibleWorkText(description));
     if (match) return { trade, word: match[0] };
   }
   // "fit new ones" in the kitchen: the room says what is being fitted.
-  if (room && /kitchen/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(description)) return { trade: "Kitchen fitting", word: "kitchen" };
+  if (room && /kitchen/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(visibleWorkText(description))) return { trade: "Kitchen fitting", word: "kitchen" };
   // "supply and fit" in a bathroom: the room says the suite is being fitted. ("strip out" already matched Strip-out.)
-  if (room && /\b(?:bath ?room|en[- ]?suite|wc|cloakroom)\b/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(description)) return { trade: "Plumbing", word: "bathroom" };
+  if (room && /\b(?:bath ?room|en[- ]?suite|wc|cloakroom)\b/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(visibleWorkText(description))) return { trade: "Plumbing", word: "bathroom" };
   return { trade: "Other", word: null };
 }
 
@@ -310,8 +313,10 @@ const besideBefore = /^[\s,]*(?:(?:all in|in total|altogether|total|is|comes to|
 const besideAfter = /^[\s,]*(?:(?:all in|in total|altogether|for|for the|the)[\s,]*)*$/iu;
 function totals(text: string): TotalPrice[] {
   const found: TotalPrice[] = [];
+  const points = amountPoints(text);
   // A clause ends at punctuation, never at the point or comma inside a number ("4.5k", "1,200").
-  const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !(/[.,]/u.test(text[at]!) && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
+  const boundary = (at: number) => /[.!?;\n,]/u.test(text[at] ?? "") && !points.has(at)
+    && !(text[at] === "," && /\d/u.test(text[at - 1] ?? "") && /\d/u.test(text[at + 1] ?? ""));
   for (const phrase of text.matchAll(new RegExp(total.source, "giu"))) {
     let clauseStart = phrase.index;
     while (clauseStart > 0 && !boundary(clauseStart - 1)) clauseStart--;
@@ -327,7 +332,7 @@ function totals(text: string): TotalPrice[] {
     // The price said with the total words: the one nearest them.
     const price = prices.length ? prices.reduce((best, match) => Math.min(Math.abs(match.index - phraseEnd), Math.abs(match.index + match[0].length - phraseAt))
       < Math.min(Math.abs(best.index - phraseEnd), Math.abs(best.index + best[0].length - phraseAt)) ? match : best) : null;
-    const words = price?.[0].trim() ?? "";
+    const words = trimSourceText(price?.[0] ?? "");
     const priceAt = price ? price.index + price[0].indexOf(words) : phraseAt, priceEnd = price ? priceAt + words.length : phraseEnd;
     const lo = Math.min(priceAt, phraseAt), hi = Math.max(priceEnd, phraseEnd);
     const wholeJob = /whole job|the lot|everything/iu.test(phrase[0]);
@@ -400,10 +405,10 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     const before = chunks[chunks.length - 1];
     const gap = before ? text.slice(before.start + before.value.length, chunk.start) : "";
     // "board and skim the ceiling": a lone verb joined by "and" stays one line; under-splitting beats inventing.
-    const loneVerb = before && /^[\p{L}-]+$/u.test(before.value) && isVerb(before.value) && /^\s+and\s+$/iu.test(gap);
+    const loneVerb = before && /^[\p{L}-]+$/u.test(visibleWorkText(before.value)) && isVerb(before.value) && /^\s+and\s+$/iu.test(gap);
     // "new front door supplied by the customer, we just fit it, 250": "fit it" is the same item.
-    const sameItem = before && /^\s*$/u.test(gap) && /(?:^|\s)(?:just|we|i|we'll|i'll|they|then we)$/iu.test(before.value) && /^[\p{L}-]+\s+(?:it|them|that|those)\b/iu.test(chunk.value);
-    if (before && !before.inferred && !chunk.inferred && (/^\s*$/u.test(gap) && bareVerb.test(chunk.value) || loneVerb || sameItem) && !roomOnly.test(before.value)) {
+    const sameItem = before && /^\s*$/u.test(gap) && /(?:^|\s)(?:just|we|i|we'll|i'll|they|then we)$/iu.test(visibleWorkText(before.value)) && /^[\p{L}-]+\s+(?:it|them|that|those)\b/iu.test(visibleWorkText(chunk.value));
+    if (before && !before.inferred && !chunk.inferred && (/^\s*$/u.test(gap) && bareVerb.test(visibleWorkText(chunk.value)) || loneVerb || sameItem) && !roomOnly.test(visibleWorkText(before.value))) {
       chunks[chunks.length - 1] = { value: text.slice(before.start, chunk.start + chunk.value.length), start: before.start };
     } else chunks.push(chunk);
   }
@@ -423,23 +428,24 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   const late = draft.title && (chunks[0]?.start ?? -1) !== draft.title.start ? lateWorkAt(titleClause) : null;
   if (draft.title && late !== null) {
     const workEnd = draft.title.start + titleClause.trimEnd().length;
-    titleCell = { value: titleClause.slice(0, late).trim(), start: draft.title.start };
+    titleCell = { value: trimSourceText(titleClause.slice(0, late)), start: draft.title.start };
     const head = { value: text.slice(draft.title.start + late, workEnd), start: draft.title.start + late };
     chunks.splice(0, chunks.filter(chunk => chunk.start < workEnd).length, head);
   }
   for (let index = 0; index < chunks.length; index++) {
     let chunk = chunks[index]!;
     // "Call it 800 pounds a room": a price said on its own is not work. Asked about, never placed.
-    if (!chunk.inferred && priceOnly.test(chunk.value.trim())) {
+    if (!chunk.inferred && priceOnly.test(chunk.value.slice(leadingContentOffset(chunk.value)))) {
       questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Check which work this price is for; it was not placed on a line.` });
       continue;
     }
     // "And downstairs": a place word on its own, not work.
-    if (!chunk.inferred && /^(?:and\s+|then\s+)?(?:upstairs|downstairs|outside|inside)[\s,.]*$/iu.test(chunk.value)) continue;
-    const only = chunk.inferred ? null : roomOnly.exec(chunk.value);
+    if (!chunk.inferred && /^(?:and\s+|then\s+)?(?:upstairs|downstairs|outside|inside)[\s,.]*$/iu.test(visibleWorkText(chunk.value))) continue;
+    const leading = leadingContentOffset(chunk.value);
+    const only = chunk.inferred ? null : roomOnly.exec(chunk.value.slice(leading));
     if (only) {
       const name = roomName(only[1]!);
-      pendingRoom = { name, start: chunk.start + only.index + only[0].indexOf(only[1]!), length: only[1]!.length };
+      pendingRoom = { name, start: chunk.start + leading + only.index + only[0].indexOf(only[1]!), length: only[1]!.length };
       continue;
     }
     if (pendingRoom) { current = { key: openArea(pendingRoom.name, chunk.start, pendingRoom.start, pendingRoom.length), name: pendingRoom.name }; pendingRoom = null; }
@@ -465,7 +471,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     }
     // A correction belongs to the line before; Reader A never applies it.
     const fix = chunk.inferred ? null : correction.exec(chunk.value);
-    if (fix && (fix.index === 0 || !workClause(chunk.value.slice(0, fix.index).trim()))) {
+    if (fix && (fix.index === 0 || !workClause(chunk.value.slice(0, fix.index)))) {
       const target = lines.length - 1;
       // A total said after the last line is what this corrects (it is left open in totals()); the line keeps its numbers.
       const lastWords = target >= 0 && lines[target]!.description.provenance.kind === "extracted" ? lines[target]!.description.provenance.span : null;
@@ -486,7 +492,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     if (reference.test(chunk.value)) questions.push({ text: `You said “${chunk.value.trim().slice(0, 200)}”. Check what this repeats; nothing was copied.`, lineIndex });
   }
   if (!lines.length) {
-    const description = text.trim().slice(0, 500);
+    const description = trimSourceText(text).slice(0, 500);
     const start = text.indexOf(description);
     lines.push({ description: { value: description, provenance: { kind: "extracted", span: { sourceId, sourceVersion: 1, start, end: start + description.length } } },
       quantity: { value: null, provenance: { kind: "defaulted", note: "Not said" } }, unit: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
@@ -525,8 +531,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
     areaPrices.splice(0, areaPrices.length, ...areaPrices.filter(price => price.areaKey !== key || keep.includes(price)));
   }
   for (const note of draft.notes) if (/^Confirm timing/u.test(note)) questions.push({ text: note.slice(0, 500) });
-  const firstStart = text.length - text.trimStart().length;
-  const title = titleCell && titleCell.value && (titleCell !== draft.title || !isWork(text.slice(firstStart))) ? titleCell : null;
+  const title = titleCell && titleCell.value && (titleCell !== draft.title || !isWork(text)) ? titleCell : null;
   const understanding = jobUnderstandingV1.parse({
     version: JOB_UNDERSTANDING_VERSION,
     title: title ? { value: title.value.slice(0, 200), provenance: { kind: "extracted", span: { sourceId, sourceVersion: 1, start: title.start, end: title.start + Math.min(200, title.value.length) } } }
