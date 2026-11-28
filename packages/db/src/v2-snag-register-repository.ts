@@ -138,7 +138,7 @@ export class SnagRegisterRepository {
         firm_key, command_id) VALUES ($1, $2, $3, $4, $5, $6, $7, app.current_firm_profile_key(), $8)`,
       [context.tenantId, jobId, command.snagId, result.sequence, command.person.kind, crewId, revision, command.commandId]);
       await this.audit(database, actor, "v2.snag.event_person", jobId, { commandId: command.commandId, snagId: command.snagId,
-        sequence: String(result.sequence), kind: result.kind, person: command.person.kind, ...(crewId && { crewId }) }, digest);
+        eventSequence: String(result.sequence), kind: result.kind, person: command.person.kind, ...(crewId && { crewId }) }, digest);
       return result;
     }).catch(refusal);
   }
