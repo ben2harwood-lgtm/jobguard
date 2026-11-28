@@ -15,7 +15,6 @@
         "apps/web/app/ui/quote-rooms.tsx",
         "apps/web/app/ui/review-proposal.tsx",
         "apps/web/e2e/V2-SQ-E-rooms-quote.spec.ts",
-        "config/lanes/v2-sq-e.json",
         "packages/core/src/quote-document-sections.test.ts",
         "packages/core/src/quote-document.ts",
         "packages/db/migration-notes/2087_v2_quote_section.md",
