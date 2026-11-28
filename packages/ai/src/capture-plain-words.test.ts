@@ -249,6 +249,34 @@ describe("continuous spoken quotes", () => {
     expect(result.lines[0]!.unitPricePence.value).toBeNull();
     expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
   });
+  // Codex review on #1032 (planner spec, 28 Nov): a fraction, multiplier or range before an amount leaves it open; the figure is never worked out.
+  it.each(["paint the walls for half a thousand pounds fit the door", "paint the walls for a quarter of a thousand pounds fit the door",
+    "paint the walls for between four hundred and five hundred pounds fit the door", "paint the walls for four hundred to five hundred pounds fit the door",
+    "paint the walls for 400 or 500 pounds fit the door", "paint the walls for £400 to £500 fit the door"])(
+    "leaves a fraction or range open with a price question: %s", text => {
+      const result = citations(text);
+      expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null, null]);
+      expect(result.questions.some(q => q.question.value.startsWith("Confirm price: paint the walls"))).toBe(true);
+    });
+  it.each(["fit six doors at fifty pounds a door plus VAT", "fit six doors at fifty pounds per door inc VAT", "fit six doors at fifty pounds each plus VAT"])(
+    "reads a per-item price with VAT words after it, keeps the number and asks about VAT: %s", text => {
+      const result = citations(text);
+      expect(rows(text)).toEqual([["fit six doors", "6", "doors", 5000]]);
+      expect(cited(text, result.lines[0]!)).toBe("fifty pounds");
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm VAT: you said “${text}”. The price is kept as said; VAT is not added or taken off.`);
+    });
+  it.each(["fit six doors at fifty pounds a day plus VAT", "fit six doors at fifty pounds a door for the hall"])(
+    "leaves a per-item price open when its word is not the counted thing or more words follow: %s", text => {
+      const result = citations(text);
+      expect(result.lines[0]!.unitPricePence.value).toBeNull();
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+    });
+  it("keeps a line price said with VAT words unchanged and asks about VAT", () => {
+    const text = "supply and fit one door for two hundred pounds plus VAT";
+    const result = citations(text);
+    expect(result.lines[0]!.unitPricePence.value).toBe(20000);
+    expect(result.questions.map(q => q.question.value)).toContain(`Confirm VAT: you said “${text}”. The price is kept as said; VAT is not added or taken off.`);
+  });
   it("keeps a leading decorate, render or rehang clause as a line", () => {
     expect(rows("decorate the bedroom for two hundred pounds fit the door for fifty pounds paint the ceiling for sixty pounds")).toEqual([
       ["decorate the bedroom", "1", "item", 20000], ["fit the door", "1", "item", 5000], ["paint the ceiling", "1", "item", 6000]]);

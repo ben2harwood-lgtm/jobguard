@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-num": {
+      "branches": [
+        "claude/project-thread-trp08u-sqnum"
+      ],
+      "note": "T2 V2-SQ-NUM: number safety in the spoken-quote parser (Codex P2s on #1032, planner spec 28 Nov). A fraction, multiplier or range before an amount leaves the price open with a question; a per-item word followed by VAT words is read; VAT words never change the number and raise a VAT question. Golden record changes only the parser hash. No migration, route, table or schema change.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts"
+      ]
+    }
+  }
+}

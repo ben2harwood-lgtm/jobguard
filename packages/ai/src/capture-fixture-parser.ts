@@ -80,8 +80,17 @@ function amounts(value: string): Amount[] {
     found.push({ text: match[0], index: match.index,
       pence: partial || pounds === null || pence === null || pence > 99 ? null : pounds * 100 + pence });
   }
+  // "half a thousand pounds", "between 400 and 500 pounds", "four to five hundred pounds": only part of what was said is an amount.
+  for (const amount of found) if (fractionOrRange.test(value.slice(0, amount.index))) amount.pence = null;
   return found.sort((a, b) => a.index - b.index);
 }
+// A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
+const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|to|or))\\s*$`, "iu");
+// The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
+const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£?\\d|(?:a|${numberWord})(?![\\p{L}]))`, "iu");
+// "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
+const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
+const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
 // Continuous speech has no punctuation, so a new work item also starts at one of these verbs
 // unless the word before it ties it to the clause (for example "the", "to" or "and").
 const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
@@ -161,7 +170,7 @@ function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null 
   const match = matches[0]!;
   const rest = chunk.value.slice(match.index + match.text.length);
   // Never keep part of an amount: unread pence or a trailing number leaves the price open for a question.
-  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest)) return null;
+  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest) || rangeAfter.test(rest)) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };
@@ -233,12 +242,15 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         const after = found ? chunk.value.slice(found.at + found.value.length) : "";
         // "fit six doors at fifty pounds each": the price is for one of the counted items.
         // "per door" or "a door" only when it names the counted thing; "per pair" or "a day" leaves the price open.
-        const per = /^\s+(?:per|an?)\s+([\p{L}-]+)$/iu.exec(after);
+        // VAT words after the per-item word ("a door plus VAT") do not hide it.
+        const per = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu").exec(after)
+          ?? (/^\s+(?:per|an?)\s+[\p{L}-]+\b/iu.test(after) ? [after, ""] : null);
         const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
-        const each = /^\s+(?:each|apiece|a piece)$/iu.test(after) || (!!per && !!perCount && sameUnit(perCount.unit, per[1]!));
+        const each = new RegExp(`^\\s+(?:each|apiece|a piece)${vatTail}?\\.?$`, "iu").test(after) || (!!per && !!perCount && !!per[1] && sameUnit(perCount.unit, per[1]));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
         const rate = found && (each || (!per && !/\b(?:each|apiece|per)\b/iu.test(chunk.value))) ? found : null;
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
+        if (rate && vatWords.test(after)) questions.push(question(`Confirm VAT: you said “${chunk.value.slice(0, 400)}”. The price is kept as said; VAT is not added or taken off.`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
         const description = rate && (each || !after)
