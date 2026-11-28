@@ -8,7 +8,7 @@ import { expect, test, type APIResponse, type BrowserContext, type Page } from "
 test.skip(!process.env.V2_TEST_ORIGIN, "Requires the embedded V2 HTTPS launcher.");
 
 const widths = [360, 1280] as const;
-const taskTitle = "Protect and prepare the hall";
+const taskTitle = "Protect and prepare";
 const shots = fileURLToPath(new URL("./artifacts/v2-c4", import.meta.url));
 
 async function json<T>(response: APIResponse): Promise<T> {
