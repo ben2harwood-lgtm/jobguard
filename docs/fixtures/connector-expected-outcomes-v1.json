@@ -1,0 +1,130 @@
+{
+  "version": "connector-expected-outcomes.v1",
+  "environment": "synthetic_demo",
+  "note": "Made-up data only. Expected values are hand-worked from the contracts in docs/contracts/connector-expected-outcomes-v1.md, not taken from running the code. The only value copied from the code is exportLineId, which is a hash-derived identifier, not an outcome.",
+  "ids": {
+    "clientContract": "30000000-0000-4000-8000-000000000001",
+    "job": "30000000-0000-4000-8000-000000000002",
+    "extra": "30000000-0000-4000-8000-000000000003",
+    "extraScopeItem": "30000000-0000-4000-8000-000000000004",
+    "extraRevision": "30000000-0000-4000-8000-000000000005",
+    "approvalBinding": "30000000-0000-4000-8000-000000000006",
+    "client": "30000000-0000-4000-8000-000000000007",
+    "siteRevision": "30000000-0000-4000-8000-000000000008",
+    "scopeL1": "30000000-0000-4000-8000-000000000011",
+    "scopeL2": "30000000-0000-4000-8000-000000000012",
+    "exportLineId": "3c237f5f-b719-8a59-b4fb-f7fb1fbebb37",
+    "revisionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "approvalSnapshotHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "schedule": {
+    "adjustment": { "numerator": "-35", "denominator": "1000" },
+    "items": { "PLB01": { "unit": "each", "ratePence": 4500 }, "ELE02": { "unit": "m", "ratePence": 3333 } }
+  },
+  "workOrderRows": {
+    "rev1": { "expectedRevision": 0, "status": "ordered", "lines": [
+      { "clientLineReference": "L1", "sorCode": "PLB01", "quantity": "2" },
+      { "clientLineReference": "L2", "sorCode": "ELE02", "quantity": "1.5" } ] },
+    "rev2": { "expectedRevision": 1, "status": "ordered", "lines": [
+      { "clientLineReference": "L1", "sorCode": "PLB01", "quantity": "3" },
+      { "clientLineReference": "L2", "sorCode": "ELE02", "quantity": "1.5" } ] },
+    "rev3": { "expectedRevision": 2, "status": "ordered", "lines": [
+      { "clientLineReference": "L1", "sorCode": "PLB01", "quantity": "3" },
+      { "clientLineReference": "L2", "sorCode": "ELE02", "quantity": "2" } ] },
+    "cancel": { "expectedRevision": 1, "status": "cancelled", "lines": [] }
+  },
+  "workOrderRowDefaults": {
+    "version": "work-order-import.v1", "workOrderReference": "FICT-WO-100", "issuedOn": "2026-11-01", "dueOn": null,
+    "priority": "routine", "resident": { "kind": "none", "reason": "void_property" }, "teamId": null, "assignedMembershipIds": []
+  },
+  "exportInput": {
+    "version": "billing-export.v1", "clientContractId": "30000000-0000-4000-8000-000000000001",
+    "lines": [{ "jobId": "30000000-0000-4000-8000-000000000002", "extraId": "30000000-0000-4000-8000-000000000003",
+      "scopeItemId": "30000000-0000-4000-8000-000000000004", "revisionId": "30000000-0000-4000-8000-000000000005",
+      "revisionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approvalBindingId": "30000000-0000-4000-8000-000000000006",
+      "approvalSnapshotHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "description": "Fictional extra: replace damaged soil pipe", "quantity": "1", "unit": "item",
+      "priceProvenance": "server_sor", "approvedNet": { "pence": 24000, "currency": "GBP" } }]
+  },
+  "eventDefaults": {
+    "version": "billing-status.v1", "clientContractId": "30000000-0000-4000-8000-000000000001", "source": "fictional-ledger",
+    "remittanceReference": null, "reconciliationId": null, "originalEventId": null, "composition": null,
+    "explicit": null, "separateInvoice": false, "lineAdjustments": []
+  },
+  "lines": {
+    "ORD-1": { "externalInvoiceLineId": "ORD-1", "kind": "original_order", "existedAt": "2026-11-02T09:00:00Z", "netPence": 100000, "vatPence": 20000, "grossPence": 120000, "match": null },
+    "EXT-1": { "externalInvoiceLineId": "EXT-1", "kind": "extra", "existedAt": "2026-11-02T09:00:00Z", "netPence": 24000, "vatPence": 4800, "grossPence": 28800, "match": "exportMatch" },
+    "OTH-1": { "externalInvoiceLineId": "OTH-1", "kind": "other", "existedAt": "2026-11-02T09:00:00Z", "netPence": 5000, "vatPence": 1000, "grossPence": 6000, "match": null }
+  },
+  "events": {
+    "inv-1": { "sourceEventId": "inv-1", "invoiceNumber": "INV-1", "factType": "invoiced", "effectiveAt": "2026-11-02T10:00:00Z",
+      "amount": { "netPence": 124000, "vatPence": 24800, "grossPence": 148800 }, "compositionLines": ["ORD-1", "EXT-1"] },
+    "pay-part": { "sourceEventId": "pay-part", "invoiceNumber": "INV-1", "factType": "paid", "effectiveAt": "2026-11-05T10:00:00Z",
+      "reconciliationId": "rec-part", "amount": { "netPence": 41667, "vatPence": 8333, "grossPence": 50000 } },
+    "pay-balance": { "sourceEventId": "pay-balance", "invoiceNumber": "INV-1", "factType": "paid", "effectiveAt": "2026-11-09T10:00:00Z",
+      "reconciliationId": "rec-balance", "amount": { "netPence": 82333, "vatPence": 16467, "grossPence": 98800 } },
+    "pay-full": { "sourceEventId": "pay-full", "invoiceNumber": "INV-1", "factType": "paid", "effectiveAt": "2026-11-05T10:00:00Z",
+      "reconciliationId": "rec-full", "amount": { "netPence": 124000, "vatPence": 24800, "grossPence": 148800 } },
+    "pay-full-changed": { "sourceEventId": "pay-full", "invoiceNumber": "INV-1", "factType": "paid", "effectiveAt": "2026-11-05T10:00:00Z",
+      "reconciliationId": "rec-full", "amount": { "netPence": 123917, "vatPence": 24783, "grossPence": 148700 } },
+    "credit-ext": { "sourceEventId": "credit-ext", "invoiceNumber": "INV-1", "factType": "credited", "effectiveAt": "2026-11-12T10:00:00Z",
+      "originalEventId": "inv-1", "amount": { "netPence": 5000, "vatPence": 1000, "grossPence": 6000 },
+      "lineAdjustments": [{ "externalInvoiceLineId": "EXT-1", "netPence": 5000, "vatPence": 1000, "grossPence": 6000 }] },
+    "reverse-full": { "sourceEventId": "reverse-full", "invoiceNumber": "INV-1", "factType": "payment_reversed", "effectiveAt": "2026-11-12T10:00:00Z",
+      "reconciliationId": "rec-reverse-full", "originalEventId": "pay-full", "amount": { "netPence": 124000, "vatPence": 24800, "grossPence": 148800 } },
+    "reject-ext": { "sourceEventId": "reject-ext", "invoiceNumber": "INV-1", "factType": "rejected", "effectiveAt": "2026-11-06T10:00:00Z",
+      "originalEventId": "inv-1", "amount": { "netPence": 24000, "vatPence": 4800, "grossPence": 28800 },
+      "lineAdjustments": [{ "externalInvoiceLineId": "EXT-1", "netPence": 24000, "vatPence": 4800, "grossPence": 28800 }] },
+    "inv-2": { "sourceEventId": "inv-2", "invoiceNumber": "INV-2", "factType": "invoiced", "effectiveAt": "2026-11-02T10:00:00Z",
+      "amount": { "netPence": 129000, "vatPence": 25800, "grossPence": 154800 }, "compositionLines": ["ORD-1", "EXT-1", "OTH-1"] },
+    "pay-mixed": { "sourceEventId": "pay-mixed", "invoiceNumber": "INV-2", "factType": "paid", "effectiveAt": "2026-11-05T10:00:00Z",
+      "reconciliationId": "rec-mixed", "amount": { "netPence": 129000, "vatPence": 25800, "grossPence": 154800 } }
+  },
+  "fee": { "policyVersion": "enterprise_site_capture_policy_v1", "rate": { "numerator": "10", "denominator": "100" }, "approvedNetPence": 24000 },
+  "cases": [
+    { "id": "EO-01", "title": "Same work-order delivery repeated", "inputs": ["rev1", "rev1"],
+      "expected": { "pure": { "contentEqual": true, "lineNetPence": [8685, 4825], "orderNetPence": 13510 },
+        "stored": { "outcomes": ["created", "unchanged"], "revisions": 1, "auditEventsForSecondRow": 0, "sameFileAgainAfterCleanImport": "replayed, nothing written" } } },
+    { "id": "EO-02", "title": "Same order key, changed payload", "inputs": ["rev1", "rev2"],
+      "expected": { "pure": { "contentEqual": false, "keptScopeIdentities": ["L1", "L2"], "changedLines": ["L1"], "lineNetPence": [13028, 4825], "orderNetPence": 17853 },
+        "stored": { "outcomes": ["created", "revised"], "revisions": 2, "revision1Unchanged": true, "sameCommandDifferentFile": "COMMAND_CONFLICT" } } },
+    { "id": "EO-03", "title": "A revision arrives before the revision it replaces", "inputs": ["rev1", "rev3", "rev2", "rev3", "rev2"],
+      "expected": { "pure": { "rev3LineNetPence": [13028, 6433], "rev3OrderNetPence": 19461 },
+        "stored": { "outcomes": ["created", "STALE_REVISION", "revised", "revised", "STALE_REVISION"], "revisionsAfterEach": [1, 1, 2, 3, 3], "finalOrderNetPence": 19461 } } },
+    { "id": "EO-04", "title": "Cancellation after an extra has been logged", "inputs": ["rev1", "extra logged on the job (24000p, site origin)", "cancel"],
+      "expected": { "pure": { "cancelContentStatus": "cancelled", "cancelContentLines": [], "contentEqualToRev1": false },
+        "stored": { "outcomes": ["created", "revised"], "revisions": 2, "revision2Status": "cancelled", "revision2KeepsLinesAndScopeIdentities": true, "jobState": "live",
+          "extraUnchanged": { "netPence": 24000, "origin": "site", "deleted": false }, "cancelUnknownOrder": "ORDER_NOT_FOUND", "orderMissingFromLaterFile": "no change",
+          "billingAfterCancellation": "OPEN: no contract decides it; a person must" } } },
+    { "id": "EO-05", "title": "Approved-extras export delivered twice", "inputs": ["render", "render", "deliver fake_sftp", "deliver fake_sftp same effect key", "deliver same effect key, other recipient"],
+      "expected": { "pure": { "identicalArtifacts": true, "lineCount": 1, "totalNetPence": 24000, "simulatedEffectsAfterTwoDeliveries": 1,
+        "secondResult": "succeeded (same provider reference)", "changedBinding": "BILLING_CONFLICT", "simulatedEffectsAfterConflict": 1 } } },
+    { "id": "EO-06", "title": "Export delivery outcome unknown", "inputs": ["deliver", "deliver again", "reconcile", "deliver again"],
+      "expected": { "pure": {
+        "unknown_accepted": { "results": ["outcome_unknown", "outcome_unknown", "succeeded", "succeeded"], "simulatedEffects": 1 },
+        "unknown_unresolved": { "results": ["outcome_unknown", "outcome_unknown", "unknown", "outcome_unknown"], "simulatedEffects": 0 },
+        "unknown_not_accepted": { "results": ["outcome_unknown", "outcome_unknown", "not_found", "outcome_unknown"], "simulatedEffects": 0 } },
+        "stored": { "retryOnlyAfter": "durable reconciliation shows safe non-delivery and current authority still holds" } } },
+    { "id": "EO-07", "title": "Invoice status before the export is acknowledged", "inputs": ["inv-1", "export_delivery received ack"],
+      "expected": { "pure": { "extraBilledNetPence": 24000, "invoiceBilledNetPence": 124000, "paidNetPence": 0, "matchedExtraNet": "0", "held": [],
+        "ackParses": true, "ackWithMoneyFieldRefused": true, "feePence": 0 },
+        "stored": { "ackReceipt": { "state": "staged", "domainEffects": 0 } } } },
+    { "id": "EO-08", "title": "Part payment, then the balance", "inputs": ["inv-1", "pay-part", "pay-balance"],
+      "expected": { "pure": {
+        "afterPart": { "extraPaidGross": "300000/31", "extraPaidNet": "250000/31", "orderPaidGross": "1250000/31", "totalPaidNet": "125000/3", "q": "250000/31", "feePence": 806, "deltaPence": 806 },
+        "afterBalance": { "extraPaidNet": "24000", "orderPaidNet": "100000", "totalPaidGross": "148800", "q": "24000", "feePence": 2400, "deltaPence": 1594 } } } },
+    { "id": "EO-09", "title": "A credit after payment", "inputs": ["inv-1", "pay-full", "credit-ext"],
+      "expected": { "pure": { "extraCreditedNet": "5000", "extraPaidNet": "24000", "q": "19000", "feePence": 1900, "priorPence": 2400, "deltaPence": -500 } } },
+    { "id": "EO-10", "title": "A payment reversal", "inputs": ["inv-1", "pay-full", "reverse-full"],
+      "expected": { "pure": { "totalPaidGross": "0", "extraPaidNet": "0", "q": "0", "feePence": 0, "priorPence": 2400, "deltaPence": -2400 } } },
+    { "id": "EO-11", "title": "A billing rejection", "inputs": ["inv-1", "reject-ext"],
+      "expected": { "pure": { "extraRejected": true, "extraCreditedNet": "0", "extraPaidNet": "0", "q": "0", "feePence": 0, "deltaPence": 0 },
+        "stored": { "connectorCannotLinkRejection": "BILLING_COMPOSITION_REQUIRED" } } },
+    { "id": "EO-12", "title": "Mixed invoice: order lines and extras, only extras count", "inputs": ["inv-2", "pay-mixed"],
+      "expected": { "pure": { "totalPaidNet": "129000", "matchedExtraNetByLine": { "ORD-1": "0", "EXT-1": "24000", "OTH-1": "0" }, "q": "24000", "feePence": 2400 } } },
+    { "id": "EO-13", "title": "Same billing event key: identical repeat, then changed payload", "inputs": ["inv-1", "pay-full", "pay-full", "pay-full-changed"],
+      "expected": { "pure": { "repeatEqualsSingle": true, "changed": "BILLING_CONFLICT" },
+        "stored": { "firstResultKept": true } } }
+  ]
+}
