@@ -1,4 +1,5 @@
 import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
+import { roomOnly } from "./room-words.js";
 
 export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/3" as const;
 const MAX_PENCE = 1_000_000_000_000n;
@@ -242,6 +243,9 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   let plainTitle: Cell | null = null;
   if (!items.length) {
     const draft = plainDraft(text);
+    // V2-SQ-J: a clause that only names a room ("In the kitchen", "Upstairs bathroom") opens that room for the rows
+    // after it (Reader A labels them); it is never a work row itself.
+    draft.chunks = draft.chunks.filter(chunk => chunk.inferred || !roomOnly.test(chunk.value));
     if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
     // One spoken item with a stated price ("supply and fit one door for three hundred pounds") is a line too; an unclear price stays open.
     const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
