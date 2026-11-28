@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseCaptureFixture } from "./capture-fixture-parser.js";
-import { understoodLabels } from "./context-reader.js";
+import { tradeOf, understoodLabels } from "./context-reader.js";
 
 // V2-SQ-J: the review screen's rows (capture parser) and their room and trade labels (Reader A), for typed text.
 const path = fileURLToPath(new URL("../../../docs/fixtures/ai/spoken-quote-understanding/capture-typed-rooms.v1.json", import.meta.url));
@@ -47,5 +47,28 @@ describe("V2-SQ-J typed text gets the same rooms as spoken text", () => {
     const { rows, proposal } = review("Jones flat. In the kitchen. Fit six doors at fifty pounds each.");
     expect(rows.map(row => [row.description, row.pence, row.room])).toEqual([["Fit six doors", 5000, "Kitchen"]]);
     expect(proposal.lines[0]!.quantity.value).toBe("6");
+  });
+});
+
+// V2-SQ-K (Q71): bathroom suite work is Plumbing, so the work plan sends it to the plumber. Labels only.
+describe("V2-SQ-K bathroom suite work gets the plumbing trade", () => {
+  it.each(["new suite", "fit the bath", "a new basin", "shower tray", "toilet", "WC pan"])("%s is Plumbing", words => {
+    expect(tradeOf(words, null).trade).toBe("Plumbing");
+  });
+  it.each(["Upstairs bathroom", "En-suite", "En suite", "Ensuite", "Downstairs WC", "Cloakroom"])("in %s, a fit, install or supply row with no trade word is Plumbing", room => {
+    for (const words of ["supply and fit", "fit the new one", "install it"]) expect(tradeOf(words, room)).toEqual({ trade: "Plumbing", word: "bathroom" });
+  });
+  it("an earlier, more specific trade word still wins in a bathroom", () => {
+    expect(tradeOf("supply and fit kitchen units", "Upstairs bathroom").trade).toBe("Kitchen fitting");
+    expect(tradeOf("strip out", "Upstairs bathroom").trade).toBe("Strip-out");
+    expect(tradeOf("supply and fit new tiles", "Upstairs bathroom").trade).toBe("Tiling");
+    expect(tradeOf("supply and fit", "Lounge").trade).toBe("Other");
+  });
+  it("the recogniser-form Smith bathroom row is Plumbing, with the same rows and prices as before", () => {
+    const { rows } = review(caseText("smith-recogniser"));
+    const bathroom = rows.find(row => row.description.startsWith("supply and fit"))!;
+    expect([bathroom.room, bathroom.category, bathroom.pence]).toEqual(["Upstairs bathroom", "Plumbing", 320000]);
+    // Rows and prices are pinned by the fixture cases above; only this row's trade label changed (Other to Plumbing).
+    expect(rows).toHaveLength(6);
   });
 });

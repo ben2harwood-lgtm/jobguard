@@ -84,22 +84,48 @@ export function amounts(value: string): Amount[] {
   // "half a thousand pounds", "between 400 and 500 pounds", "four to five hundred pounds": only part of what was said is an amount.
   // Unread number guard: "one thousand and a hundred pounds", "fifty pounds and five": a number said next to the amount
   // but outside it means the amount was read in part, so it has no price.
-  for (const amount of found) {
-    if (fractionOrRange.test(value.slice(0, amount.index)) || unreadBefore.test(value.slice(0, amount.index))
-      || unreadAfter.test(value.slice(amount.index + amount.text.length))) amount.pence = null;
-  }
+  for (const amount of found) if (readInPart(value.slice(0, amount.index), value.slice(amount.index + amount.text.length))) amount.pence = null;
   return found.sort((a, b) => a.index - b.index);
 }
 // A fraction, multiplier or range word right before an amount. The price stays open; the parser never works out the figure.
 const fractionOrRange = new RegExp(`(?:\\b(?:half|halves|quarters?|thirds?|couple|few)(?:\\s+of)?(?:\\s+an?)?|\\bbetween\\b[^.;!?]{0,60}?\\band|(?:\\d|£|\\b(?:${numberWord}|hundred|thousand|grand|k))\\s*(?:-|–|to|or))\\s*$`, "iu");
 // A number word, digit, fraction or multiplier next to an amount, with only "and", "a", "an", "of", hyphens or spaces between.
-const unreadNumber = `(?:\\d|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|point|half|halves|quarters?|thirds?|couple|few|dozen)(?![\\p{L}]))`;
+const unreadNumber = `(?:\\d[\\d,.]*k?|\\b(?:${numberWord}|hundred|thousand|million|billion|trillion|grand|k|point|half|halves|quarters?|thirds?|couple|few|dozen|score)(?![\\p{L}]))`;
 const unreadBefore = new RegExp(`${unreadNumber}(?:[\\s-]+(?:and|a|an|of))*[\\s-]*$`, "iu");
 const unreadAfter = new RegExp(`^(?:[\\s-]+(?:and|a|an|of)(?![\\p{L}]))*[\\s-]+${unreadNumber}`, "iu");
+/**
+ * The one unread-number guard, for line prices and for room and whole-job totals alike: true when the words just
+ * before or after an amount are a fraction, range, multiplier or another number ("a quarter of a thousand pounds",
+ * "one million two hundred pounds", "fifty pounds and five"). The amount was then read in part, so it has no price.
+ */
+export function readInPart(before: string, after: string): boolean {
+  return fractionOrRange.test(before) || unreadBefore.test(before) || unreadAfter.test(after);
+}
+/** A rate qualifier right after an amount: "a/an/per <noun>" (group 1 is the noun) or "each". The amount is then a rate. */
+const rateQualifier = /^\s+(?:(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])|(?:each|apiece)(?![\p{L}]))/iu;
+export function rateAfter(after: string): RegExpExecArray | null {
+  return rateQualifier.exec(after);
+}
 // The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
 const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
-// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
-const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*$)`, "iu");
+// Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range. A bare number counts
+// at the end of the clause or before the total words ("five hundred pounds or six for the whole job").
+const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*(?:$|(?=(?:for|all in|in total|altogether)(?![\\p{L}]))))`, "iu");
+// A hedge word qualifying the amount itself: "about 500", "roughly £500", "500 or so". "Tile around the bath" is a place.
+const hedgeBefore = /\b(?:about|around|roughly|approximately|approx)\.?\s*$/iu;
+const hedgeAfter = /^\s*(?:-?ish\b|or so\b|(?:roughly|approximately|approx)(?![\p{L}]))/iu;
+/**
+ * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
+ * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
+ * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
+ * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
+ * a hedge word qualifies it ("about 500", "500 or so"); or a rate qualifier follows it (rateAfter).
+ * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
+ */
+export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
+  return readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
+    || hedgeBefore.test(before) || hedgeAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
+}
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
 const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
@@ -179,12 +205,10 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
 
 function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null {
   const matches = amounts(chunk.value);
-  if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)
-    || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
+  if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)) return null;
   const match = matches[0]!;
-  const rest = chunk.value.slice(match.index + match.text.length);
-  // Never keep part of an amount: unread pence or a trailing number leaves the price open for a question.
-  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest) || rangeAfter.test(rest)) return null;
+  // Never keep part of an amount: every said-amount guard, the same function totals call.
+  if (saidAmountOpen(chunk.value.slice(0, match.index), chunk.value.slice(match.index + match.text.length), "line")) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };
@@ -264,7 +288,8 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         // VAT words after the per-item word ("a door plus VAT") do not hide it.
         // Rate qualifier guard: "a/an/per <noun>" right after the amount is a rate whatever follows it.
         const whole = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu").exec(after);
-        const per = whole ?? /^\s+(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])/iu.exec(after);
+        const qualifier = rateAfter(after);
+        const per = whole ?? (qualifier?.[1] !== undefined ? qualifier : null);
         const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
         const each = new RegExp(`^\\s+(?:each|apiece|a piece)${vatTail}?\\.?$`, "iu").test(after) || (!!per && !!perCount && !!per[1] && sameUnit(perCount.unit, per[1]));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
