@@ -97,7 +97,7 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 
 | RT12-84 | RT-12 | b25b5ee9 | 01–20 @layout-save (mobile-360); tap-targets | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Every measured review control at least 44×44 px | 20/20 scripts fail; representative Walk the job 85.56×36, price field 272×42, Save review 100.72×40; per-script counts below | P2 | open-finding | — |
 | RT12-85 | RT-12 | b25b5ee9 | 01–20 @layout-save (desktop); tap-targets | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Every measured review control at least 44×44 px | 20/20 scripts fail; representative Walk the job 85.56×36, price field 138×42, Save review 100.72×40; per-script counts below | P2 | open-finding | — |
-| RT12-86 | RT-12 | b25b5ee9 | 01–20 @layout-save (desktop, mobile-360); reopen-job | All 20 fictional scripts from RT-12-right-place.spec.ts; representative: strip out the old kitchen fit six base units hang the new doors paint the walls | Jobs-list Open job navigation is verified at the saved job URL | Immediate page.url() sample returns false in 40/40 journeys; no navigation wait precedes it. Subsequent direct review reopen retains edits, transcript and firm in 40/40 | P2 | harness-gap; not evidence of a wrong-job defect; navigation remains unverified | — |
+| RT12-86 | RT-12 | b25b5ee9 | 01-four-items @jobs-list-reopen (desktop, mobile-360); reopen-job | strip out the old kitchen fit six base units hang the new doors paint the walls | Jobs-list Open job navigation is verified at the saved job URL | Round 2: after waiting for navigation, 360×740 PASS (1/1), 1280×740 PASS (1/1); each reaches its own saved job's /overview URL | — (test bug; formerly P2 harness gap) | closed; navigation race fixed; expected-failure binding removed | Local repair base 3a3999b2f; round-2 receipt below |
 
 ## RT-12 hosted attack receipt — 28 November 2026
 
@@ -280,3 +280,48 @@ and this findings file are included in the round-1 results commit; `.pnpm-store/
 Post-annotation validation: TypeScript typecheck PASS; hosted-config discovery PASS (40 selected
 layout/save tests); `git diff --check` PASS. Full build, unit, database, migration and model-eval suites
 were not run for this scoped test/documentation change.
+
+## RT12-86 repair round 2 (last) — 28 November 2026
+
+Local base `3a3999b2fb22223a45d8815ce081422e8cc2a9bd`, branch `codex/sandbox/rt-12`.
+The spec now waits for navigation away from `/jobs` before checking the captured job ID.
+RT12-86 is closed as a test timing bug, and its `test.fail` registration is removed.
+RT12-84/85 and every other finding and assertion remain unchanged.
+
+Only the Jobs-list reopen step was exercised once per size, using the existing fictional
+`01-four-items` words. A temporary focused version of the spec reused the repaired Jobs-list
+block verbatim, with own-practice-firm capture, edit and save as setup. It omitted line-content,
+layout, reload and direct-review-reopen checks, then restored the full spec in `finally`.
+The temporary runner/spec are `/tmp/rt12-round2-reopen.py` and
+`/tmp/rt12-round2-focused-spec.ts`; neither is committed. The hosted config was unchanged.
+
+Commands actually run (Node 24.17.0; pnpm 10.28.1):
+
+```sh
+python3 /tmp/rt12-round2-reopen.py
+# Runner performs discovery (--list), then this one browser batch:
+JOBGUARD_HOSTED_URL=https://sq-preview-jobguard-demo.ben2harwood.workers.dev PLAYWRIGHT_JSON_OUTPUT_FILE=/tmp/rt12-round2-reopen-results.json pnpm --dir apps/web exec playwright test -c playwright.hosted.config.ts RT-12-right-place.spec.ts --grep @jobs-list-reopen --trace off --workers=2 --retries=0 --repeat-each=1 --output=/tmp/rt12-round2-test-results --reporter=line,json
+```
+
+The initial sandboxed invocation failed to launch Chromium (`MachPortRendezvousServer:
+Permission denied`) before either test contacted the preview. Its launch-error report is
+`/tmp/rt12-round2-launch-blocked-results.json`; it is not a product failure. The same runner
+then ran with browser-launch permission: 14:25:52–14:26:10 UTC, 18.3 seconds,
+**2 passed, 0 failed, 0 skipped**, two workers, zero retries, trace off.
+
+| Size | Jobs-list reopen | Captured job ID in observed `/jobs/<id>/overview` URL |
+| --- | --- | --- |
+| 360×740 | PASS, 1/1 | `bd366ec1-431a-436f-a360-c4f60142d01b` |
+| 1280×740 | PASS, 1/1 | `29319340-63ac-4c5b-a6f4-cdcea39c6028` |
+
+Both entry-asset hashes matched `44f496ea4730dbf34bfbac9175f6e8905a94375e1b3a89b0488a2b7eed338aad`;
+the owner-supplied preview head remains `b25b5ee9`, Worker `d7b174a0` (fingerprint matching
+is not independent version attestation). Results and URL evidence are in
+`/tmp/rt12-round2-reopen-results.json`. This settles the navigation check on the representative
+script at both sizes; the 40 historical immediate samples above were not rerun.
+No default config, local server, deployment, push, paid API or real customer data was used.
+
+Final validation: `pnpm --dir apps/web exec tsc -p tsconfig.json --noEmit --incremental false`
+PASS (also the web package's lint check); `git diff --check` PASS. Full build, unit, database,
+migration and model-eval suites were not run for this scoped test/documentation repair.
+Only the spec and this findings file are committed; `.pnpm-store/` is excluded.

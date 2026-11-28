@@ -228,7 +228,6 @@ const findings: Record<string, string> = {
 // Round 1: all 20 scripts reproduced these checks at each size in the single hosted batch.
 for (const quote of cases) for (const viewport of ["mobile-360", "desktop"]) {
   findings[`${quote.id}/${viewport}/tap-targets`] = viewport === "mobile-360" ? "RT12-84" : "RT12-85";
-  findings[`${quote.id}/${viewport}/reopen-job`] = "RT12-86";
 }
 type Mismatch = { key: string; expected: unknown; actual: unknown; severity: "P0" | "P1" | "P2" };
 const gbp = (pence: number) => `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -379,8 +378,7 @@ test.describe("RT-12 typed quotes on the hosted preview", () => {
       await page.goto("/jobs");
       await expect(page.getByRole("button", { name: "Open job →", exact: true })).toHaveCount(1);
       await page.getByRole("button", { name: "Open job →", exact: true }).click();
-      // RT12-86: this immediate sample races router.push. It does not prove wrong-job navigation.
-      // Retained as an expected failing harness observation; the one-run round cannot verify a timing repair.
+      await page.waitForURL(url => url.pathname !== "/jobs");
       check("reopen-job", true, new URL(page.url()).pathname.includes(capture!.jobId), "P2");
       await page.goto(reviewURL); // Reopen the saved review after the ordinary Jobs entry.
       await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
