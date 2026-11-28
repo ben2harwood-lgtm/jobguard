@@ -88,13 +88,16 @@ describe("ENT-6 independent contracts (persisted writers held)", () => {
     expect(() => renderBillingExport({ ...raw, lines: [exportLine(), { ...exportLine(), extraId: billingId(51), revisionId: billingId(50), approvedNet: { pence: 1_000_000_000_000, currency: "GBP" } }] })).toThrow("BILLING_INVALID");
   });
 
-  it("E6-06 escapes spreadsheet formulas in both CSV writers while retaining exact source text", () => {
+  it("E6-06 keeps DB-checked export parity and space-aware status CSV protection with exact source text", () => {
     for (const prefix of ["=", "+", "-", "@", "'", "'=", "''", "\t=", "\t+", "\t-", "\t@", " =", " +", " -", " @", "\r=", "\r+", "\r-", "\r@", " \t\r ="]) {
       const text = `${prefix}SUM(1,2) "fictional"\n第二行`;
       const artifact = renderBillingExport({ version: "billing-export.v1", clientContractId: billingId(1),
         lines: [{ ...exportLine(), description: text, unit: text }] });
       const escapedCell = `"'${text.replace(/"/gu, '""')}"`;
-      expect(artifact.csv.split(escapedCell)).toHaveLength(3);
+      // RT-FIX-12 option (a): the DB only protects position 0. Space-prefixed
+      // billing formulas remain F008 open until migration 2089 is authorised.
+      const billingCell = prefix.startsWith(" ") ? `"${text.replace(/"/gu, '""')}"` : escapedCell;
+      expect(artifact.csv.split(billingCell)).toHaveLength(3);
       expect(JSON.parse(artifact.json).lines[0].description).toBe(text);
       expect(JSON.parse(artifact.json).lines[0].unit).toBe(text);
       // Identity fields reject control characters; the free-text remittance still

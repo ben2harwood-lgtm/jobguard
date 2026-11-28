@@ -77,4 +77,12 @@ describe("RT-07 document and spreadsheet boundaries", () => {
     expect(artifact.csv).toContain(csvCell(`'${description}`));
     // Byte-level protection; not proof that a spreadsheet was opened or a formula executed.
   });
+  // RT-FIX-12 option (a): preserve the desired inert-cell assertion as a known
+  // failure. SQL cb_csv_cell protects position 0 only; migration 2089 needs Ben's go.
+  it.fails.each([" =", " +", " -", " @"])('RT-07-F008 open: exports space plus "%s" as inert billing CSV', prefix => {
+    const description = `${prefix}SUM(1,2)`;
+    const artifact = exportFor(description);
+    expect(JSON.parse(artifact.json).lines[0].description).toBe(description);
+    expect(artifact.csv).toContain(csvCell(`'${description}`));
+  });
 });

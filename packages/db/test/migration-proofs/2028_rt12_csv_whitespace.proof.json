@@ -1,6 +1,0 @@
-{
-  "migration": "2028_rt12_csv_whitespace.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}
