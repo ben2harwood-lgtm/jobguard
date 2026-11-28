@@ -52,7 +52,7 @@ test("rooms: headings, a move and back, one price for the bathroom, and the same
     await expect(headings).toHaveText(["Kitchen", "Bathroom", "Hallway"]);
     await expect(subtotals).toHaveText(["£2,000.00", "£900.00", "£600.00"]);
     await expect(total).toHaveText("Total so far £3,500.00 · complete");
-    await expect(page.getByLabel("Description Bathroom: all work as described")).toBeVisible();
+    await expect(page.getByLabel(`Description Bathroom: tile the floor; ${sockets}`)).toBeVisible();
     await expect(page.getByTestId("row-origin")).toContainText(["Itemised came to £590.00 · room price £900.00"]);
   };
   const url = page.url();

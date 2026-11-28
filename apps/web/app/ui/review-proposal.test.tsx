@@ -487,7 +487,7 @@ it("V2-SQ-D: groups rows by room, moves a row and back, and quotes one room as o
   expect(saved.map((l: { room: string; disposition: string; unitPricePence: number | null; parentScopeItemIds: string[] }) => [l.room, l.disposition, l.unitPricePence, l.parentScopeItemIds]))
     .toEqual([["Kitchen", "proposed", 120000, []], ["Bathroom", "merged", null, []], ["Bathroom", "merged", 4500, []], ["Hall", "proposed", 30000, []],
       ["Bathroom", "accepted", 90000, ["scope-b1", "scope-b2"]]]);
-  expect(saved.at(-1).description).toBe("Bathroom: all work as described");
+  expect(saved.at(-1).description).toBe("Bathroom: Tile the floor; Two sockets");
 });
 it("V2-SQ-D: one price is blocked while a row's inferred room is unchecked, and rooms can be added, renamed and merged", () => {
   const make = (id: string, description: string, room: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room, unitPricePence: 1000, disposition: "accepted" });
@@ -529,7 +529,7 @@ it("V2-SQ-D: splitting the one-price row ends its undo, so undo cannot duplicate
   p.button(p.render(), "Set one price for Kitchen").props.onClick();
   p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
   expect(all(p.render(), n => n.props["aria-label"] === "Undo one price for Kitchen" || text(n) === "Undo one price for Kitchen")).not.toHaveLength(0);
-  p.button(p.render(), "Split Kitchen: all work as described").props.onClick();
+  p.button(p.render(), "Split Kitchen: Strip the units; Fit a sink").props.onClick();
   expect(all(p.render(), n => n.type === "button" && text(n) === "Undo one price for Kitchen")).toHaveLength(0);
   expect(all(p.render(), n => n.type === "article")).toHaveLength(5);
 });
