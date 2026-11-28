@@ -56,7 +56,9 @@ beforeAll(async () => {
         // V2-C3C
         "_v2_crew_contact.sql",
         // V2-G1
-        "_v2_snag_register.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_snag_register.sql",
+        // V2-G2
+        "_v2_handover_version.sql", "_v2_handover_release.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -74,6 +76,10 @@ beforeAll(async () => {
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
   // V2-G1: the snag register stays absent outside the V2 database.
   expect((await admin.query("SELECT to_regclass('app.v2_snag_owner') AS owner")).rows[0].owner).toBeNull();
+  // V2-G2: handover versions stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_version') AS handover")).rows[0].handover).toBeNull();
+  // V2-G3: handover releases stay absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_handover_release') AS handover")).rows[0].handover).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

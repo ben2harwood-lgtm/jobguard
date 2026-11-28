@@ -33,6 +33,8 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
     "/api/customer-portal/extra-approvals/", "/api/customer-portal/extra-approvals/extra",
     "/api/customer-portal/EXTRA-APPROVALS", "/api/customer-portal/unknown", "/api/customer-portal/READ",
     "/api/customer-portal/variations", "/api/customer-portal/variation-approvals/extra",
+    // V2-G3: only the exact handover receipt path is exempt.
+    "/api/v2/handover/", "/api/v2/handover/extra", "/api/v2/HANDOVER", "/api/v2", "/api/jobs/fictional/handover/releases",
     // QW-4: builder snag routes are never customer routes.
     "/api/jobs/fictional/snags", "/api/jobs/fictional/snags/fictional/events", "/api/jobs/fictional/snags/fictional/photos",
   ])("denies customer access to %s even alongside builder cookies", async path => {
@@ -46,6 +48,13 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
         expect(response.headers.has("set-cookie")).toBe(false);
       }
     }
+  });
+
+  it("lets a portal cookie holder reach the token-authorized handover receipt", () => {
+    // The route still checks its origin and the link token; the portal cookie grants nothing there.
+    const response = proxy(request("/api/v2/handover", "jobguard_customer=fictional", "POST"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.has("set-cookie")).toBe(false);
   });
 
   it.each([undefined, "jg_session=legacy", "jobguard_session=builder"])("leaves builder authentication to the route for %s", cookie => {
