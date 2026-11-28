@@ -271,12 +271,46 @@ describe("continuous spoken quotes", () => {
       expect(cited(text, result.lines[0]!)).toBe("fifty pounds");
       expect(result.questions.map(q => q.question.value)).toContain(`Confirm VAT: you said “${text}”. The price is kept as said; VAT is not added or taken off.`);
     });
-  it.each(["fit six doors at fifty pounds a day plus VAT", "fit six doors at fifty pounds a door for the hall"])(
-    "leaves a per-item price open when its word is not the counted thing or more words follow: %s", text => {
+  it.each(["fit six doors at fifty pounds a day plus VAT", "fit six doors at fifty pounds a day including materials", "fit six doors at fifty pounds a visit for the hall"])(
+    "leaves a per-item price open when its word is not the counted thing, whatever follows: %s", text => {
       const result = citations(text);
       expect(result.lines[0]!.unitPricePence.value).toBeNull();
       expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
     });
+  // Rate qualifier guard (planner rule 2): "a <counted thing>" is per item even when more words follow; those words are asked about.
+  it.each(["fit six doors at fifty pounds a door including hinges", "fit six doors at fifty pounds a door for the hall"])(
+    "keeps a per-item price when more words follow the counted thing, and asks about them: %s", text => {
+      const result = citations(text);
+      expect(rows(text)).toEqual([["fit six doors", "6", "doors", 5000]]);
+      expect(result.questions.map(q => q.question.value)).toContain(`Check “${text}”: the words after the price were not read into this line.`);
+    });
+  // Unread number guard (planner rule 1) and rule 2 together: either the exactly said figure on the right basis, or open with a
+  // question; never a different figure.
+  it("never proposes a different figure for amounts with unread numbers or rate words around them", () => {
+    const amounts: [string, number][] = [["fifty pounds", 5000], ["a hundred pounds", 10000], ["two hundred pounds", 20000], ["£300", 30000]];
+    const prefixes = ["", "one thousand and ", "half ", "two or three ", "about "];
+    const suffixes = ["", " a door including hinges", " a day including materials", " each plus VAT", " and five"];
+    for (const [said, pence] of amounts) for (const prefix of prefixes) for (const suffix of suffixes) {
+      const text = `fit six doors at ${prefix}${said}${suffix}`;
+      const result = citations(text);
+      const line = result.lines[0]!;
+      const asked = result.questions.some(q => /^(?:Confirm price|Check)/u.test(q.question.value));
+      if (line.unitPricePence.value === null) { expect(asked, text).toBe(true); continue; }
+      // "one thousand and fifty pounds" is one whole amount, read exactly; any other prefix leaves it open.
+      const whole = prefix === "" ? pence : prefix === "one thousand and " && !/^(?:a |£)/u.test(said) ? 100000 + pence : null;
+      expect(line.unitPricePence.value, text).toBe(whole);
+      // No rate word: a line price for six doors, asked about (the existing rule).
+      if (!suffix) { expect(asked, text).toBe(true); continue; }
+      expect(suffix.startsWith(" a door") || suffix.startsWith(" each"), text).toBe(true);
+      expect([line.quantity.value, line.unit.value], text).toEqual(["6", "doors"]);
+    }
+  });
+  it("leaves a partly read spoken amount open: fit one door for one thousand and a hundred pounds", () => {
+    const text = "fit one door for one thousand and a hundred pounds";
+    const result = citations(text);
+    expect(result.lines[0]!.unitPricePence.value).toBeNull();
+    expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+  });
   it("keeps a line price said with VAT words unchanged and asks about VAT", () => {
     const text = "supply and fit one door for two hundred pounds plus VAT";
     const result = citations(text);
