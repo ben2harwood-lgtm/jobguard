@@ -1,7 +1,7 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
-import { roomLead, roomOnly, roomPart } from "./room-words.js";
+import { amounts, numberWords, plainDraft, saidAmountOpen, spokenCount, spokenVerb, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
  * V2-SQ-C Reader A, the context reader. Code only: no model, no network, no spend. It reads one spoken
@@ -25,6 +25,8 @@ function thousands(words: string): number | null {
   const value = spoken && !/\d/u.test(spoken[1]!) ? spokenPounds(spoken[1]!) : null;
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
+/** Where one work item ends and the next begins inside a sentence: a comma, or "and"/"then" before a work verb. */
+const itemBreak = new RegExp(`,|\\s(?:and\\s+|then\\s+)*(?=(?:${spokenVerb.source.replace(/^\^/u, "")}))`, "iu");
 export const spokenNumbers: SpokenNumberReader = {
   money(words) {
     const text = words.trim();
@@ -40,6 +42,12 @@ export const spokenNumbers: SpokenNumberReader = {
     if (/^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/u.test(text)) return Number(text);
     if (!/^[a-z]+(?:[\s-][a-z]+)?$/u.test(text) || /pounds|quid|hundred|thousand/u.test(text)) return null;
     return spokenPounds(text);
+  },
+  // The same said-amount guards as the reader's own line prices (V2-SQ-M), on the amount's own work clause only:
+  // another item in the same sentence ("…, fit a handle for twenty pounds and fifty pence") never opens this one.
+  open: (before, after) => {
+    const ownBefore = before.split(itemBreak).at(-1) ?? before, ownAfter = after.split(itemBreak)[0] ?? after;
+    return saidAmountOpen(ownBefore, ownAfter, "line");
   },
 };
 /** Reader B (SQ-G) passes its output through the same check. */
@@ -180,7 +188,9 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       // A second rate or a correction after this one ("60 a metre, or 80 a metre") leaves the rate open.
       const tail = value.slice(rate.index + rate[0].length);
       const vat = vatOnly.test(tail);
-      if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
+      const at = rate.index + rate[0].indexOf(rate[1]!);
+      if (pence !== null && saidAmountOpen(hideRoomNumbers(value).slice(0, at), hideRoomNumbers(value).slice(at + rate[1]!.length), "line")) questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
+      else if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
         questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
       else if (pence !== null) {
         price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit";
@@ -198,7 +208,11 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
       const text = bare[1]!;
       candidates.push({ text, at: bare.index + bare[0].length - text.length, pence: spokenNumbers.money(text) });
     }
-    if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at))) {
+    // Every said-amount guard, the same function the draft path and the totals call (V2-SQ-M: "up to £200" is asked about).
+    // "bedroom two £300": the room's number is its name, not a second number (V2-SQ-L).
+    const shown = hideRoomNumbers(value);
+    const open = (found: { text: string; at: number }) => saidAmountOpen(shown.slice(0, found.at), shown.slice(found.at + found.text.length), "line");
+    if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at)) && !open(candidates[0]!)) {
       const found = candidates[0]!;
       const after = value.slice(found.at + found.text.length);
       const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
@@ -306,7 +320,9 @@ function totals(text: string): TotalPrice[] {
     const clause = text.slice(clauseStart, clauseEnd);
     const phraseAt = phrase.index - clauseStart, phraseEnd = phraseAt + phrase[0].length;
     // A measure or a count ("12 square metres", "6 doors") is never a total price.
-    const prices = [...clause.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
+    // "Bedroom 2 £500": the room's ordinal is never one of the clause's prices (V2-SQ-L). Same length, same indexes.
+    const read = hideRoomNumbers(clause);
+    const prices = [...read.matchAll(priceNear)].filter(match => /\d|pounds|quid|grand/iu.test(match[0])
       && !/^\s*(?:square|sq\b|m2|m²|met(?:re|er)s?|linear|mm|cm|coats?|days?|weeks?|hours?|units?|doors?|items?|rooms?)/iu.test(clause.slice(match.index + match[0].length)));
     // The price said with the total words: the one nearest them.
     const price = prices.length ? prices.reduce((best, match) => Math.min(Math.abs(match.index - phraseEnd), Math.abs(match.index + match[0].length - phraseAt))
@@ -327,7 +343,7 @@ function totals(text: string): TotalPrice[] {
     // Totals call the same function as line prices (saidAmountOpen), with the words of the same clause either side:
     // "a quarter of a thousand pounds", "five hundred pounds or six hundred", "500 pounds per day" all stay open and
     // are asked about with the whole phrase. The unsure words and corrections above are extra, for totals only.
-    const partial = !!price && saidAmountOpen(clause.slice(0, priceAt), clause.slice(priceEnd));
+    const partial = !!price && saidAmountOpen(read.slice(0, priceAt), read.slice(priceEnd));
     const pence = single && !unsure && !partial ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
       text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
@@ -480,6 +496,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   }
   const areaPrices: JobUnderstanding["areaPrices"] = [];
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
+  let wholeJobConflict = false;
   for (const price of priced) {
     if (price.pence === null) { questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue; }
     const provenance = { kind: "extracted" as const, span: { sourceId, sourceVersion: 1 as const, start: price.start, end: price.end } };
@@ -491,7 +508,21 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
       areaPrices.push({ areaKey: key, pence: price.pence, provenance });
     } else if (room) areaPrices.push({ areaKey: room.key, pence: price.pence, provenance });
     else if (!wholeJobPrice) wholeJobPrice = { pence: price.pence, provenance };
-    else questions.push({ text: `You said more than one whole-job price (“${price.text.slice(0, 200)}”). Check which applies.` });
+    else if (wholeJobPrice.pence !== price.pence) {
+      // Two different whole-job figures: neither is offered; the builder says which applies.
+      wholeJobConflict = true;
+      questions.push({ text: `You said more than one whole-job price (“${price.text.slice(0, 200)}”). Check which applies.` });
+    }
+  }
+  if (wholeJobConflict) wholeJobPrice = null;
+  // Two different totals for one room ("Bathroom all in 500 pounds. Bathroom all in 600 pounds."): neither is offered.
+  // The same figure said twice is kept once.
+  for (const key of new Set(areaPrices.map(price => price.areaKey))) {
+    const said = areaPrices.filter(price => price.areaKey === key);
+    if (said.length < 2) continue;
+    const keep = new Set(said.map(price => price.pence)).size === 1 ? [said[0]!] : [];
+    if (!keep.length) questions.push({ text: `You said more than one price for ${areas.find(area => area.key === key)?.name.value ?? key}. Check which applies.`.slice(0, 500), areaKey: key });
+    areaPrices.splice(0, areaPrices.length, ...areaPrices.filter(price => price.areaKey !== key || keep.includes(price)));
   }
   for (const note of draft.notes) if (/^Confirm timing/u.test(note)) questions.push({ text: note.slice(0, 500) });
   const firstStart = text.length - text.trimStart().length;

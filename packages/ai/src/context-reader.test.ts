@@ -79,9 +79,52 @@ describe("V2-SQ-C Reader A", () => {
       const line = readSpokenJob("l", `Tile the floor for ${said}.`);
       expect(line.lines.every(item => item.unitPricePence.value === null), said).toBe(true);
     }
+    // A hedge counts only when it qualifies the amount: "around the bath" is a place.
+    expect(readSpokenJob("h", "Tile around the bath for 500 pounds all in.").wholeJobPrice?.pence).toBe(50000);
+    for (const said of ["about 500 pounds", "500 pounds or so", "roughly £500"]) {
+      expect(readSpokenJob("j", `Tile the floor. ${said} for the whole job.`).wholeJobPrice ?? null, said).toBeNull();
+    }
     // Whole amounts said in full are still read exactly.
     expect(readSpokenJob("r", "In the bathroom tile the floor. Bathroom all in one thousand two hundred pounds.").areaPrices.map(price => price.pence)).toEqual([120000]);
     expect(readSpokenJob("g", "Tile the floor. Six grand for the whole job.").wholeJobPrice?.pence).toBe(600000);
+  });
+
+  it("two different totals for one room, or for the whole job, offer neither and ask which applies", () => {
+    const room = readSpokenJob("t", "In the bathroom tile the floor. Bathroom all in 500 pounds. Bathroom all in 600 pounds.");
+    expect(room.areaPrices).toEqual([]);
+    expect(room.questions.some(question => /^You said more than one price for bathroom\. Check which applies\.$/iu.test(question.text)
+      && question.areaKey === "bathroom"), JSON.stringify(room.questions)).toBe(true);
+    const same = readSpokenJob("s", "In the bathroom tile the floor. Bathroom all in 500 pounds. Bathroom all in 500 pounds.");
+    expect(same.areaPrices.map(price => price.pence)).toEqual([50000]);
+    const whole = readSpokenJob("w", "Tile the floor. 900 pounds for the whole job. Paint the walls. 1200 pounds for the whole job.");
+    expect(whole.wholeJobPrice).toBeNull();
+    expect(whole.questions.some(question => question.text.startsWith("You said more than one whole-job price"))).toBe(true);
+    expect(readSpokenJob("v", "Tile the floor. 900 pounds for the whole job. Paint the walls. 900 pounds for the whole job.").wholeJobPrice?.pence).toBe(90000);
+  });
+
+  it("a numbered room next to a stated amount is the room, never part of the price (V2-SQ-L)", () => {
+    for (const text of ["In bedroom two paint the walls. Bedroom two £500 all in.", "In bedroom 2 paint the walls. Bedroom 2 £500 all in.",
+      "In bedroom two paint the walls. Bedroom two 500 pounds all in."]) {
+      const job = readSpokenJob("n", text);
+      expect(job.areaPrices.map(price => price.pence), text).toEqual([50000]);
+      expect(/^bedroom (?:two|2)$/iu.test(job.areas.find(area => area.key === job.areaPrices[0]!.areaKey)!.name.value), text).toBe(true);
+      expect(checkSpokenNumbers(strip(job), text), text).toEqual(strip(job));
+    }
+    // Said in words straight after the ordinal, the amount is never read as more than was said: it stays open.
+    const words = readSpokenJob("m", "In bedroom two paint the walls. Bedroom two five hundred pounds all in.");
+    expect(words.areaPrices.map(price => price.pence)).not.toContain(250000);
+    expect(words.areaPrices).toEqual([]);
+    // A line priced next to a numbered room keeps its price and room.
+    const line = readSpokenJob("k", "In bedroom two paint the walls for £300.");
+    expect(line.lines.map(item => item.unitPricePence.value)).toEqual([30000]);
+    expect(readSpokenJob("l", "Paint the walls in bedroom two £300.").lines.map(item => item.unitPricePence.value)).toEqual([30000]);
+    // Guards that stay open: no room, a part amount, a range, a hedge.
+    for (const text of ["Tile the floor. Two £500 all in.", "In bedroom two paint the walls. Bedroom two and a half thousand pounds all in.",
+      "In bedroom two paint the walls. Bedroom two £500 or £600 all in.", "In bedroom two paint the walls. Bedroom two about £500 all in."]) {
+      const job = readSpokenJob("g", text);
+      expect(job.areaPrices, text).toEqual([]);
+      expect(job.wholeJobPrice ?? null, text).toBeNull();
+    }
   });
 
   it("line prices and room and whole-job totals call one guard function, saidAmountOpen, and nothing else", () => {
@@ -185,7 +228,7 @@ describe("V2-SQ-C Reader A", () => {
     let seed = 20261127;
     const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)]!;
-    const rooms = ["kitchen", "the bathroom", "upstairs bathroom", "back bedroom", "the hallway and landing", "out the back", "loft", "bedroom 2"];
+    const rooms = ["kitchen", "the bathroom", "upstairs bathroom", "back bedroom", "the hallway and landing", "out the back", "loft", "bedroom 2", "bedroom two"];
     const work = ["rip out the old units", "fit new units", "tile the floor", "paint the walls", "move two sockets", "fit a new door",
       "skim the ceiling", "lay laminate", "fit six base units", "supply and fit", "replace the slates", "same again", "no, make that three"];
     const money = () => pick([`${Math.floor(random() * 5000)}`, `£${Math.floor(random() * 900)}.${Math.floor(random() * 99)}`, "two hundred pounds",
@@ -231,5 +274,70 @@ describe("V2-SQ-C Reader A", () => {
         }
       }
     }
+  });
+});
+
+describe("V2-SQ-M limit and credit words only count beside the amount", () => {
+  it.each([
+    ["Fit the radiator under the window for £150", 15000], ["Paint the hall over the stairs for £300", 30000],
+    ["Lay the floor in the back bedroom for £400", 40000], ["Hang the door - £200", 20000], ["Hang the door – £200", 20000],
+  ])("keeps %s", (text, pence) => {
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([pence]);
+  });
+  it("leaves a credit room total and whole-job total open", () => {
+    const read = readSpokenJob("00000000-0000-4000-8000-000000000002", "In the kitchen paint the ceiling for £200. The kitchen all in minus £300. For the whole job up to £400.");
+    expect(read.areaPrices).toEqual([]);
+    expect(read.wholeJobPrice).toBeNull();
+  });
+});
+
+describe("V2-SQ-M a digits-only citation still sees the words before its currency sign (Codex P2 on #1064)", () => {
+  it.each(["up to ", "minus ", "a credit of ", "-"])("clears a line, room and whole-job price cited as digits after %s£", words => {
+    const pad = " ".repeat(words.length);
+    const exact = `In the kitchen paint the ceiling for ${pad}£200. The kitchen all in ${pad}£300. For the whole job ${pad}£400.`;
+    const { timeline: _timeline, ...original } = readSpokenJob("00000000-0000-4000-8000-000000000002", exact);
+    expect([original.lines[0]!.unitPricePence.value, original.areaPrices[0]?.pence, original.wholeJobPrice?.pence]).toEqual([20000, 30000, 40000]);
+    // Each citation narrowed to its digits, as another reader may cite them; the sign and the words stay outside.
+    type Cited = { provenance: { kind: string } };
+    const digits = <T extends Cited>(field: T): T => {
+      const provenance = field.provenance as { kind: "extracted"; span: { start: number; end: number } };
+      return { ...field, provenance: { ...provenance, span: { ...provenance.span, start: provenance.span.start + 1 } } };
+    };
+    const narrowed = { ...original, lines: original.lines.map(line => ({ ...line, unitPricePence: digits(line.unitPricePence) })),
+      areaPrices: original.areaPrices.map(digits), wholeJobPrice: original.wholeJobPrice && digits(original.wholeJobPrice) };
+    expect(checkSpokenNumbers(narrowed, exact).lines[0]!.unitPricePence.value).toBe(20000);
+    const checked = checkSpokenNumbers(narrowed, exact.replaceAll(`${pad}£`, `${words}£`));
+    expect(checked.lines[0]!.unitPricePence.value).toBeNull();
+    expect(checked.areaPrices).toEqual([]);
+    expect(checked.wholeJobPrice).toBeNull();
+  });
+});
+
+describe("V2-SQ-L the room-number exception needs a stated amount (Codex P2 on #1063)", () => {
+  it("rejects a supplied room price citing all-word money straight after the room's number", () => {
+    const said = "In bedroom two paint the walls. Bedroom two £500 all in.";
+    const { timeline: _timeline, ...job } = readSpokenJob("00000000-0000-4000-8000-000000000002", said);
+    expect(job.areaPrices.map(price => price.pence)).toEqual([50000]);
+    const words = "In bedroom two paint the walls. Bedroom two five hundred pounds all in.";
+    const start = words.indexOf("five hundred pounds");
+    const supplied = { ...job, areaPrices: job.areaPrices.map(price => ({ ...price,
+      provenance: { kind: "extracted" as const, span: { sourceId: "00000000-0000-4000-8000-000000000002", sourceVersion: 1 as const, start, end: start + "five hundred pounds".length } } })) };
+    expect(checkSpokenNumbers(supplied, words).areaPrices).toEqual([]);
+    // The same supplied price, cited as "£500" after the room, is kept.
+    expect(checkSpokenNumbers(job, said).areaPrices.map(price => price.pence)).toEqual([50000]);
+  });
+});
+
+describe("V2-SQ-M another item's words in the same sentence never open this item's price (Codex P2 on #1064)", () => {
+  it.each(["Paint the walls for £200, fit a handle for twenty pounds and fifty pence",
+    "Paint the walls for £200 and fit a handle for twenty pounds and fifty pence"])("keeps £200 in %s through checkSpokenNumbers", text => {
+    const { timeline: _timeline, ...job } = readSpokenJob("00000000-0000-4000-8000-000000000002", text);
+    const before = job.lines.map(line => line.unitPricePence.value);
+    expect(before[0]).toBe(20000);
+    expect(checkSpokenNumbers(job, text).lines.map(line => line.unitPricePence.value)).toEqual(before);
+  });
+  it("still opens a limit said in the amount's own clause next to another item", () => {
+    const text = "Fit a handle for twenty pounds, paint the walls for up to £200";
+    expect(readSpokenJob("00000000-0000-4000-8000-000000000002", text).lines.map(line => line.unitPricePence.value)).toEqual([2000, null]);
   });
 });
