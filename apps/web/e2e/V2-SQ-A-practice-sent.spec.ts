@@ -15,6 +15,9 @@ async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "o
     // The shared example tenant: every "Look around an example firm" session shares it, so ownership must filter.
     expect((await page.request.post("/api/session")).ok()).toBe(true);
     await page.goto("/classic");
+    // The shared example firm opens its quick tour; on a phone it covers "Make my draft", so skip it when it shows.
+    const skip = page.getByRole("button", { name: "Skip tour", exact: true });
+    if (await skip.waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false)) await skip.click();
   }
   await click(page, "＋ Start a new job");
   await page.getByLabel("Work details").fill("JOB: Fictional Sent list job\nITEM: Protect room | £200.00\nITEM: Paint walls | £300.00");
@@ -35,7 +38,12 @@ async function sendPracticeQuote(page: Page, firm: "own" | "shared example" = "o
   const result = await response; expect(result.ok(), await result.text()).toBe(true);
   const preview = await result.json() as Preview;
   await click(page, "Simulate sending this quote");
-  await expect(page.locator(".quote-notice")).toHaveText("Simulated delivery — nothing real was sent.");
+  const notice = page.locator(".quote-notice");
+  const sent = "Simulated delivery — nothing real was sent.";
+  // The shared example firm queues the send for the deterministic fake worker; run it, as a builder would.
+  await expect(notice).toHaveText(new RegExp(`^(?:${sent}|The exact quote is queued only for the deterministic fake worker\\. Nothing was sent\\.)$`, "u"));
+  if ((await notice.textContent())?.includes("queued")) await click(page, "Continue fake worker");
+  await expect(notice).toHaveText(sent);
   return { jobId, preview };
 }
 
