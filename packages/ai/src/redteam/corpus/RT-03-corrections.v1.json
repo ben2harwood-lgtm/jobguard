@@ -3662,5 +3662,65 @@
     },
     "status": "pass",
     "finding": "RT-FIX-6-P2-02"
+  },
+  {
+    "id": "RT-03-233",
+    "lane": "RT-03",
+    "transcript": "Paint walls £500, no make that 600 and fit doors £200",
+    "why": "A bare-number correction ends before the next explicit work item; its price stays open without swallowing the doors.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit doors",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "no make that 600"
+      ],
+      "neverPence": [
+        50000,
+        60000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-8-P2-01"
+  },
+  {
+    "id": "RT-03-234",
+    "lane": "RT-03",
+    "transcript": "Fit two doors £200 each, no make that 3 and paint the hall £300",
+    "why": "A count correction ends before the next explicit work item; the corrected count and price stay open while hall painting keeps its own price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two doors",
+          "quantity": null,
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the hall",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "no make that 3"
+      ],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-8-P2-01"
   }
 ]

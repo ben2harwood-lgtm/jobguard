@@ -1,0 +1,5654 @@
+[
+  {
+    "id": "RT-05-001",
+    "lane": "RT-05",
+    "transcript": "right then er the kitchen we'll rip it all out like and fit the new units for er three grand",
+    "why": "seed / Scouse discourse and filler inside an amount; grand price loss already tracked by RT-01-F060",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "rip it all out",
+          "unitPricePence": null,
+          "trade": "Strip-out",
+          "room": "Kitchen"
+        },
+        {
+          "descriptionIncludes": "fit the new units",
+          "unitPricePence": 300000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-002",
+    "lane": "RT-05",
+    "transcript": "aye so the wee bathroom needs a new suite twelve hundred and tiling four hundred",
+    "why": "seed / Scots wee and coordinated noun-led work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "new suite",
+          "unitPricePence": 120000,
+          "trade": "Plumbing",
+          "room": "Bathroom"
+        },
+        {
+          "descriptionIncludes": "tiling",
+          "unitPricePence": 40000,
+          "trade": "Tiling",
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F011"
+  },
+  {
+    "id": "RT-05-003",
+    "lane": "RT-05",
+    "transcript": "second fix sparks in the extension six hundred",
+    "why": "seed / electrical trade slang and implicit price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "second fix sparks",
+          "unitPricePence": 60000,
+          "trade": "Electrics",
+          "room": "Extension"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-004",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for fifty pond",
+    "why": "seed / pond is not a currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-005",
+    "lane": "RT-05",
+    "transcript": "fit four doors for forty each",
+    "why": "seed / stated count and rate without currency",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit four doors",
+          "unitPricePence": 4000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "4",
+          "unit": "doors",
+          "priceBasis": "each"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        4400,
+        440000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F011"
+  },
+  {
+    "id": "RT-05-006",
+    "lane": "RT-05",
+    "transcript": "dot and dab the lounge walls four fifty",
+    "why": "seed / ambiguous shorthand stays open; lounge-walls room suppression already tracked by RV2-05",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "dot and dab",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": "Lounge"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        45000,
+        5400
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-007",
+    "lane": "RT-05",
+    "transcript": "fit the kitchen units for two hundred pounds like",
+    "why": "dialect / Scouse; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the kitchen units",
+          "unitPricePence": 20000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-008",
+    "lane": "RT-05",
+    "transcript": "sound paint the ceiling for ninety pounds",
+    "why": "dialect / Scouse; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 9000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-009",
+    "lane": "RT-05",
+    "transcript": "boss fit the door for eighty pounds",
+    "why": "dialect / Scouse; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-010",
+    "lane": "RT-05",
+    "transcript": "we'll do the kitchen like fit six base units for six hundred pounds",
+    "why": "dialect / Scouse; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit six base units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-011",
+    "lane": "RT-05",
+    "transcript": "howay fit the door for eighty pounds",
+    "why": "dialect / Geordie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-012",
+    "lane": "RT-05",
+    "transcript": "canny job paint the ceiling for seventy pounds",
+    "why": "dialect / Geordie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 7000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-013",
+    "lane": "RT-05",
+    "transcript": "aye man plumb in the sink for a hundred pounds",
+    "why": "dialect / Geordie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plumb in the sink",
+          "unitPricePence": 10000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-014",
+    "lane": "RT-05",
+    "transcript": "pet fit the skirting for sixty pounds",
+    "why": "dialect / Geordie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the skirting",
+          "unitPricePence": 6000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-015",
+    "lane": "RT-05",
+    "transcript": "aye fit the wee basin for two hundred pounds",
+    "why": "dialect / Glaswegian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the wee basin",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-016",
+    "lane": "RT-05",
+    "transcript": "gonnae skim the ceiling for three hundred pounds",
+    "why": "dialect / Glaswegian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim the ceiling",
+          "unitPricePence": 30000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-017",
+    "lane": "RT-05",
+    "transcript": "paint the hall for ninety pounds pal",
+    "why": "dialect / Glaswegian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the hall",
+          "unitPricePence": 9000,
+          "trade": "Decorating",
+          "room": "Hall"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-018",
+    "lane": "RT-05",
+    "transcript": "fit the press shelves for a hundred pounds",
+    "why": "dialect / Glaswegian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the press shelves",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-019",
+    "lane": "RT-05",
+    "transcript": "bab paint the ceiling for eighty pounds",
+    "why": "dialect / Brummie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-020",
+    "lane": "RT-05",
+    "transcript": "we am gonna fit the door for a hundred pounds",
+    "why": "dialect / Brummie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-021",
+    "lane": "RT-05",
+    "transcript": "fit the sockets for sixty pounds bostin",
+    "why": "dialect / Brummie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the sockets",
+          "unitPricePence": 6000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-022",
+    "lane": "RT-05",
+    "transcript": "right bab tile the floor for two hundred pounds",
+    "why": "dialect / Brummie; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "tile the floor",
+          "unitPricePence": 20000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-023",
+    "lane": "RT-05",
+    "transcript": "cor fit the door for eighty quid",
+    "why": "dialect / Cockney; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-024",
+    "lane": "RT-05",
+    "transcript": "gonna paint the ceiling for fifty quid innit",
+    "why": "dialect / Cockney; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 5000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-025",
+    "lane": "RT-05",
+    "transcript": "fit the sink for a hundred quid mate",
+    "why": "dialect / Cockney; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the sink",
+          "unitPricePence": 10000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-026",
+    "lane": "RT-05",
+    "transcript": "sorted fit the skirting for sixty quid",
+    "why": "dialect / Cockney; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the skirting",
+          "unitPricePence": 6000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-027",
+    "lane": "RT-05",
+    "transcript": "our kid fit the door for ninety pounds",
+    "why": "dialect / Mancunian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 9000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-028",
+    "lane": "RT-05",
+    "transcript": "dead easy paint the ceiling for eighty pounds",
+    "why": "dialect / Mancunian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-029",
+    "lane": "RT-05",
+    "transcript": "fit the sockets for sixty pounds nice one",
+    "why": "dialect / Mancunian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the sockets",
+          "unitPricePence": 6000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-030",
+    "lane": "RT-05",
+    "transcript": "sound that skim the wall for a hundred pounds",
+    "why": "dialect / Mancunian; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim the wall",
+          "unitPricePence": 10000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-031",
+    "lane": "RT-05",
+    "transcript": "proper job fit the gate for a hundred pounds",
+    "why": "dialect / West Country; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the gate",
+          "unitPricePence": 10000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-032",
+    "lane": "RT-05",
+    "transcript": "my lover paint the ceiling for eighty pounds",
+    "why": "dialect / West Country; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-033",
+    "lane": "RT-05",
+    "transcript": "fit the door for ninety pounds mind",
+    "why": "dialect / West Country; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 9000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-034",
+    "lane": "RT-05",
+    "transcript": "we be fitting new units for six hundred pounds",
+    "why": "dialect / West Country; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fitting new units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-035",
+    "lane": "RT-05",
+    "transcript": "tidy fit the door for eighty pounds",
+    "why": "dialect / Welsh; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-036",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for seventy pounds lovely",
+    "why": "dialect / Welsh; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 7000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-037",
+    "lane": "RT-05",
+    "transcript": "butt fit the sink for a hundred pounds",
+    "why": "dialect / Welsh; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the sink",
+          "unitPricePence": 10000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-038",
+    "lane": "RT-05",
+    "transcript": "right now then tile the floor for two hundred pounds",
+    "why": "dialect / Welsh; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "tile the floor",
+          "unitPricePence": 20000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-039",
+    "lane": "RT-05",
+    "transcript": "aye fit the wee door for eighty pounds so it is",
+    "why": "dialect / Northern Irish; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the wee door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-040",
+    "lane": "RT-05",
+    "transcript": "grand job paint the ceiling for seventy pounds",
+    "why": "dialect / Northern Irish; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 7000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-041",
+    "lane": "RT-05",
+    "transcript": "fit the hot press shelves for a hundred pounds",
+    "why": "dialect / Northern Irish; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the hot press shelves",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-042",
+    "lane": "RT-05",
+    "transcript": "sure plumb in the sink for two hundred pounds",
+    "why": "dialect / Northern Irish; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plumb in the sink",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-043",
+    "lane": "RT-05",
+    "transcript": "in kitchen we fit new units for six hundred pounds",
+    "why": "dialect / Polish first-language English; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit new units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-044",
+    "lane": "RT-05",
+    "transcript": "we paint ceiling for eighty pounds yes",
+    "why": "dialect / Romanian first-language English; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-045",
+    "lane": "RT-05",
+    "transcript": "fit two doors for a hundred pounds together",
+    "why": "dialect / Lithuanian first-language English; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit two doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-046",
+    "lane": "RT-05",
+    "transcript": "we do plaster ceiling for two hundred pounds",
+    "why": "dialect / Portuguese first-language English; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster ceiling",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-047",
+    "lane": "RT-05",
+    "transcript": "sink we will fit for a hundred pounds",
+    "why": "dialect / Urdu first-language English; preserve the said work and exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 10000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F010"
+  },
+  {
+    "id": "RT-05-048",
+    "lane": "RT-05",
+    "transcript": "er fit the door for a hundred pounds",
+    "why": "filler-leading / er",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-049",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for er eighty pounds",
+    "why": "filler-price / er does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-050",
+    "lane": "RT-05",
+    "transcript": "fit the er sink for ninety pounds",
+    "why": "filler-object / er",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-051",
+    "lane": "RT-05",
+    "transcript": "um fit the door for a hundred pounds",
+    "why": "filler-leading / um",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-052",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for um eighty pounds",
+    "why": "filler-price / um does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-053",
+    "lane": "RT-05",
+    "transcript": "fit the um sink for ninety pounds",
+    "why": "filler-object / um",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-054",
+    "lane": "RT-05",
+    "transcript": "erm fit the door for a hundred pounds",
+    "why": "filler-leading / erm",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-055",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for erm eighty pounds",
+    "why": "filler-price / erm does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-056",
+    "lane": "RT-05",
+    "transcript": "fit the erm sink for ninety pounds",
+    "why": "filler-object / erm",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-057",
+    "lane": "RT-05",
+    "transcript": "like fit the door for a hundred pounds",
+    "why": "filler-leading / like",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-058",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for like eighty pounds",
+    "why": "filler-price / like does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-059",
+    "lane": "RT-05",
+    "transcript": "fit the like sink for ninety pounds",
+    "why": "filler-object / like",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-060",
+    "lane": "RT-05",
+    "transcript": "you know fit the door for a hundred pounds",
+    "why": "filler-leading / you know",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-061",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for you know eighty pounds",
+    "why": "filler-price / you know does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-062",
+    "lane": "RT-05",
+    "transcript": "fit the you know sink for ninety pounds",
+    "why": "filler-object / you know",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-063",
+    "lane": "RT-05",
+    "transcript": "right then fit the door for a hundred pounds",
+    "why": "filler-leading / right then",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-064",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for right then eighty pounds",
+    "why": "filler-price / right then does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-065",
+    "lane": "RT-05",
+    "transcript": "fit the right then sink for ninety pounds",
+    "why": "filler-object / right then",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-066",
+    "lane": "RT-05",
+    "transcript": "so yeah fit the door for a hundred pounds",
+    "why": "filler-leading / so yeah",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-067",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for so yeah eighty pounds",
+    "why": "filler-price / so yeah does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-068",
+    "lane": "RT-05",
+    "transcript": "fit the so yeah sink for ninety pounds",
+    "why": "filler-object / so yeah",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-069",
+    "lane": "RT-05",
+    "transcript": "basically fit the door for a hundred pounds",
+    "why": "filler-leading / basically",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-070",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for basically eighty pounds",
+    "why": "filler-price / basically does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-071",
+    "lane": "RT-05",
+    "transcript": "fit the basically sink for ninety pounds",
+    "why": "filler-object / basically",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-072",
+    "lane": "RT-05",
+    "transcript": "well fit the door for a hundred pounds",
+    "why": "filler-leading / well",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-073",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for well eighty pounds",
+    "why": "filler-price / well does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-074",
+    "lane": "RT-05",
+    "transcript": "fit the well sink for ninety pounds",
+    "why": "filler-object / well",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-075",
+    "lane": "RT-05",
+    "transcript": "okay fit the door for a hundred pounds",
+    "why": "filler-leading / okay",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F005"
+  },
+  {
+    "id": "RT-05-076",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for okay eighty pounds",
+    "why": "filler-price / okay does not change the exact amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-077",
+    "lane": "RT-05",
+    "transcript": "fit the okay sink for ninety pounds",
+    "why": "filler-object / okay",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sink",
+          "unitPricePence": 9000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-078",
+    "lane": "RT-05",
+    "transcript": "fit the handle for fifteen pounds",
+    "why": "number contrast / fifteen; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 1500,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-079",
+    "lane": "RT-05",
+    "transcript": "fit the handle for fifty pounds",
+    "why": "number contrast / fifty; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 5000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        1500
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-080",
+    "lane": "RT-05",
+    "transcript": "fit the handle for thirteen pounds",
+    "why": "number contrast / thirteen; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 1300,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        3000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-081",
+    "lane": "RT-05",
+    "transcript": "fit the handle for thirty pounds",
+    "why": "number contrast / thirty; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 3000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        1300
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-082",
+    "lane": "RT-05",
+    "transcript": "fit the handle for fourteen pounds",
+    "why": "number contrast / fourteen; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 1400,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        4000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-083",
+    "lane": "RT-05",
+    "transcript": "fit the handle for forty pounds",
+    "why": "number contrast / forty; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 4000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        1400
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-084",
+    "lane": "RT-05",
+    "transcript": "fit the handle for eighteen pounds",
+    "why": "number contrast / eighteen; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 1800,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        8000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-085",
+    "lane": "RT-05",
+    "transcript": "fit the handle for eighty pounds",
+    "why": "number contrast / eighty; keep what is transcribed",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the handle",
+          "unitPricePence": 8000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        1800
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-086",
+    "lane": "RT-05",
+    "transcript": "skim the ceiling for fifty pond",
+    "why": "currency homophone / pond is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-087",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for 150 pond",
+    "why": "currency homophone / pond is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-088",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for fifty ponds",
+    "why": "currency homophone / ponds is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-089",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for 150 ponds",
+    "why": "currency homophone / ponds is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-090",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for fifty quit",
+    "why": "currency homophone / quit is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-091",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for 150 quit",
+    "why": "currency homophone / quit is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-092",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for fifty squid",
+    "why": "currency homophone / squid is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-093",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for 150 squid",
+    "why": "currency homophone / squid is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-094",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for fifty gran",
+    "why": "currency homophone / gran is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-095",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for 150 gran",
+    "why": "currency homophone / gran is not pounds or quid",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-096",
+    "lane": "RT-05",
+    "transcript": "fit for doors for a hundred pounds",
+    "why": "count homophone / for is not a count; retain words; physical count tested separately from the default one-draft-line representation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit for doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-097",
+    "lane": "RT-05",
+    "transcript": "fit to doors for a hundred pounds",
+    "why": "count homophone / to is not a count; retain words; physical count tested separately from the default one-draft-line representation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit to doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-098",
+    "lane": "RT-05",
+    "transcript": "fit ate doors for a hundred pounds",
+    "why": "count homophone / ate is not a count; retain words; physical count tested separately from the default one-draft-line representation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit ate doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-099",
+    "lane": "RT-05",
+    "transcript": "fit won doors for a hundred pounds",
+    "why": "count homophone / won is not a count; retain words; physical count tested separately from the default one-draft-line representation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit won doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-100",
+    "lane": "RT-05",
+    "transcript": "fit four doors for a hundred pounds",
+    "why": "count contrast / four is a real number",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit four doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "4",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-101",
+    "lane": "RT-05",
+    "transcript": "fit two doors for a hundred pounds",
+    "why": "count contrast / two is a real number",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit two doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "2",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-102",
+    "lane": "RT-05",
+    "transcript": "fit eight doors for a hundred pounds",
+    "why": "count contrast / eight is a real number",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit eight doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "8",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-103",
+    "lane": "RT-05",
+    "transcript": "fit one doors for a hundred pounds",
+    "why": "count contrast / one is a real number",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit one doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "1",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-104",
+    "lane": "RT-05",
+    "transcript": "fit the squirting for a hundred pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the squirting",
+          "unitPricePence": 10000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-105",
+    "lane": "RT-05",
+    "transcript": "fit the skirting for a hundred pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the skirting",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-106",
+    "lane": "RT-05",
+    "transcript": "replace the plastic for eighty pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "replace the plastic",
+          "unitPricePence": 8000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-107",
+    "lane": "RT-05",
+    "transcript": "plaster the ceiling for eighty pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-108",
+    "lane": "RT-05",
+    "transcript": "fit the styles for ninety pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the styles",
+          "unitPricePence": 9000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-109",
+    "lane": "RT-05",
+    "transcript": "lay the tiles for ninety pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "lay the tiles",
+          "unitPricePence": 9000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-110",
+    "lane": "RT-05",
+    "transcript": "replace the boil a for two hundred pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "replace the boil a",
+          "unitPricePence": 20000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-111",
+    "lane": "RT-05",
+    "transcript": "replace the boiler for two hundred pounds",
+    "why": "trade mishearing / retain the recogniser spelling; no invented noun",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "replace the boiler",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-112",
+    "lane": "RT-05",
+    "transcript": "first fix electrics for two hundred pounds",
+    "why": "trade slang / first fix electrics; inferred trade Electrics",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "first fix electrics",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-113",
+    "lane": "RT-05",
+    "transcript": "second fix sparks for two hundred pounds",
+    "why": "trade slang / second fix sparks; inferred trade Electrics",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "second fix sparks",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-114",
+    "lane": "RT-05",
+    "transcript": "sparky work for two hundred pounds",
+    "why": "trade slang / sparky work; inferred trade Electrics; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sparky work",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-115",
+    "lane": "RT-05",
+    "transcript": "sparks work for two hundred pounds",
+    "why": "trade slang / sparks work; inferred trade Electrics",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "sparks work",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-116",
+    "lane": "RT-05",
+    "transcript": "spark work for two hundred pounds",
+    "why": "trade slang / spark work; inferred trade Electrics",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "spark work",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-117",
+    "lane": "RT-05",
+    "transcript": "consumer unit for two hundred pounds",
+    "why": "trade slang / consumer unit; inferred trade Electrics; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "consumer unit",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-118",
+    "lane": "RT-05",
+    "transcript": "CU for two hundred pounds",
+    "why": "trade slang / CU; inferred trade Electrics",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "CU",
+          "unitPricePence": 20000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-119",
+    "lane": "RT-05",
+    "transcript": "chippy work for two hundred pounds",
+    "why": "trade slang / chippy work; inferred trade Carpentry",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "chippy work",
+          "unitPricePence": 20000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-120",
+    "lane": "RT-05",
+    "transcript": "noggins for two hundred pounds",
+    "why": "trade slang / noggins; inferred trade Carpentry",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "noggins",
+          "unitPricePence": 20000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-121",
+    "lane": "RT-05",
+    "transcript": "stud wall for two hundred pounds",
+    "why": "trade slang / stud wall; inferred trade Carpentry; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "stud wall",
+          "unitPricePence": 20000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-122",
+    "lane": "RT-05",
+    "transcript": "joists for two hundred pounds",
+    "why": "trade slang / joists; inferred trade Carpentry; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "joists",
+          "unitPricePence": 20000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-123",
+    "lane": "RT-05",
+    "transcript": "architraves for two hundred pounds",
+    "why": "trade slang / architraves; inferred trade Carpentry; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "architraves",
+          "unitPricePence": 20000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-124",
+    "lane": "RT-05",
+    "transcript": "plumb in the sink for two hundred pounds",
+    "why": "trade slang / plumb in the sink; inferred trade Plumbing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plumb in the sink",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-125",
+    "lane": "RT-05",
+    "transcript": "P-trap for two hundred pounds",
+    "why": "trade slang / P-trap; inferred trade Plumbing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "P-trap",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-126",
+    "lane": "RT-05",
+    "transcript": "combi for two hundred pounds",
+    "why": "trade slang / combi; inferred trade Plumbing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "combi",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-127",
+    "lane": "RT-05",
+    "transcript": "rads for two hundred pounds",
+    "why": "trade slang / rads; inferred trade Plumbing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "rads",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-128",
+    "lane": "RT-05",
+    "transcript": "pipework for two hundred pounds",
+    "why": "trade slang / pipework; inferred trade Plumbing; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "pipework",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-129",
+    "lane": "RT-05",
+    "transcript": "dot and dab for two hundred pounds",
+    "why": "trade slang / dot and dab; inferred trade Plastering",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "dot and dab",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-130",
+    "lane": "RT-05",
+    "transcript": "skim for two hundred pounds",
+    "why": "trade slang / skim; inferred trade Plastering",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-131",
+    "lane": "RT-05",
+    "transcript": "bonding for two hundred pounds",
+    "why": "trade slang / bonding; inferred trade Plastering",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "bonding",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-132",
+    "lane": "RT-05",
+    "transcript": "plasterboard for two hundred pounds",
+    "why": "trade slang / plasterboard; inferred trade Plastering; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plasterboard",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-133",
+    "lane": "RT-05",
+    "transcript": "render for two hundred pounds",
+    "why": "trade slang / render; inferred trade Plastering",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "render",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-134",
+    "lane": "RT-05",
+    "transcript": "pointing for two hundred pounds",
+    "why": "trade slang / pointing; inferred trade Brickwork; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "pointing",
+          "unitPricePence": 20000,
+          "trade": "Brickwork",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-135",
+    "lane": "RT-05",
+    "transcript": "lintel for two hundred pounds",
+    "why": "trade slang / lintel; inferred trade Brickwork; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "lintel",
+          "unitPricePence": 20000,
+          "trade": "Brickwork",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-136",
+    "lane": "RT-05",
+    "transcript": "blockwork for two hundred pounds",
+    "why": "trade slang / blockwork; inferred trade Brickwork; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "blockwork",
+          "unitPricePence": 20000,
+          "trade": "Brickwork",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-137",
+    "lane": "RT-05",
+    "transcript": "screed for two hundred pounds",
+    "why": "trade slang / screed; inferred trade Flooring",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "screed",
+          "unitPricePence": 20000,
+          "trade": "Flooring",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-138",
+    "lane": "RT-05",
+    "transcript": "latex the floor for two hundred pounds",
+    "why": "trade slang / latex the floor; inferred trade Flooring",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "latex the floor",
+          "unitPricePence": 20000,
+          "trade": "Flooring",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-139",
+    "lane": "RT-05",
+    "transcript": "floorboards for two hundred pounds",
+    "why": "trade slang / floorboards; inferred trade Flooring; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "floorboards",
+          "unitPricePence": 20000,
+          "trade": "Flooring",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-140",
+    "lane": "RT-05",
+    "transcript": "LVT for two hundred pounds",
+    "why": "trade slang / LVT; inferred trade Flooring; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "LVT",
+          "unitPricePence": 20000,
+          "trade": "Flooring",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-141",
+    "lane": "RT-05",
+    "transcript": "grout for two hundred pounds",
+    "why": "trade slang / grout; inferred trade Tiling; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "grout",
+          "unitPricePence": 20000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-142",
+    "lane": "RT-05",
+    "transcript": "splashback tiles for two hundred pounds",
+    "why": "trade slang / splashback tiles; inferred trade Tiling; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "splashback tiles",
+          "unitPricePence": 20000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-143",
+    "lane": "RT-05",
+    "transcript": "mastic the tiles for two hundred pounds",
+    "why": "trade slang / mastic the tiles; inferred trade Tiling; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "mastic the tiles",
+          "unitPricePence": 20000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-144",
+    "lane": "RT-05",
+    "transcript": "flashing for two hundred pounds",
+    "why": "trade slang / flashing; inferred trade Roofing; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "flashing",
+          "unitPricePence": 20000,
+          "trade": "Roofing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-145",
+    "lane": "RT-05",
+    "transcript": "fascias for two hundred pounds",
+    "why": "trade slang / fascias; inferred trade Roofing; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fascias",
+          "unitPricePence": 20000,
+          "trade": "Roofing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-146",
+    "lane": "RT-05",
+    "transcript": "soffits for two hundred pounds",
+    "why": "trade slang / soffits; inferred trade Roofing; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "soffits",
+          "unitPricePence": 20000,
+          "trade": "Roofing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-147",
+    "lane": "RT-05",
+    "transcript": "guttering for two hundred pounds",
+    "why": "trade slang / guttering; inferred trade Roofing; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "guttering",
+          "unitPricePence": 20000,
+          "trade": "Roofing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-148",
+    "lane": "RT-05",
+    "transcript": "footings for two hundred pounds",
+    "why": "trade slang / footings; inferred trade Groundworks; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "footings",
+          "unitPricePence": 20000,
+          "trade": "Groundworks",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-149",
+    "lane": "RT-05",
+    "transcript": "drainage for two hundred pounds",
+    "why": "trade slang / drainage; inferred trade Groundworks; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "drainage",
+          "unitPricePence": 20000,
+          "trade": "Groundworks",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-150",
+    "lane": "RT-05",
+    "transcript": "patio for two hundred pounds",
+    "why": "trade slang / patio; inferred trade Groundworks; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "patio",
+          "unitPricePence": 20000,
+          "trade": "Groundworks",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-151",
+    "lane": "RT-05",
+    "transcript": "rip out the old units for three hundred pounds",
+    "why": "trade slang / rip out; keep scope even without a leading recognised verb",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "rip out",
+          "unitPricePence": 30000,
+          "trade": "Strip-out",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-152",
+    "lane": "RT-05",
+    "transcript": "strip out the old suite for three hundred pounds",
+    "why": "trade slang / strip out; keep scope even without a leading recognised verb",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "strip out",
+          "unitPricePence": 30000,
+          "trade": "Strip-out",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-153",
+    "lane": "RT-05",
+    "transcript": "gut it for three hundred pounds",
+    "why": "trade slang / gut it; keep scope even without a leading recognised verb",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "gut it",
+          "unitPricePence": 30000,
+          "trade": "Strip-out",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-154",
+    "lane": "RT-05",
+    "transcript": "making good around the new opening for three hundred pounds",
+    "why": "trade slang / making good; keep scope even without a leading recognised verb; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "making good",
+          "unitPricePence": 30000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-155",
+    "lane": "RT-05",
+    "transcript": "snagging the new doors for three hundred pounds",
+    "why": "trade slang / snagging; keep scope even without a leading recognised verb; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "snagging",
+          "unitPricePence": 30000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-156",
+    "lane": "RT-05",
+    "transcript": "RSJ installation for three hundred pounds",
+    "why": "trade slang / RSJ; keep scope even without a leading recognised verb; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "RSJ",
+          "unitPricePence": 30000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-157",
+    "lane": "RT-05",
+    "transcript": "in the back kitchen fit the shelves for eighty pounds",
+    "why": "local room / back kitchen; preserve room identity rather than guessing a different room; known RV2-03 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Back kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-05-158",
+    "lane": "RT-05",
+    "transcript": "in the scullery fit the shelves for eighty pounds",
+    "why": "local room / scullery; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Scullery"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-159",
+    "lane": "RT-05",
+    "transcript": "in the press fit the shelves for eighty pounds",
+    "why": "local room / press; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Press"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-160",
+    "lane": "RT-05",
+    "transcript": "in the hot press fit the shelves for eighty pounds",
+    "why": "local room / hot press; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Hot press"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-161",
+    "lane": "RT-05",
+    "transcript": "in the box room fit the shelves for eighty pounds",
+    "why": "local room / box room; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Box room"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-162",
+    "lane": "RT-05",
+    "transcript": "in the front room fit the shelves for eighty pounds",
+    "why": "local room / front room; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Front room"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-163",
+    "lane": "RT-05",
+    "transcript": "in the boot room fit the shelves for eighty pounds",
+    "why": "local room / boot room; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Boot room"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-164",
+    "lane": "RT-05",
+    "transcript": "in the wet room fit the shelves for eighty pounds",
+    "why": "local room / wet room; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Wet room"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-165",
+    "lane": "RT-05",
+    "transcript": "in the wee bathroom fit the shelves for eighty pounds",
+    "why": "local room / wee is a size adjective; the stated room is Bathroom; known RV2-03 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Bathroom"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-05-166",
+    "lane": "RT-05",
+    "transcript": "in the downstairs loo fit the shelves for eighty pounds",
+    "why": "local room / downstairs loo; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Downstairs loo"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-167",
+    "lane": "RT-05",
+    "transcript": "in the upstairs loo fit the shelves for eighty pounds",
+    "why": "local room / upstairs loo; preserve room identity rather than guessing a different room",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Upstairs loo"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F008"
+  },
+  {
+    "id": "RT-05-168",
+    "lane": "RT-05",
+    "transcript": "in the spare bedroom fit the shelves for eighty pounds",
+    "why": "local room / spare bedroom; preserve room identity rather than guessing a different room; known RV2-03 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": "Spare bedroom"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-05-169",
+    "lane": "RT-05",
+    "transcript": "fit the door for eighty pounds paint the ceiling for sixty pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-170",
+    "lane": "RT-05",
+    "transcript": "er fit the door for eighty pounds then um paint the ceiling for sixty pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-05-F009"
+  },
+  {
+    "id": "RT-05-171",
+    "lane": "RT-05",
+    "transcript": "rip out the old units fit the new units for six hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "rip out",
+          "unitPricePence": null,
+          "trade": "Strip-out",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "fit the new units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-172",
+    "lane": "RT-05",
+    "transcript": "fit the door and paint the ceiling for sixty pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": null,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-173",
+    "lane": "RT-05",
+    "transcript": "fit the sink for two hundred pounds and tile the floor for three hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the sink",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "tile the floor",
+          "unitPricePence": 30000,
+          "trade": "Tiling",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-174",
+    "lane": "RT-05",
+    "transcript": "first fix sparks for six hundred pounds then second fix sparks for four hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "first fix sparks",
+          "unitPricePence": 60000,
+          "trade": "Electrics",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "second fix sparks",
+          "unitPricePence": 40000,
+          "trade": "Electrics",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-175",
+    "lane": "RT-05",
+    "transcript": "fit the noggins for eighty pounds skim the wall for ninety pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the noggins",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "skim the wall",
+          "unitPricePence": 9000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-176",
+    "lane": "RT-05",
+    "transcript": "plumb in the sink for a hundred pounds fit the rads for two hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plumb in the sink",
+          "unitPricePence": 10000,
+          "trade": "Plumbing",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "fit the rads",
+          "unitPricePence": 20000,
+          "trade": "Plumbing",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F007"
+  },
+  {
+    "id": "RT-05-177",
+    "lane": "RT-05",
+    "transcript": "dot and dab for two hundred pounds then skim for three hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount; known RV2-02 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "dot and dab",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "skim",
+          "unitPricePence": 30000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "open-finding",
+    "finding": "RV2-02"
+  },
+  {
+    "id": "RT-05-178",
+    "lane": "RT-05",
+    "transcript": "fit the shelves for eighty pounds you know and paint the wall for sixty pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the shelves",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-05-F006"
+  },
+  {
+    "id": "RT-05-179",
+    "lane": "RT-05",
+    "transcript": "lay the floor for three hundred pounds then fit the skirting for a hundred pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "lay the floor",
+          "unitPricePence": 30000,
+          "room": null
+        },
+        {
+          "descriptionIncludes": "fit the skirting",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-180",
+    "lane": "RT-05",
+    "transcript": "fit the worktop for two hundred pounds and seal the joints for thirty pounds",
+    "why": "no punctuation / independent work clauses and ownership of each amount",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the worktop",
+          "unitPricePence": 20000,
+          "trade": "Kitchen fitting",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "seal the joints",
+          "unitPricePence": 3000,
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-181",
+    "lane": "RT-05",
+    "transcript": "FIT THE DOOR FOR EIGHTY POUNDS",
+    "why": "recogniser casing / all caps",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-182",
+    "lane": "RT-05",
+    "transcript": "SKIM THE WALL FOR TWO HUNDRED POUNDS",
+    "why": "recogniser casing / all caps",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim the wall",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-183",
+    "lane": "RT-05",
+    "transcript": "FIT TWO SOCKETS FOR SIXTY POUNDS",
+    "why": "recogniser casing / all caps",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit two sockets",
+          "unitPricePence": 6000,
+          "trade": "Electrics",
+          "room": null,
+          "quantity": "2",
+          "unit": "sockets"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-184",
+    "lane": "RT-05",
+    "transcript": "FIT THE DOOR FOR EIGHTY POUNDS PAINT THE CEILING FOR SIXTY POUNDS",
+    "why": "recogniser casing / all caps",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-185",
+    "lane": "RT-05",
+    "transcript": "PLASTER THE CEILING FOR FIFTY POND",
+    "why": "recogniser casing / all caps",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-186",
+    "lane": "RT-05",
+    "transcript": "IN THE KITCHEN FIT THE UNITS FOR SIX HUNDRED POUNDS",
+    "why": "recogniser casing / all caps; known RV2-03 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-05-187",
+    "lane": "RT-05",
+    "transcript": "Fit The Door For Eighty Pounds",
+    "why": "recogniser casing / title case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-188",
+    "lane": "RT-05",
+    "transcript": "Skim The Wall For Two Hundred Pounds",
+    "why": "recogniser casing / title case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "skim the wall",
+          "unitPricePence": 20000,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-189",
+    "lane": "RT-05",
+    "transcript": "Fit Two Sockets For Sixty Pounds",
+    "why": "recogniser casing / title case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit two sockets",
+          "unitPricePence": 6000,
+          "trade": "Electrics",
+          "room": null,
+          "quantity": "2",
+          "unit": "sockets"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-190",
+    "lane": "RT-05",
+    "transcript": "Fit The Door For Eighty Pounds Paint The Ceiling For Sixty Pounds",
+    "why": "recogniser casing / title case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 8000,
+          "trade": "Carpentry",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 6000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-191",
+    "lane": "RT-05",
+    "transcript": "Plaster The Ceiling For Fifty Pond",
+    "why": "recogniser casing / title case",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "plaster the ceiling",
+          "unitPricePence": null,
+          "trade": "Plastering",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-192",
+    "lane": "RT-05",
+    "transcript": "In The Kitchen Fit The Units For Six Hundred Pounds",
+    "why": "recogniser casing / title case; known RV2-03 reused, no new finding row",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": "Kitchen"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RV2-03"
+  },
+  {
+    "id": "RT-05-193",
+    "lane": "RT-05",
+    "transcript": "fit the door for 150quid",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 15000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F012"
+  },
+  {
+    "id": "RT-05-194",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for 80pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": 8000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F012"
+  },
+  {
+    "id": "RT-05-195",
+    "lane": "RT-05",
+    "transcript": "fit 2doors for a hundred pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit 2doors",
+          "unitPricePence": 10000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "2",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F013"
+  },
+  {
+    "id": "RT-05-196",
+    "lane": "RT-05",
+    "transcript": "fit 4sockets for eighty pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit 4sockets",
+          "unitPricePence": 8000,
+          "trade": "Electrics",
+          "room": null,
+          "quantity": "4",
+          "unit": "sockets"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F013"
+  },
+  {
+    "id": "RT-05-197",
+    "lane": "RT-05",
+    "transcript": "lay 12 square metres of vinyl for two hundred pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "lay 12 square metres of vinyl",
+          "unitPricePence": 20000,
+          "trade": "Flooring",
+          "room": null,
+          "quantity": "12",
+          "unit": "m²"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F015"
+  },
+  {
+    "id": "RT-05-198",
+    "lane": "RT-05",
+    "transcript": "fit 6 base units for six hundred pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit 6 base units",
+          "unitPricePence": 60000,
+          "trade": "Kitchen fitting",
+          "room": null,
+          "quantity": "6",
+          "unit": "base units"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F014"
+  },
+  {
+    "id": "RT-05-199",
+    "lane": "RT-05",
+    "transcript": "fit 2doors for 150quid",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit 2doors",
+          "unitPricePence": 15000,
+          "trade": "Carpentry",
+          "room": null,
+          "quantity": "2",
+          "unit": "doors"
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F012"
+  },
+  {
+    "id": "RT-05-200",
+    "lane": "RT-05",
+    "transcript": "fit the door for150 pounds",
+    "why": "glued tokens or digit speech / token boundaries do not change said money or count",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the door",
+          "unitPricePence": 15000,
+          "trade": "Carpentry",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1
+    },
+    "status": "open-finding",
+    "finding": "RT-05-F012"
+  },
+  {
+    "id": "RT-05-201",
+    "lane": "RT-05",
+    "transcript": "paint panel alpha for ten pounds paint panel bravo for ten pounds paint panel charlie for ten pounds paint panel delta for ten pounds paint panel echo for ten pounds paint panel foxtrot for ten pounds paint panel golf for ten pounds paint panel hotel for ten pounds paint panel india for ten pounds paint panel juliet for ten pounds paint panel kilo for ten pounds paint panel lima for ten pounds paint panel mike for ten pounds paint panel november for ten pounds paint panel oscar for ten pounds paint panel papa for ten pounds paint panel quebec for ten pounds paint panel romeo for ten pounds paint panel sierra for ten pounds paint panel tango for ten pounds paint panel uniform for ten pounds paint panel victor for ten pounds paint panel whiskey for ten pounds paint panel xray for ten pounds paint panel zulu for ten pounds",
+    "why": "25 item unpunctuated quote / no separators; 25 unique items each at 1000 pence",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint panel alpha",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel bravo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel charlie",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel delta",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel echo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel foxtrot",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel golf",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel hotel",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel india",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel juliet",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel kilo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel lima",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel mike",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel november",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel oscar",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel papa",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel quebec",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel romeo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel sierra",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel tango",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel uniform",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel victor",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel whiskey",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel xray",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel zulu",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 25
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-202",
+    "lane": "RT-05",
+    "transcript": "paint panel alpha for ten pounds and paint panel bravo for ten pounds and paint panel charlie for ten pounds and paint panel delta for ten pounds and paint panel echo for ten pounds and paint panel foxtrot for ten pounds and paint panel golf for ten pounds and paint panel hotel for ten pounds and paint panel india for ten pounds and paint panel juliet for ten pounds and paint panel kilo for ten pounds and paint panel lima for ten pounds and paint panel mike for ten pounds and paint panel november for ten pounds and paint panel oscar for ten pounds and paint panel papa for ten pounds and paint panel quebec for ten pounds and paint panel romeo for ten pounds and paint panel sierra for ten pounds and paint panel tango for ten pounds and paint panel uniform for ten pounds and paint panel victor for ten pounds and paint panel whiskey for ten pounds and paint panel xray for ten pounds and paint panel zulu for ten pounds",
+    "why": "25 item unpunctuated quote / and joins; 25 unique items each at 1000 pence",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint panel alpha",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel bravo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel charlie",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel delta",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel echo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel foxtrot",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel golf",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel hotel",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel india",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel juliet",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel kilo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel lima",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel mike",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel november",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel oscar",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel papa",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel quebec",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel romeo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel sierra",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel tango",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel uniform",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel victor",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel whiskey",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel xray",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel zulu",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 25
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-203",
+    "lane": "RT-05",
+    "transcript": "paint panel alpha for ten pounds then paint panel bravo for ten pounds then paint panel charlie for ten pounds then paint panel delta for ten pounds then paint panel echo for ten pounds then paint panel foxtrot for ten pounds then paint panel golf for ten pounds then paint panel hotel for ten pounds then paint panel india for ten pounds then paint panel juliet for ten pounds then paint panel kilo for ten pounds then paint panel lima for ten pounds then paint panel mike for ten pounds then paint panel november for ten pounds then paint panel oscar for ten pounds then paint panel papa for ten pounds then paint panel quebec for ten pounds then paint panel romeo for ten pounds then paint panel sierra for ten pounds then paint panel tango for ten pounds then paint panel uniform for ten pounds then paint panel victor for ten pounds then paint panel whiskey for ten pounds then paint panel xray for ten pounds then paint panel zulu for ten pounds",
+    "why": "25 item unpunctuated quote / then joins; 25 unique items each at 1000 pence",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint panel alpha",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel bravo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel charlie",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel delta",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel echo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel foxtrot",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel golf",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel hotel",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel india",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel juliet",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel kilo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel lima",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel mike",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel november",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel oscar",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel papa",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel quebec",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel romeo",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel sierra",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel tango",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel uniform",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel victor",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel whiskey",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel xray",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        },
+        {
+          "descriptionIncludes": "paint panel zulu",
+          "unitPricePence": 1000,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 25
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-05-204",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for up to er fifty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-205",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for at most um sixty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        6000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-206",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for no more than erm seventy pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        7000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-207",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for maximum like eighty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        8000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-208",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for at least er ninety pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        9000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-209",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for minimum um a hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-210",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for starting from erm two hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-211",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for capped at you know three hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F001"
+  },
+  {
+    "id": "RT-05-212",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for about er fifty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-213",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for around um sixty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        6000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-214",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for roughly erm seventy pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        7000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-215",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for maybe like eighty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        8000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-216",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for probably you know ninety pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        9000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-217",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for say er a hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-218",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for ballpark um two hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-219",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for reckon erm three hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F002"
+  },
+  {
+    "id": "RT-05-220",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for minus er fifty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-221",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for less um sixty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        6000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-222",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for deduct erm seventy pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        7000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-223",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for a credit of like eighty pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        8000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-224",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for knock off er ninety pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        9000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-225",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for take off you know a hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-226",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for refund um two hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-227",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for a rebate of erm three hundred pounds",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F003"
+  },
+  {
+    "id": "RT-05-228",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for fifty pounds er tops",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        5000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-229",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for sixty pounds um maximum",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        6000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-230",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for seventy pounds erm or so",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        7000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-231",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for eighty pounds like minimum",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        8000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-232",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for ninety pounds you know off the bill",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        9000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-233",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for a hundred pounds er credit",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-234",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for two hundred pounds um back",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  },
+  {
+    "id": "RT-05-235",
+    "lane": "RT-05",
+    "transcript": "paint the ceiling for three hundred pounds erm ish",
+    "why": "disfluent qualification / filler does not remove the limit hedge or deduction; M2 M3",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "paint the ceiling",
+          "unitPricePence": null,
+          "trade": "Decorating",
+          "room": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-05-F004"
+  }
+]

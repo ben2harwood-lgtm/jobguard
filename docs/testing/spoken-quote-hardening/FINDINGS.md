@@ -134,6 +134,21 @@ Expected failures and open corpus findings are attack evidence, not product acce
 | RT-01-F190 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-190 | Fit kitchen units for three grand | One line priced 300000 pence; never 300 pence | Capture: 1 line(s), pence [null]; Reader A: 1 line(s), pence [null] | P1 | open | — |
 | RT-01-F191 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-191 | Fit kitchen units two and a half grand | One unpriced line and an explicit price question; never 200000, 250 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
 | RT-01-F192 | RT-01 | b25b5ee931ff7bb62bbaa34a47099fddadf514ed | RT-01-192 | Fit the door a ton | One unpriced line and an explicit price question; never 10000 pence | Capture: 1 line(s), pence [null]; no explicit price question; Reader A: 1 line(s), pence [null]; no explicit price question | P2 | open | — |
+| RT-05-F001 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-204, RT-05-205, RT-05-206, RT-05-207, RT-05-208, RT-05-209, RT-05-210, RT-05-211 | paint the ceiling for up to er fifty pounds | One Decorating line; null price and a price question. A filler cannot turn an upper or lower limit into a fixed charge. | Capture, zero-spend fixture gateway, Reader A and checked Reader A keep +5000 pence without a price question. Eight disfluent limit cases retain their respective 5000–30000 pence amounts; the corresponding fluent controls stay open. | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-05-F002 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-212, RT-05-213, RT-05-214, RT-05-215, RT-05-216, RT-05-217, RT-05-218, RT-05-219 | paint the ceiling for about er fifty pounds | One Decorating line; null price and a price question. About/around/roughly/maybe/probably/say/ballpark/reckon remain hedges across a filler. | All four tested paths keep +5000 pence without a price question. Eight disfluent hedge cases retain 5000–30000 pence as fixed prices; fluent controls stay open. | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-05-F003 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-220, RT-05-221, RT-05-222, RT-05-223, RT-05-224, RT-05-225, RT-05-226, RT-05-227 | paint the ceiling for minus er fifty pounds | One open line and a price question; a deduction or refund is never a positive charge even with er/um/erm/like/you know before the amount. | All four tested paths keep +5000 pence without a price question. Eight deductions/credits/refunds retain +5000–30000 pence; fluent controls stay open. | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-05-F004 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-228, RT-05-229, RT-05-230, RT-05-231, RT-05-232, RT-05-233, RT-05-234, RT-05-235 | paint the ceiling for fifty pounds er tops | One open line and a price question; tops/maximum/or so/minimum/off the bill/credit/back/ish still qualify an amount after a filler. | Capture and the fixture gateway retain +5000 pence, with a price question. Reader A and checked Reader A safely clear it. All eight trailing-filler cases retain 5000–30000 pence on the capture path; fluent controls stay open. | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-05-F005 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-008, RT-05-009, RT-05-010, RT-05-011, RT-05-012, RT-05-013, RT-05-014, RT-05-015, RT-05-016, RT-05-019, RT-05-020, RT-05-022, RT-05-023, RT-05-024, RT-05-026, RT-05-027, RT-05-028, RT-05-030, RT-05-031, RT-05-032, RT-05-034, RT-05-035, RT-05-037, RT-05-038, RT-05-040, RT-05-042, RT-05-043, RT-05-044, RT-05-046, RT-05-048, RT-05-051, RT-05-054, RT-05-057, RT-05-060, RT-05-063, RT-05-066, RT-05-069, RT-05-072, RT-05-075 | er fit the door for a hundred pounds | Keep the single door-fitting line and its exact 10000-pence price through leading conversational words. | Capture, fixture gateway, Reader A and checked Reader A return one unpriced line for the representative er case. Other discourse prefixes lose the exact price on capture and sometimes Reader A. Scope remains readable; this is lost money, not invented money. The known leading-room-only fallback is reused as RV2-03 instead. | P1 | open | — |
+| RT-05-F006 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-007, RT-05-017, RT-05-021, RT-05-025, RT-05-029, RT-05-033, RT-05-036, RT-05-039, RT-05-045, RT-05-178 | paint the hall for ninety pounds pal | Keep the Hall paint line at exactly 9000 pence; pal is conversational address, not a qualification of money. | Capture retains 9000 with an inclusion question. Reader A and checked Reader A clear it and ask about price. The same safe-but-lost-price failure occurs with like/bostin/mate/nice one/mind/lovely/so it is/together/you know. | P1 | open | — |
+| RT-05-F007 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-001, RT-05-003, RT-05-006, RT-05-112, RT-05-113, RT-05-115, RT-05-116, RT-05-118, RT-05-119, RT-05-120, RT-05-125, RT-05-126, RT-05-127, RT-05-129, RT-05-131, RT-05-137, RT-05-138, RT-05-153, RT-05-175, RT-05-176 | second fix sparks in the extension six hundred | Second fix sparks is Electrics in Extension; six hundred is 60000 pence. Other explicit trade slang should infer its corresponding trade. | The representative Reader A line is Other in Whole job with null price; capture is also unpriced. Narrow trade-only tests independently reproduce missing sparks/spark/electrics/CU/chippy/noggins/P-trap/combi/rads/dot and dab/bonding/screed/latex/gut it/rip it all out mappings. Existing grand-price loss and lounge-walls suppression are referenced, not reported again. | P1 | open | — |
+| RT-05-F008 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-158, RT-05-159, RT-05-160, RT-05-161, RT-05-162, RT-05-163, RT-05-164, RT-05-166, RT-05-167 | in the scullery fit the shelves for eighty pounds | The shelf-fitting line belongs to the stated Scullery at 8000 pence; preserve local room identity. | Reader A and checked Reader A keep the 8000-pence shelf line under Whole job, with no room question. Scullery, Press, Hot press, Box room, Front room, Boot room, Wet room and upstairs/downstairs loo all lose the stated room. Capture also leaves the single prefixed line unpriced (the existing prefix issue). | P1 | open | — |
+| RT-05-F009 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-170 | er fit the door for eighty pounds then um paint the ceiling for sixty pounds | Two work lines: fit the door 8000 pence and paint the ceiling 6000 pence, regardless of er/um. | Capture merges both into one unpriced line. Reader A and checked Reader A retain only paint the ceiling at 6000; door-fitting goes to the title rather than a line or question. No question recovers that work. | P1 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-05-F010 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-047 | sink we will fit for a hundred pounds | One sink-fitting work line at 10000 pence, Plumbing. Object-first speech still says what is being fitted. | Reader A and checked Reader A keep only the description fit at 10000, trade Other; sink we will is treated as the title and no question recovers the sink. Capture keeps the full words but leaves the exact price open. | P1 | open | — |
+| RT-05-F011 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-002, RT-05-005 | fit four doors for forty each | Four doors, 4000 pence each; no invented multiplication. The other normative seed needs suite 120000 and tiling 40000 as separate lines. | Reader A retains four doors but no rate, priceBasis none, and no price question. Capture leaves count/unit/price null. In the Scots bathroom seed both paths return one unpriced line rather than two prices. These are explicit currency-free prices from the lane seeds, not ambiguous one-fifty shorthand. | P1 | open | — |
+| RT-05-F012 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-193, RT-05-194, RT-05-199, RT-05-200 | fit the door for 150quid | One door-fitting line at 15000 pence: 150quid is still an explicit amount. Glued currency and for150 must not lose a price. | Capture and Reader A return null instead of 15000; Reader A has no price question. The same boundary issue loses 80pounds and for150 pounds. The combined 2doors/150quid case also loses the physical count. | P1 | open | — |
+| RT-05-F013 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-195, RT-05-196 | fit 2doors for a hundred pounds | One Carpentry line containing two doors; keep quantity 2 and unit doors while retaining the said 10000-pence line price. | Capture defaults to 1 item; Reader A and checked Reader A have null quantity/unit and trade Other. The explicit 10000-pence price survives. 4sockets likewise loses count/unit and the Electrics trade. | P1 | open | — |
+| RT-05-F014 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-100, RT-05-101, RT-05-102, RT-05-183, RT-05-189, RT-05-198 | fit four doors for a hundred pounds | Preserve four doors as quantity 4/unit doors with 10000 pence and line price basis; a lump sum does not require erasing the count. | Capture replaces the stated physical count with default 1 item; Reader A and checked Reader A null the count and unit. Both retain 10000 and ask about line-versus-each, but lose the structured quantity. Includes two/eight doors, two sockets in all caps/title case, and six base units. | P1 | open | — |
+| RT-05-F015 | RT-05 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-05-197 | lay 12 square metres of vinyl for two hundred pounds | One Flooring line: 12 square metres of vinyl, exact 20000-pence lump sum with line basis; no division or multiplication. | Capture retains 20000 as a line price (default 1 item). Reader A and checked Reader A keep quantity 12 and m² but discard the explicit 20000-pence lump sum without a price question. | P1 | open | — |
 
 ## RT-FIX-2 receipt (28 Nov 2026, #1071)
 
@@ -1303,10 +1318,10 @@ Related variants share one finding; every failing corpus case names its finding.
 
 | ID | Lane | Head sha | Case id | Transcript | Expected | Actual | Sev | Status | Fix PR |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| RT-13-F001 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-027, RT-13-029, RT-13-031, RT-13-033, RT-13-034 | `Paint the walls for up to er £150.`; `Paint the walls for minus er £150.`; `Paint the walls for about er £150.`; `Paint the walls for a maximum of er £150.`; `Paint the walls for up to, er, £150.` | Each amount stays open with a price question. Removing a hesitation does not remove a limit, hedge or deduction. In particular a credit never becomes a positive charge. | Capture and Reader A retain positive 15000 pence; Reader A gives line basis and no price question. The filler separates the qualifier from the amount; the comma variation also bypasses it. The numeric check does not remove the retained price. Corresponding filler-free bases remain open. | P0 | open | — |
+| RT-13-F001 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-027, RT-13-029, RT-13-031, RT-13-033, RT-13-034 | `Paint the walls for up to er £150.`; `Paint the walls for minus er £150.`; `Paint the walls for about er £150.`; `Paint the walls for a maximum of er £150.`; `Paint the walls for up to, er, £150.` | Each amount stays open with a price question. Removing a hesitation does not remove a limit, hedge or deduction. In particular a credit never becomes a positive charge. | Capture and Reader A retain positive 15000 pence; Reader A gives line basis and no price question. The filler separates the qualifier from the amount; the comma variation also bypasses it. The numeric check does not remove the retained price. Corresponding filler-free bases remain open. | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
 | RT-13-F002 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-011, RT-13-012 | `Fit two doors at £150 each. The customer's dog is called Max.`; `Fit two doors at £150 each. Er.` | Exactly one door-fitting work line, quantity 2, unit doors, 15000 pence each. Neither an unrelated dog sentence nor a standalone hesitation is work. | Capture and Reader A both append a second unpriced work line containing the dog sentence or `Er`. The numeric check retains the extra line. The source contains only one work item. | P1 | fixed | RT-FIX-8; deterministic corpus and focused checks |
 | RT-13-F003 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-023 | `In the kitchen fit two doors at £150 each in bedroom two paint three walls at £200 each` | Two doors at 15000 pence each belong to Kitchen; three walls at 20000 pence each belong to Bedroom two. Removing punctuation from RT-13-021 preserves ownership and exact prices. | Reader A assigns BOTH lines to Bedroom two and leaves the door price open; the numeric check preserves that misplaced room. Capture also loses the door rate. Unlike RV2-06's forward room transition after a full stop, the next room here steals the preceding work when full stops are removed. | P1 | fixed | RT-FIX-8; deterministic corpus and focused checks |
-| RT-13-F004 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-013, RT-13-014, RT-13-015, RT-13-017, RT-13-018 | `Fit two doors at erm £150 each.`; `Fit two doors at er £150 each.`; `Fit two doors at £150 each er.`; `Fit two doors at £150 each and er paint three walls at £200 each.`; `Fit two doors at £150 each, like, paint three walls at £200 each.` | A nonleading hesitation preserves the counted object (2 doors), its exact 15000-pence rate, and the separate wall item where said. These fillers introduce neither a new unit nor a qualification. | Before the amount, capture extracts unit `doors at erm` or `doors at er`, while Reader A keeps doors. After `each`, or in the connective to the next item, capture and Reader A clear the door rate; capture changes the count/unit to 1/item. Both paths keep the following wall rate where present. The numeric check does not restore the lost fields. | P1 | open | — |
+| RT-13-F004 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-013, RT-13-014, RT-13-015, RT-13-017, RT-13-018 | `Fit two doors at erm £150 each.`; `Fit two doors at er £150 each.`; `Fit two doors at £150 each er.`; `Fit two doors at £150 each and er paint three walls at £200 each.`; `Fit two doors at £150 each, like, paint three walls at £200 each.` | A nonleading hesitation preserves the counted object (2 doors), its exact 15000-pence rate, and the separate wall item where said. These fillers introduce neither a new unit nor a qualification. | Before the amount, capture extracts unit `doors at erm` or `doors at er`, while Reader A keeps doors. After `each`, or in the connective to the next item, capture and Reader A clear the door rate; capture changes the count/unit to 1/item. Both paths keep the following wall rate where present. The numeric check does not restore the lost fields. | P1 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
 | RT-13-F005 | RT-13 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-13-039–044; seeded capture-measure property | `Fit two doors at up to £150 each.`; also minus/about/at most/a maximum of; seed 0: `In the bedroom two. Fit four doors at minus £96 each. In the kitchen. Paint seven walls at up to eight hundred and thirty two quid each.` | Qualification opens the price, but the explicit count and counted object survive: 2 doors (seed 0: 4 doors and 7 walls). | Capture safely leaves the prices null but replaces each explicit count/unit with default 1/item. Reader A and its numeric check preserve the correct counts and units. This loss occurs even without any filler and differs from F004's changed unit text or lost exact rate. | P1 | fixed | RT-FIX-8; deterministic corpus and focused checks |
 
 RT-13-008/009/010 exercise the existing `RV2-03` single-item prefix fallback with
@@ -1377,6 +1392,110 @@ No application workflow, database, model, prompt, migration or release changes;
 root application builds, database suites, browser tests and live evaluation were
 not run for this test-only lane. No servers, paid APIs, deploy, push or merge.
 Open findings remain unresolved; passing expected-failure tests are not fixes.
+## RT-05 attack receipt — 28 November 2026
+
+Branch `codex/sandbox/rt-05`; local `HEAD_UNDER_TEST` / branch base
+`ac8065af7305d9cc3db110eff4eb38d47248fa51`. Task #1071. The newer plan was read from
+`../lanes-ref/docs/testing/spoken-quote-hardening/README.md` and
+`../lanes-ref/docs/testing/spoken-quote-hardening/lanes/RT-05-speech-realism.md`.
+This is a deterministic transcript attack, not an audio-recognition or deployed-preview test.
+
+The corpus contains **235 distinct transcripts: 76 pass, 159 open-finding**. Open cases by severity:
+**P0 32, P1 127, P2 0**. There are **15 new grouped findings: 4 P0, 11 P1, 0 P2**.
+Of the 159 open cases, 32 reuse existing findings (`RV2-02`: 27, `RV2-03`: 5); the remaining
+127 refer to new RT-05 findings. Every new finding row records the base sha and all its primary
+case IDs. Known grand-price loss (`RT-01-F060`) and lounge-walls room suppression (`RV2-05`)
+are cross-referenced in the affected seed cases. F-005/F-006/F-007/F-008 are not reported again.
+Passing cases have no finding severity; the severity counts above classify open cases.
+
+| New P0 | Cases | Failure |
+| --- | ---: | --- |
+| RT-05-F001 | 8 | A filler before money bypasses upper/lower limits |
+| RT-05-F002 | 8 | A filler before money bypasses hedges |
+| RT-05-F003 | 8 | A filler turns deductions, credits and refunds into positive charges |
+| RT-05-F004 | 8 | A filler after money bypasses trailing qualifiers on capture |
+
+Expectations were authored from the spoken words, including all six normative lane seeds.
+Patterns cover regional discourse, first-language English variants, fillers in different positions,
+number/currency/trade homophone contrasts, trade slang, local room names, all caps/title case,
+glued recogniser tokens and three 25-item quotes without punctuation. Region labels describe
+synthetic word patterns; they do not establish recognition accuracy for a speaker or accent.
+
+Expectation review: cases RT-05-096–099 originally required a null quantity on both paths.
+That was too strict for capture's documented **defaulted one draft line**, which makes no
+extracted physical-count claim. Their corpus checks retain the exact said money/work; separate
+focused checks require Reader A's physical count to stay null and capture's count provenance to
+stay defaulted. No for/to/ate/won word is accepted as an extracted number. RT-05-165 treats
+“wee” as a size adjective and expects Bathroom, consistent with the normative Scots seed.
+These are expectation interpretations, not product findings. All actual price/room/trade/count
+failures retain their word-derived expected values.
+
+The existing corpus runner is unchanged and executes both parsers plus the checked reader.
+The additional 346 focused tests include separate price and question assertions on each of
+capture, the zero-spend fixture gateway, Reader A and checked Reader A for every new P0 case.
+Fluent controls for all 32 disfluent attacks pass on all four paths. Narrow P1 symptom tests
+prevent a remaining secondary mismatch from hiding a repaired trade, room, count or price.
+The focused suite has **251 expected failures and 95 ordinary passes**; unexpected recovery of
+an expected failure fails the suite, as does recovery of any corpus open-finding case.
+
+Commands actually run, Node 24.17.0 / pnpm 10.28.1, all final checks exit 0:
+
+```sh
+pnpm --dir packages/core build
+pnpm --dir packages/ai exec vitest run src/redteam --maxWorkers=2
+pnpm --dir packages/ai typecheck
+pnpm --dir packages/ai lint
+pnpm --dir packages/ai build
+pnpm --dir packages/ai exec vitest run --exclude src/redteam/RT-05-speech-realism.test.ts --testNamePattern '^(?!.*RT-05)' --maxWorkers=2
+pnpm eval --maxWorkers=2
+git diff --check
+```
+
+The initial test invocation could not import the unbuilt core package; building its existing
+entry point resolved that setup issue. Temporary diagnostics were removed before final checks.
+The existing-suite control run (performed after authoring, with RT-05 excluded) reports
+**28 files, 1239 passed, 235 RT-05 cases skipped**. The final full AI/eval run reports
+**29 files, 1569 passed plus 251 expected failures = 1820 tests**, with no skips or unexpected
+failures. The focused red-team run reports **1072 passed plus 251 expected failures**.
+Logs are local only: `/tmp/rt05-baseline-tests.log`, `/tmp/rt05-ai-tests-final.log`.
+
+Existing deterministic SQ-C scores are unchanged at base and final: all product parser,
+number-checker and fixture bytes are unchanged. Both the existing-suite control and final
+full run pass their unchanged gates; scores were also inspected using the built evaluator.
+Held-out room/trade percentages are descriptive, while their existing hard gates require zero
+wrong numbers and zero invented work. Their historic omissions remain visible below.
+
+| Existing set | Wrong numbers / invented work | Rooms right | Trades right | Missed work | Questions |
+| --- | --- | --- | --- | ---: | --- |
+| Main, 30 transcripts | 0 / 0 | 82/82 | 82/82 | 0 | 15/15 |
+| Held-out, 10 transcripts | 0 / 0 | 30/40 | 28/40 | 9 | 7/9 |
+| Held-out 2, 10 transcripts | 0 / 0 | 15/30 | 14/30 | 9 | 2/4 |
+
+No existing golden fixture or evaluation hash was changed. New RT-05 corpus SHA-256:
+`ef9a2ac7a19649aa8266cbd23ad787b0a1b70aa4b4f821da9b6a01543af72b8f`.
+A local integrity check verified 235 unique transcripts, all open-finding references, every new
+finding's exact base sha/case membership, and unchanged parser/number-checker bytes.
+
+Initial source inspection — **LATER / SIMPLICITY**:
+`packages/ai/src/capture-fixture-parser.ts:saidAmountOpen` is already shared by line prices,
+totals and the numeric checker. A later qualifier repair should keep ownership there rather
+than add a separate speech-only price validator; one qualifier policy reduces drift across
+capture and the reader. This is non-blocking and no repair is included here.
+
+Only the corpus, focused tests, findings and `config/lanes/v2-rt-05.json` are included.
+No source, prompt, model, commercial policy, migration or web workflow changed. Root-wide,
+database, migration, browser, native and live-model suites were not run for this scoped test
+addition. No default Playwright config, local server, port 3000/55432, deployment, remote push,
+paid provider or real customer data was used. `.pnpm-store/` remains untracked and excluded.
+These results are test-executed evidence; independent review, acceptance and release are not claimed.
+
+Lane validation: the existing `mergeLanePolicy`, `selectLane` and `lanePathAllowed` helpers
+pass RT-05's own lane shape, exact branch and all four intended paths. Loading the entire
+repository lane policy fails on the pre-existing `config/lanes/v2-rt-12.json`, which grants a
+lane-register path forbidden by the current checker. That file is byte-identical to the base
+and outside this attack's allow-list; it was not changed. A repository-wide lane pass is
+therefore not claimed. The Git index for this linked worktree is outside the writable
+workspace; staging/committing the four authorized files requires filesystem escalation only.
 ## RT-FIX-5 repair round 1 — Codex review of PR #1085 at ac8065af
 
 Base `ac8065af`, branch `codex/sandbox/rt-fix-5`. Both reported money/loss paths are repaired locally:
@@ -1817,6 +1936,62 @@ deterministic checks, not independent review or live-model accuracy evidence.
 Independent RED review against the committed head remains required before merge.
 Commit only; no push, merge or deployment. `.pnpm-store/` remains untracked and
 is excluded from the commit.
+### RT-06 limits and noise attack (#1071, 28 Nov 2026)
+
+HEAD_UNDER_TEST (this branch's base): `ac8065af7305d9cc3db110eff4eb38d47248fa51`.
+Expectations were specified from the source words before running the cases. Existing F-005–F-008
+and already documented findings are excluded from the new rows. In particular, the known single
+item after a title fallback and the intentional open-price guard for format characters inside a
+clause are not reported again.
+
+For the generated inputs below, `F(s) = s.repeat(Math.ceil(49970 / s.length)).slice(0, 49970)`;
+concatenation is literal JavaScript string concatenation. Unicode escapes identify the original
+code units, not replacements made before parsing. All inputs are synthetic and all timings are
+local Node 24.17.0 measurements, not CI performance certification.
+
+| ID | Lane | Head sha | Case id | Transcript / input | Expected | Actual | Sev | Status | Fix PR |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RT-06-F001 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | RT-06-057–060 | `Fit the latch for £1\u030150.`, `Fit the latch for £1\u000050.`, `Fit the latch for £1\ud80050.`, `Fit the latch for £1\udfff50.` (escapes denote one combining mark, NUL, lone high surrogate or lone low surrogate) | One open latch line, a price question, no fixed 100/5000/15000 pence: a corrupted literal cannot prove any exact price | Capture keeps **100 pence (£1)** with a citation ending before the corruption. Reader A and the checked reader safely leave the price null. Four cases share the unrecognised non-format-character money boundary defect | P0 | fixed | RT-FIX-9 (#1071); deterministic corpus and focused checks |
+| RT-06-F002 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: RT-06-078 (corpus semantic assertions pass) | `'Fit the latch for £25.'.padEnd(50000, ' ')` | Both readers <1000 ms; each regex call <50 ms; same intact £25 item at the exact request limit | Full-suite capture **2612.5 ms**, Reader A **2095.5 ms**. Separate uninstrumented run: 1350.5/1257.9 ms. Slowest profiled regex: `suggestCapturePartyClause`'s for/name/at matcher in `packages/core/src/capture.ts`, **1346.6 ms max**, 2579.3 ms summed across two calls. Trailing whitespace drives expensive unsuccessful party matching | P1 | open | — |
+| RT-06-F003 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: number-words | `'Fit panel ' + F('one hundred and ') + ' end'` (49984 code units) | Each reader <1000 ms and every regex call <50 ms, including unsuccessful number-word matches | Full-suite capture **1000.6 ms**, Reader A **1023.6 ms**. `capture-fixture-parser.ts:spokenAmount` **166.2 ms max** (288.2 ms cumulative); `wholeJobTail` **155.8 ms max** (278.4 ms cumulative). Initial lower-load run also exceeded the regex limit: 122.9/120.5 ms. `priceCondition` had 642.2 ms cumulative across 6246 calls, with no >50 ms individual call | P1 | open | — |
+| RT-06-F004 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: comma-digits | `'Fit panel £' + F('1,111,') + 'x'` (49982 code units) | Each reader <1000 ms; each regex call <50 ms; malformed money stays safe without blocking processing | Full-suite capture **5214.5 ms**, Reader A **5061.7 ms**. Native isolated exec of the current AST's unchanged `capture-fixture-parser.ts:wholeJobTail` initializer took **2076.0 ms**. Other isolated regexes: spokenAmount 0.69 ms, priceLiteral 0.57 ms, fractionOrRange 0.38 ms. Full-parser profiling was stopped by its diagnostic 40 s watchdog; those partial profiling results are not treated as native timings | P1 | open | — |
+| RT-06-F005 | RT-06 | ac8065af7305d9cc3db110eff4eb38d47248fa51 | perf: and-chain | `'Fit panel ' + F('and ') + ' end'` (49984 code units) | Each reader <1000 ms on a repeated recogniser filler; no repeated full-suffix work that exceeds the budget | Full-suite capture **2308.9 ms**, Reader A **2274.2 ms**; initial run 1564.3/1679.6 ms. Slowest cumulative regexes across the two instrumented readers: `priceCondition` **1808.8 ms / 24984 calls**, `spokenCorrection` **1210.0 ms / 24985 calls**, invisible-format recognition **684.6 ms / 87482 calls**. Individual maxima 1.24/1.95/0.83 ms: the defect is repeated scans, not one long regex call | P1 | open | — |
+
+Coverage and validation:
+
+- Corpus: **78 cases; 74 pass, 4 open P0 cases** linked to RT-06-F001. Includes noise-only input,
+  200 repeated fillers, Welsh/Polish/combining/emoji labels, CRLF/tabs/Unicode separators, NUL and lone
+  surrogates, corrupted money, 99/100 distinct items, exactly 1500/4500/9000-word notes, and 50000
+  code units. Empty and over-limit strings use focused tests because the shared corpus schema
+  requires nonempty transcripts and its assertions expect parser output rather than clean refusal.
+- Focused checks: **25 pass**. Both request source kinds accept 49999/50000 and reject 50001;
+  overlong raw local recognition is rejected independently of edited text. Silent sources get the
+  typed capture refusal. Both readers keep all 100 distinct items or refuse 101 with
+  `FIXTURE_STRUCTURE_REQUIRED`; there is no partial result. Fixture-gateway and Reader A citations
+  retain original source code units. These are package checks, not browser-message or database
+  persistence verification.
+- Performance: **10 cases; 6 pass, 4 open P1 cases**, each with its finding ID in the test name.
+  Long 1500/4500/9000-word notes passed (capture 5.7/23.2/81.7 ms; reader 23.2/42.9/108.5 ms).
+  Between-chains, room chains and hyphenated number noise passed. Timings exclude worker imports
+  and profiling. A terminable worker and 15 s watchdog bound runaway synchronous work.
+  Open cases assert a real budget violation remains; worker import/runtime errors still fail.
+- **113 RT-06 checks overall: 105 pass / 8 open**. Open-case severity: **P0 4, P1 4, P2 0**.
+  Unique new findings: **P0 1, P1 4, P2 0**. P0 list: **RT-06-F001**.
+- After building the missing generated core dependency with `pnpm --filter @jobguard/core build`,
+  `pnpm --filter @jobguard/ai test --maxWorkers=2` passed **30 files / 1352 tests**, including the
+  open-finding guard assertions. AI `typecheck` and `build` passed. No source, migrations, model,
+  prompt, live provider, browser, database, deployment or demo service was changed or exercised.
+- `node tools/agent-lane-boundary-lint.mjs --lane=v2-rt-06` is blocked by the existing invalid
+  self-grant in `config/lanes/v2-rt-12.json`. An isolated call to the existing `mergeLanePolicy` and
+  `lanePathAllowed` functions accepts the RT-06 file, exact branch and all six intended paths,
+  and rejects parser-source, another lane and `.pnpm-store` paths. The unrelated lane is untouched.
+
+LATER / SIMPLICITY (initial review only): `packages/ai/src/capture-fixture-parser.ts:plainDraft`
+repeatedly prepares and scans the same suffix for several separator checks. Prepare the candidate
+suffix once per separator and reuse it within that iteration while retaining original offsets.
+This keeps one splitter and one source-coordinate scheme, reduces duplicate recognition work,
+and makes future separator changes easier to maintain. This suggestion is not a gate or a source
+change in this attack lane.
 
 ## RT-FIX-8 repair round 2 (last) — Codex review of #1102 at 990d7e6e
 
@@ -1859,3 +2034,190 @@ synthetic deterministic checks, not independent review or live-model evidence.
 Independent RED review of the new exact head remains required before merge.
 Commit only; no push, merge or deployment. `.pnpm-store/` stays untracked and is
 excluded from the commit.
+
+## RT-FIX-9 repair receipt — 28 November 2026
+
+Branch `codex/sandbox/rt-fix-9`, starting implementation head `6cd336f00`.
+The requested RT-05 (`b84826fd`), RT-06 (`b45e3927`) and RT-FIX-8 repair-2
+(`7d5ee9e8`, merged at `6cd336f00`) merges were already committed. No conflicts
+remained. All 508 primary finding rows are retained with unique IDs; status and
+repair references were updated only for fully repaired findings.
+
+The existing `saidAmountOpen` remains the single amount-safety guard. A shared,
+same-length comparison copy masks speech fillers and surrounding pause commas;
+qualifiers still run in their original places. Source transcripts, amounts and
+UTF-16 citation offsets are untouched. Real `like-for-like`, `would like` and
+`like new` remain readable. `or so` remains a hedge, and original `I mean`
+corrections retain their safety check. Leading work/count recognition and rate
+tails use the same filler vocabulary. Filler-only incidental chunks use the
+existing incidental-chat filter. The RT-FIX-3 corrupted-literal alternative now
+includes combining marks, NUL and lone surrogates, so exact-rate parsing rejects
+the entire damaged amount rather than accepting its £1 prefix. Combining marks
+in ordinary names are preserved and do not invalidate a clean price.
+
+Corpus counts (pass/open within each severity; clean controls have no severity):
+
+| Lane | Total pass before → after | P0 pass/open before → after | P1 pass/open before → after | P2 pass/open before → after | Ungraded pass |
+| --- | ---: | --- | --- | --- | ---: |
+| RT-05 | 76 → 115 | 0/32 → 32/0 | 0/127 → 7/120 | 0/0 → 0/0 | 76 |
+| RT-06 | 74 → 78 | 0/4 → 4/0 | 0/0 → 0/0 | 0/0 → 0/0 | 74 |
+| RT-13 | 31 → 41 | 0/5 → 5/0 | 9/8 → 14/3 | 0/0 → 0/0 | 22 |
+
+Open totals: RT-05 159 → 120, RT-06 4 → 0, RT-13 13 → 3. All 41 targeted
+P0 corpus cases now pass. Additional recoveries close RT-05-F009 and all five
+RT-13-F004 cases; partial P1 recoveries leave their grouped findings open.
+Corpus expectations are byte-for-byte unchanged; only status tokens changed.
+Focused test changes only promote expected failures to ordinary passing tests.
+**RT-06-F005 remains open with its exact original test status and finding row,
+reserved for RT-FIX-10.** No earlier-fix “now passes” cases appeared in the
+rebuilt-core baseline.
+
+Initial full `pnpm eval --maxWorkers=2` used stale compiled core output and
+reported 8 failures, 2,367 passes and 264 expected failures (2,639 total).
+Rebuilding the existing core package removed three household regressions.
+The rebuilt-core pre-fix full eval had **4 failures, 2,371 ordinary passes and
+264 expected failures = 2,639 tests in 37 files**. Its failures were the
+RT-06-078 corpus default timeout and existing performance budgets for
+between-chain, room-chain and hyphen-words. A separate initial run also observed
+RT-06-077 over its 1-second budget. These are measured failures, not expected
+failures or authorization to weaken timing assertions.
+
+Validation commands and final results are recorded below.
+No database, browser, live model, provider, fee policy or deployment change.
+These are deterministic fixture checks, not independent RED review or release
+approval. Commit only; no push. `.pnpm-store/` is excluded.
+
+LATER / SIMPLICITY — initial review: `packages/ai/src/capture-fixture-parser.ts`
+and `packages/ai/src/context-reader.ts` each recognize their own rate-tail
+variants. A later bounded change could share the rate-tail interpretation while
+keeping each existing safety guard in its current owner; this would reduce
+maintenance drift between the two readers. This does not block RT-FIX-9.
+
+Commands actually executed for this repair (Node 24.17.0 / pnpm 10.28.1):
+
+```sh
+pnpm --filter @jobguard/core build
+pnpm --filter @jobguard/core typecheck
+pnpm --filter @jobguard/core lint
+pnpm --filter @jobguard/ai typecheck
+pnpm --filter @jobguard/ai lint
+pnpm --filter @jobguard/ai build
+pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts src/redteam/RT-05-speech-realism.test.ts src/redteam/fuzz.test.ts src/redteam/limits-and-noise.test.ts src/capture-qualified-price.test.ts --maxWorkers=2
+pnpm eval --maxWorkers=2
+pnpm eval --maxWorkers=2 --no-file-parallelism
+node --experimental-transform-types /tmp/rt-fix-9-matrix.mjs
+git diff --check
+```
+
+All six package typecheck/lint/build commands passed (core has no source change).
+The temporary, uncommitted matrix passed **872 path checks** through capture,
+fixture gateway, reader and checked reader, plus real-word `like` contrasts in
+both full and leading-only comparison modes. It includes all nine filler forms,
+pause commas, limits, hedges, deductions, all trailing qualifier forms, `yeah so`,
+`or er so`, interior phrase fillers, the preserved BOM guard, and combining mark,
+NUL, lone high/low surrogate and zero-width corruptions at each internal amount
+position. It checks source-string spans and clean per-item counts/rates.
+
+The scoped lane validation passed using the existing `mergeLanePolicy`,
+`selectLane` and `lanePathAllowed` functions: nine changed paths are allowed,
+other lane files are rejected, and there is no grant to `config/lanes/`.
+The aggregate `loadLanePolicy` check is blocked by the existing
+`config/lanes/v2-rt-12.json` grant to the lane register. That unrelated file is
+outside this task's allow-list and was not changed. Independent exact-head RED
+review and the full-eval gate remain separate from these deterministic checks.
+
+
+Final full eval on the final source, `pnpm eval --maxWorkers=2
+--no-file-parallelism`: **5 failures, 2,593 ordinary passes, 41 declared expected
+failures = 2,639 tests in 37 files; 35 files pass, 2 fail**. There are no skips.
+All five failures are timing checks also observed before the repair:
+RT-06-078's 5-second corpus harness timeout, plus RT-06-077, between-chain,
+room-chain and hyphen-words exceeding their explicit 1-second reader budget.
+Two earlier post-fix full runs recorded 3 and 2 timing failures respectively;
+that variation is not evidence of a fix. No timeout, budget assertion, expected
+value or performance test status was changed. **The required full-eval green
+gate is NOT met; this commit must retain that validation hold.** In particular,
+RT-06-F005's unchanged expected-open check still behaves as declared.
+
+The separate unchanged `capture-qualified-price.test.ts` run passed **19/19**:
+`pnpm --filter @jobguard/ai exec vitest run src/capture-qualified-price.test.ts
+--maxWorkers=2`. Final local logs: `/tmp/rt-fix-9-eval-baseline.log`,
+`/tmp/rt-fix-9-eval-final.log`, `/tmp/rt-fix-9-qualified-final.log`,
+`/tmp/rt-fix-9-matrix.log`. Logs and the temporary matrix are not committed.
+
+The separate complete semantic corpus run passed **1,567/1,567 tests**, covering
+all **1,520 corpus cases** and 47 runner checks:
+`pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts
+--maxWorkers=2 --testTimeout=20000`. The 20-second CLI harness timeout lets the
+unchanged 50,000-character case finish its semantic assertions; it does not
+replace the failed standard full eval or alter the dedicated 1-second performance
+assertions. This is semantic evidence only. Log:
+`/tmp/rt-fix-9-corpus-final.log`.
+
+
+## RT-FIX-8 follow-up, fixed in RT-FIX-9
+
+Codex review P2 of #1102 at `capture-fixture-parser.ts:awaitingCorrection`,
+implemented as a follow-up to `f2e1255b8` on `codex/sandbox/rt-fix-9`.
+
+| Finding | Severity | Corpus cases | Repair |
+| --- | --- | --- | --- |
+| RT-FIX-8-P2-01 | P2 | RT-03-233, RT-03-234 | A bare-number replacement (`600`) or count correction (`3`) now ends the correction wait before the next explicit work item. The corrected line stays open with the correction question; the separate doors/hall line keeps its own £200/£300 price. |
+
+`plainDraft` reuses the existing number-token vocabulary rather than requiring a
+currency amount to end the wait. This only permits the existing shared item
+boundary to split: it never applies the replacement number. Capture, Reader A
+and `checkSpokenNumbers` retain the same correction chunks and targets; there
+is no second boundary implementation. No changes to context-reader or core
+source were needed. The initial RT-FIX-9 LATER / SIMPLICITY note above is retained.
+
+Both added cases first failed through all three corpus paths (one swallowed
+item each), then passed after the fix. Their expectations require exactly two
+lines, the original and replacement prices to remain absent on the corrected
+line, its correction question, and the following item's exact price; the count
+case also requires an unresolved quantity. Existing cases and expectations are
+unchanged. Only the parser implementation hash changes in `golden-run.v1.json`.
+
+Validation (Node 24.17.0 / pnpm 10.28.1):
+
+```sh
+pnpm --filter @jobguard/core build
+pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2 -t 'RT-03-23[34]'
+pnpm eval --maxWorkers=2
+pnpm eval --maxWorkers=2 --no-file-parallelism
+pnpm --filter @jobguard/core typecheck
+pnpm --filter @jobguard/core lint
+pnpm --filter @jobguard/core build
+pnpm --filter @jobguard/ai typecheck
+pnpm --filter @jobguard/ai lint
+pnpm --filter @jobguard/ai build
+pnpm --filter @jobguard/core test --maxWorkers=2
+git diff --check
+```
+
+- Core was rebuilt before the post-fix tests. All six package
+  typecheck/lint/build commands passed. Core tests: **4,895/4,895**, 232 files.
+- New cases: **2/2 pass** after the fix (both failed before it).
+- Every corpus case ran in both full evals: **1,569/1,569 corpus-suite tests**,
+  comprising **1,522 cases** (1,144 pass, 378 declared open findings) plus 47
+  runner checks. RT-03 is **158 pass / 0 open**. No existing status was changed.
+- Both full evals returned **2 unexpected failures, 2,598 ordinary passes,
+  41 expected failures = 2,641 tests in 37 files** (36 files pass, 1 fails;
+  no skips). Both failures are in the existing `redteam/perf.test.ts`:
+  `between-chain` exceeds the 1-second reader budgets, and `hyphen-words`
+  exceeds the 50-millisecond regex budget (also the reader budget in the serial
+  run). The serial run measured 1,170/1,562 ms for between-chain capture/reader
+  and a 560 ms maximum regex call for hyphen-words. These failures were already
+  recorded in the preceding RT-FIX-9 receipt. No performance threshold, test
+  expectation or expected-failure status was weakened. **The requested full
+  eval gate of zero unexpected failures is NOT met; the validation hold remains.**
+- Scope and hash checks passed: four allowed files changed, existing corpus
+  entries identical, exactly two cases added, golden-run changed only at the
+  parser implementation hash. No database migration, web workflow, provider,
+  live-model, release or deployment change. These are deterministic checks,
+  not independent RED review. Commit only; no push; `.pnpm-store/` excluded.
+
+Local logs: `/tmp/rt-fix-9-followup-red.log`,
+`/tmp/rt-fix-9-followup-green.log`, `/tmp/rt-fix-9-followup-eval.log`,
+`/tmp/rt-fix-9-followup-eval-serial.log`,
+`/tmp/rt-fix-9-followup-core-tests.log`.

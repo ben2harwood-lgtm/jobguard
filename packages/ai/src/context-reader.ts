@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceDescription, rateAfter, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceDescription, rateAfter, priceCondition, saidAmountOpen, speechComparison, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -262,7 +262,7 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     if (candidates.length === 1 && candidates[0]!.pence !== null && !open(candidates[0]!)) {
       const found = candidates[0]!;
       const tail = value.slice(found.at + found.text.length);
-      const after = tail.replace(/^[\s,]+/u, " ");
+      const after = speechComparison(tail).replace(/^[\s,]+/u, " ").trimEnd();
       const whole = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
       const per = whole ?? perAnyAfter.exec(after);
       const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
