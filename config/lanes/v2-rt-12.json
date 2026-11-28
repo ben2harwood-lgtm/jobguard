@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-12": {
+      "branches": ["codex/sandbox/rt-12"],
+      "note": "RT-12 attack only: 20 typed quote journeys at 360x740 and 1280x740 on hosted Worker d7b174a0, head b25b5ee9. Fictional own practice firms; no deploy or push. Existing staged planning files are retained by user instruction.",
+      "allow": [
+        "apps/web/e2e/RT-12-right-place.spec.ts",
+        "apps/web/playwright.hosted.config.ts",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "config/lanes/v2-rt-12.json"
+      ]
+    }
+  }
+}

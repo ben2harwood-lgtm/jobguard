@@ -6,7 +6,7 @@ const baseURL = process.env.JOBGUARD_HOSTED_URL;
 if (!baseURL) throw new Error("Set JOBGUARD_HOSTED_URL to the exact address that will be shared.");
 
 export default defineConfig({
-  testDir: "./e2e", testMatch: ["HOSTED-preview-firm-start.spec.ts", "SPOKEN-QUOTE-REAL.spec.ts"], fullyParallel: false, workers: 1, retries: 0,
+  testDir: "./e2e", testMatch: ["HOSTED-preview-firm-start.spec.ts", "SPOKEN-QUOTE-REAL.spec.ts", "RT-12-right-place.spec.ts"], fullyParallel: false, workers: 1, retries: 0,
   expect: { timeout: 30_000 },
   use: { baseURL, trace: "retain-on-failure" },
   projects: [
