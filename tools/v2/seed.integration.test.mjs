@@ -2123,7 +2123,11 @@ test("AUTH-1 the linked builder adds a progress photo and completes the stage; r
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.job_proof_statement WHERE job_id = $1", [jobId])).rows[0].n, 0);
 });
 
-test("AUTH-1 a revoked linked session is refused on read, write and replay, and nothing is written", async () => {
+// Revocation and expiry are separate cases: linked_practice_authority checks both on the credential.
+for (const [name, column, broken, restored] of [
+  ["revoked", "revoked_at", () => new Date(), () => null],
+  ["expired", "expires_at", () => new Date(Date.now() - 60_000), original => original],
+]) test(`AUTH-1 a linked session that is ${name} is refused on read, write and replay, and nothing is written`, async () => {
   const { jobId, scopeItemId } = await pxLiveJob();
   const builder = await signIn("builder");
   const select = auth1Command("select_generated", { scopeItemId, fixture: "completion-photo" });
@@ -2134,18 +2138,20 @@ test("AUTH-1 a revoked linked session is refused on read, write and replay, and 
     (SELECT count(*)::int FROM app.stage_completion WHERE job_id = $1) AS completions,
     (SELECT count(*)::int FROM app.audit_event WHERE subject_ref = $1::text AND event_type LIKE 'v2.proof.%') AS events`, [jobId])).rows[0];
   const before = await counts();
-  // Test administrator fixture: revoke the builder's linked credential, then restore it for the later cases.
+  // Test administrator fixture: break the builder's linked credential, then restore it for the later cases.
   const digest = auth1Digest(builder.sessionId);
-  const revoke = at => auth1Fixture("UPDATE control_plane.practice_session SET revoked_at = $2 WHERE token_digest = $1", [digest, at]);
-  await revoke(new Date());
+  const { rows: [credential] } = await admin.query(`SELECT ${column} AS value FROM control_plane.practice_session WHERE token_digest = $1`, [digest]);
+  const set = value => auth1Fixture(`UPDATE control_plane.practice_session SET ${column} = $2 WHERE token_digest = $1`, [digest, value]);
+  await set(broken());
   try {
-    assert.ok([401, 403].includes((await request(`/api/jobs/${jobId}/proof`, { cookies: builder.cookies })).status));
+    assert.ok([401, 403].includes((await request(`/api/jobs/${jobId}/proof`, { cookies: builder.cookies })).status), "the read is refused");
     assert.ok([401, 403].includes((await auth1Post(jobId, builder, select)).status), "the replay is refused");
+    await assert.rejects(v2Proof.get(jobId), error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code));
     await assert.rejects(v2Proof.command(jobId, select), error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code));
     await assert.rejects(v2Proof.command(jobId, auth1Command("select_generated", { scopeItemId, fixture: "j3-drainage-photo" })),
-      error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code));
+      error => ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code), "a new write is refused");
     assert.deepEqual(await counts(), before, "nothing written");
-  } finally { await revoke(null); }
+  } finally { await set(restored(credential.value)); }
   assert.equal((await auth1Post(jobId, builder, select)).status, 200, "restored for the later cases");
 });
 
