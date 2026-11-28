@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-trp08u-g4"
       ],
-      "note": "RED Q63 V2-G4 who can read the handover pack: the builder stops a link, a link sent to an earlier customer contact stops opening, newer-version ignores stopped releases, another firm sees nothing. Migration 2084 (number from the V2 register). Base claude/project-thread-trp08u-g3 (G3 #999). G4 mounts, owned by G3 #999: packages/db/src/v2-handover-release-repository.ts (stop(), releases() stoppedAt and recipientCurrent), apps/api/src/workspace/handover-release.application.ts (stop body on the same command, one status line), apps/web/app/ui/v2-handover-release.tsx (Stop this link and Release to the current customer), apps/web/app/ui/v2-handover-release-label.tsx and its test (G4 helpers), tools/v2/handover-release.browser.test.mjs (one 360 px case). G4 mounts, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2083; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_release_stop.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs own appended cases.",
+      "note": "RED Q63 V2-G4 who can read the handover pack: the builder stops a link, a link sent to an earlier customer contact stops opening, newer-version ignores stopped releases, another firm sees nothing. Migration 2084 (number from the V2 register). Base claude/project-thread-trp08u-g3 (G3 #999). G4 mounts, owned by G3 #999: packages/db/src/v2-handover-release-repository.ts (stop(), releases() stoppedAt and recipientCurrent), apps/api/src/workspace/handover-release.application.ts (stop body on the same command, one status line), apps/web/app/ui/v2-handover-release.tsx (Stop this link and Release to the current customer), apps/web/app/ui/v2-handover-release-label.tsx and its test (G4 helpers), tools/v2/handover-release.browser.test.mjs (one 360 px case). G4 mounts, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2083; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_release_stop.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs own appended cases. G4 mount, owned by the V2 launcher: packages/db/src/v2-local-catcher.ts one invented address (replacement@jobguard-v2.invalid), the changed customer of the G4 case (Q78).",
       "allow": [
         "apps/api/src/workspace/handover-release.application.test.ts",
         "apps/api/src/workspace/handover-release.application.ts",
@@ -19,7 +19,8 @@
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/handover-release.browser.test.mjs",
-        "tools/v2/seed.integration.test.mjs"
+        "tools/v2/seed.integration.test.mjs",
+        "packages/db/src/v2-local-catcher.ts"
       ]
     }
   }
