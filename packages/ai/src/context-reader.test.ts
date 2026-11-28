@@ -84,6 +84,19 @@ describe("V2-SQ-C Reader A", () => {
     expect(readSpokenJob("g", "Tile the floor. Six grand for the whole job.").wholeJobPrice?.pence).toBe(600000);
   });
 
+  it("two different totals for one room, or for the whole job, offer neither and ask which applies", () => {
+    const room = readSpokenJob("t", "In the bathroom tile the floor. Bathroom all in 500 pounds. Bathroom all in 600 pounds.");
+    expect(room.areaPrices).toEqual([]);
+    expect(room.questions.some(question => /^You said more than one price for bathroom\. Check which applies\.$/iu.test(question.text)
+      && question.areaKey === "bathroom"), JSON.stringify(room.questions)).toBe(true);
+    const same = readSpokenJob("s", "In the bathroom tile the floor. Bathroom all in 500 pounds. Bathroom all in 500 pounds.");
+    expect(same.areaPrices.map(price => price.pence)).toEqual([50000]);
+    const whole = readSpokenJob("w", "Tile the floor. 900 pounds for the whole job. Paint the walls. 1200 pounds for the whole job.");
+    expect(whole.wholeJobPrice).toBeNull();
+    expect(whole.questions.some(question => question.text.startsWith("You said more than one whole-job price"))).toBe(true);
+    expect(readSpokenJob("v", "Tile the floor. 900 pounds for the whole job. Paint the walls. 900 pounds for the whole job.").wholeJobPrice?.pence).toBe(90000);
+  });
+
   it("line prices and room and whole-job totals call one guard function, saidAmountOpen, and nothing else", () => {
     const parser = readFileSync(new URL("./capture-fixture-parser.ts", import.meta.url), "utf8");
     const reader = readFileSync(new URL("./context-reader.ts", import.meta.url), "utf8");

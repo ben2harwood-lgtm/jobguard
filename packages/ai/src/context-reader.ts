@@ -480,6 +480,7 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   }
   const areaPrices: JobUnderstanding["areaPrices"] = [];
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
+  let wholeJobConflict = false;
   for (const price of priced) {
     if (price.pence === null) { questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue; }
     const provenance = { kind: "extracted" as const, span: { sourceId, sourceVersion: 1 as const, start: price.start, end: price.end } };
@@ -491,7 +492,21 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
       areaPrices.push({ areaKey: key, pence: price.pence, provenance });
     } else if (room) areaPrices.push({ areaKey: room.key, pence: price.pence, provenance });
     else if (!wholeJobPrice) wholeJobPrice = { pence: price.pence, provenance };
-    else questions.push({ text: `You said more than one whole-job price (“${price.text.slice(0, 200)}”). Check which applies.` });
+    else if (wholeJobPrice.pence !== price.pence) {
+      // Two different whole-job figures: neither is offered; the builder says which applies.
+      wholeJobConflict = true;
+      questions.push({ text: `You said more than one whole-job price (“${price.text.slice(0, 200)}”). Check which applies.` });
+    }
+  }
+  if (wholeJobConflict) wholeJobPrice = null;
+  // Two different totals for one room ("Bathroom all in 500 pounds. Bathroom all in 600 pounds."): neither is offered.
+  // The same figure said twice is kept once.
+  for (const key of new Set(areaPrices.map(price => price.areaKey))) {
+    const said = areaPrices.filter(price => price.areaKey === key);
+    if (said.length < 2) continue;
+    const keep = new Set(said.map(price => price.pence)).size === 1 ? [said[0]!] : [];
+    if (!keep.length) questions.push({ text: `You said more than one price for ${areas.find(area => area.key === key)?.name.value ?? key}. Check which applies.`.slice(0, 500), areaKey: key });
+    areaPrices.splice(0, areaPrices.length, ...areaPrices.filter(price => price.areaKey !== key || keep.includes(price)));
   }
   for (const note of draft.notes) if (/^Confirm timing/u.test(note)) questions.push({ text: note.slice(0, 500) });
   const firstStart = text.length - text.trimStart().length;
