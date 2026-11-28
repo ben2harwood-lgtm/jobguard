@@ -1,0 +1,3556 @@
+[
+  {
+    "id": "RT-03-101",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, wait, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "wait, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-102",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, hang on, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "hang on, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F001"
+  },
+  {
+    "id": "RT-03-103",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, nah, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "nah, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-104",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, nope, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "nope, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-105",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, I meant £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "I meant £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-106",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, that should be £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "that should be £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-107",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, change the price to £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "change the price to £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-108",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, replace that price with £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "replace that price with £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F002"
+  },
+  {
+    "id": "RT-03-109",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, forget that price, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "forget that price, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-110",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, scrap that figure, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "scrap that figure, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-111",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, correction, £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "correction, £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-112",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, on second thoughts £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "on second thoughts £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-113",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, let's say £275",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "let's say £275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-114",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, make it £275 instead",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "make it £275 instead"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F003"
+  },
+  {
+    "id": "RT-03-115",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, it is £275, not £320",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "it is £275, not £320"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-116",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, £275 rather than £320",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "£275 rather than £320"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-117",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, sorry, £0",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            0,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "sorry, £0"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-118",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, actually £0.01",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            1,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "actually £0.01"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-119",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, wait, £32.50",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            3250,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "wait, £32.50"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-120",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, hang on, £1,275.99",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            127599,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "hang on, £1,275.99"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F004"
+  },
+  {
+    "id": "RT-03-121",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, no, two hundred and seventy five pounds",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "no, two hundred and seventy five pounds"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-122",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, actually two hundred and seventy five quid",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "actually two hundred and seventy five quid"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-123",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, sorry, I mean two hundred pounds and fifty pence",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            20050,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "sorry, I mean two hundred pounds and fifty pence"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-124",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £320, or rather ninety nine pounds and ninety nine pence",
+    "why": "M5: retract the first handrail price; one corrected/open line and a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            9999,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        32000
+      ],
+      "questionsInclude": [
+        "or rather ninety nine pounds and ninety nine pence"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-125",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no £280, actually £310",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": [
+            31000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        28000
+      ],
+      "questionsInclude": [
+        "£310"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-126",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no £280, sorry back to £260",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": [
+            26000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        28000
+      ],
+      "questionsInclude": [
+        "back to £260"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-127",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no £280, wait leave the price open",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        28000
+      ],
+      "questionsInclude": [
+        "leave the price open"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-128",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, scratch that figure, price to follow",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "price to follow"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-129",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no, that figure is a credit",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "credit"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F005"
+  },
+  {
+    "id": "RT-03-130",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually knock £20 off that",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        2000,
+        24000
+      ],
+      "questionsInclude": [
+        "knock £20 off"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-131",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually add £20 to that",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        2000,
+        28000
+      ],
+      "questionsInclude": [
+        "add £20"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-132",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no, that was euros",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "euros"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F006"
+  },
+  {
+    "id": "RT-03-133",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually up to £310",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        31000
+      ],
+      "questionsInclude": [
+        "up to £310"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-134",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually between £280 and £310",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        28000,
+        31000
+      ],
+      "questionsInclude": [
+        "between £280 and £310"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-135",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually £310 if the scaffold is there",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        31000
+      ],
+      "questionsInclude": [
+        "if the scaffold"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-136",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no, £310 less ten percent",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        31000,
+        27900
+      ],
+      "questionsInclude": [
+        "ten percent"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-137",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, sorry I cannot give a figure yet",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "cannot give a figure"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F007"
+  },
+  {
+    "id": "RT-03-138",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, no, do not use that amount",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "do not use"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F008"
+  },
+  {
+    "id": "RT-03-139",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually £310 plus VAT",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": [
+            31000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000,
+        37200
+      ],
+      "questionsInclude": [
+        "£310"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-140",
+    "lane": "RT-03",
+    "transcript": "Replace the gutter £260, actually £310 labour only",
+    "why": "M2/M3/M5: a retraction, conditional replacement or changed currency must not revive an old fixed price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the gutter",
+          "unitPricePence": [
+            31000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        26000
+      ],
+      "questionsInclude": [
+        "£310"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-141",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180. Wait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F009"
+  },
+  {
+    "id": "RT-03-142",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180. Scratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F010"
+  },
+  {
+    "id": "RT-03-143",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180; Wait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F011"
+  },
+  {
+    "id": "RT-03-144",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180; Scratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F012"
+  },
+  {
+    "id": "RT-03-145",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180! Wait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F013"
+  },
+  {
+    "id": "RT-03-146",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180! Scratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F014"
+  },
+  {
+    "id": "RT-03-147",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180\nWait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F015"
+  },
+  {
+    "id": "RT-03-148",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180\nScratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F016"
+  },
+  {
+    "id": "RT-03-149",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180\n\nWait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F017"
+  },
+  {
+    "id": "RT-03-150",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180\n\nScratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F018"
+  },
+  {
+    "id": "RT-03-151",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180 — Wait, the handrail price should be £295",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": [
+            29500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "£295"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-152",
+    "lane": "RT-03",
+    "transcript": "Fit the handrail for £180 — Scratch the handrail price; leave it unpriced",
+    "why": "M5/S1: correction across a sentence or transcript break belongs to the same handrail.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handrail",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        18000
+      ],
+      "questionsInclude": [
+        "unpriced"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F019"
+  },
+  {
+    "id": "RT-03-153",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Actually the first price should be £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F020"
+  },
+  {
+    "id": "RT-03-154",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Change the first item to £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F021"
+  },
+  {
+    "id": "RT-03-155",
+    "lane": "RT-03",
+    "transcript": "Tile the splashback £240. Fit the tap £160. Actually the first price should be £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the splashback",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the tap",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F022"
+  },
+  {
+    "id": "RT-03-156",
+    "lane": "RT-03",
+    "transcript": "Tile the splashback £240. Fit the tap £160. Change the first item to £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the splashback",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the tap",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F023"
+  },
+  {
+    "id": "RT-03-157",
+    "lane": "RT-03",
+    "transcript": "Lay the carpet £240. Paint the ceiling £160. Actually the first price should be £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay the carpet",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F024"
+  },
+  {
+    "id": "RT-03-158",
+    "lane": "RT-03",
+    "transcript": "Lay the carpet £240. Paint the ceiling £160. Change the first item to £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay the carpet",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F025"
+  },
+  {
+    "id": "RT-03-159",
+    "lane": "RT-03",
+    "transcript": "Fit the basin £240. Hang the gate £160. Actually the first price should be £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the basin",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F026"
+  },
+  {
+    "id": "RT-03-160",
+    "lane": "RT-03",
+    "transcript": "Fit the basin £240. Hang the gate £160. Change the first item to £275",
+    "why": "M5/S1: correction targets the first work item and must preserve the independent second price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the basin",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 16000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass",
+    "finding": "RT-03-F027"
+  },
+  {
+    "id": "RT-03-161",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240, no, paint the fence for £275",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F028"
+  },
+  {
+    "id": "RT-03-162",
+    "lane": "RT-03",
+    "transcript": "Fit the gate £310, sorry, fit the gate £290 instead",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the gate",
+          "unitPricePence": [
+            29000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        31000
+      ],
+      "questionsInclude": [
+        "£290"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F029"
+  },
+  {
+    "id": "RT-03-163",
+    "lane": "RT-03",
+    "transcript": "Tile the shower £620. Start again, tile the shower £650",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the shower",
+          "unitPricePence": [
+            65000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        62000
+      ],
+      "questionsInclude": [
+        "£650"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F030"
+  },
+  {
+    "id": "RT-03-164",
+    "lane": "RT-03",
+    "transcript": "Lay the carpet £410; scrap that, lay the carpet for £390",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay the carpet",
+          "unitPricePence": [
+            39000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        41000
+      ],
+      "questionsInclude": [
+        "£390"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F031"
+  },
+  {
+    "id": "RT-03-165",
+    "lane": "RT-03",
+    "transcript": "Replace the basin £190, I mean replace the basin for £210",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the basin",
+          "unitPricePence": [
+            21000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        19000
+      ],
+      "questionsInclude": [
+        "£210"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F032"
+  },
+  {
+    "id": "RT-03-166",
+    "lane": "RT-03",
+    "transcript": "Skim the ceiling £330, hang on, skim the ceiling £350",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Skim the ceiling",
+          "unitPricePence": [
+            35000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        33000
+      ],
+      "questionsInclude": [
+        "£350"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F033"
+  },
+  {
+    "id": "RT-03-167",
+    "lane": "RT-03",
+    "transcript": "Install the radiator £225. No, install the radiator £250",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Install the radiator",
+          "unitPricePence": [
+            25000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        22500
+      ],
+      "questionsInclude": [
+        "£250"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F034"
+  },
+  {
+    "id": "RT-03-168",
+    "lane": "RT-03",
+    "transcript": "Build the wall £900. Correction: build the wall for £950",
+    "why": "M5/S2: a spoken restart replaces one price, not a second billable work line.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Build the wall",
+          "unitPricePence": [
+            95000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        90000
+      ],
+      "questionsInclude": [
+        "£950"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F035"
+  },
+  {
+    "id": "RT-03-169",
+    "lane": "RT-03",
+    "transcript": "Hang four doors, actually five doors, at £45 each",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang",
+          "unitPricePence": [
+            4500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "five doors"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-170",
+    "lane": "RT-03",
+    "transcript": "Fit eight sockets, sorry ten sockets, at £30 each",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "unitPricePence": [
+            3000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "ten sockets"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F036"
+  },
+  {
+    "id": "RT-03-171",
+    "lane": "RT-03",
+    "transcript": "Install three radiators, no, make that two radiators, at £95 each",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Install",
+          "unitPricePence": [
+            9500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "two radiators"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-172",
+    "lane": "RT-03",
+    "transcript": "Lay twelve square metres, wait fourteen square metres, at £25 per square metre",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay",
+          "unitPricePence": [
+            2500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "fourteen square metres"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F037"
+  },
+  {
+    "id": "RT-03-173",
+    "lane": "RT-03",
+    "transcript": "Fit 4 doors at £45 each. No, make that 5 doors",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "unitPricePence": [
+            4500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "5 doors"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-174",
+    "lane": "RT-03",
+    "transcript": "Fit six metres of skirting at £12 per metre, sorry eight metres",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "unitPricePence": [
+            1200,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "eight metres"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-175",
+    "lane": "RT-03",
+    "transcript": "Install 2 lights at £35 each, actually 3 lights",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Install",
+          "unitPricePence": [
+            3500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "3 lights"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-176",
+    "lane": "RT-03",
+    "transcript": "Hang five doors at £45 each, no, that is four doors",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang",
+          "unitPricePence": [
+            4500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "four doors"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-177",
+    "lane": "RT-03",
+    "transcript": "Tile twenty square metres at £30 per square metre, no, fifteen square metres",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "unitPricePence": [
+            3000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "fifteen square metres"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-178",
+    "lane": "RT-03",
+    "transcript": "Fit three shelves at £20 each, I mean four shelves",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit",
+          "unitPricePence": [
+            2000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "four shelves"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-179",
+    "lane": "RT-03",
+    "transcript": "Paint two coats for £180, sorry three coats",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint",
+          "unitPricePence": [
+            18000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "three coats"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F038"
+  },
+  {
+    "id": "RT-03-180",
+    "lane": "RT-03",
+    "transcript": "Lay 12 square metres for £360, actually 14 square metres",
+    "why": "M2/M5/S3: changed count or measure needs confirmation; keep at most the exact stated price, never calculate a new total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay",
+          "unitPricePence": [
+            36000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "questionsInclude": [
+        "14 square metres"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F039"
+  },
+  {
+    "id": "RT-03-181",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for not £420, £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-182",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for not four hundred and twenty pounds, four hundred and sixty pounds",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "four hundred and sixty pounds"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-183",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £460, not £420",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-184",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £460 rather than £420",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-185",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420 is wrong, £460 is right",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-186",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for forget £420; use £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F040"
+  },
+  {
+    "id": "RT-03-187",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420 was the old price, now £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-188",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420 was my mistake, it is £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-189",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420? No, £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F041"
+  },
+  {
+    "id": "RT-03-190",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420 — no — £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-191",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420... sorry... £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F042"
+  },
+  {
+    "id": "RT-03-192",
+    "lane": "RT-03",
+    "transcript": "Paint the gate for £420\nNo, £460",
+    "why": "M5: explicit negation or repair may retain only the final exact amount, with a question.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the gate",
+          "unitPricePence": [
+            46000,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        42000
+      ],
+      "questionsInclude": [
+        "£460"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F043"
+  },
+  {
+    "id": "RT-03-193",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Revise the fence price to £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 3
+    },
+    "status": "pass",
+    "finding": "RT-03-F044"
+  },
+  {
+    "id": "RT-03-194",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. The fence figure was wrong, use £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 3
+    },
+    "status": "pass",
+    "finding": "RT-03-F045"
+  },
+  {
+    "id": "RT-03-195",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. Revise the fence price to £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 5
+    },
+    "status": "pass",
+    "finding": "RT-03-F046"
+  },
+  {
+    "id": "RT-03-196",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. The fence figure was wrong, use £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 5
+    },
+    "status": "pass",
+    "finding": "RT-03-F047"
+  },
+  {
+    "id": "RT-03-197",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. Fit the shelf £85. Skim the wall £320. Revise the fence price to £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        },
+        {
+          "descriptionIncludes": "Fit the shelf",
+          "unitPricePence": 8500
+        },
+        {
+          "descriptionIncludes": "Skim the wall",
+          "unitPricePence": 32000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 7
+    },
+    "status": "pass",
+    "finding": "RT-03-F048"
+  },
+  {
+    "id": "RT-03-198",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. Fit the shelf £85. Skim the wall £320. The fence figure was wrong, use £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        },
+        {
+          "descriptionIncludes": "Fit the shelf",
+          "unitPricePence": 8500
+        },
+        {
+          "descriptionIncludes": "Skim the wall",
+          "unitPricePence": 32000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 7
+    },
+    "status": "pass",
+    "finding": "RT-03-F049"
+  },
+  {
+    "id": "RT-03-199",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. Fit the shelf £85. Skim the wall £320. Lay the carpet £410. Install the basin £220. Revise the fence price to £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        },
+        {
+          "descriptionIncludes": "Fit the shelf",
+          "unitPricePence": 8500
+        },
+        {
+          "descriptionIncludes": "Skim the wall",
+          "unitPricePence": 32000
+        },
+        {
+          "descriptionIncludes": "Lay the carpet",
+          "unitPricePence": 41000
+        },
+        {
+          "descriptionIncludes": "Install the basin",
+          "unitPricePence": 22000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 9
+    },
+    "status": "pass",
+    "finding": "RT-03-F050"
+  },
+  {
+    "id": "RT-03-200",
+    "lane": "RT-03",
+    "transcript": "Paint the fence £240. Fit the door £160. Replace the tap £90. Hang the gate £190. Paint the ceiling £210. Fit the shelf £85. Skim the wall £320. Lay the carpet £410. Install the basin £220. The fence figure was wrong, use £275",
+    "why": "M5/S1: an explicit earlier-target correction survives several intervening work clauses.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": [
+            27500,
+            null
+          ]
+        },
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 16000
+        },
+        {
+          "descriptionIncludes": "Replace the tap",
+          "unitPricePence": 9000
+        },
+        {
+          "descriptionIncludes": "Hang the gate",
+          "unitPricePence": 19000
+        },
+        {
+          "descriptionIncludes": "Paint the ceiling",
+          "unitPricePence": 21000
+        },
+        {
+          "descriptionIncludes": "Fit the shelf",
+          "unitPricePence": 8500
+        },
+        {
+          "descriptionIncludes": "Skim the wall",
+          "unitPricePence": 32000
+        },
+        {
+          "descriptionIncludes": "Lay the carpet",
+          "unitPricePence": 41000
+        },
+        {
+          "descriptionIncludes": "Install the basin",
+          "unitPricePence": 22000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        24000
+      ],
+      "questionsInclude": [
+        "£275"
+      ],
+      "lineCount": 9
+    },
+    "status": "pass",
+    "finding": "RT-03-F051"
+  },
+  {
+    "id": "RT-03-201",
+    "lane": "RT-03",
+    "transcript": "Fit the latch for five hun- five hundred pounds",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the latch",
+          "unitPricePence": 50000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-202",
+    "lane": "RT-03",
+    "transcript": "Paint the wall for two thou- two thousand pounds",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 200000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-203",
+    "lane": "RT-03",
+    "transcript": "Replace the lock for £85.50, sorry £85.05",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Replace the lock",
+          "unitPricePence": [
+            8505,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        8550
+      ],
+      "questionsInclude": [
+        "£85.05"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-204",
+    "lane": "RT-03",
+    "transcript": "Fit the handle for £9.99, no £10.01",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the handle",
+          "unitPricePence": [
+            1001,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        999
+      ],
+      "questionsInclude": [
+        "£10.01"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-205",
+    "lane": "RT-03",
+    "transcript": "Paint the wall £1,250, no £1,205",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": [
+            120500,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        125000
+      ],
+      "questionsInclude": [
+        "£1,205"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-206",
+    "lane": "RT-03",
+    "transcript": "Fit the latch for £80, no, make it eighty pounds and five pence",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the latch",
+          "unitPricePence": [
+            8005,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        8000
+      ],
+      "questionsInclude": [
+        "eighty pounds and five pence"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F052"
+  },
+  {
+    "id": "RT-03-207",
+    "lane": "RT-03",
+    "transcript": "Fit the latch for eighty pounds, no, make it £80.05",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the latch",
+          "unitPricePence": [
+            8005,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        8000
+      ],
+      "questionsInclude": [
+        "£80.05"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass",
+    "finding": "RT-03-F053"
+  },
+  {
+    "id": "RT-03-208",
+    "lane": "RT-03",
+    "transcript": "Fit the latch £80, sorry, eighty pence",
+    "why": "M1/M5/S2: partial number restarts and pence corrections never preserve a superseded amount or invent arithmetic.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the latch",
+          "unitPricePence": [
+            80,
+            null
+          ]
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "neverPence": [
+        8000
+      ],
+      "questionsInclude": [
+        "eighty pence"
+      ],
+      "lineCount": 1
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-209",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-210",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Oh, it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Oh, it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-211",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. It's actually £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "It's actually £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-212",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100. Sorry it's £120",
+    "why": "M5/S2: a spoken price correction clears the original amount and never adds another charge.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "Sorry it's £120"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-213",
+    "lane": "RT-03",
+    "transcript": "Paint the hall £200, actually £250. Kitchen. Fit the sink £300",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the sink",
+          "room": "Kitchen",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-214",
+    "lane": "RT-03",
+    "transcript": "Paint the lounge £400, sorry £450. In the bathroom. Tile the walls £600",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the lounge",
+          "room": "Lounge",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Tile the walls",
+          "room": "Bathroom",
+          "unitPricePence": 60000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-215",
+    "lane": "RT-03",
+    "transcript": "Skim the hall £300, make that £350. Upstairs bedroom. Fit the shelves £150",
+    "why": "S1/S3: a room-only heading ends a completed correction and locates the following independent work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Skim the hall",
+          "room": "Hall",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Fit the shelves",
+          "room": "Upstairs bedroom",
+          "unitPricePence": 15000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "spoken correction"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-216",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that wall good for £200.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that wall good",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-217",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make that opening wider for £300.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make that opening wider",
+          "unitPricePence": 30000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-218",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £400. Make it watertight for £250.",
+    "why": "S1/M5: an ordinary make-that/make-it work instruction keeps its own exact price; it is not a price correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 40000
+        },
+        {
+          "descriptionIncludes": "Make it watertight",
+          "unitPricePence": 25000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-219",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that £250",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that £250"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-220",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make that two fifty",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that two fifty"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-221",
+    "lane": "RT-03",
+    "transcript": "Paint the walls £200, make it 300",
+    "why": "M5/S2: make-that/make-it with a replacement amount stays one open correction.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it 300"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-222",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a hundred and twenty pounds",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a hundred and twenty pounds"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-223",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a grand",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a grand"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-224",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make that a couple of hundred",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make that a couple of hundred"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-225",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, make it a thousand and fifty quid",
+    "why": "A spoken replacement beginning with a reuses number recognition and retracts the original charge without creating new work.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 1,
+      "questionsInclude": [
+        "make it a thousand and fifty quid"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-226",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, cancel that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "cancel that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-227",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, scrap that and paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "scrap that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-03-228",
+    "lane": "RT-03",
+    "transcript": "Fit the sink £100, forget that, paint the wall £200",
+    "why": "A number-less withdrawal ends before independent work; only the sink is questioned and the wall retains its exact cited price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "forget that"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass"
+  }
+]
