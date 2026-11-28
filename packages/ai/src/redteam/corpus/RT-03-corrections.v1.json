@@ -51,7 +51,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F001"
   },
   {
@@ -214,7 +214,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F002"
   },
   {
@@ -377,7 +377,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F003"
   },
   {
@@ -540,7 +540,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F004"
   },
   {
@@ -777,7 +777,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F005"
   },
   {
@@ -854,7 +854,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F006"
   },
   {
@@ -981,7 +981,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F007"
   },
   {
@@ -1006,7 +1006,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F008"
   },
   {
@@ -1089,7 +1089,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F009"
   },
   {
@@ -1114,7 +1114,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F010"
   },
   {
@@ -1142,7 +1142,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F011"
   },
   {
@@ -1167,7 +1167,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F012"
   },
   {
@@ -1195,7 +1195,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F013"
   },
   {
@@ -1220,7 +1220,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F014"
   },
   {
@@ -1248,7 +1248,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F015"
   },
   {
@@ -1273,7 +1273,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F016"
   },
   {
@@ -1301,7 +1301,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F017"
   },
   {
@@ -1326,7 +1326,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F018"
   },
   {
@@ -1378,7 +1378,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F019"
   },
   {
@@ -1410,7 +1410,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F020"
   },
   {
@@ -1442,7 +1442,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F021"
   },
   {
@@ -1474,7 +1474,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F022"
   },
   {
@@ -1506,7 +1506,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F023"
   },
   {
@@ -1538,7 +1538,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F024"
   },
   {
@@ -1570,7 +1570,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F025"
   },
   {
@@ -1602,7 +1602,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F026"
   },
   {
@@ -1634,7 +1634,7 @@
       ],
       "lineCount": 2
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F027"
   },
   {
@@ -1662,7 +1662,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F028"
   },
   {
@@ -1690,7 +1690,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F029"
   },
   {
@@ -1718,7 +1718,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F030"
   },
   {
@@ -1746,7 +1746,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F031"
   },
   {
@@ -1774,7 +1774,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F032"
   },
   {
@@ -1802,7 +1802,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F033"
   },
   {
@@ -1830,7 +1830,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F034"
   },
   {
@@ -1858,7 +1858,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F035"
   },
   {
@@ -1909,7 +1909,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F036"
   },
   {
@@ -1960,7 +1960,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F037"
   },
   {
@@ -2136,7 +2136,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F038"
   },
   {
@@ -2162,7 +2162,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F039"
   },
   {
@@ -2325,7 +2325,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F040"
   },
   {
@@ -2407,7 +2407,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F041"
   },
   {
@@ -2462,7 +2462,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F042"
   },
   {
@@ -2490,7 +2490,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F043"
   },
   {
@@ -2526,7 +2526,7 @@
       ],
       "lineCount": 3
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F044"
   },
   {
@@ -2562,7 +2562,7 @@
       ],
       "lineCount": 3
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F045"
   },
   {
@@ -2606,7 +2606,7 @@
       ],
       "lineCount": 5
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F046"
   },
   {
@@ -2650,7 +2650,7 @@
       ],
       "lineCount": 5
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F047"
   },
   {
@@ -2702,7 +2702,7 @@
       ],
       "lineCount": 7
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F048"
   },
   {
@@ -2754,7 +2754,7 @@
       ],
       "lineCount": 7
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F049"
   },
   {
@@ -2814,7 +2814,7 @@
       ],
       "lineCount": 9
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F050"
   },
   {
@@ -2874,7 +2874,7 @@
       ],
       "lineCount": 9
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F051"
   },
   {
@@ -3021,7 +3021,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F052"
   },
   {
@@ -3049,7 +3049,7 @@
       ],
       "lineCount": 1
     },
-    "status": "open-finding",
+    "status": "pass",
     "finding": "RT-03-F053"
   },
   {
