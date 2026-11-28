@@ -845,6 +845,40 @@ explicit grants under `config/lanes/`. `git diff --check` passed. No golden reco
 | RT-11-F121 | RT-11 | a44f5d35b363a5182b166ff724d2d09ca5c1060f | RT-11-121 | Fit door £0.01. Paint skirting £0.02. For the whole job £0.04. | {"lines":[{"descriptionIncludes":"Fit door","unitPricePence":1},{"descriptionIncludes":"Paint skirting","unitPricePence":2}],"lineCount":2,"areaPrices":[],"wholeJobPricePence":4,"questionsInclude":["add up"]} | Capture {"lines":[{"description":"Fit door","q":"1","u":"item","p":1},{"description":"Paint skirting","q":"1","u":"item","p":2}],"questions":["Confirm disposal and waste allowance","You said “For the whole job £0.04”. Add a price to each line, or put it on one line."]}; Reader A {"lines":[{"description":"Fit door","q":null,"u":null,"p":1,"basis":"line"},{"description":"Paint skirting","q":null,"u":null,"p":2,"basis":"line"}],"questions":[],"areaPrices":[],"wholeJobPence":4}; checked Reader A unchanged. | P2 | open | — |
 | RT-11-F123 | RT-11 | a44f5d35b363a5182b166ff724d2d09ca5c1060f | RT-11-123 | Fit door £99.99. Paint skirting £0.01. For the whole job £99.99. | {"lines":[{"descriptionIncludes":"Fit door","unitPricePence":9999},{"descriptionIncludes":"Paint skirting","unitPricePence":1}],"lineCount":2,"areaPrices":[],"wholeJobPricePence":9999,"questionsInclude":["add up"]} | Capture {"lines":[{"description":"Fit door","q":"1","u":"item","p":9999},{"description":"Paint skirting","q":"1","u":"item","p":1}],"questions":["Confirm disposal and waste allowance","You said “For the whole job £99.99”. Add a price to each line, or put it on one line."]}; Reader A {"lines":[{"description":"Fit door","q":null,"u":null,"p":9999,"basis":"line"},{"description":"Paint skirting","q":null,"u":null,"p":1,"basis":"line"}],"questions":[],"areaPrices":[],"wholeJobPence":9999}; checked Reader A unchanged. | P2 | open | — |
 | RT-11-F124 | RT-11 | a44f5d35b363a5182b166ff724d2d09ca5c1060f | RT-11-124 | Fit door £25.50. Paint skirting £25.50. For the whole job £51.01. | {"lines":[{"descriptionIncludes":"Fit door","unitPricePence":2550},{"descriptionIncludes":"Paint skirting","unitPricePence":2550}],"lineCount":2,"areaPrices":[],"wholeJobPricePence":5101,"questionsInclude":["add up"]} | Capture {"lines":[{"description":"Fit door","q":"1","u":"item","p":2550},{"description":"Paint skirting","q":"1","u":"item","p":2550}],"questions":["Confirm disposal and waste allowance","You said “For the whole job £51.01”. Add a price to each line, or put it on one line."]}; Reader A {"lines":[{"description":"Fit door","q":null,"u":null,"p":2550,"basis":"line"},{"description":"Paint skirting","q":null,"u":null,"p":2550,"basis":"line"}],"questions":[],"areaPrices":[],"wholeJobPence":5101}; checked Reader A unchanged. | P2 | open | — |
+
+### RT-02 qualifier attack (#1071, 28 Nov 2026)
+
+HEAD_UNDER_TEST (branch base): `a44f5d35b363a5182b166ff724d2d09ca5c1060f`.
+Used the newer `lanes-ref` README invariants/corpus contract and RT-02 lane instructions.
+175 distinct synthetic transcripts: **82 pass / 93 open** (42 P0, 38 P1, 13 P2).
+Each failing case has its own open finding row above, bound to that base SHA.
+Expectations follow the spoken scope and qualifications: no discount/rate arithmetic, no deposit
+as a price, VAT/materials questions, matching counted units, and a question for free work.
+
+Open P0 IDs (all prefixed `RT-02-F`): **026–027, 080–081, 100–102, 106–107,
+109–111, 116–124, 128–139, 147, 149–154, 164–165**.
+These cover percentage deductions, time rates kept as line prices, hedges/budgets, conditions,
+cashback, and deposits/prior payments promoted to charges. Full transcripts and path-specific
+actual results are in the table. P1 includes lost prices/counts and extra work lines; P2 includes
+missing VAT, rate and free-work questions. None is treated as a fix or an accepted release risk.
+
+Executed locally with Node 24.17.0 and the pinned pnpm 10.28.1:
+
+- Dependency compilation: `pnpm --filter @jobguard/core build` passes.
+- Before: `pnpm --filter @jobguard/ai test --maxWorkers=2` passes 28 files / 875 tests.
+- After: the same command passes 28 files / 1,050 tests. Existing lane counts unchanged:
+  RT-00 3 pass / 2 open; RT-01 201 pass / 101 open; RT-03 24 pass / 0 open.
+  The existing runner exercises capture, Reader A and checked Reader A, including M1/S2/S4.
+  Every open case must still fail its oracle; green Vitest does not mean these defects are fixed.
+- `pnpm --filter @jobguard/ai typecheck`, `lint` and `build` pass.
+- Lane policy loads and all three changed files pass `lanePathAllowed`, including the lane config
+  through the checker's automatic own-file permission (explicit register grants are forbidden).
+- Verified 175 unique transcripts, exactly one row per open case, correct head bindings, and no
+  changes to earlier findings, production source, Q77, existing test expectations or golden records.
+- `git diff --check` passes. Generated package-manager cache is excluded from the commit.
+
+Deterministic local attack evidence only. No paid API, audio upload, migration, browser/DB change,
+push, deployment, merge or independent review. Commit only, as requested.
 | RT12-01 | RT-12 | b25b5ee9 | 01-four-items (desktop, mobile-360); line-4-trade | strip out the old kitchen fit six base units hang the new doors paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-02 | RT-12 | b25b5ee9 | 02-two-prices-open (desktop, mobile-360); line-3-trade | strip out the old kitchen for two hundred pounds fit the new units for six hundred pounds paint the walls | Decorating | Other | P1 | open-finding | — |
 | RT12-03 | RT-12 | b25b5ee9 | 03-two-sixty (desktop, mobile-360); line-1-trade | paint the walls two hundred pounds and fit the door sixty pounds | Decorating | Other | P1 | open-finding | — |
