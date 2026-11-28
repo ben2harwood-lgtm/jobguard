@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ep-b2l-real-data": {
+      "branches": [
+        "claude/ep-b2l-real-data-0550d6"
+      ],
+      "note": "Docs only (enterprise R1 plan piece B2, first half, work-list EP-B2L): inventory of every contractor path that accepts only made-up data. No code change and no gate opened.",
+      "allow": [
+        "docs/operations/enterprise-real-data-route-inventory.md"
+      ]
+    }
+  }
+}
