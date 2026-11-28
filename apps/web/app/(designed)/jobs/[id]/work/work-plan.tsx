@@ -19,6 +19,8 @@ type PlanView = {
   unplanned: { scopeItemId: string; title: string; key: string }[];
   // Approved extras: the approved variation revision each scope item was planned from.
   variationRevisions?: Record<string, string>;
+  // V2-SQ-F: trades.v1 durations are round defaults, labelled as typical times.
+  templateKey?: string;
 };
 type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
@@ -224,7 +226,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         plan.changes.changed.some(row => taskId(row.after) === taskId(task));
       return <article className="card-body" key={taskId(task)}>
         <h3>{task.position}. {task.title}</h3>
-        <p>{task.trade} · {task.durationMinutes} min · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee ? ` · ${task.assignee}` : task.assigneeRef ? " · Crew member assigned" : ""}</p>
+        <p>{task.trade} · {task.durationMinutes} min{plan.templateKey === "trades.v1" ? " (Typical time, change to suit)" : ""} · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee ? ` · ${task.assignee}` : task.assigneeRef ? " · Crew member assigned" : ""}</p>
         <div className="job-caption">
           <Tag tone={task.scheduledDate ? "green" : "amber"}>{task.scheduledDate ? "Scheduled" : "Planned"}</Tag>
           {changed && <Tag tone="amber">Changed since last quote revision</Tag>}

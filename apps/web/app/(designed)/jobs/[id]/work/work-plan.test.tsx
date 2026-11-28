@@ -62,6 +62,17 @@ beforeEach(() => {
 afterEach(() => { cleanups.forEach(cleanup => cleanup()); cleanups = []; vi.unstubAllGlobals(); });
 
 describe("Plan card after changes in the job workspace", () => {
+  it("V2-SQ-F: labels trades.v1 durations as typical times, and leaves other templates' durations plain", async () => {
+    const text = (node: React.ReactNode): string => Array.isArray(node) ? node.map(text).join("")
+      : React.isValidElement<{ children?: React.ReactNode }>(node) ? text(node.props.children) : node == null || typeof node === "boolean" ? "" : String(node);
+    const durations = () => shown().filter(node => node.type === "p" && text(node.props.children as React.ReactNode).includes(" min")).map(node => text(node.props.children as React.ReactNode));
+    request.mockResolvedValueOnce(Response.json({ ...view("rev-1", "draft", [task("tiling-prepare", "Prepare the surface")]), templateKey: "trades.v1" }));
+    await mount();
+    await vi.waitFor(() => expect(durations()).toEqual(["Joinery · 60 min (Typical time, change to suit) · Day to set"]));
+    await quoteSaved("quotes", Response.json({ ...view("rev-2", "draft", [task("fit", "Fit doors")]), templateKey: "splashback-decorating.v1" }));
+    await vi.waitFor(() => expect(durations()).toEqual(["Joinery · 60 min · Day to set"]));
+  });
+
   it("shows the first quote's tasks, a revision's tasks and Switch live without a reload", async () => {
     request.mockResolvedValueOnce(noQuote());
     await mount();
