@@ -18,7 +18,8 @@ confines the firm). Runtime may select and insert.
 `app.v2_review_request_due(t, j)` (STABLE, runs as the caller) returns the state the screen
 shows and the guard enforces, first match wins: `off`, `no_release` (no release whose link is
 not stopped), `recipient_changed` (G4's address rule), `open_dispute` (a recovery case against the
-customer, book `builder_customer`, in `identified`, `active` or `partially_landed`; a supplier
+customer, book `builder_customer`, whose current state in `recovery_case_current` is still open:
+`identified`, `active`, `evidence_assembled`, `pursuing`, `negotiating` or `partially_landed`; a supplier
 overcharge case does not count), `unpaid_invoice` (an issued invoice whose total
 less credit notes exceeds its payments less reversals, the `projectInvoiceBalance` rule),
 `too_soon` (less than 7 days since the newest unstopped release), `due`.
