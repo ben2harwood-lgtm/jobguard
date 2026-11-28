@@ -206,11 +206,15 @@ test("TL-R7 piece must pass its own lane", (t) => {
   const f = fixture(t, { editPiece: ({ id, write }) => { if (id === "b") write("packages/db/protected.txt"); } });
   refused(f, [f.pieces[1].head, f.pieces[1].branch, "piece-b", "packages/db/protected.txt"]);
 });
-test("TL-R8 only the main base branch is permitted", (t) => {
+test("TL-R8 only the main or v2/main base branch is permitted", (t) => {
   const f = fixture(t);
-  for (const baseRef of ["codex/sandbox/piece-a", undefined]) {
-    const event = f.payload(); event.pull_request.base.ref = baseRef; refused(f, ["base branch", "main"], event);
+  for (const baseRef of ["codex/sandbox/piece-a", "v2/main-old", "v2", undefined]) {
+    const event = f.payload(); event.pull_request.base.ref = baseRef; refused(f, ["base branch", "main or v2/main"], event);
   }
+});
+test("TL-P8 a train into v2/main passes like a train into main", (t) => {
+  const f = fixture(t), event = f.payload(); event.pull_request.base.ref = "v2/main";
+  assert.deepEqual(f.inspect(event).train.pieces, f.pieces);
 });
 test("TL-R9 only main-side merges are refused", (t) => {
   const f = fixture(t); f.git("switch", "--detach", f.base); const a = f.commit("tools/a/main.mjs");
