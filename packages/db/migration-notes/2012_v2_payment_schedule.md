@@ -32,3 +32,9 @@ The purchase-order upgrade fixture defers this V2-only migration with the other
 V2 entries. Reapplying is idempotent. Forward-fix in a later allocated migration;
 for local rollback retain the existing rehearsal database and provision fresh
 state from the preceding checkout. Do not drop schedules or audit history.
+
+Firm lock (Q83, edited in place before merge): `app.v2_payment_schedule` and
+`app.v2_payment_schedule_task_done` also carry the restrictive
+`v2_practice_firm` policy (FOR ALL, TO jobguard_runtime, joined to `app.job`),
+the same as the other V2 tables, so v2/main's FL guard holds. Rerunning drops
+and re-creates the policies.
