@@ -55,3 +55,10 @@ Renaming the V2 database was refused, because it would switch on main's demo-onl
 - Record the real membership in the money audit.
 - Tests: normal success, a refusal for the same tenant with a different firm, and a stage draft racing the close.
 - An issued invoice and its digest survive a later supplement.
+
+## Added 28 Nov 15:10 UK (from Q81's dry-check)
+Two further options are held here for the 3 Dec decision:
+- **(B)** A V2 definer that answers the job-proof statement ("no electrical work") by writing main's `job_proof_statement`, `command_receipt` and audit. This needs Codex design sign-off, because it writes main's tables.
+- **(C)** Change 0734 so that `job_proof_session_digest` accepts the linked namespace through `linked_practice_authority`. This is main-lane and RED, on Ben's card.
+
+`answer_job_proof_statement` is gated on the database name, so it is one of the 167 name gates.

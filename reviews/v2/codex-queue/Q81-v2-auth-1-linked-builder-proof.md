@@ -31,3 +31,22 @@
 
 ## Done when
 H1 steps 8 and 14 pass in the browser for a linked builder, lp6 and 0734 are unchanged, and the desktop Codex security review is clean.
+
+## Planner decision after the dry-check (28 Nov 15:10 UK)
+The builder's dry-check found three problems:
+- main has no proof read that avoids lp6;
+- `answer_job_proof_statement` (0734) refuses any database not named `jobguard_synthetic_demo`;
+- `ProofApplication` hard-codes `DEMO_MEMBERSHIP_ID`.
+
+The electrical-certificate path (photo, then complete, then site complete) needs no change to main's SQL.
+
+**Chosen: option A, the narrow version.**
+- **The read.** A V2-owned, read-only definer for the requirement read (2089; FL-F rules apply), commented as a mirror of 0734's `job_proof_requirement`. A parity test checks that it gives the same requirement as main's function for a home session on the same fixture, in every state.
+- **The writes.** One V2 command boundary for upload and complete, on `v2_work_plan_editor` + `enforcePracticePair`. It records the real membership and re-checks the binding before returning an earlier receipt. Main's `ProofApplication` is unchanged.
+- **"No electrical work" stays refused on V2**, with the message "On the practice V2 stack, record an electrical certificate photo instead."
+
+Main's SQL, lp6 and 0734 are unchanged.
+
+**Moved to Q74 for the 3 Dec decision:**
+- B, a V2 fork of the statement answer that writes main's tables;
+- C, changing 0734 so the linked namespace is accepted. That would be main-lane, RED, on Ben's card.
