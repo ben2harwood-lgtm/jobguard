@@ -27,3 +27,12 @@ So far this has been called "worker timing". Nobody has checked that.
 - The two tests pass 5 of 5 on G9, on the K5 line top and on v2/main.
 - The cause and its proof are in the PR.
 - CI1 and v2-seed are green, and desktop Codex is clean.
+
+## Planner decision (28 Nov 13:20 UK, from the builder's findings)
+The cause is graphile crontab ticks, not app code. G9 passed 5 of 5 alone and 4 of 4 in the full suite. The one failure went from 0 to 5 `_private_jobs` rows, and the five rows were exactly the five per-minute crontab tasks in `apps/api/src/worker.ts:155`.
+
+Fix, test only: `effectCounts` leaves out a row only when its payload has `_cron` **and** its `task_identifier` is in that crontab list. The list comes from one shared constant, or is asserted against `_private_known_crontabs`.
+
+A guard test enqueues one non-cron app job and checks that the count goes up by 1. The comment records the cause.
+
+This counts the same thing the test promises to count ("approval schedules nothing"), so it does not loosen the test.
