@@ -1,10 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { contractorPermissionMatrix, contractorRoles } from "./contractor.js";
-import { workOrderRowV1, validateWorkOrderRow, parseWorkOrderCsv, encodeWorkOrderCsv, matchWorkOrderLines, diffWorkOrderRevision, workOrderImportPermits, sorImportPermits, workOrderAuditPayloadV1, workOrderBatchAuditPayloadV1, workOrderContentFields, workOrderPartiesComplete, workOrderImportRequestV1, workOrderErrorCodes, workOrderHttpStatus } from "./work-order.js";
+import { workOrderRowV1, validateWorkOrderRow, parseWorkOrderCsv, encodeWorkOrderCsv, matchWorkOrderLines, diffWorkOrderRevision, workOrderImportPermits, sorImportPermits, workOrderAuditPayloadV1, workOrderBatchAuditPayloadV1, workOrderContentFields, workOrderPartiesComplete, workOrderImportRequestV1, workOrderErrorCodes, workOrderHttpStatus, workOrderCsvColumns } from "./work-order.js";
 const id = "11000000-0000-4000-8000-000000000001";
 const other = "11000000-0000-4000-8000-000000000002";
 const row = { version: "work-order-import.v1", clientId: id, contractId: id, workOrderReference: "Fictional-001", issuedOn: "2026-10-08", dueOn: null, priority: "routine", status: "ordered", expectedRevision: 0, siteRevisionId: id, resident: { kind: "none", reason: "void_property" }, teamId: null, assignedMembershipIds: [], lines: [{ clientLineReference: null, sorCode: "REPAIR", quantity: "1" }] };
 describe("ENT-2 import boundaries (DW2, DW6)", () => {
+  it("exports spreadsheet-looking references as text and imports the protective apostrophe literally", () => {
+    for (const whitespace of ["", "\t", " ", "\r", " \t\r "]) for (const starter of ["=", "+", "-", "@"]) {
+      const workOrderReference = `${whitespace}${starter}SUM(1,2)`;
+      const input = { ...row, workOrderReference };
+      const csv = encodeWorkOrderCsv([input]);
+      expect(csv).toContain(`"'${workOrderReference}"`);
+      expect(parseWorkOrderCsv(csv)).toEqual([{ rowNumber: 2, input: { ...input, workOrderReference: `'${workOrderReference}` } }]);
+    }
+    expect(encodeWorkOrderCsv([{ ...row, expectedRevision: -1 }])).toContain('"-1"');
+    expect(encodeWorkOrderCsv([{ ...row, expectedRevision: -1 }])).not.toContain('"\'-1"');
+  });
+  it("keeps a literal apostrophe in v1 CSV so the reference matches the existing order, with no new-order candidate", () => {
+    const existingOrder = { id: other, contractId: id, reference: "'=WO-123" };
+    // An existing v1 file, independent of the export encoder and its protective prefix.
+    const csv = workOrderCsvColumns.join(",") + "\r\n" +
+      `work-order-import.v1,${id},${id},'=WO-123,2026-10-08,,routine,ordered,0,${id},"{""kind"":""none"",""reason"":""void_property""}",,[],"[{""clientLineReference"":null,""sorCode"":""REPAIR"",""quantity"":""1""}]"\r\n`;
+    const records = parseWorkOrderCsv(csv);
+    expect(records).toEqual([{ rowNumber: 2, input: { ...row, workOrderReference: existingOrder.reference } }]);
+    const imported = records.map(record => workOrderRowV1.parse(record.input));
+    // The repository looks up orders within the authenticated tenant by contract and exact reference.
+    const existingOrders = [existingOrder, { id, contractId: id, reference: "=WO-123" }];
+    const matches = imported.map(input => existingOrders.find(order => order.contractId === input.contractId && order.reference === input.workOrderReference));
+    expect(matches).toEqual([existingOrder]);
+    expect(imported.filter((_, index) => matches[index] === undefined)).toEqual([]);
+  });
   it("accepts the versioned row and leaves absent parties for the controlled CH-3b refusal", () => {
     expect(workOrderRowV1.safeParse(row).success).toBe(true);
     for (const field of ["clientId", "contractId", "siteRevisionId", "resident"]) {

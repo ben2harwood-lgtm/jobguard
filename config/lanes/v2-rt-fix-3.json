@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-3": {
+      "branches": [
+        "codex/sandbox/rt-fix-3"
+      ],
+      "note": "RT-FIX-3 (#1071): RT-01 deductions, negative notation, malformed decimal and invisible-format amounts stay open under the shared Q77 guard. Parser and validator repair only; no web workflow, DB, provider or release change. Includes the already-staged RT-01 corpus and FINDINGS.md. Independent review remains separate; no push or merge.",
+      "allow": [
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/core/src/job-understanding.ts",
+        "packages/ai/src/redteam/corpus/RT-01-money-words.v1.json",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}

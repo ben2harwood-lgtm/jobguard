@@ -2,6 +2,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { randomUUID } from "node:crypto";
+import { renderBillingExport } from "@jobguard/core";
 import { cluster,world,code,type World } from "./contractor-billing-fixtures.js";
 let c:Awaited<ReturnType<typeof cluster>>, w:World;
 beforeAll(async()=>{c=await cluster();w=await world(c);},240000);
@@ -40,10 +41,12 @@ it("E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate t
 it("LATER-SAFETY-81 SQL export prefixes TAB and CR formulas and preserves existing escaping",async()=>{
  const own=await world(c);await own.exported();
  const view=await own.repo.read(own.ctx,own.session,own.s.jobId),artifact=view.exports[0]!.artifact;
- for(const prefix of ["\t","\r","=","+","-","@","'"]){
+ for(const prefix of ["\t","\r","=","+","-","@","'","\t=","\t+","\t-","\t@","\r=","\r+","\r-","\r@"]){
   const description=prefix+'SUM(1,2) "fictional"';
   const modified={...JSON.parse(artifact.json),lines:artifact.lines.map(line=>({...line,description}))};
   const csv=(await c.admin.query<{csv:string}>("SELECT app.cb_csv($1::jsonb) csv",[JSON.stringify(modified)])).rows[0]!.csv;
+  const { exportLineId: _, ...line } = modified.lines[0]!;
+  expect(csv).toBe(renderBillingExport({ version: modified.version, clientContractId: modified.clientContractId, lines: [line] }).csv);
   expect(csv).toContain(',"\''+description.replaceAll('"','""')+'",');
   expect(modified.lines[0]!.description).toBe(description);
  }

@@ -7,6 +7,7 @@
     "dev": "next dev --port 3000",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:hosted": "playwright test -c playwright.hosted.config.ts",
     "test:e2e": "pnpm turbo run build --filter=@jobguard/db... && playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:cloudflare": "pnpm --workspace-root exec turbo run build --filter=@jobguard/web^... && opennextjs-cloudflare build",

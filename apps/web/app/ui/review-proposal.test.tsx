@@ -73,6 +73,18 @@ it("keeps full accessible names and walkthrough Accept text with one-word visibl
   expect(all(tree, n => n.props["aria-label"] === `Description ${description}`)[0]!.props.value).toBe(description);
   expect(text(all(tree, n => n.type === "blockquote")[0])).toContain(line.sourceExcerpt);
 });
+it("adds a human line to the whole job with trade Other, and shows old fixed labels the same way", async () => {
+  const fetch = vi.fn(async () => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }) }));
+  vi.stubGlobal("fetch", fetch);
+  const old = { ...line, room: "Practice job", category: "Work" };
+  const p = panel({ ...fixture, review: { ...fixture.review!, lines: [old] } } as ReviewCaptureResult);
+  p.button(p.render(), "Add omitted line").props.onClick();
+  await p.button(p.render(), "Save review").props.onClick();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const lines = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).review.lines;
+  expect(lines.map((saved: { room: string; category: string }) => [saved.room, saved.category])).toEqual([["Whole job", "Other"], ["Whole job", "Other"]]);
+});
+
 it("announces Split, focuses the first adjacent editable child, and saves the unchanged lineage payload", async () => {
   const fetch = vi.fn(async () => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }) }));
   vi.stubGlobal("fetch", fetch);
@@ -415,4 +427,140 @@ it("a price that is not plain pounds leaves the row unpriced and says why", () =
   const tree = p.render();
   expect(all(tree, n => n.props["data-testid"] === "running-total").map(text)).toEqual(["Total so far £0.00 · incomplete: 1 row needs a price"]);
   expect(text(all(tree, n => n.props.role === "alert"))).toContain("Check the price for Protect room");
+});
+it("V2-SQ-D: groups rows by room, moves a row and back, and quotes one room as one price with merge lineage", async () => {
+  const fetch = vi.fn(async (_url: string, options: RequestInit) => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }), body: options.body }));
+  vi.stubGlobal("fetch", fetch);
+  const make = (id: string, description: string, room: string, category: string, unitPricePence: number | null, quantity = "1") =>
+    ({ ...line, id, scopeItemId: `scope-${id}`, description, room, category, quantity, unitPricePence, disposition: "proposed" });
+  const rows = [make("k1", "Fit the units", "Kitchen", "Kitchen fitting", 120000), make("b1", "Tile the floor", "Bathroom", "Tiling", null),
+    make("b2", "Two sockets", "Bathroom", "Electrics", 4500, "2"), make("h1", "Paint the hall", "Hall", "Decorating", 30000)];
+  const result = { ...fixture,
+    proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: r.unitPricePence }, room: r.room, category: r.category, roomInferred: r.id === "b2" })),
+      questions: [], roomPrices: [{ room: "Bathroom", pence: 90000, words: "nine hundred for the bathroom" }], wholeJobPrice: null },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  const byTestId = (tree: React.ReactNode, id: string) => all(tree, n => n.props["data-testid"] === id).map(text);
+  const heads = (tree: React.ReactNode) => all(tree, n => n.type === "section" && n.props["data-testid"] === "room-group").map(n => n.props["aria-label"]);
+  expect(heads(p.render())).toEqual(["Kitchen", "Bathroom", "Hall"]);
+  expect(byTestId(p.render(), "room-total")).toEqual(["£1,200.00", "£90.00 · incomplete: 1 row needs a price", "£300.00"]);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £1,590.00 · incomplete: 1 row needs a price"]);
+  // A trade the closed list holds is a select; an inferred trade shows "check" until touched.
+  expect(all(p.render(), n => n.type === "select" && n.props["aria-label"] === "Trade Tile the floor")[0]!.props.value).toBe("Tiling");
+  expect(all(p.render(), n => n.props["aria-label"] === "Trade looks right: Tile the floor")).toHaveLength(1);
+  all(p.render(), n => n.props["aria-label"] === "Trade Tile the floor")[0]!.props.onChange({ target: { value: "Flooring" } });
+  expect(all(p.render(), n => n.props["aria-label"] === "Trade looks right: Tile the floor")).toHaveLength(0);
+  // Combine is one room at a time.
+  for (const name of ["Fit the units", "Tile the floor"]) all(p.render(), n => n.props["aria-label"] === `Select ${name} for merge`)[0]!.props.onChange({ target: { checked: true } });
+  expect(p.button(p.render(), "Merge selected (2)").props.disabled).toBe(true);
+  for (const name of ["Fit the units", "Tile the floor"]) all(p.render(), n => n.props["aria-label"] === `Select ${name} for merge`)[0]!.props.onChange({ target: { checked: false } });
+  // Move the sockets to the kitchen and back: only the two subtotals change, and the row keeps everything else.
+  p.button(p.render(), "Move Two sockets").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "move-sheet")[0]!, "Kitchen").props.onClick();
+  expect(byTestId(p.render(), "room-total")).toEqual(["£1,290.00", "£0.00 · incomplete: 1 row needs a price", "£300.00"]);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £1,590.00 · incomplete: 1 row needs a price"]);
+  p.button(p.render(), "Move Two sockets").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "move-sheet")[0]!, "Bathroom").props.onClick();
+  expect(heads(p.render())).toEqual(["Kitchen", "Bathroom", "Hall"]);
+  // One price for the bathroom: the said figure is offered, never applied without a press; a moved row counts as checked.
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Bathroom" && n.props.checked === false)[0]!.props.onChange();
+  expect(all(p.render(), n => n.props["aria-label"] === "Room price Bathroom")[0]!.props.value).toBe("");
+  p.button(p.render(), "Use the £900.00 you said for Bathroom").props.onClick();
+  expect(byTestId(p.render(), "room-total")[1]).toBe("£90.00 · incomplete: 1 row needs a price");
+  p.button(p.render(), "Set one price for Bathroom").props.onClick();
+  const confirm = all(p.render(), n => n.props.className === "room-confirm")[0]!;
+  expect(text(confirm)).toContain("these 2 rows, which become one row");
+  expect(all(confirm, n => n.type === "li").map(text)).toEqual(["Tile the floor · proposed", "Two sockets · proposed"]);
+  p.button(confirm, "Apply one price").props.onClick();
+  expect(byTestId(p.render(), "room-total")).toEqual(["£1,200.00", "£900.00", "£300.00"]);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £2,400.00 · complete"]);
+  expect(byTestId(p.render(), "row-origin")).toContain("Itemised incomplete · room price £900.00");
+  // Undo before save restores the rows.
+  p.button(p.render(), "Undo one price for Bathroom").props.onClick();
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £1,590.00 · incomplete: 1 row needs a price"]);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Bathroom" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Bathroom")[0]!.props.onChange({ target: { value: "900" } });
+  p.button(p.render(), "Set one price for Bathroom").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  await p.button(p.render(), "Save review").props.onClick(); await settle();
+  const saved = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).review.lines;
+  expect(saved.map((l: { room: string; disposition: string; unitPricePence: number | null; parentScopeItemIds: string[] }) => [l.room, l.disposition, l.unitPricePence, l.parentScopeItemIds]))
+    .toEqual([["Kitchen", "proposed", 120000, []], ["Bathroom", "merged", null, []], ["Bathroom", "merged", 4500, []], ["Hall", "proposed", 30000, []],
+      ["Bathroom", "accepted", 90000, ["scope-b1", "scope-b2"]]]);
+  expect(saved.at(-1).description).toBe("Bathroom: Tile the floor; Two sockets");
+});
+it("V2-SQ-D: one price is blocked while a row's inferred room is unchecked, and rooms can be added, renamed and merged", () => {
+  const make = (id: string, description: string, room: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room, unitPricePence: 1000, disposition: "accepted" });
+  const rows = [make("a", "Strip the units", "Kitchen"), make("b", "Fit a sink", "Kitchen"), make("c", "Paint the hall", "Hall")];
+  const result = { ...fixture, proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: 1000 }, room: r.room, category: "Work", roomInferred: r.id === "b" })), questions: [] },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  const heads = (tree: React.ReactNode) => all(tree, n => n.type === "section" && n.props["data-testid"] === "room-group").map(n => n.props["aria-label"]);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  expect(all(p.render(), n => n.props.className === "room-confirm")).toHaveLength(0);
+  expect(all(p.render(), n => n.props["data-testid"] === "room-notice").map(text)).toEqual(["Check the room on ‘Fit a sink’ before quoting Kitchen as one price."]);
+  p.button(p.render(), "Room looks right: Fit a sink").props.onClick();
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  expect(all(p.render(), n => n.props.className === "room-confirm")).toHaveLength(1);
+  // Rooms: add an empty one, rename, merge (rows move, order kept).
+  all(p.render(), n => n.props["aria-label"] === "Add a room")[0]!.props.onChange({ target: { value: "  Loft " } });
+  p.button(p.render(), "Add room").props.onClick();
+  expect(heads(p.render())).toEqual(["Kitchen", "Hall", "Loft"]);
+  all(p.render(), n => n.props["aria-label"] === "Rename Hall")[0]!.props.onChange({ target: { value: "Landing" } });
+  p.button(all(p.render(), n => n.type === "section" && n.props["aria-label"] === "Hall")[0]!, "Rename").props.onClick();
+  expect(heads(p.render())).toEqual(["Kitchen", "Landing", "Loft"]);
+  all(p.render(), n => n.props["aria-label"] === "Merge Kitchen into")[0]!.props.onChange({ target: { value: "Landing" } });
+  expect(heads(p.render())).toEqual(["Landing", "Loft"]);
+  expect(all(p.render(), n => n.type === "article").map(n => n.key)).toEqual(["a", "b", "c"]);
+  all(p.render(), n => n.props["aria-label"] === "Rename Loft")[0]!.props.onChange({ target: { value: "   " } });
+  p.button(all(p.render(), n => n.type === "section" && n.props["aria-label"] === "Loft")[0]!, "Rename").props.onClick();
+  expect(all(p.render(), n => n.props["data-testid"] === "room-notice").map(text)).toEqual(["A room name is 1 to 100 characters."]);
+});
+it("V2-SQ-D: splitting the one-price row ends its undo, so undo cannot duplicate or orphan rows", () => {
+  const make = (id: string, description: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room: "Kitchen", unitPricePence: 1000, disposition: "accepted" });
+  const rows = [make("a", "Strip the units"), make("b", "Fit a sink")];
+  const result = { ...fixture, proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: 1000 }, room: r.room, category: "Work", roomInferred: false })), questions: [] },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  expect(all(p.render(), n => n.props["aria-label"] === "Undo one price for Kitchen" || text(n) === "Undo one price for Kitchen")).not.toHaveLength(0);
+  p.button(p.render(), "Split Kitchen: Strip the units; Fit a sink").props.onClick();
+  expect(all(p.render(), n => n.type === "button" && text(n) === "Undo one price for Kitchen")).toHaveLength(0);
+  expect(all(p.render(), n => n.type === "article")).toHaveLength(5);
+});
+it("V2-SQ-D: undo after editing the one-price row's price shows the restored price, not the edit", () => {
+  const row = { ...line, id: "a", scopeItemId: "scope-a", description: "Strip the units", room: "Kitchen", unitPricePence: 1000, disposition: "accepted" };
+  const result = { ...fixture, proposal: { lines: [{ id: "a", unitPricePence: { value: 1000 }, room: "Kitchen", category: "Work", roomInferred: false }], questions: [] },
+    review: { ...fixture.review!, lines: [row] } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  const priced = () => all(p.render(), n => n.type === "input" && String(n.props["aria-label"] ?? "").startsWith("Price "));
+  for (const input of priced()) input.props.onChange({ target: { value: "777" } });
+  p.button(p.render(), "Undo one price for Kitchen").props.onClick();
+  expect(priced().map(input => input.props.value)).toEqual(["10.00"]);
+});
+it("V2-SQ-D: renaming a one-price room keeps its undo, which restores the rows under the new name", () => {
+  const make = (id: string, description: string) => ({ ...line, id, scopeItemId: `scope-${id}`, description, room: "Kitchen", unitPricePence: 1000, disposition: "accepted" });
+  const rows = [make("a", "Strip the units"), make("b", "Fit a sink")];
+  const result = { ...fixture, proposal: { lines: rows.map(r => ({ id: r.id, unitPricePence: { value: 1000 }, room: r.room, category: "Work", roomInferred: false })), questions: [] },
+    review: { ...fixture.review!, lines: rows } } as unknown as ReviewCaptureResult;
+  const p = panel(result);
+  const heads = (tree: React.ReactNode) => all(tree, n => n.type === "section" && n.props["data-testid"] === "room-group").map(n => n.props["aria-label"]);
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Kitchen" && n.props.checked === false)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Kitchen")[0]!.props.onChange({ target: { value: "500" } });
+  p.button(p.render(), "Set one price for Kitchen").props.onClick();
+  p.button(all(p.render(), n => n.props.className === "room-confirm")[0]!, "Apply one price").props.onClick();
+  all(p.render(), n => n.props["aria-label"] === "Rename Kitchen")[0]!.props.onChange({ target: { value: "Utility" } });
+  p.button(all(p.render(), n => n.type === "section" && n.props["aria-label"] === "Kitchen")[0]!, "Rename").props.onClick();
+  p.button(p.render(), "Undo one price for Utility").props.onClick();
+  expect(heads(p.render())).toEqual(["Utility"]);
+  expect(all(p.render(), n => n.type === "article").map(n => n.key)).toEqual(["a", "b"]);
 });

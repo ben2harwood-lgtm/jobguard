@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-2": {
+      "branches": [
+        "codex/sandbox/rt-fix-2"
+      ],
+      "note": "RT-FIX-2 (#1071): keep spoken price corrections on one open line with an explicit correction question. HEAD_UNDER_TEST=b25b5ee931ff7bb62bbaa34a47099fddadf514ed. Retain the already-staged RT-00 runner, corpus and hardening plan unchanged apart from the authorised findings/status edits. This lane automatically owns its own config file.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/redteam/corpus/RT-03-corrections-seed.v1.json",
+        "packages/ai/src/redteam/corpus/RT-00-seed.v1.json",
+        "packages/ai/src/redteam/corpus.test.ts",
+        "docs/testing/spoken-quote-hardening/**"
+      ]
+    }
+  }
+}

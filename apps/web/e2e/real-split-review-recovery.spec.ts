@@ -59,8 +59,9 @@ test("walk 2 Split reaches confirmed scope without guessing quantity", async ({ 
   await expect(childA).toBeFocused();
   await expect(childA).toBeInViewport();
   await expect(page.getByTestId("proposal-line-count")).toHaveText(String(initialCount + 2));
-  await expect(cards(page).nth(0).locator("strong")).toHaveText("split");
-  await expect(cards(page).nth(1)).toContainText("check both descriptions and accept each child");
+  // Rows are grouped by room, so find the parent and child by name rather than position.
+  await expect(cards(page).filter({ has: page.getByLabel(`Description ${originalDescription}`, { exact: true }) }).locator("strong")).toHaveText("split");
+  await expect(cards(page).filter({ has: childA })).toContainText("check both descriptions and accept each child");
   await childA.fill(hall);
   await page.getByLabel(`Description ${originalDescription} — part B`, { exact: true }).fill(woodwork);
   for (const description of [hall, woodwork]) {

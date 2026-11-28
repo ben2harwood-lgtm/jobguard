@@ -1,0 +1,4165 @@
+[
+  {
+    "id": "RT-02-001",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 plus VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-002",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 + VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-003",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 inc VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-004",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 incl VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-005",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 including VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-006",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 inclusive of VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-007",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 ex VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-008",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 excl VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-009",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 excluding VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-010",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 exclusive of VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-011",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 no VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-012",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 VAT on top",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F012"
+  },
+  {
+    "id": "RT-02-013",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 with VAT included",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F013"
+  },
+  {
+    "id": "RT-02-014",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 VAT included",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F014"
+  },
+  {
+    "id": "RT-02-015",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 inclusive",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F015"
+  },
+  {
+    "id": "RT-02-016",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 VAT exclusive",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F016"
+  },
+  {
+    "id": "RT-02-017",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 before VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F017"
+  },
+  {
+    "id": "RT-02-018",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 after VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F018"
+  },
+  {
+    "id": "RT-02-019",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 VAT payable separately",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F019"
+  },
+  {
+    "id": "RT-02-020",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,500 net of VAT",
+    "why": "VAT qualification preserves the spoken number and asks about VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F020"
+  },
+  {
+    "id": "RT-02-021",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler, I am not VAT registered, £2,500",
+    "why": "VAT before the amount still needs a tax question",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F021"
+  },
+  {
+    "id": "RT-02-022",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler, I'm not VAT registered, £2,500",
+    "why": "VAT before the amount still needs a tax question",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F022"
+  },
+  {
+    "id": "RT-02-023",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler, No VAT on this work, £2,500",
+    "why": "VAT before the amount still needs a tax question",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F023"
+  },
+  {
+    "id": "RT-02-024",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler, Price includes VAT, £2,500",
+    "why": "VAT before the amount still needs a tax question",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": [
+        300000,
+        208333
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F024"
+  },
+  {
+    "id": "RT-02-025",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler with the VAT that is £180",
+    "why": "Tax wording never authorises adding, removing or rounding VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 18000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F025"
+  },
+  {
+    "id": "RT-02-026",
+    "lane": "RT-02",
+    "transcript": "Paint the fence £600 with twenty percent off",
+    "why": "Any percentage deduction near an amount leaves the work price open; no discount arithmetic",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the fence",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F026"
+  },
+  {
+    "id": "RT-02-027",
+    "lane": "RT-02",
+    "transcript": "Tile the floor £800 with a 20% discount",
+    "why": "Any percentage deduction near an amount leaves the work price open; no discount arithmetic",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the floor",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F027"
+  },
+  {
+    "id": "RT-02-028",
+    "lane": "RT-02",
+    "transcript": "Fit the radiator £120 +VAT",
+    "why": "Tax wording never authorises adding, removing or rounding VAT",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the radiator",
+          "unitPricePence": 12000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "VAT"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F028"
+  },
+  {
+    "id": "RT-02-029",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus materials",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F029"
+  },
+  {
+    "id": "RT-02-030",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 labour only",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "labour"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F030"
+  },
+  {
+    "id": "RT-02-031",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus the materials",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F031"
+  },
+  {
+    "id": "RT-02-032",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 excluding materials",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F032"
+  },
+  {
+    "id": "RT-02-033",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 materials extra",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F033"
+  },
+  {
+    "id": "RT-02-034",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 materials at cost",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F034"
+  },
+  {
+    "id": "RT-02-035",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus materials at cost",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F035"
+  },
+  {
+    "id": "RT-02-036",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 labour only with materials at cost",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "labour"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F036"
+  },
+  {
+    "id": "RT-02-037",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus skip",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "skip"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F037"
+  },
+  {
+    "id": "RT-02-038",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus scaffold",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "scaffold"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F038"
+  },
+  {
+    "id": "RT-02-039",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus delivery",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "delivery"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F039"
+  },
+  {
+    "id": "RT-02-040",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus waste removal",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "waste"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F040"
+  },
+  {
+    "id": "RT-02-041",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 supply only",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "supply"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F041"
+  },
+  {
+    "id": "RT-02-042",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 materials only",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F042"
+  },
+  {
+    "id": "RT-02-043",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 excluding labour",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "labour"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F043"
+  },
+  {
+    "id": "RT-02-044",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus labour",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "labour"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F044"
+  },
+  {
+    "id": "RT-02-045",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 labour extra",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "labour"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F045"
+  },
+  {
+    "id": "RT-02-046",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus fixings",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "fixings"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F046"
+  },
+  {
+    "id": "RT-02-047",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 with materials to be agreed",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "materials"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F047"
+  },
+  {
+    "id": "RT-02-048",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom £1,200 plus tiles supplied by the customer",
+    "why": "Keep the stated scope amount; ask about materials, labour or the excluded extra",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "tiles"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F048"
+  },
+  {
+    "id": "RT-02-049",
+    "lane": "RT-02",
+    "transcript": "Tile the kitchen £300 labour and £200 materials",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-050",
+    "lane": "RT-02",
+    "transcript": "Tile the kitchen labour £300 and materials £200",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-051",
+    "lane": "RT-02",
+    "transcript": "Tile the kitchen £200 materials plus £300 labour",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        50000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-052",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen for £900 plus £600 materials",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-053",
+    "lane": "RT-02",
+    "transcript": "Paint the hall £400 plus £50 for materials",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-054",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler £2,000 plus a £100 delivery charge",
+    "why": "Two scope amounts cannot silently become one fixed line price; ask which price belongs to the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-055",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £40 a door",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": 4000,
+          "quantity": "3",
+          "unit": "doors"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        12000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-056",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £40 per door",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": 4000,
+          "quantity": "3",
+          "unit": "doors"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        12000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-057",
+    "lane": "RT-02",
+    "transcript": "Fit four windows at £75 a window",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four windows",
+          "unitPricePence": 7500,
+          "quantity": "4",
+          "unit": "windows"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-058",
+    "lane": "RT-02",
+    "transcript": "Fit four windows at £75 per window",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four windows",
+          "unitPricePence": 7500,
+          "quantity": "4",
+          "unit": "windows"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        30000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-059",
+    "lane": "RT-02",
+    "transcript": "Fit six sockets at £25 per socket",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six sockets",
+          "unitPricePence": 2500,
+          "quantity": "6",
+          "unit": "sockets"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-060",
+    "lane": "RT-02",
+    "transcript": "Fit two radiators at £120 a radiator",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit two radiators",
+          "unitPricePence": 12000,
+          "quantity": "2",
+          "unit": "radiators"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        24000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-061",
+    "lane": "RT-02",
+    "transcript": "Paint three rooms at £200 per room",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint three rooms",
+          "unitPricePence": 20000,
+          "quantity": "3",
+          "unit": "rooms"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        60000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-062",
+    "lane": "RT-02",
+    "transcript": "Paint two coats at £100 per coat",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint two coats",
+          "unitPricePence": 10000,
+          "quantity": "2",
+          "unit": "coats"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        20000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F062"
+  },
+  {
+    "id": "RT-02-063",
+    "lane": "RT-02",
+    "transcript": "Lay ten metres of skirting at £25 per metre",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay ten metres of skirting",
+          "unitPricePence": 2500,
+          "quantity": "10",
+          "unit": "m"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        25000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F063"
+  },
+  {
+    "id": "RT-02-064",
+    "lane": "RT-02",
+    "transcript": "Tile twelve square metres at £30 per square metre",
+    "why": "A rate may be retained only for the explicitly counted matching unit",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile",
+          "unitPricePence": 3000,
+          "quantity": "12",
+          "unit": "m²"
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": [
+        36000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F064"
+  },
+  {
+    "id": "RT-02-065",
+    "lane": "RT-02",
+    "transcript": "Fit three windows at £180 a day",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-066",
+    "lane": "RT-02",
+    "transcript": "Fit three windows at £25 per hour",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-067",
+    "lane": "RT-02",
+    "transcript": "Fit three windows at £40 per pair",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-068",
+    "lane": "RT-02",
+    "transcript": "Fit three windows at £30 per room",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-069",
+    "lane": "RT-02",
+    "transcript": "Fit three windows at £50 per coat",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit three windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-070",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £180 a day",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-071",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £25 per hour",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-072",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £40 per pair",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-073",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £30 per room",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-074",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £50 per coat",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-075",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom at £180 a day",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-076",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom at £25 per hour",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-077",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom at £40 per pair",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-078",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom at £30 per room",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-079",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom at £50 per coat",
+    "why": "An unrelated rate unit never becomes a fixed price for the work",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-080",
+    "lane": "RT-02",
+    "transcript": "Paint the hall at a day rate of £180 for three days",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        54000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F080"
+  },
+  {
+    "id": "RT-02-081",
+    "lane": "RT-02",
+    "transcript": "Paint the hall day rate £180, three days",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        54000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F081"
+  },
+  {
+    "id": "RT-02-082",
+    "lane": "RT-02",
+    "transcript": "Paint the hall £180 a day for three days",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        54000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-083",
+    "lane": "RT-02",
+    "transcript": "Paint the hall £25 per hour for eight hours",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-084",
+    "lane": "RT-02",
+    "transcript": "Lay the floor £25 a metre for ten metres",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Lay the floor",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F084"
+  },
+  {
+    "id": "RT-02-085",
+    "lane": "RT-02",
+    "transcript": "Tile the floor £25 per square metre for twelve square metres",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the floor",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F085"
+  },
+  {
+    "id": "RT-02-086",
+    "lane": "RT-02",
+    "transcript": "Fit four windows at £40 a door",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit four windows",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-087",
+    "lane": "RT-02",
+    "transcript": "Hang three doors at £75 per window",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Hang three doors",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-088",
+    "lane": "RT-02",
+    "transcript": "Fit six sockets at £180 per day",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit six sockets",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        54000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-089",
+    "lane": "RT-02",
+    "transcript": "Paint two coats at £100 per room",
+    "why": "A time or mismatched rate stays open; no multiplication into a line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint two coats",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-090",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for between £400 and £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-091",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for between four hundred and five hundred pounds",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-092",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for four to five hundred pounds",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-093",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for four or five hundred pounds",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-094",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400-500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-095",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400–£500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-096",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 to £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-097",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 or £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-098",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 ish",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-099",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400-ish",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-100",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 give or take",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F100"
+  },
+  {
+    "id": "RT-02-101",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for give or take £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F101"
+  },
+  {
+    "id": "RT-02-102",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for call it £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F102"
+  },
+  {
+    "id": "RT-02-103",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for roughly four hundred pounds",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-104",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for approximately £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-105",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for approx. £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F105"
+  },
+  {
+    "id": "RT-02-106",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for ballpark £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F106"
+  },
+  {
+    "id": "RT-02-107",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 ballpark",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F107"
+  },
+  {
+    "id": "RT-02-108",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for around about £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-109",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for somewhere near £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F109"
+  },
+  {
+    "id": "RT-02-110",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for in the region of £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F110"
+  },
+  {
+    "id": "RT-02-111",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for circa £400",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F111"
+  },
+  {
+    "id": "RT-02-112",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 or thereabouts",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-113",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for should come in under £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-114",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for no less than £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-115",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for not above £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-116",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for a budget of £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F116"
+  },
+  {
+    "id": "RT-02-117",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for allow £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F117"
+  },
+  {
+    "id": "RT-02-118",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for allowance of £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F118"
+  },
+  {
+    "id": "RT-02-119",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for provisionally £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F119"
+  },
+  {
+    "id": "RT-02-120",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £500 subject to survey",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F120"
+  },
+  {
+    "id": "RT-02-121",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £500 estimated",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F121"
+  },
+  {
+    "id": "RT-02-122",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for an estimate of £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F122"
+  },
+  {
+    "id": "RT-02-123",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for maybe £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F123"
+  },
+  {
+    "id": "RT-02-124",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for probably £500",
+    "why": "A range, estimate, budget or hedge is not a fixed line price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F124"
+  },
+  {
+    "id": "RT-02-125",
+    "lane": "RT-02",
+    "transcript": "Fit the door for £150 if they want oak otherwise £100",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-126",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £300 or £250 if they pay cash",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-127",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £200 for one coat or £300 for two",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-128",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 if the walls are sound",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F128"
+  },
+  {
+    "id": "RT-02-129",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £500 unless the plaster needs repair",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F129"
+  },
+  {
+    "id": "RT-02-130",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £600 provided access is clear",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F130"
+  },
+  {
+    "id": "RT-02-131",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £700 subject to seeing the joists",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F131"
+  },
+  {
+    "id": "RT-02-132",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £250 depending on the finish",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F132"
+  },
+  {
+    "id": "RT-02-133",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £350 assuming no rot",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F133"
+  },
+  {
+    "id": "RT-02-134",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £450 only if the room is empty",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F134"
+  },
+  {
+    "id": "RT-02-135",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £550 conditional on access",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F135"
+  },
+  {
+    "id": "RT-02-136",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £650 if we can reuse the frame",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F136"
+  },
+  {
+    "id": "RT-02-137",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £750 if materials arrive on time",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F137"
+  },
+  {
+    "id": "RT-02-138",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 if paid in advance",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F138"
+  },
+  {
+    "id": "RT-02-139",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 subject to customer approval",
+    "why": "A conditional price or alternate amount is not a fixed approved work price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": []
+    },
+    "status": "pass",
+    "finding": "RT-02-F139"
+  },
+  {
+    "id": "RT-02-140",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for knock off £20 for cash",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-141",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for take £20 off for cash",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-142",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for less £20 for cash",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-143",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for a discount of £20",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-144",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for a rebate of £20",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-145",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for a refund of £20",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-146",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £20 back for the old fittings",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-147",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £20 cashback",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F147"
+  },
+  {
+    "id": "RT-02-148",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for deduct £20 for the old fittings",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-149",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for less 10 percent of £400",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F149"
+  },
+  {
+    "id": "RT-02-150",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for 10% off £400",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F150"
+  },
+  {
+    "id": "RT-02-151",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 with 10% off",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F151"
+  },
+  {
+    "id": "RT-02-152",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 less ten percent",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F152"
+  },
+  {
+    "id": "RT-02-153",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 at a 10 percent discount",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F153"
+  },
+  {
+    "id": "RT-02-154",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 minus the deposit",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F154"
+  },
+  {
+    "id": "RT-02-155",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 after the £100 deposit",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-156",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 but they have paid £100 already",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-157",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 but I will knock off £20 for cash",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-158",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 with a £20 credit",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-159",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400 less the £20 materials refund",
+    "why": "Credit, deduction, percentage or prior payment must not be promoted to a positive work charge",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ],
+      "neverPence": [
+        42000,
+        44000,
+        36000
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-160",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen £4,000, customer has paid a £500 deposit",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": 400000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "deposit"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F160"
+  },
+  {
+    "id": "RT-02-161",
+    "lane": "RT-02",
+    "transcript": "Customer has paid a £500 deposit, fit the kitchen £4,000",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "fit the kitchen",
+          "unitPricePence": 400000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "deposit"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F161"
+  },
+  {
+    "id": "RT-02-162",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen £4,000, deposit of £500 already paid",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": 400000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "deposit"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F162"
+  },
+  {
+    "id": "RT-02-163",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen £4,000, they have paid £500 already",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": 400000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "paid"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F163"
+  },
+  {
+    "id": "RT-02-164",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen, deposit of £500",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "deposit"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F164"
+  },
+  {
+    "id": "RT-02-165",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen, they have paid £500 already",
+    "why": "A deposit or settled payment is not a line price or a deduction to calculate",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "paid"
+      ],
+      "neverPence": [
+        50000,
+        350000,
+        450000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-02-F165"
+  },
+  {
+    "id": "RT-02-166",
+    "lane": "RT-02",
+    "transcript": "Fit skirting free of charge",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "free of charge"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F166"
+  },
+  {
+    "id": "RT-02-167",
+    "lane": "RT-02",
+    "transcript": "Fit skirting for free",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "for free"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F167"
+  },
+  {
+    "id": "RT-02-168",
+    "lane": "RT-02",
+    "transcript": "Fit skirting at no charge",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "at no charge"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F168"
+  },
+  {
+    "id": "RT-02-169",
+    "lane": "RT-02",
+    "transcript": "Fit skirting chuck it in",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "chuck it in"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F169"
+  },
+  {
+    "id": "RT-02-170",
+    "lane": "RT-02",
+    "transcript": "Fit skirting on the house",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "on the house"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F170"
+  },
+  {
+    "id": "RT-02-171",
+    "lane": "RT-02",
+    "transcript": "Fit skirting complimentary",
+    "why": "Free work has one unpriced or zero-price line with an explicit question, never a guess",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit skirting",
+          "unitPricePence": [
+            null,
+            0
+          ]
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "complimentary"
+      ],
+      "neverPence": []
+    },
+    "status": "open-finding",
+    "finding": "RT-02-F171"
+  },
+  {
+    "id": "RT-02-172",
+    "lane": "RT-02",
+    "transcript": "Paint the hall for £400",
+    "why": "Unqualified control keeps precisely the fixed price that was said",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the hall",
+          "unitPricePence": 40000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-173",
+    "lane": "RT-02",
+    "transcript": "Tile the bathroom for £1,200",
+    "why": "Unqualified control keeps precisely the fixed price that was said",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Tile the bathroom",
+          "unitPricePence": 120000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-174",
+    "lane": "RT-02",
+    "transcript": "Fit the boiler for £2,500",
+    "why": "Unqualified control keeps precisely the fixed price that was said",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the boiler",
+          "unitPricePence": 250000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-02-175",
+    "lane": "RT-02",
+    "transcript": "Fit the kitchen for £4,000",
+    "why": "Unqualified control keeps precisely the fixed price that was said",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the kitchen",
+          "unitPricePence": 400000
+        }
+      ],
+      "lineCount": 1,
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [],
+      "neverPence": []
+    },
+    "status": "pass"
+  }
+]
