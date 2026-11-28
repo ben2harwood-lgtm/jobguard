@@ -6751,5 +6751,96 @@
       "lineCount": 1
     },
     "status": "pass"
+  },
+  {
+    "id": "RT-01-269",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-270",
+    "lane": "RT-01",
+    "transcript": "﻿Fit the door for £150. ​Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-271",
+    "lane": "RT-01",
+    "transcript": "​Fit the door for £150. Paint the wall for £200",
+    "why": "Invisible characters before work verbs never hide an item or alter its source spans; the amounts are intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": 15000
+        },
+        {
+          "descriptionIncludes": "Paint the wall",
+          "unitPricePence": 20000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RT-01-272",
+    "lane": "RT-01",
+    "transcript": "F​it the door for £150. Pa​int the wall for £200",
+    "why": "Invisible characters inside work verbs never hide an item; source spans and conservative open-price checks remain intact.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "F​it the door",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Pa​int the wall",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "Confirm price"
+      ],
+      "lineCount": 2
+    },
+    "status": "pass"
   }
 ]

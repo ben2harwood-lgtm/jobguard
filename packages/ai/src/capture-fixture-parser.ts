@@ -38,7 +38,12 @@ const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace
 export const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 // The splitter's spoken verbs count too, so a leading "decorate the bedroom …" is never mistaken for a title.
-export const workClause = (value: string) => workWord.test(value) || spokenVerb.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
+// Recognition only: never use this copy for source spans or amount parsing.
+const visibleWorkText = (value: string) => value.replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, "").trimStart();
+export const workClause = (value: string) => {
+  const visible = visibleWorkText(value);
+  return workWord.test(visible) || spokenVerb.test(visible) || /^woodwork\s+in\s+gloss\b/iu.test(visible);
+};
 export const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 // Keep corrupted literals whole so they produce an open price, never a valid prefix or a second work line.
 export const invisibleFormat = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
@@ -140,12 +145,14 @@ const limitAfter = /^\s*(?:[-–−)]|(?:pounds?\s+|quid\s+)?(?:minimum|maximum|
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
  * a hedge word qualifies it ("about 500", "500 or so"); a limit, floor or credit word qualifies it ("up to £200",
  * "£200 minimum", "take off £50", "-£50", "(£50)", "£50-", "£50 off the bill"); invisible format characters
- * occur in its clause (never stripped from the source); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
+ * occur in its clause (except before the work verb; never stripped from the source); a spoken correction retracts it; or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
+  // A BOM/zero-width prefix before work is harmless; retain every character beside or inside the amount.
+  const priceBefore = workClause(before) ? before.replace(/^[\s\p{Cf}\p{Default_Ignorable_Code_Point}]+/u, "") : before;
   return spokenCorrection.test(before) || spokenCorrection.test(after) || readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
-    || invisibleFormat.test(before) || invisibleFormat.test(after)
+    || invisibleFormat.test(priceBefore) || invisibleFormat.test(after)
     || hedgeBefore.test(before) || hedgeAfter.test(after) || limitBefore.test(before) || limitAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
@@ -197,7 +204,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
       if (!separator) {
         // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
-        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(text.slice(i + 1))
+        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
           && !tiedBefore.test(text.slice(start, i)) && text.slice(start, i).trim().split(/\s+/u).length >= 2) {
           add(start, i); start = i + 1;
         }
@@ -217,7 +224,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   add(start, text.length);
   const first = chunks[0];
   const titleText = first?.value.split(/ for | at /iu)[0]?.slice(0, 200).trim();
-  const title = first && titleText ? { value: titleText, start: first.start } : null;
+  const title = first && titleText ? { value: titleText, start: first.start + first.value.indexOf(titleText) } : null;
   const work = chunks.filter((chunk, index) => {
     if (isTiming(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
     if (!isWork(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {

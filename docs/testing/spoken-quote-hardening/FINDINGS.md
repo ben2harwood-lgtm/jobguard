@@ -252,3 +252,26 @@ the worktree.
 
 Parser/validator repair only: no database migration, provider action, web workflow or commercial-policy
 change. No push, merge, deployment, independent review, acceptance or production readiness is claimed.
+
+
+### RT-FIX-3 review repair round 1 (#1077, 28 Nov 2026)
+
+Work recognition ignores leading and inner invisible format characters in a temporary comparison
+copy. The source and work-description spans retain them. Leading characters before a work verb do
+not open an otherwise intact price; characters inside or beside an amount still do. The title span
+now accounts for a trimmed BOM. No parser or policy version changes.
+
+Added RT-01-269–271 for the requested BOM/zero-width prefixes, each retaining two lines priced
+15000 and 20000 pence, and RT-01-272 for invisible characters inside both work verbs. The three
+requested cases fail before the repair and pass afterward through capture, Reader A and its numeric
+checker, including source-span invariants.
+
+Executed locally with at most two Vitest workers:
+- `pnpm --filter @jobguard/ai test --maxWorkers=2`: 28 files / 804 tests pass.
+- `pnpm eval --maxWorkers=2`: 28 files / 804 tests pass.
+- `pnpm --filter @jobguard/ai typecheck`, `lint` and `build`: pass.
+- Golden record: only the parser implementation SHA-256 changed; all 32 fixture predictions and
+  evaluation totals remain unchanged (recall 41/41, citations 119/119, unsupported money 0,
+  ambiguities 63/63). Existing open findings remain open.
+
+Deterministic local verification only. No push, merge, release or independent review claimed.
