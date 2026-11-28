@@ -305,3 +305,59 @@ describe("approve -> duplicate -> unlink restores the effective state", () => {
     expect(asked).toMatchObject({ pendingNetPence: 40000, approvedNetPence: null });
   });
 });
+
+// Repair round 2 (P2): every fact a read classifies comes from ONE statement, hence one READ COMMITTED snapshot. A final
+// approval committed by another connection mid-read is seen whole or not at all, never as an old lifecycle beside a new outcome.
+describe("reads come from one consistent snapshot", () => {
+  let w: ChainWorld, sup: S;
+  beforeAll(async () => { w = await chainWorld(c); sup = await session(w.members.supervisor.member); }, 240_000);
+  /** A runtime pool that records the read connection's statements and runs `between` (committing elsewhere) after the scope call. */
+  function interleaved(between: () => Promise<void>, statements: string[]) {
+    let fired = false;
+    return new Proxy(c.runtime, { get(target, key) {
+      if (key === "connect") return async () => {
+        const client = await target.connect();
+        return new Proxy(client, { get(connection, property) {
+          if (property === "query") return async (sql: string, values?: unknown[]) => {
+            statements.push(sql);
+            const result = await connection.query(sql, values);
+            if (!fired && sql.includes("app.cr_read_scope(")) { fired = true; await between(); }
+            return result;
+          };
+          const value = Reflect.get(connection, property);
+          return typeof value === "function" ? value.bind(connection) : value;
+        } });
+      };
+      const value = Reflect.get(target, key);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+  }
+
+  it("a final approval committed mid-read is classified consistently, and every fact table is read by one statement", async () => {
+    const s = await submitted(c, w, 25000);
+    expect(await itemOf(sup, s.extraId)).toMatchObject({ state: "waiting_for_contractor_approval" });
+    const statements: string[] = [];
+    const pool = interleaved(async () => {
+      await approvals().approveExtraStep(await act(w, w.members.supervisor.member), w.members.supervisor.member, approveInput(s, 0));
+    }, statements);
+    const list = await new ExtraCommercialReadRepository(pool as Pool).workList(sup.ctx, sup.id, { version: "extra-work-list-query.v1" });
+    // The approval committed before the facts statement began, so the one snapshot holds both its outcome and its event.
+    expect(list.items.find(i => i.extraId === s.extraId)).toMatchObject({ state: "approved_not_exported" });
+    // Exactly one statement reads the extra, approval and billing tables; no second SELECT can see a later commit.
+    const factTables = ["app.extra_event", "app.extra_approval_request", "app.extra_approval_outcome", "app.extra_approval_step_fact", "app.billing_export_line", "app.billing_fact", "app.variation "];
+    const readers = statements.filter(q => factTables.some(t => q.includes(t)));
+    expect(readers).toHaveLength(1);
+    expect(readers[0]!.startsWith("WITH ")).toBe(true);
+    for (const t of factTables) expect(readers[0]).toContain(t);
+  });
+
+  it("the entitlement context, asked-against-approved and claim record each read their facts in one statement", async () => {
+    const s = await submitted(c, w, 26000);
+    for (const method of ["entitlementContext", "askedAgainstApproved", "claimRecord"] as const) {
+      const statements: string[] = [];
+      const repo = new ExtraCommercialReadRepository(interleaved(async () => undefined, statements) as Pool);
+      await repo[method](sup.ctx, sup.id, s.jobId, s.extraId);
+      expect(statements.filter(q => q.includes("app.extra_event") || q.includes("app.extra_approval_request")), method).toHaveLength(1);
+    }
+  });
+});

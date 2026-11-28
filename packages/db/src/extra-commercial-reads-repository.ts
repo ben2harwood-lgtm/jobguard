@@ -39,70 +39,88 @@ function failure(error: unknown): never {
 type Facts = Awaited<ReturnType<typeof loadFacts>>;
 type Extra = Facts["extras"][number];
 
-async function q(db: TenantTransaction, sql: string, args: unknown[]): Promise<Row[]> { return (await db.$client.query(sql, args)).rows as Row[]; }
 
-/** Every row needed by any of the four reads, for the given covered jobs (and optionally one extra). One pass, no N+1. */
-async function loadFacts(db: TenantTransaction, tenant: string, jobs: string[], extra: string | null) {
-  const a = [tenant, jobs, extra];
-  const scoped = "tenant_id=$1 AND job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR variation_id=$3)";
-  const extras = await q(db, `SELECT v.id extra_id,v.job_id,v.description,v.sor_code,v.sor_version_id,o.kind origin_kind,o.server_recorded_at raised_at,o.raising_membership_id,
+/**
+ * Every row needed by any of the four reads, for the given covered jobs (and optionally one extra), in ONE statement.
+ * withTenant runs READ COMMITTED (the plan-entitlement and worker-switch guards require it), where each statement takes
+ * its own snapshot; a writer committing between two SELECTs (a final approval after the events were read, an export
+ * after the lifecycle) could otherwise pair facts that never coexisted. One statement is one snapshot.
+ * Rows travel as jsonb: timestamps are revived to Date below, exact rationals and adjustments are cast to text.
+ */
+const FACT_SETS: readonly (readonly [name: string, sql: string, order: string])[] = [
+  ["extras", `SELECT v.id extra_id,v.job_id,v.description,v.sor_code,v.sor_version_id,o.kind origin_kind,o.server_recorded_at raised_at,o.raising_membership_id,
      o.site_visit_id,o.evidence_id,o.resident_confirmation_evidence_id,o.work_order_revision_id origin_revision_id,
      w.id work_order_id,w.reference order_reference,w.contract_id,w.contract_version_id,cur.revision_id current_revision_id
     FROM app.variation v JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(v.tenant_id,v.job_id,v.id)
     JOIN app.work_order w ON(w.tenant_id,w.job_id)=(v.tenant_id,v.job_id)
     LEFT JOIN app.work_order_current cur ON(cur.tenant_id,cur.work_order_id)=(w.tenant_id,w.id)
-    WHERE v.tenant_id=$1 AND v.job_id=ANY($2::uuid[]) AND v.job_track='contractor' AND ($3::uuid IS NULL OR v.id=$3)
-    ORDER BY o.server_recorded_at,v.id`, a);
-  // `superseded` mirrors app.xa_latest_kind (0622): only the duplicate event written by a link that was later reversed by an
+    WHERE v.tenant_id=$1 AND v.job_id=ANY($2::uuid[]) AND v.job_track='contractor' AND ($3::uuid IS NULL OR v.id=$3)`, "t.raised_at,t.extra_id"],
+  // superseded mirrors app.xa_latest_kind (0622): only the duplicate event written by a link that was later reversed by an
   // unlink stops counting toward the effective state. The event itself stays in the history.
-  const events = await q(db, `SELECT e.variation_id,e.kind,e.sequence,e.reason_code,e.server_recorded_at,
+  ["events", `SELECT e.variation_id,e.kind,e.sequence,e.reason_code,e.server_recorded_at,
      (e.kind='duplicate' AND EXISTS(SELECT 1 FROM app.extra_duplicate_link l
        JOIN app.extra_duplicate_link u ON(u.tenant_id,u.job_id,u.reverses_link_id)=(l.tenant_id,l.job_id,l.id) AND u.kind='unlink'
        WHERE(l.tenant_id,l.job_id,l.duplicate_id,l.command_id)=(e.tenant_id,e.job_id,e.variation_id,e.command_id) AND l.kind='link')) superseded
-    FROM app.extra_event e WHERE e.tenant_id=$1 AND e.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR e.variation_id=$3) ORDER BY e.variation_id,e.sequence`, a);
-  const sor = await q(db, `SELECT * FROM app.extra_sor_revision WHERE ${scoped}`, a);
-  const bindings = await q(db, `SELECT b.variation_id,b.id,b.logical_revision,b.source_kind,b.sor_revision_id,b.actor_membership_id,b.server_recorded_at,
+    FROM app.extra_event e WHERE e.tenant_id=$1 AND e.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR e.variation_id=$3)`, "t.variation_id,t.sequence"],
+  ["sor", `SELECT s.id,s.variation_id,s.coverage,s.sor_code,s.unit,s.instructed_quantity,s.claimed_quantity,s.quantity,s.net_pence,
+     s.adjustment_numerator::text adjustment_numerator,s.adjustment_denominator::text adjustment_denominator FROM app.extra_sor_revision s
+    WHERE s.tenant_id=$1 AND s.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR s.variation_id=$3)`, "t.variation_id,t.id"],
+  ["bindings", `SELECT b.variation_id,b.id,b.logical_revision,b.source_kind,b.sor_revision_id,b.actor_membership_id,b.server_recorded_at,
      coalesce(s.net_pence,r.signed_delta_pence) net_pence,p.server_recorded_at basis_at
     FROM app.extra_approval_revision_binding b
     LEFT JOIN app.extra_sor_revision s ON(s.tenant_id,s.id)=(b.tenant_id,b.sor_revision_id)
     LEFT JOIN app.variation_revision r ON(r.tenant_id,r.job_id,r.id)=(b.tenant_id,b.job_id,b.variation_revision_id)
     LEFT JOIN app.extra_pricing_basis p ON p.tenant_id=b.tenant_id AND p.variation_id=b.variation_id AND p.revision=s.revision
      AND p.revision_content_hash=s.content_hash AND p.pricing_basis='server_sor'
-    WHERE b.tenant_id=$1 AND b.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR b.variation_id=$3) ORDER BY b.variation_id,b.logical_revision`, a);
-  const requests = await q(db, `SELECT r.variation_id,r.id,r.request_revision,r.binding_id,r.net_pence,r.requirement,r.server_recorded_at,r.contract_version_id,r.rule_version_id,
+    WHERE b.tenant_id=$1 AND b.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR b.variation_id=$3)`, "t.variation_id,t.logical_revision"],
+  ["requests", `SELECT r.variation_id,r.id,r.request_revision,r.binding_id,r.net_pence,r.requirement,r.server_recorded_at,r.contract_version_id,r.rule_version_id,
      o.kind outcome_kind,o.reason_code,o.actor_kind outcome_actor_kind,o.by_rule,o.server_recorded_at outcome_at
     FROM app.extra_approval_request r LEFT JOIN app.extra_approval_outcome o ON(o.tenant_id,o.request_id)=(r.tenant_id,r.id)
-    WHERE r.tenant_id=$1 AND r.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR r.variation_id=$3) ORDER BY r.variation_id,r.request_revision`, a);
-  const steps = await q(db, `SELECT variation_id,request_id,step_index,step_role,actor_kind,approved_net_pence,server_recorded_at FROM app.extra_approval_step_fact WHERE ${scoped} ORDER BY request_id,step_index`, a);
-  const escalations = await q(db, `SELECT variation_id,request_id,step_index,eligible_roles,fired_at FROM app.extra_escalation_fact WHERE ${scoped}`, a);
-  const links = await q(db, `SELECT k.variation_id,k.id,k.request_id,k.server_recorded_at,c.kind closed_kind,c.server_recorded_at closed_at FROM app.extra_client_link k
-    LEFT JOIN app.extra_client_link_closure c ON(c.tenant_id,c.link_id)=(k.tenant_id,k.id) WHERE k.tenant_id=$1 AND k.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR k.variation_id=$3)`, a);
-  const duplicateLinks = await q(db, `SELECT id,kind,duplicate_id,canonical_id,server_recorded_at FROM app.extra_duplicate_link
-    WHERE tenant_id=$1 AND job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR duplicate_id=$3 OR canonical_id=$3) ORDER BY server_recorded_at,id`, a);
-  const revisionIds = [...new Set(extras.flatMap(e => [e.origin_revision_id, e.current_revision_id]).filter(Boolean))] as string[];
-  const orderRevisions = await q(db, `SELECT id,work_order_id,revision,status,created_at FROM app.work_order_revision WHERE tenant_id=$1 AND id=ANY($2::uuid[])`, [tenant, revisionIds]);
-  const orderLines = await q(db, `SELECT revision_id,position,scope_item_id,client_line_reference,sor_code,unit,quantity,rate_pence FROM app.work_order_line
-    WHERE tenant_id=$1 AND revision_id=ANY($2::uuid[]) ORDER BY revision_id,position`, [tenant, revisionIds]);
-  const contractVersions = await q(db, `SELECT cv.id,cv.contract_id,cv.revision,cv.rule_version_id,rv.revision rule_revision FROM app.client_contract_version cv
-    JOIN app.approval_rule_version rv ON(rv.tenant_id,rv.id)=(cv.tenant_id,cv.rule_version_id) WHERE cv.tenant_id=$1 AND cv.id=ANY($2::uuid[])`,
-    [tenant, [...new Set(extras.map(e => e.contract_version_id))]]);
-  const rateItems = await q(db, `SELECT i.version_id,i.code,i.description,i.unit,i.rate_pence,s.reference,s.effective_from::text effective_from FROM app.sor_item i
-    JOIN app.sor_version s ON(s.tenant_id,s.id)=(i.tenant_id,i.version_id) WHERE i.tenant_id=$1 AND (i.version_id,i.code) IN (SELECT * FROM unnest($2::uuid[],$3::text[]))`,
-    [tenant, extras.filter(e => e.sor_code).map(e => e.sor_version_id), extras.filter(e => e.sor_code).map(e => e.sor_code)]);
-  const exportLines = await q(db, `SELECT l.id,l.extra_id,l.batch_id,l.approval_request_id,l.approved_net_pence,b.server_recorded_at exported_at FROM app.billing_export_line l
-    JOIN app.billing_export_batch b ON(b.tenant_id,b.id)=(l.tenant_id,l.batch_id) WHERE l.tenant_id=$1 AND l.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR l.extra_id=$3)`, a);
-  const lineIds = exportLines.map(l => l.id as string);
-  const matches = await q(db, `SELECT m.export_line_id,f.source,f.invoice_number,m.external_invoice_line_id,f.job_id FROM app.billing_line_match m
-    JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id) WHERE m.tenant_id=$1 AND m.export_line_id=ANY($2::uuid[]) AND f.payload->>'factType'='invoiced'`, [tenant, lineIds]);
-  const invoiceJobs = [...new Set(matches.map(m => m.job_id as string))];
-  const runs = await q(db, `SELECT r.id,r.job_id,r.source,r.invoice_number,r.projection,r.server_recorded_at FROM app.billing_allocation_run r WHERE r.tenant_id=$1 AND r.job_id=ANY($2::uuid[])
-    AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE n.tenant_id=r.tenant_id AND n.predecessor_id=r.id)`, [tenant, invoiceJobs]);
-  const allocations = await q(db, `SELECT a.id,a.run_id,a.export_line_id,a.source_ref,a.rule,a.matched_extra_numerator::text n,a.matched_extra_denominator::text d,
+    WHERE r.tenant_id=$1 AND r.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR r.variation_id=$3)`, "t.variation_id,t.request_revision"],
+  ["steps", `SELECT variation_id,request_id,step_index,step_role,actor_kind,approved_net_pence,server_recorded_at FROM app.extra_approval_step_fact
+    WHERE tenant_id=$1 AND job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR variation_id=$3)`, "t.request_id,t.step_index"],
+  ["escalations", `SELECT variation_id,request_id,step_index,eligible_roles,fired_at FROM app.extra_escalation_fact
+    WHERE tenant_id=$1 AND job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR variation_id=$3)`, "t.request_id,t.step_index,t.fired_at"],
+  ["links", `SELECT k.variation_id,k.id,k.request_id,k.server_recorded_at,c.kind closed_kind,c.server_recorded_at closed_at FROM app.extra_client_link k
+    LEFT JOIN app.extra_client_link_closure c ON(c.tenant_id,c.link_id)=(k.tenant_id,k.id) WHERE k.tenant_id=$1 AND k.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR k.variation_id=$3)`,
+    "t.server_recorded_at,t.id"],
+  ["duplicate_links", `SELECT id,kind,duplicate_id,canonical_id,server_recorded_at FROM app.extra_duplicate_link
+    WHERE tenant_id=$1 AND job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR duplicate_id=$3 OR canonical_id=$3)`, "t.server_recorded_at,t.id"],
+  ["order_revisions", `SELECT id,work_order_id,revision,status,created_at FROM app.work_order_revision
+    WHERE tenant_id=$1 AND id IN(SELECT origin_revision_id FROM extras UNION SELECT current_revision_id FROM extras)`, "t.id"],
+  ["order_lines", `SELECT revision_id,position,scope_item_id,client_line_reference,sor_code,unit,quantity,rate_pence FROM app.work_order_line
+    WHERE tenant_id=$1 AND revision_id IN(SELECT origin_revision_id FROM extras UNION SELECT current_revision_id FROM extras)`, "t.revision_id,t.position"],
+  ["contract_versions", `SELECT cv.id,cv.contract_id,cv.revision,cv.rule_version_id,rv.revision rule_revision FROM app.client_contract_version cv
+    JOIN app.approval_rule_version rv ON(rv.tenant_id,rv.id)=(cv.tenant_id,cv.rule_version_id) WHERE cv.tenant_id=$1 AND cv.id IN(SELECT contract_version_id FROM extras)`, "t.id"],
+  ["rate_items", `SELECT i.version_id,i.code,i.description,i.unit,i.rate_pence,s.reference,s.effective_from::text effective_from FROM app.sor_item i
+    JOIN app.sor_version s ON(s.tenant_id,s.id)=(i.tenant_id,i.version_id)
+    WHERE i.tenant_id=$1 AND (i.version_id,i.code) IN(SELECT sor_version_id,sor_code FROM extras WHERE sor_code IS NOT NULL)`, "t.version_id,t.code"],
+  ["export_lines", `SELECT l.id,l.extra_id,l.batch_id,l.approval_request_id,l.approved_net_pence,b.server_recorded_at exported_at FROM app.billing_export_line l
+    JOIN app.billing_export_batch b ON(b.tenant_id,b.id)=(l.tenant_id,l.batch_id) WHERE l.tenant_id=$1 AND l.job_id=ANY($2::uuid[]) AND ($3::uuid IS NULL OR l.extra_id=$3)`, "t.id"],
+  ["matches", `SELECT m.export_line_id,f.source,f.invoice_number,m.external_invoice_line_id,f.job_id FROM app.billing_line_match m
+    JOIN app.billing_fact f ON(f.tenant_id,f.id)=(m.tenant_id,m.fact_id)
+    WHERE m.tenant_id=$1 AND m.export_line_id IN(SELECT id FROM export_lines) AND f.payload->>'factType'='invoiced'`, "t.export_line_id,t.external_invoice_line_id"],
+  ["runs", `SELECT r.id,r.job_id,r.source,r.invoice_number,r.projection,r.server_recorded_at FROM app.billing_allocation_run r
+    WHERE r.tenant_id=$1 AND r.job_id IN(SELECT job_id FROM matches)
+    AND NOT EXISTS(SELECT 1 FROM app.billing_allocation_run n WHERE n.tenant_id=r.tenant_id AND n.predecessor_id=r.id)`, "t.id"],
+  ["allocations", `SELECT a.id,a.run_id,a.export_line_id,a.source_ref,a.rule,a.matched_extra_numerator::text n,a.matched_extra_denominator::text d,
      NOT EXISTS(SELECT 1 FROM app.billing_allocation_run x WHERE x.tenant_id=a.tenant_id AND x.predecessor_id=a.run_id) current
-    FROM app.contractor_receipt_line_allocation a WHERE a.tenant_id=$1 AND a.export_line_id=ANY($2::uuid[]) ORDER BY a.run_id,a.id`, [tenant, lineIds]);
-  const billingFacts = await q(db, `SELECT f.id,f.source,f.invoice_number,f.payload->>'factType' fact_type,f.source_event_id,f.match_valid,f.server_recorded_at FROM app.billing_fact f
-    WHERE f.tenant_id=$1 AND f.job_id=ANY($2::uuid[]) AND (f.source,f.invoice_number) IN (SELECT * FROM unnest($3::text[],$4::text[])) ORDER BY f.server_recorded_at,f.id`,
-    [tenant, invoiceJobs, matches.map(m => m.source), matches.map(m => m.invoice_number)]);
+    FROM app.contractor_receipt_line_allocation a WHERE a.tenant_id=$1 AND a.export_line_id IN(SELECT id FROM export_lines)`, "t.run_id,t.id"],
+  ["billing_facts", `SELECT f.id,f.source,f.invoice_number,f.payload->>'factType' fact_type,f.source_event_id,f.match_valid,f.server_recorded_at FROM app.billing_fact f
+    WHERE f.tenant_id=$1 AND f.job_id IN(SELECT job_id FROM matches) AND (f.source,f.invoice_number) IN(SELECT source,invoice_number FROM matches)`, "t.server_recorded_at,t.id"],
+];
+export const FACTS_STATEMENT = `WITH ${FACT_SETS.map(([name, sql]) => `${name} AS MATERIALIZED (${sql})`).join(",\n")}
+SELECT jsonb_build_object(${FACT_SETS.map(([name, , order]) => `'${name}',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY ${order}),'[]'::jsonb) FROM ${name} t)`).join(",")}) facts`;
+/** Top-level timestamp columns (every `*_at`, and the order revision's `created_at`) come back as Date, as node-postgres returns them. */
+const revive = (rows: Row[]): Row[] => rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, k.endsWith("_at") && typeof v === "string" ? new Date(v) : v])));
+
+async function loadFacts(db: TenantTransaction, tenant: string, jobs: string[], extra: string | null) {
+  const raw = (await db.$client.query<{ facts: Record<string, Row[]> }>(FACTS_STATEMENT, [tenant, jobs, extra])).rows[0]!.facts;
+  const set = (name: string) => revive(raw[name] ?? []);
+  const extras = set("extras"), events = set("events"), sor = set("sor"), bindings = set("bindings"), requests = set("requests"), steps = set("steps"),
+    escalations = set("escalations"), links = set("links"), duplicateLinks = set("duplicate_links"), orderRevisions = set("order_revisions"), orderLines = set("order_lines"),
+    contractVersions = set("contract_versions"), rateItems = set("rate_items"), exportLines = set("export_lines"), matches = set("matches"), runs = set("runs"),
+    allocations = set("allocations"), billingFacts = set("billing_facts");
   const by = <T extends Row>(rows: T[], key: string) => { const m = new Map<string, T[]>(); for (const r of rows) { const k = r[key] as string; m.set(k, [...(m.get(k) ?? []), r]); } return m; };
   const ev = by(events, "variation_id"), bi = by(bindings, "variation_id"), rq = by(requests, "variation_id"), st = by(steps, "request_id"), es = by(escalations, "request_id"),
     lk = by(links, "variation_id"), ex = by(exportLines, "extra_id"), sr = by(sor, "variation_id");
