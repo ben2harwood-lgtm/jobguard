@@ -9,6 +9,9 @@
       "allow": [
         "packages/ai/src/capture-fixture-parser.ts",
         "packages/ai/src/context-reader.ts",
+        "packages/ai/src/context-reader.test.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "packages/ai/src/capture-typed-rooms.test.ts",
         "packages/ai/src/redteam/corpus/RT-03-corrections.v1.json",
         "packages/core/src/job-understanding.ts",
         "packages/ai/src/redteam/corpus/RT-04-structure.v1.json",

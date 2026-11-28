@@ -209,7 +209,8 @@ export function plainItemBoundary(text: string, i: number, start: number,
   const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
   if (!separator) {
     // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
-    if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(visibleWorkText(text.slice(i + 1)))
+    if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && (spokenVerb.test(visibleWorkText(text.slice(i + 1)))
+        || workWord.test(visibleWorkText(text.slice(i + 1))) && amounts(text.slice(start, i)).some(amount => amount.index + amount.text.length === i - start))
       && !tiedBefore.test(text.slice(start, i)) && visibleWorkText(text.slice(start, i)).trimEnd().split(/\s+/u).length >= 2) {
       return 1;
     }
@@ -222,6 +223,10 @@ export function plainItemBoundary(text: string, i: number, start: number,
   if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) return 0;
   // "supply and fit one door" is one item.
   if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) return 0;
+  // B6: delegated work after a price is a new item, never a suffix lost by description trimming.
+  // Keep its own untouched source span; both readers and numeric checks use this boundary.
+  const delegated = /^(?:and\s+)?(?=(?:get|have|ask)\s+the\b)/iu.exec(next);
+  if (delegated && !priceCondition.test(text.slice(start, i))) return separator.length + delegated[0].length;
   if (isNext(next)) {
     return separator.length;
   }

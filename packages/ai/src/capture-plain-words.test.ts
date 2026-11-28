@@ -259,7 +259,8 @@ describe("continuous spoken quotes", () => {
       expect(result.questions.some(q => q.question.value.startsWith("Confirm price: paint the walls"))).toBe(true);
     });
   it("reads only an amount as the other end of a range", () => {
-    expect(rows("paint the walls for £500 to a high standard")).toEqual([["paint the walls for £500 to a high standard", "1", "item", 50000]]);
+    // B6: strip the amount words; the suffix remains in the explicit price-includes question.
+    expect(rows("paint the walls for £500 to a high standard")).toEqual([["paint the walls", "1", "item", 50000]]);
     for (const text of ["paint the walls for fifty pounds or sixty", "paint the walls for £400 to a thousand pounds"]) {
       expect(citations(text).lines[0]!.unitPricePence.value).toBeNull();
     }

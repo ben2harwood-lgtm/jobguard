@@ -422,9 +422,8 @@ const openNumbers = (line: JobUnderstanding["lines"][number]): JobUnderstanding[
 const priceOnly = new RegExp(`^(?:call it|say|make it|that'?s|thats|it'?s|about|around|roughly)?\\s*(?:£?\\d[\\d,]*(?:\\.\\d{1,2})?(?:\\s*(?:pounds|quid|grand|k))?|(?:(?:${numberWord}|a)[\\s-]+(?:and\\s+)?)*(?:${numberWord}|hundred|thousand)\\s+(?:pounds|quid|grand))(?:\\s+(?:a|per)\\s+[\\p{L}]+|\\s+each)?[.\\s]*$`, "iu");
 type Timeline = { start: number; name: string }[];
 function splitWithin(chunk: Cell): Cell[] {
-  // "…3200, and get the sparky to move two sockets": a new item the v1 splitter keeps with the last.
   // "… for 400 second bedroom same again": a reference starts its own item.
-  const at = /,?\s+and\s+(?=(?:get|have|ask)\s+the\b)/iu.exec(chunk.value) ?? sameAgain.exec(chunk.value);
+  const at = sameAgain.exec(chunk.value);
   if (!at || at.index === 0 || priceCondition.test(chunk.value.slice(0, at.index)) || chunk.inferred || !isWork(chunk.value.slice(0, at.index))) return [chunk];
   const head = chunk.value.slice(0, at.index), tailStart = at.index + at[0].length;
   return [{ value: head, start: chunk.start }, ...splitWithin({ value: chunk.value.slice(tailStart), start: chunk.start + tailStart })];

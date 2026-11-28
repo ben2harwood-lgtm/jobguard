@@ -1727,3 +1727,59 @@ receipt. No database, web, provider or prompt change; no live-model run required
 for this deterministic parser repair. Independent review of the new exact head
 remains required before merge. Commit only; no push, merge or deployment.
 `.pnpm-store/` remains untracked and is excluded from the commit.
+
+## RT-FIX-8 repair round 1 — work after an amount (#1071)
+
+Coordinator ruling applied on `f2d989e83`; this supersedes the three-assertion
+full-evaluation hold above. `context-reader.test.ts` now leaves square metres
+priced “a metre” open under RT-11 F065-F071. The one affected description
+assertion in `capture-plain-words.test.ts` follows B6's amount-free prefix rule.
+Each changed expectation names its finding in a one-line comment.
+
+The shared `plainItemBoundary` now splits delegated work (“and get/have/ask the
+…”) before B6 trims descriptions. The previous delegated-work splitter in
+Reader A is removed; its unrelated same-again/reference handling stays there.
+Unpunctuated work verbs outside the continuous-speech list also start a line
+when immediately preceded by an amount. The first full run caught an overly
+broad version splitting “new” inside “two new sockets”; requiring the amount
+to end immediately at the boundary preserves that existing held-out guarantee.
+
+Smith's recogniser-form suite retains its exact 320000 pence; “move two sockets”
+is a separate unpriced Electrics row. The typed Smith form also preserves the
+previously combined suite/sockets as separate rows; its bare `3200` remains open
+under the existing exact-amount grammar. Only the affected Smith expectations
+inside `capture-typed-rooms.test.ts` change (recogniser seven rows, typed eight).
+No price is copied, divided, reassigned or invented. The non-work tail “to a
+high standard” remains in the explicit price-includes question, verified using
+the compiled parser.
+
+B6-023–025 require every work phrase as a separate line: the Smith suite plus
+unpriced sockets, an immediate unpunctuated “move two sockets” after a units
+amount, and a separately priced electrician/socket variant. Exact per-line
+amounts are asserted through capture, Reader A and its numeric checker. All
+22 existing B6 cases are unchanged. The initial LATER / SIMPLICITY note above
+is retained; no unrelated refactor is included.
+
+Executed on Node 24.17.0 / pnpm 10.28.1, at most two Vitest workers:
+
+| Check | Result |
+| --- | --- |
+| `pnpm eval --maxWorkers=2` (full suite, final run) | PASS: 34 files; 1918 passes and 13 expected failures, 1931 checks; zero unexpected failures |
+| `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2` | PASS: 1240 checks; all 1193 corpus cases exercised, including 925 pass cases and 268 recorded open findings; 25/25 B6 cases pass |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core typecheck` | PASS for both packages |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core lint` | PASS for both packages |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core build` | PASS for both packages |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | PASS: 232 files, 4895 tests |
+| Compiled `runCaptureEvaluation` / `verifyGoldenRunRecord`; comparison to starting HEAD | PASS: 32/32 cases; recall 41/41, citations 119/119, unsupported money 0, ambiguity 63/63; entire record unchanged except parser source hash |
+| Current RT-FIX-8 lane helpers, corpus comparison, `git diff --check` | PASS: changed paths allowed; existing B6 rows identical; exactly three additions; no whitespace errors |
+
+An additional attempt to combine every lane file with `mergeLanePolicy` rejects
+pre-existing `config/lanes/v2-rt-12.json` for granting the lane register. That file
+is outside this repair's scope and unchanged; checking the RT-FIX-8 lane itself
+passes. This is separate from the green requested package checks and eval.
+
+No database, web, model, prompt, provider or release change. These are executed
+deterministic checks, not independent review or live-model accuracy evidence.
+Independent RED review against the committed head remains required before merge.
+Commit only; no push, merge or deployment. `.pnpm-store/` remains untracked and
+is excluded from the commit.

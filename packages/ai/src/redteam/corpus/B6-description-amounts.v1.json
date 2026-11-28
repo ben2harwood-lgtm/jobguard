@@ -512,5 +512,71 @@
       "areaPrices": []
     },
     "status": "pass"
+  },
+  {
+    "id": "B6-023",
+    "lane": "RT-08",
+    "transcript": "supply and fit three thousand two hundred pounds and get the sparky to move two sockets",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "supply and fit",
+          "unitPricePence": 320000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-024",
+    "lane": "RT-08",
+    "transcript": "Fit new units two thousand pounds move two sockets",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Fit new units",
+          "unitPricePence": 200000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": null
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "B6-025",
+    "lane": "RT-08",
+    "transcript": "Paint the walls £500 and ask the electrician to move two sockets £90",
+    "why": "B6: nothing spoken is lost: every work phrase must appear as a separate line or in an explicit question; the Smith suite row and two variants keep exactly their own spoken amounts. These cases require both work phrases as lines.",
+    "expect": {
+      "lineCount": 2,
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the walls",
+          "unitPricePence": 50000
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": 9000
+        }
+      ],
+      "wholeJobPricePence": null,
+      "areaPrices": []
+    },
+    "status": "pass"
   }
 ]

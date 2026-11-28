@@ -26,7 +26,8 @@ describe("V2-SQ-C Reader A", () => {
     };
     expect(line("fit new ones")).toMatchObject({ room: "Kitchen", unitPricePence: { value: 240000 }, priceBasis: "line" });
     const tiling = line("tile the floor");
-    expect(tiling).toMatchObject({ room: "Kitchen", trade: { value: "Tiling" }, quantity: { value: "12" }, unit: { value: "m²" }, unitPricePence: { value: 6000 }, priceBasis: "per_unit" });
+    // RT-11 F065-F071: square metres and a metre are incompatible units, so the price stays open.
+    expect(tiling).toMatchObject({ room: "Kitchen", trade: { value: "Tiling" }, quantity: { value: "12" }, unit: { value: "m²" }, unitPricePence: { value: null }, priceBasis: "none" });
     expect(job.questions.some(question => question.lineIndex === tiling.index && /about 12/u.test(question.text))).toBe(true);
     const suite = line("supply and fit 3200");
     expect(suite).toMatchObject({ room: "Upstairs bathroom", unitPricePence: { value: null }, priceBasis: "none" });
