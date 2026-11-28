@@ -1,5 +1,5 @@
 import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
-import { roomOnly } from "./room-words.js";
+import { hideRoomNumbers, roomOnly } from "./room-words.js";
 
 export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/3" as const;
 const MAX_PENCE = 1_000_000_000_000n;
@@ -68,7 +68,9 @@ export function spokenPounds(words: string): number | null {
   return last === null ? null : totalValue + group;
 }
 export type Amount = { text: string; index: number; pence: number | null };
-export function amounts(value: string): Amount[] {
+export function amounts(said: string): Amount[] {
+  // "Bedroom two £500": a numbered room's ordinal is never part of an amount nor beside one (V2-SQ-L). Same length.
+  const value = hideRoomNumbers(said);
   const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
     pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
   for (const match of value.matchAll(spokenAmount)) {
@@ -214,7 +216,8 @@ function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null 
   if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)) return null;
   const match = matches[0]!;
   // Never keep part of an amount: every said-amount guard, the same function totals call.
-  if (saidAmountOpen(chunk.value.slice(0, match.index), chunk.value.slice(match.index + match.text.length), "line")) return null;
+  const read = hideRoomNumbers(chunk.value);
+  if (saidAmountOpen(read.slice(0, match.index), read.slice(match.index + match.text.length), "line")) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
   return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };

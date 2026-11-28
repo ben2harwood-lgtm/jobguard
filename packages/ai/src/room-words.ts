@@ -8,3 +8,12 @@ export const roomPart = `(?:(?:${QUALIFIER})\\s+)?(?:bedroom\\s+${ORDINAL}|${ROO
 export const roomLead = "(?:(?:right|ok|okay|so|um|er|well)[\\s,]+)*(?:(?:and\\s+)?(?:then\\s+)?(?:(?:in|on|up on|at)\\s+)?(?:the\\s+)?|out the\\s+)";
 /** A clause that only names a room ("In the kitchen", "Upstairs bathroom", "Out the back"): it opens the room for what follows. */
 export const roomOnly = new RegExp(`^${roomLead}(${roomPart}(?:\\s+and\\s+(?:the\\s+)?${roomPart})?|back|front)[\\s,:-]*$`, "iu");
+/**
+ * "Bedroom two £500", "bedroom 2 500 pounds": the ordinal names the room, so the amount reader and its guards must not
+ * see it as a number beside the amount. Hidden only when a stated amount (£ or digits) follows; "bedroom two five
+ * hundred pounds" is left as said and stays open. Same length, so every index into the text stays the same.
+ */
+const numberedRoom = /(?<![\p{L}])bedroom\s+(?:one|two|three|four|five|[1-5])(?=\s*£|\s+\d)/giu;
+export function hideRoomNumbers(text: string): string {
+  return text.replace(numberedRoom, room => room.replace(/(?:one|two|three|four|five|[1-5])$/iu, ordinal => " ".repeat(ordinal.length)));
+}
