@@ -111,18 +111,20 @@ const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:
 // Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range. A bare number counts
 // at the end of the clause or before the total words ("five hundred pounds or six for the whole job").
 const rangeAfter = new RegExp(`^\\s*(?:-|–|to|or)\\s*(?:£\\d|${rangePhrase}\\s*(?:pounds|quid|k|grand|hundred|thousand)(?![\\p{L}])|${rangePhrase}\\s*(?:$|(?=(?:for|all in|in total|altogether)(?![\\p{L}]))))`, "iu");
-const hedge = /\b(?:about|around|roughly|approximately)\b/iu;
+// A hedge word qualifying the amount itself: "about 500", "roughly £500", "500 or so". "Tile around the bath" is a place.
+const hedgeBefore = /\b(?:about|around|roughly|approximately|approx)\.?\s*$/iu;
+const hedgeAfter = /^\s*(?:-?ish\b|or so\b|(?:roughly|approximately|approx)(?![\p{L}]))/iu;
 /**
  * The one place that holds every said-amount guard, for line prices (plainPrice) and room and whole-job totals alike.
  * `before` and `after` are the words of the same clause either side of the amount. The amount stays open, and is asked
  * about, when: it was read in part (readInPart); pence words or a "p" amount sit beside it (loosePence); a number
  * follows it (numberAfter); the other end of a range or alternative follows it (rangeAfter: "or six hundred");
- * a hedge word is in the clause (about, around, roughly, approximately); or a rate qualifier follows it (rateAfter).
+ * a hedge word qualifies it ("about 500", "500 or so"); or a rate qualifier follows it (rateAfter).
  * Line prices read "each" and "per door" rates themselves, so plainPrice passes rates "line" and only the rest apply.
  */
 export function saidAmountOpen(before: string, after: string, rates: "open" | "line" = "open"): boolean {
   return readInPart(before, after) || loosePence.test(`${before} ${after}`) || numberAfter.test(after) || rangeAfter.test(after)
-    || hedge.test(before) || hedge.test(after) || (rates === "open" && rateAfter(after) !== null);
+    || hedgeBefore.test(before) || hedgeAfter.test(after) || (rates === "open" && rateAfter(after) !== null);
 }
 // "plus VAT", "inc VAT", "ex VAT": VAT words never change the stated number, and VAT is asked about, not worked out.
 const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";

@@ -79,6 +79,11 @@ describe("V2-SQ-C Reader A", () => {
       const line = readSpokenJob("l", `Tile the floor for ${said}.`);
       expect(line.lines.every(item => item.unitPricePence.value === null), said).toBe(true);
     }
+    // A hedge counts only when it qualifies the amount: "around the bath" is a place.
+    expect(readSpokenJob("h", "Tile around the bath for 500 pounds all in.").wholeJobPrice?.pence).toBe(50000);
+    for (const said of ["about 500 pounds", "500 pounds or so", "roughly £500"]) {
+      expect(readSpokenJob("j", `Tile the floor. ${said} for the whole job.`).wholeJobPrice ?? null, said).toBeNull();
+    }
     // Whole amounts said in full are still read exactly.
     expect(readSpokenJob("r", "In the bathroom tile the floor. Bathroom all in one thousand two hundred pounds.").areaPrices.map(price => price.pence)).toEqual([120000]);
     expect(readSpokenJob("g", "Tile the floor. Six grand for the whole job.").wholeJobPrice?.pence).toBe(600000);
