@@ -83,7 +83,7 @@ export function V2HireItems({ jobId }: { jobId: string }) {
           {view.tasks.map(task => <label key={hireTaskKey(task)} style={{ display: "block", minHeight: 44 }}>
             <input type="checkbox" checked={isHireTaskLinked(item.tasks, task)}
               onChange={event => { const { title: _title, ...link } = task;
-                const tasks = toggleHireTask(item.tasks, link, event.target.checked);
+                const tasks = toggleHireTask(item.tasks, link, event.target.checked, view.tasks);
                 void run(() => change("link", item, { tasks })); }}/>{task.title}
           </label>)}
           {!view.tasks.length && <p>No dated plan tasks yet. Use Needed until for a reminder.</p>}

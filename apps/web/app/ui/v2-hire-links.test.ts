@@ -4,6 +4,7 @@ import { isHireTaskLinked, toggleHireTask } from "./v2-hire-links";
 const old = { quoteRevisionId: "rev-1", scopeItemId: "scope-a", templateTaskKey: "tile" };
 const current = { ...old, quoteRevisionId: "rev-2" };
 const other = { quoteRevisionId: "rev-2", scopeItemId: "scope-b", templateTaskKey: "paint" };
+const plan = [current, other];
 
 describe("V2-K8 hire task links across quote revisions", () => {
   it("shows a task linked on an older revision as linked on the current plan", () => {
@@ -11,10 +12,15 @@ describe("V2-K8 hire task links across quote revisions", () => {
     expect(isHireTaskLinked([old], other)).toBe(false);
   });
   it("unticking removes the older revision's link, so it stops driving reminders", () => {
-    expect(toggleHireTask([old, other], current, false)).toEqual([other]);
+    expect(toggleHireTask([old, other], current, false, plan)).toEqual([other]);
   });
   it("ticking replaces the older link with the current task instead of adding a second", () => {
-    expect(toggleHireTask([old], current, true)).toEqual([current]);
-    expect(toggleHireTask([], current, true)).toEqual([current]);
+    expect(toggleHireTask([old], current, true, plan)).toEqual([current]);
+    expect(toggleHireTask([], current, true, plan)).toEqual([current]);
+  });
+  it("drops a link whose task left the current plan, so the next change still saves", () => {
+    const gone = { quoteRevisionId: "rev-1", scopeItemId: "scope-x", templateTaskKey: "strip" };
+    expect(toggleHireTask([gone, old], other, true, plan)).toEqual([old, other]);
+    expect(toggleHireTask([gone, old], current, false, plan)).toEqual([]);
   });
 });
