@@ -38,11 +38,11 @@ function invoiceFailureMessage(code: string, unchangedLockedRevision = false): s
  return "The invoice result could not be confirmed. Reload the saved records before trying again.";
 }
 type LockInvoiceGuard = { code: "FINAL_ACCOUNT_LOCK_REQUIRED" | "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED" | null; kind: "final" | "supplementary"; lockedRevision?:{id:string;sourceHash:string;issueBlocked:boolean} };
-export function CustomerInvoices({jobId,finalAccount,lockGuard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};lockGuard?:LockInvoiceGuard}) {
- if(lockGuard)return <LockBoundCustomerInvoices jobId={jobId} finalAccount={finalAccount} guard={lockGuard}/>;
- return <PracticeCustomerInvoices jobId={jobId} finalAccount={finalAccount}/>;
+export function CustomerInvoices({jobId,finalAccount,lockGuard,designed=false}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};lockGuard?:LockInvoiceGuard;designed?:boolean}) {
+ if(lockGuard)return <LockBoundCustomerInvoices jobId={jobId} finalAccount={finalAccount} guard={lockGuard} designed={designed}/>;
+ return <PracticeCustomerInvoices jobId={jobId} finalAccount={finalAccount} designed={designed}/>;
 }
-function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean}}) {
+function PracticeCustomerInvoices({jobId,finalAccount,designed}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};designed:boolean}) {
  const [savedView,setView]=useState<PracticeInvoiceResponse|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false),[errorCode,setErrorCode]=useState("");
  const view=savedView?.jobId===jobId?savedView:null;
  const active=useRef<AbortController|null>(null),writing=useRef(false),uncertain=useRef(false);
@@ -86,11 +86,11 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
   finally{if(currentJob.current===jobId&&lifetime.current===generation){writing.current=false;setBusy(false);}}
  }
  if(loading)return <section aria-live="polite"><h3>Customer invoice</h3><p>Loading invoice history…</p></section>;
- if(error&&!view)return <section role="alert"><h3>Customer invoice unavailable</h3><p>{error}</p><button onClick={()=>void load()}>Try invoice history again</button></section>;
+ if(error&&!view)return <section role="alert"><h3>Customer invoice unavailable</h3><p>{error}</p><button className={designed ? "btn" : undefined} onClick={()=>void load()}>Try invoice history again</button></section>;
  const invoices=view?.invoices??[];
  const invoice=invoices.at(-1);
  return <section className="customer-invoice"><h3>Customer invoice</h3><p>Reference VAT is illustrative. This is not a real tax invoice.</p>
-  {!invoice?<button className="primary" disabled={busy||uncertain.current||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:invoices.map(invoice=><article key={invoice.id} id={`invoice-${invoice.id}`}>
+  {!invoice?<button className={designed ? "btn primary" : "primary"} disabled={busy||uncertain.current||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:invoices.map(invoice=><article key={invoice.id} id={`invoice-${invoice.id}`} tabIndex={designed ? -1 : undefined}>
    <p>Issued separately from delivery.</p><dl>
     <div><dt>Invoice number</dt><dd data-testid="customer-invoice-number">{invoice.number}</dd></div>
     <div><dt>Invoice gross</dt><dd data-testid="invoice-gross">{pounds(invoice.totalPence)}</dd></div>
@@ -103,17 +103,17 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    <CustomerInvoicePayNow/>
    <p>Need to change it? Issue a correction; this snapshot and number cannot be edited.</p>
    <CustomerCreditNotes jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
-   <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
+   <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} designed={designed} onChanged={()=>void load(true)}/>
   </article>)}
   {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
   {finalAccount.issueBlocked&&!invoice&&<p>Complete the required proof, then press “Rebuild from approved sources” to include it before issuing this bill.</p>}
   {error&&<p role="alert" data-error-code={errorCode}>{error}</p>}
-  {error&&<button type="button" disabled={busy} onClick={()=>void load(true)}>Refresh saved invoice history</button>}
+  {error&&<button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={()=>void load(true)}>Refresh saved invoice history</button>}
  </section>;
 }
 
 /** Screen prerequisites only; the server retains ancestry, line-difference and approval authority. */
-function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};guard:LockInvoiceGuard}) {
+function LockBoundCustomerInvoices({jobId,finalAccount,guard,designed}:{jobId:string;finalAccount:{id:string;sourceHash:string;issueBlocked:boolean};guard:LockInvoiceGuard;designed:boolean}) {
  const [busy,setBusy]=useState(false),[error,setError]=useState("");
  const [savedIssued,setIssued]=useState<PracticeInvoiceResponse|null>(null);
  const issued=savedIssued?.jobId===jobId?savedIssued:null;
@@ -170,8 +170,8 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
  }
  const latest=issued?.invoices.at(-1);
  return <section data-testid="lock-bound-invoices" aria-label="Lock-bound customer invoices">
-  <button style={{minHeight:44,minWidth:44}} disabled={finalDisabled} onClick={()=>void issue("final")}>Issue final invoice</button>
-  <button style={{minHeight:44,minWidth:44}} disabled={supplementaryDisabled} onClick={()=>void issue("supplementary")}>Issue supplementary invoice</button>
+  <button className={designed ? "btn primary" : undefined} style={{minHeight:44,minWidth:44}} disabled={finalDisabled} onClick={()=>void issue("final")}>Issue final invoice</button>
+  <button className={designed ? "btn" : undefined} style={{minHeight:44,minWidth:44}} disabled={supplementaryDisabled} onClick={()=>void issue("supplementary")}>Issue supplementary invoice</button>
   {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
   {issued&&!hasFinal&&<p>Issue the final invoice before adding a supplementary invoice.</p>}
   {hasFinal&&finalAccount.id===guard.lockedRevision?.id&&<p>This is still the locked account. Approve the extra, then press “Rebuild from approved sources” to create a later account for its supplementary invoice.</p>}
@@ -179,7 +179,7 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
   {guard.code&&<p role="alert" data-error-code={guard.code}>{invoiceGuardMessages[guard.code]}</p>}
   {finalAccount.issueBlocked&&<p>Complete the required proof, then press “Rebuild from approved sources” before issuing this bill.</p>}
   {error&&<p role="alert" data-error-code={error}>{error==="INVOICE_OUTCOME_UNKNOWN"?"The invoice result is unknown. Repeated issue is blocked. Check the saved invoice history before continuing.":invoiceFailureMessage(error,hasFinal&&finalAccount.id===guard.lockedRevision?.id)}</p>}
-  {error&&<button type="button" disabled={busy} onClick={()=>void load()}>Refresh saved invoice history</button>}
+  {error&&<button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={()=>void load()}>Refresh saved invoice history</button>}
   {latest&&<dl>
    <div><dt>Saved invoice number</dt><dd data-testid="lock-bound-invoice-number">{latest.number}</dd></div>
    <div><dt>Saved invoice gross</dt><dd data-testid="lock-bound-invoice-gross">{pounds(latest.totalPence)}</dd></div>

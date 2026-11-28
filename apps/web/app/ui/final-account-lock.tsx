@@ -13,7 +13,7 @@ import { INVOICE_CHANGED_EVENT } from "./customer-payment-status";
 import { FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
 
 const uuid = z.string().uuid();
-const viewV1 = z.object({
+export const finalAccountLockViewV1 = z.object({
   version: z.literal("final-account-lock.view.v1"), jobId: uuid,
   account: finalAccountResponseV1.shape.account,
   lock: z.object({ id: uuid, finalAccountRevisionId: uuid, sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), lockedAt: z.string() }).passthrough().nullable(),
@@ -22,7 +22,17 @@ const viewV1 = z.object({
   termsAccepted: z.boolean(), checkStatus: z.enum(["pending", "failed", "completed"]).nullable(),
   invoiceGuard: z.enum(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED"]).nullable(),
 }).strict();
-type LockView = z.infer<typeof viewV1>;
+type LockView = z.infer<typeof finalAccountLockViewV1>;
+export function lockBoundInvoiceProps(view: LockView, account: NonNullable<FinalAccountResponse["account"]>) {
+  return {
+    finalAccount: view.account ?? { ...account, issueBlocked: true },
+    lockGuard: {
+      code: view.invoiceGuard,
+      kind: "final" as const,
+      ...(view.lock ? { lockedRevision: { id: view.lock.finalAccountRevisionId, sourceHash: view.lock.sourceHash, issueBlocked: false } } : {}),
+    },
+  };
+}
 const targetSize = { minHeight: 44, minWidth: 44 };
 const pounds = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 
@@ -30,8 +40,8 @@ function isWaiting(capture: LockView["captures"][number]) {
   return capture.state === "draft" || capture.state === "priced";
 }
 
-export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
-  jobId: string; account: NonNullable<FinalAccountResponse["account"]>; onChanged: () => Promise<void>; onRebuild?: () => Promise<void>;
+export function FinalAccountLock({ jobId, account, onChanged, onRebuild, designed = false }: {
+  jobId: string; account: NonNullable<FinalAccountResponse["account"]>; onChanged: () => Promise<void>; onRebuild?: () => Promise<void>; designed?: boolean;
 }) {
   const [view, setView] = useState<LockView | null>(null), [error, setError] = useState("");
   const [busy, setBusy] = useState(false), [description, setDescription] = useState(""), [amount, setAmount] = useState("");
@@ -47,7 +57,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
     try {
       const response = await fetch(`/api/jobs/${jobId}/final-account/lock`, { cache: "no-store", signal: controller.signal });
       if (!response.ok) { const failure = await response.json(); throw new Error(String(failure.code)); }
-      const next = viewV1.parse(await response.json());
+      const next = finalAccountLockViewV1.parse(await response.json());
       if (next.jobId !== jobId) throw new Error("WRONG_JOB_RESPONSE");
       if (isCurrent()) { setView(next); setError(""); }
     } catch (failure) { if (isCurrent()) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
@@ -100,7 +110,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
   const hasUntickedExtra = waiting.some(capture => !leftOff.includes(capture.id));
   const baseline = account.lines.filter(line => line.kind === "baseline");
   const allDisposed = baseline.every(line => view?.dispositions.some(item => item.scopeItemId === line.scopeItemId));
-  return <section data-testid="final-account-lock" aria-label="Final-account completion" aria-busy={busy}>
+  return <section className={designed ? "card card-body designed-account-lock" : undefined} data-testid="final-account-lock" aria-label="Final-account completion" aria-busy={busy}>
     {!view && !error ? <p aria-live="polite">Loading final account…</p> : null}
     {view?.jobId === jobId ? <>
       <p data-testid="lock-state" role="status">{view.lock ? "Final account completed" : "Final account review"}</p>
@@ -108,19 +118,19 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
         <p>{FINAL_ACCOUNT_REVIEW_PROMPT}</p>
         <section aria-label="Captured variations">{view.captures.map(capture => <p key={capture.id}>{capture.description} · {capture.state} · {capture.netPence === null ? "Unpriced" : `£${(capture.netPence / 100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`}</p>)}</section>
         <fieldset disabled={busy} style={{ minWidth: 0, margin: 0, padding: 0, border: 0 }}>
-          {baseline.map(line => <label key={line.scopeItemId} style={{ display: "block" }}>Disposition {line.description}
+          {baseline.map(line => <label key={line.scopeItemId} style={designed ? undefined : { display: "block" }}>Disposition {line.description}
             <select style={targetSize} aria-label={`Disposition ${line.description}`} value={view.dispositions.find(item => item.scopeItemId === line.scopeItemId)?.disposition ?? ""}
               onChange={event => { if (event.target.value) void command("dispositions", { version: "final-account.disposition.v1", commandId: crypto.randomUUID(), scopeItemId: line.scopeItemId, disposition: event.target.value }); }}>
               <option value="">Choose disposition</option><option value="done">Done</option><option value="removed">Removed</option><option value="deferred">Deferred</option>
             </select>
           </label>)}
-          <label style={{ display: "block" }}>Final-review extra description<input style={targetSize} value={description} onChange={event => setDescription(event.target.value)} /></label>
-          <label style={{ display: "block" }}>Final-review extra price (£, optional)<input style={targetSize} inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} /></label>
-          <button style={targetSize} disabled={!description.trim()} onClick={() => void addReviewExtra()}>Add final-review extra</button>
+          <label style={designed ? undefined : { display: "block" }}>Final-review extra description<input style={targetSize} value={description} onChange={event => setDescription(event.target.value)} /></label>
+          <label style={designed ? undefined : { display: "block" }}>Final-review extra price (£, optional)<input style={targetSize} inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} /></label>
+          <button className={designed ? "btn" : undefined} style={targetSize} disabled={!description.trim()} onClick={() => void addReviewExtra()}>Add final-review extra</button>
           <ul>{FINAL_CHECK_TERMS_STATEMENTS.map(statement => <li key={statement}>{statement}</li>)}</ul>
           {busy && <p role="status">Saving your final-account review. Wait for this to finish before continuing.</p>}
           {view.termsAccepted && <p>Final check terms accepted.</p>}
-          <button style={targetSize} disabled={view.termsAccepted} onClick={() => void command("terms", { version: "final-check-terms.accept.v1", commandId: crypto.randomUUID(), termsVersion: FINAL_CHECK_TERMS_VERSION })}>Accept final check terms</button>
+          <button className={designed ? "btn" : undefined} style={targetSize} disabled={view.termsAccepted} onClick={() => void command("terms", { version: "final-check-terms.accept.v1", commandId: crypto.randomUUID(), termsVersion: FINAL_CHECK_TERMS_VERSION })}>Accept final check terms</button>
           <p>{FINAL_ACCOUNT_DECLARATION}</p>
           {!allDisposed && <p>Choose Done, Removed or Deferred for every accepted line before completing the final account.</p>}
           {!view.termsAccepted && <p>Press “Accept final check terms” before completing the final account.</p>}
@@ -132,7 +142,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
                 <p>{capture.description} · {capture.state === "draft" || capture.netPence === null
                   ? "Needs a price" : `${pounds.format(capture.netPence / 100)} — not approved yet`}</p>
                 <a href={`#variation-${capture.id}`}>Price or approve it</a>
-                <label style={{ display: "block" }}>
+                <label style={designed ? undefined : { display: "block" }}>
                   <input type="checkbox" checked={leftOff.includes(capture.id)}
                     onChange={event => setLeftOff(event.target.checked ? [...leftOff, capture.id] : leftOff.filter(id => id !== capture.id))} />
                   {`Leave "${capture.description}" off this bill on purpose`}
@@ -141,7 +151,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
             </ul>
           </section>}
           {hasUntickedExtra && <p>Approve or price each extra above, or tick to leave it off this bill on purpose, before completing the final account.</p>}
-          <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked || hasUntickedExtra}
+          <button className={designed ? "btn primary" : "primary"} style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked || hasUntickedExtra}
             onClick={() => void command("lock", { version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: FINAL_ACCOUNT_DECLARATION_VERSION })}>Complete final account</button>
         </fieldset>
       </> : <>
@@ -149,13 +159,13 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
             FinalCheckReveal panel reads that state and owns failure/retry UI. */}
         <p data-testid="final-check-state" role="status">{view.checkStatus === "completed" ? "JobGuard's final check is complete." : FINAL_CHECK_RUNNING_TEXT}</p>
       </>}
-      <CustomerInvoices jobId={jobId} finalAccount={view.account ?? { ...account, issueBlocked: true }} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
+      {!designed && <CustomerInvoices jobId={jobId} {...lockBoundInvoiceProps(view, account)}/>}
     </> : null}
     {error && <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{
       error === "STALE_REVISION"
         ? "You approved a change after this bill was built. Update the bill, check the new total, then press Complete final account again."
         : Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error
     }</p>}
-    {error === "STALE_REVISION" && onRebuild && <button style={targetSize} disabled={busy} onClick={() => void rebuild()}>Update the bill with approved extras</button>}
+    {error === "STALE_REVISION" && onRebuild && <button className={designed ? "btn" : undefined} style={targetSize} disabled={busy} onClick={() => void rebuild()}>Update the bill with approved extras</button>}
   </section>;
 }

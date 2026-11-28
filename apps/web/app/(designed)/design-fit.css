@@ -144,3 +144,69 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd .designed-workspace :is(.btn,input,textarea,select,a,summary):not(.jgd-legacy *):focus-visible{outline:3px solid #078592;outline-offset:2px}
 .jgd .designed-workspace .btn:not(.jgd-legacy *):disabled{opacity:.62;cursor:not-allowed}
 .jgd .designed-workspace :is(#quote,#work-proof,#variations-title,[id^="variation-"]){scroll-margin-top:56px}
+
+/* V2-SQ-I-3: the final account, lock, final check, invoices, receipts and paid report. Copied (read only) from #918 @ 32decb2c1
+   design-fit.css lines 133-196, without the stack selectors for screens not on this base (.designed-money-stack, .designed-records-stack). */
+.jgd .designed-workspace :is(.designed-final-account,.designed-account-lock,.designed-check-reveal){
+  min-width:0;margin-block:12px;overflow-wrap:anywhere
+}
+.jgd .designed-final-account > .variation-summary{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:8px;margin-block:12px
+}
+.jgd .designed-final-account > .variation-summary > div,
+.jgd .designed-final-account > section[aria-label]:not(.designed-account-lock),
+.jgd .designed-check-reveal .check-evidence,
+.jgd .designed-check-reveal > fieldset{
+  min-width:0;padding:12px;margin-block:8px;border:1px solid var(--line);border-radius:8px;background:var(--pale)
+}
+.jgd .designed-final-account > .variation-summary > div{margin:0}
+.jgd .designed-final-account > .variation-summary strong{display:block;font-variant-numeric:tabular-nums}
+.jgd .designed-final-account :is(code,summary):not(.jgd-legacy *){overflow-wrap:anywhere;white-space:normal}
+.jgd .designed-account-lock fieldset:not(.jgd-legacy *){min-width:0}
+.jgd :is(.designed-account-lock,.designed-check-reveal) label:not(.jgd-legacy *){
+  display:grid;gap:4px;margin-block:8px;font-weight:650
+}
+.jgd .designed-account-lock label:has(input[type="checkbox"]){
+  display:flex;align-items:center;gap:8px;min-height:44px
+}
+.jgd .designed-account-lock label > input[type="checkbox"]{width:18px;height:18px;flex:none;accent-color:var(--teal2)}
+.jgd :is(.designed-account-lock,.designed-check-reveal) :is(input:not([type="checkbox"]),select,textarea):not(.jgd-legacy *){
+  width:100%;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--ink);font:inherit
+}
+.jgd .designed-workspace :is(.designed-final-account,.designed-account-lock,.designed-check-reveal) .btn:not(.jgd-legacy *){
+  min-height:44px;max-width:100%;white-space:normal
+}
+.jgd :is(.designed-account-lock,.designed-check-reveal) [role="status"]:not(.jgd-legacy *){
+  padding:10px 12px;border-radius:7px;background:var(--pale)
+}
+.jgd :is(.designed-account-lock,.designed-check-reveal) [role="alert"]:not(.jgd-legacy *){
+  padding:10px 12px;border:1px solid #e3ac98;border-radius:7px;background:#fff2eb;color:#832d1b
+}
+
+.jgd :is(.designed-money-stack,.designed-money-card .card-body){display:grid;gap:16px;min-width:0}
+.jgd .designed-money-stack{margin-top:19px}
+.jgd .designed-money-card{min-width:0;overflow-wrap:anywhere;scroll-margin-top:96px}
+.jgd .designed-money-card :is(.customer-invoice,.customer-receipts,[data-testid="lock-bound-invoices"],.value-grid){
+  display:grid;gap:12px;min-width:0
+}
+.jgd .designed-money-card :is(.customer-invoice > article,.customer-receipts,.value-card,[data-testid="lock-bound-invoices"]){
+  min-width:0;padding:16px;border:1px solid var(--line);border-radius:10px
+}
+.jgd .designed-money-card :is(.customer-invoice article,.value-card){scroll-margin-top:96px}
+.jgd .designed-money-card .customer-invoice > article > * + *,
+.jgd .designed-money-card.value-page > * + *{margin-top:12px}
+.jgd .designed-money-card :is(dl,fieldset){display:grid;gap:10px;margin:0;min-width:0}
+.jgd .designed-money-card dl{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+.jgd .designed-money-card dl > div,.jgd .designed-money-card .value-card{background:var(--pale);padding:12px;border-radius:8px}
+.jgd .designed-money-card dd{margin:2px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+.jgd .designed-money-card label{display:grid;gap:4px;min-width:0;font-weight:650}
+.jgd .designed-money-card :is(input,select):not(.jgd-legacy *){
+  width:100%;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--ink);font:inherit
+}
+.jgd .designed-money-card :is(button,.btn):not(.jgd-legacy *){
+  min-height:44px;min-width:44px;max-width:100%;justify-self:start;white-space:normal
+}
+.jgd .designed-money-card .btn:disabled{opacity:.62;cursor:not-allowed}
+.jgd .designed-money-card :is(button,input,select,a,article):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd .designed-money-card .value-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.jgd .designed-money-card .value-card a{display:block}
