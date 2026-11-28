@@ -3552,5 +3552,115 @@
       ]
     },
     "status": "pass"
+  },
+  {
+    "id": "RT-03-229",
+    "lane": "RT-03",
+    "transcript": "Paint the kitchen walls £200. Fit the kitchen sink £100. Cancel the kitchen sink",
+    "why": "The work subject sink selects only the sink; sharing the room kitchen cannot retract the wall price.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint the kitchen walls",
+          "unitPricePence": 20000
+        },
+        {
+          "descriptionIncludes": "Fit the kitchen sink",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "Cancel the kitchen sink"
+      ],
+      "neverPence": [
+        10000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-6-P2-01"
+  },
+  {
+    "id": "RT-03-230",
+    "lane": "RT-03",
+    "transcript": "Fit the utility sink £150. Paint the utility walls £250. Forget the utility sink",
+    "why": "A named sink withdrawal reaches the earlier item without retracting later work in the same room.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the utility sink",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "Paint the utility walls",
+          "unitPricePence": 25000
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": null,
+      "lineCount": 2,
+      "questionsInclude": [
+        "Forget the utility sink"
+      ],
+      "neverPence": [
+        15000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-6-P2-01"
+  },
+  {
+    "id": "RT-03-231",
+    "lane": "RT-03",
+    "transcript": "Fit the door £100, actually £120. All in £500",
+    "why": "A standalone whole-job total ends a completed correction; the line stays open and the independent total survives.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the door",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 50000,
+      "lineCount": 1,
+      "questionsInclude": [
+        "actually £120"
+      ],
+      "neverPence": [
+        10000,
+        12000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-6-P2-02"
+  },
+  {
+    "id": "RT-03-232",
+    "lane": "RT-03",
+    "transcript": "Fit the gate £180, sorry £200; In total £650",
+    "why": "A semicolon and another total phrase end a completed correction without retracting the total.",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit the gate",
+          "unitPricePence": null
+        }
+      ],
+      "areaPrices": [],
+      "wholeJobPricePence": 65000,
+      "lineCount": 1,
+      "questionsInclude": [
+        "sorry £200"
+      ],
+      "neverPence": [
+        18000,
+        20000
+      ]
+    },
+    "status": "pass",
+    "finding": "RT-FIX-6-P2-02"
   }
 ]

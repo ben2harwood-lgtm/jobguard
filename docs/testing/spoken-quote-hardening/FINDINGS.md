@@ -1682,3 +1682,48 @@ No migration, prompt, model/provider, interface, fee-policy or new external acti
 Database/native/browser/live-provider checks are inapplicable to this deterministic
 repair. No server used port 3000 or 55432, no default Playwright suite ran, no deploy
 or push was performed, and `.pnpm-store/` is excluded from the commit.
+
+## RT-FIX-6 findings — fixed in RT-FIX-8 (Codex review #1089 at 99fef8da)
+
+Follow-up on `codex/sandbox/rt-fix-8`, based on `56ad68afe`. Both P2s fail safe
+before this repair: they clear valid money rather than introducing a charge.
+
+| Finding | Severity | Cases | Observed before repair | Resolution |
+| --- | --- | --- | --- | --- |
+| RT-FIX-6-P2-01 | P2 | RT-03-229, RT-03-230 | `Paint the kitchen walls £200. Fit the kitchen sink £100. Cancel the kitchen sink` clears both prices because `kitchen` selects both items. The utility variant also clears unrelated painting after an earlier sink. | fixed in RT-FIX-8: exclude shared room phrases from subject matching, so the named work subject `sink` selects only the sink. Room-only references remain ambiguous and are questioned across candidates. |
+| RT-FIX-6-P2-02 | P2 | RT-03-231, RT-03-232 | `Fit the door £100, actually £120. All in £500` absorbs the standalone total into the correction and clears it. The semicolon / `In total` variant does the same. | fixed in RT-FIX-8: a standalone total after a completed correction ends the chunk. The corrected line stays open; the independent whole-job total survives with its exact source citation. |
+
+Four pass cases added to RT-03; all four reproduced the reported defects before
+the parser repair. Existing cases and expectations are unchanged. Capture,
+Reader A and the numeric checker consume the same correction metadata; the
+existing room grammar, total grammar and correction/amount guards are reused.
+No second copy of either guard and no `context-reader.ts` change. The lane
+allow-list now includes RT-03. The earlier initial LATER / SIMPLICITY note is
+retained; this follow-up adds no unrelated refactor.
+
+Executed checks (Node 24.17.0, pnpm 10.28.1, at most two Vitest workers):
+
+| Check | Result |
+| --- | --- |
+| Four new corpus cases before repair | Exit 1: four expected reproductions; wall prices lost on all three reader paths, totals lost on Reader A and its numeric check |
+| `pnpm --filter @jobguard/ai exec vitest run src/redteam src/capture-qualified-price.test.ts --maxWorkers=2` | Exit 0: 8 files, 1,437 ordinary passes and 13 expected failures; every corpus case and focused assertion runs |
+| `pnpm eval --maxWorkers=2` | Exit 1: 31 files pass / 3 fail; 1,912 ordinary passes, 13 expected failures, 3 failures (1,928 checks). The same three pre-existing conflicts listed above remain; no new failures |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core typecheck` | Exit 0 |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core lint` | Exit 0 |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core build` | Exit 0 |
+| Compiled `runCaptureEvaluation`, `createGoldenRunRecord`, `verifyGoldenRunRecord`; comparison to starting HEAD | Golden PASS; identical complete record except the parser source hash |
+| Additional compiled guard probes | PASS: room-only reference opens both candidates on all three reader paths; an incomplete correction still keeps its pending amount |
+| Lane helpers (`mergeLanePolicy`, `selectLane`, `lanePathAllowed`), corpus comparison and `git diff --check` | PASS: all five changed paths allowed; existing RT-03 rows unchanged; exactly four unique additions; no whitespace errors |
+
+Golden scores remain **32/32** cases, scope recall **41/41**, valid citations
+**119/119**, unsupported monetary facts **0**, ambiguity checks **63/63**.
+No score, prediction, label, target or release-state change. The only change to
+`golden-run.v1.json` is the parser SHA-256.
+
+The full-evaluation hold remains the three out-of-scope assertions at
+`context-reader.test.ts:29`, `capture-plain-words.test.ts:262` and
+`capture-typed-rooms.test.ts:31`, already documented in the preceding RT-FIX-8
+receipt. No database, web, provider or prompt change; no live-model run required
+for this deterministic parser repair. Independent review of the new exact head
+remains required before merge. Commit only; no push, merge or deployment.
+`.pnpm-store/` remains untracked and is excluded from the commit.

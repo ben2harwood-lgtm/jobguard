@@ -278,9 +278,11 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
     // A decimal point or thousands separator belongs to the amount.
     if ((/[.!?;\r\n]/u.test(char) || char === "—" && spokenCorrection.exec(visibleWorkText(text.slice(i + 1)))?.index === 0) && !points.has(i)) {
       if (char === "." && /\bapprox$/iu.test(text.slice(start, i)) && /^\s*£?\d/u.test(text.slice(i + 1))) continue;
-      // Pauses inside a correction stay with it; following work or a room heading starts a new clause.
+      // Pauses inside a correction stay with it; work, a room heading or a total after a completed correction starts a new clause.
       const next = visibleWorkText(text.slice(i + 1));
-      if (correctionInChunkEnd >= start && !isWork(next) && !roomOnly.test(next.split(/[.!?;\r\n]/u)[0]!)) continue;
+      const nextClause = next.split(/[.!?;\r\n]/u)[0]!;
+      if (correctionInChunkEnd >= start && !isWork(next) && !roomOnly.test(nextClause)
+        && (awaitingCorrection || !total.test(nextClause))) continue;
       add(start, i); start = i + 1;
     } else {
       const separator = plainItemBoundary(text, i, start, isNext);
@@ -294,7 +296,9 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
   const corrected: Cell[] = [];
   const words = (value: string) => value.toLowerCase().match(/\p{L}+/gu) ?? [];
   const ignored = new Set("the a an for at to price figure amount item first that this it is was should be actually change revise replace forget cancel leave out do not bother with we are doing scratch quote use wrong".split(" "));
-  const subjectWords = (value: string) => words(value).filter(word => !ignored.has(word) && !workClause(word));
+  const subjectRooms = new RegExp(`\\b${roomPart}\\b`, "giu");
+  // A shared room is context, never the work subject: "kitchen sink" must not select "kitchen walls".
+  const subjectWords = (value: string) => words(value.replace(subjectRooms, " ")).filter(word => !ignored.has(word) && !workClause(word));
   const description = (value: string) => {
     const at = amounts(value)[0]?.index ?? value.length;
     return value.slice(0, at).toLowerCase().replace(/^yeah[,\s]+/u, "").replace(/\s+(?:for|at)\s*$/u, "").trim();
@@ -308,7 +312,8 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       const allNamed = subjectWords(chunk.value);
       const matches = candidates.filter(item => subjectWords(description(item.value)).some(word => allNamed.includes(word)));
       const explicit = /\bfirst\s+(?:price|item|figure)\b/iu.test(chunk.value);
-      const backReference = /\b(?:first|revise|figure was wrong)\b/iu.test(chunk.value);
+      // Room-only references remain ambiguous; ask across candidates rather than selecting work by its room.
+      const backReference = /\b(?:first|revise|figure was wrong)\b/iu.test(chunk.value) || !!chunk.value.match(subjectRooms);
       const targets = explicit ? candidates.slice(0, 1) : matches.length ? matches : backReference ? candidates : candidates.slice(-1);
       if (targets.length) {
         for (const target of targets) target.correction = [target.correction, chunk.value].filter(Boolean).join("; ");

@@ -9,6 +9,7 @@
       "allow": [
         "packages/ai/src/capture-fixture-parser.ts",
         "packages/ai/src/context-reader.ts",
+        "packages/ai/src/redteam/corpus/RT-03-corrections.v1.json",
         "packages/core/src/job-understanding.ts",
         "packages/ai/src/redteam/corpus/RT-04-structure.v1.json",
         "packages/ai/src/redteam/structure.test.ts",
