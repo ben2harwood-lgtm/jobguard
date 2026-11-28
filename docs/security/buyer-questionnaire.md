@@ -6,6 +6,8 @@ DRAFT for founder review. Not to be sent to any buyer until Ben approves it.
 
 Evidence cutoff: 1df57716837b0184b1cf291c62c18a9e537276d4 (4 November 2026)
 
+Updated 28 November 2026 at `main` daaa927ca0184cf7d84ada4e79d49b632c98b2f6 for Q-04 and Q-16 only, where the evidence changed (EP-A1; see [contractor inventory](../status/contractor-inventory-2026-11-28.md)). Every other answer keeps its 4 November evidence.
+
 These are JobGuard’s own 34 questions. A buyer’s required format is NOT DETERMINED. Answers apply only at the cutoff. “Covered” names an existing automated test; this refresh ran the identity and signed-export unit suites, alongside the watchdog/context guards, migration-proof loader and ops-pack unit checks; PostgreSQL/browser execution awaits CI. Read the map’s run record separately.
 
 ## A Sign-in and identity
@@ -50,7 +52,7 @@ Approved OpenID operation remains not claimed: founder decision not recorded (E-
 
 ### Q-04 Can our identity provider create and remove accounts automatically (SCIM)?
 
-**Plain answer:** Deactivation is in place in the practice build: a connection-scoped synthetic bearer request revokes linked membership/grants and bound sessions. The next bound request fails; ordinary sessions lose the removed company but retain other companies. The message is JobGuard JSON, not the SCIM 2.0 wire protocol. Account creation and general SCIM provisioning are NOT BUILT; live interoperability is not claimed.
+**Plain answer:** Deactivation is in place in the practice build: a connection-scoped synthetic bearer request revokes linked membership/grants and bound sessions. The next bound request fails; ordinary sessions lose the removed company but retain other companies. The message is JobGuard JSON, not the SCIM 2.0 wire protocol. SCIM 2.0 Users/Groups provisioning is built dark on `main` (`0613_scim2_machine.sql`, #574, 5 Nov 2026), but its controller is not registered (`apps/api/src/app.module.ts` line 105; re-checked 28 Nov), so account creation is not available and is not claimed (E-52); live interoperability is not claimed.
 
 **Status:** in place for synthetic deactivation; not claimed for account creation or live use
 
@@ -206,7 +208,7 @@ Not claimed. Waits for native mobile sign-in to merge to main with its own named
 
 ### Q-16 What can the application’s database login not do?
 
-**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. LP-1 removes direct account/membership creation, promotion, restoration and deletion; LP-4 removes direct audit writes and seals entries through controlled routines. Named tests cover these changes. Lower-trust authority-named audit statements remain permitted; full protection from forged owner approvals, job status/price and downstream authority is not claimed (E-71). Privileged database and identity-service compromise remain outside this limit.
+**Plain answer:** It is not a superuser and cannot bypass or alter row-level security. LP-1 removes direct account/membership creation, promotion, restoration and deletion; LP-4 removes direct audit writes and seals entries through controlled routines. Named tests cover these changes. Later least-privilege pieces LP-5 to LP-13 and a synthetic LP-9 final gate merged after the cutoff (#474–#866; re-checked 28 Nov, see E-71). Lower-trust authority-named audit statements remain permitted; full protection from forged owner approvals, job status/price and downstream authority is not claimed (E-71). Privileged database and identity-service compromise remain outside this limit.
 
 **Status:** in place for the named practice controls; not claimed for the Not done items
 

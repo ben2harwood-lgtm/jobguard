@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ep-a1": {
+      "branches": [
+        "claude/ep-a1-inventory-e69bad"
+      ],
+      "note": "Docs only (EP-A1, Enterprise R1 plan piece A1): corrected contractor inventory at main daaa927c, one dated pointer line in BUILD_PLAN.md section 7, dated evidence updates in two security drafts. No contract, policy or decision text changed.",
+      "allow": [
+        "docs/status/contractor-inventory-2026-11-28.md",
+        "BUILD_PLAN.md",
+        "docs/security/buyer-questionnaire.md",
+        "docs/security/not-claimed-register.md"
+      ]
+    }
+  }
+}
