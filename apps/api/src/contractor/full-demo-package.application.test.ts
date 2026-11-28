@@ -1,7 +1,7 @@
 // Practice sandbox — synthetic data; nothing is sent or charged
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { EnterpriseDashboardError, projectEnterpriseDashboard, enterpriseSignals } from "@jobguard/core";
+import { EnterpriseDashboardError, assembleEnterpriseDashboardReport, enterpriseSignals } from "@jobguard/core";
 import { EnterpriseDashboardApplication } from "./enterprise-dashboard.application.js";
 import { FullDemoPackageApplication } from "./full-demo-package.application.js";
 const principal = { sessionId: "00000000-0000-4000-8000-000000000001" };
@@ -9,7 +9,7 @@ const dashboard = { version: "enterprise-dashboard-query.v1", from: "2026-01-01T
 const query = { version: "full-demo-package-query.v1", dashboard };
 const label = "Practice sandbox — synthetic data; nothing is sent or charged";
 const pool = new Proxy({}, { get() { throw new Error("unexpected database access"); } }) as Pool;
-const observed = () => ({ report: projectEnterpriseDashboard({ version: "enterprise-dashboard-facts.v1", cutoff: "2026-10-18T00:00:00Z", extras: [], billing: { status: "held", prerequisite: "ENT-6B" } }, dashboard), signals: enterpriseSignals({ version: "enterprise-signal-facts.v1", extras: [], orderLines: [], billedVariations: [], closeouts: [], outlierPolicy: null }) });
+const observed = () => ({ report: assembleEnterpriseDashboardReport({ version: "enterprise-dashboard-aggregate.v1", cutoff: "2026-10-18T00:00:00Z", sourceHash: "0".repeat(64), totals: {}, groupCount: 0, groups: [], contributions: [], drilldown: null }, dashboard), signals: enterpriseSignals({ version: "enterprise-signal-facts.v1", extras: [], orderLines: [], billedVariations: [], closeouts: [], outlierPolicy: null }) });
 beforeEach(() => vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 it("A01 rejects mode and authority overrides", async () => {

@@ -2,10 +2,14 @@ import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import type { BillingStatus, BillingAllocation } from "@jobguard/core";
 import { z } from "zod";
-import { EnterpriseDashboardError, dashboardParse, dashboardQueryV1, dashboardFactsV1, projectEnterpriseDashboard, projectStoredDashboardBilling, enterpriseSignalFactsV1 } from "@jobguard/core";
+import { EnterpriseDashboardError, dashboardParse, dashboardQueryV1, dashboardFactsV1, assembleEnterpriseDashboardReport, dashboardSelectionParams, projectStoredDashboardBilling, enterpriseSignalFactsV1 } from "@jobguard/core";
 import { scopedEnterpriseSignals, storedBilledSignalRowsV1 } from "./enterprise-dashboard-signals.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from "./enterprise-dashboard-queries.js";
+import { dashboardInputBound, enterpriseDashboardSelectionSql, enterpriseDashboardScopeLockSql } from "./enterprise-dashboard-queries.js";
+
+type SelectionRow = { authorized: boolean; integrity: boolean; activity_visible: boolean; billing_visible: boolean;
+  counts: { members: number; visits: number; order_lines: number; billed_signals: number };
+  report: unknown; facts: unknown; signals: unknown; signal_billing: unknown; billing: unknown[] | null };
 
 /** ENT-6B must supply full composition and exact allocation references bound to the same source snapshot.
  * No fake/empty successful implementation is wired. The supplied-fact core projector confers no authority.
@@ -19,22 +23,17 @@ export interface EnterpriseDashboardBillingReadPort {
 /** Read-only application repository; existing session/scope routines re-check authority in one SELECT snapshot. */
 export class EnterpriseDashboardRepository {
   constructor(private readonly pool: Pool) {}
-  /** Billed/paid only; no fee reads, signals, transport or UI. */
+  /** Billed/paid only; no fee reads, signals, transport or UI. Period/dimension selection runs in the database. */
   async readBilling(context: VerifiedTenantContext, sessionId: string, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new EnterpriseDashboardError("MODE_FORBIDDEN");
     if (!z.guid().safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
     const query = dashboardParse(dashboardQueryV1, raw);
     return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
-      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
-      const row = (await db.$client.query<{ authorized: boolean; facts: unknown; billing: unknown }>(
-        enterpriseDashboardSourceSql, [sessionId, context.tenantId])).rows[0];
-      if (!row?.authorized) throw new EnterpriseDashboardError("NOT_FOUND");
-      const facts = dashboardParse(dashboardFactsV1, row.facts);
-      for (const [key, value] of Object.entries(query.filters)) {
-        if (!facts.extras.some(e => e.dimensions[key as keyof typeof e.dimensions] === value))
-          throw new EnterpriseDashboardError("NOT_FOUND");
-      }
-      return projectStoredDashboardBilling(facts, query, row.billing);
+      const row = await this.select(db.$client, context, sessionId, query);
+      if (!row.billing_visible) throw new EnterpriseDashboardError("NOT_FOUND");
+      // Exact fractional balances are projected in core; above the bound the read refuses rather than truncating.
+      if (row.facts === null || row.billing === null || row.billing.length > dashboardInputBound) throw new EnterpriseDashboardError("DASHBOARD_SELECTION_TOO_LARGE");
+      return projectStoredDashboardBilling(dashboardParse(dashboardFactsV1, row.facts), query, row.billing);
     }), () => new EnterpriseDashboardError("NOT_FOUND"));
   }
   async read(context: VerifiedTenantContext, sessionId: string, raw: unknown) {
@@ -42,18 +41,23 @@ export class EnterpriseDashboardRepository {
     if (!z.guid({ error: "Invalid uuid" }).safeParse(sessionId).success) throw new EnterpriseDashboardError("NOT_FOUND");
     const query = dashboardParse(dashboardQueryV1, raw);
     return mapRequestBindingRefusal(withTenant(this.pool, context, async db => {
-      await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
-      const row = (await db.$client.query<{ authorized: boolean; facts: unknown; signals: unknown; signal_billing: unknown }>(enterpriseDashboardSourceSql, [sessionId, context.tenantId])).rows[0];
-      if (!row?.authorized) throw new EnterpriseDashboardError("NOT_FOUND");
+      const row = await this.select(db.$client, context, sessionId, query);
+      if (!row.activity_visible) throw new EnterpriseDashboardError("NOT_FOUND");
+      const report = assembleEnterpriseDashboardReport(row.report, query);
+      // Signals are advisory and need their full selected inputs; a selection over the bound says so instead.
+      if (row.facts === null || row.signals === null || row.signal_billing === null)
+        return { report, signals: { version: "enterprise-signals-bounded.v1", status: "selection_too_large", bound: dashboardInputBound, counts: row.counts } as const };
       const facts = dashboardParse(dashboardFactsV1, row.facts);
-      const billedSignals = dashboardParse(storedBilledSignalRowsV1, row.signal_billing);
-      for (const [key, value] of Object.entries(query.filters)) {
-        const visible = [...facts.extras, ...facts.closeouts, ...billedSignals.rows].some(e => e.dimensions[key as keyof typeof e.dimensions] === value);
-        if (!visible) throw new EnterpriseDashboardError("NOT_FOUND");
-      }
-      const report = projectEnterpriseDashboard(facts, query), signalFacts = dashboardParse(enterpriseSignalFactsV1, row.signals);
-      const signals = scopedEnterpriseSignals(facts, query, signalFacts, billedSignals);
+      const signals = scopedEnterpriseSignals(facts, query, dashboardParse(enterpriseSignalFactsV1, row.signals), dashboardParse(storedBilledSignalRowsV1, row.signal_billing));
       return { report, signals };
     }), () => new EnterpriseDashboardError("NOT_FOUND"));
+  }
+  /** One SELECT snapshot under the shared tenant gate; authority is re-resolved by the database for every request. */
+  private async select(client: { query: Pool["query"] }, context: VerifiedTenantContext, sessionId: string, query: z.infer<typeof dashboardQueryV1>) {
+    await client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+    const row = (await client.query<SelectionRow>(enterpriseDashboardSelectionSql, [sessionId, context.tenantId, dashboardSelectionParams(query)])).rows[0];
+    if (!row?.authorized) throw new EnterpriseDashboardError("NOT_FOUND");
+    if (!row.integrity) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
+    return row;
   }
 }

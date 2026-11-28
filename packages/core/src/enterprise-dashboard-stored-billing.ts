@@ -4,7 +4,7 @@ import { divideRounded } from "./rational.js";
 import { moneyFromBigInt } from "./money.js";
 import { sha256 } from "./evidence-pack.js";
 import { dashboardCanonical, dashboardCompareText, dashboardFactsV1, dashboardFreeze, dashboardParse,
-  dashboardPeriodContains, dashboardQueryV1, EnterpriseDashboardError, projectEnterpriseDashboard } from "./enterprise-dashboard.js";
+  dashboardPageLimits, dashboardPeriodContains, dashboardQueryV1, EnterpriseDashboardError, projectEnterpriseDashboard } from "./enterprise-dashboard.js";
 
 const uuid = z.guid();
 const fraction = exactPenceV1;
@@ -26,6 +26,15 @@ function totals(rows: Contribution[]) {
       known: moneyFromBigInt(divideRounded(exact.numerator, exact.denominator, "half_even")) };
   };
   return { billed: stageTotal("billed"), paid: stageTotal("paid") };
+}
+/** EP-F6: the first page of each stage's drill-down, plus the requested drill-down page; never a silent cut. */
+function pages(all: Contribution[], query: z.infer<typeof dashboardQueryV1>) {
+  const limit = dashboardPageLimits.contributions, d = query.drilldown;
+  const contributions = (["billed", "paid"] as const).flatMap(stage => all.filter(c => c.stage === stage).slice(0, limit));
+  const selected = d ? all.filter(c => c.stage === d.stage && (d.group === undefined || c.group === d.group)) : [];
+  return { contributions, contributionPage: { limit, complete: contributions.length === all.length },
+    drilldown: d ? { stage: d.stage, ...(d.group === undefined ? {} : { group: d.group }), offset: d.offset, limit: d.limit, total: selected.length,
+      complete: d.offset + d.limit >= selected.length, contributions: selected.slice(d.offset, d.offset + d.limit) } : null };
 }
 /** Supplied rows must come from the scoped stored-fact SELECT. This pure function grants no authority. */
 export function projectStoredDashboardBilling(rawFacts: unknown, rawQuery: unknown, rawRows: unknown) {
@@ -57,9 +66,9 @@ export function projectStoredDashboardBilling(rawFacts: unknown, rawQuery: unkno
   }
   const groups = [...new Set(contributions.map(c => c.group))].sort((a, b) => dashboardCompareText(a ?? "", b ?? ""))
     .map(id => ({ id, totals: totals(contributions.filter(c => c.group === id)) }));
-  const result = { version: "enterprise-dashboard-stored-billing.v1", method, complete: held.length === 0, held,
+  const result = { version: "enterprise-dashboard-stored-billing.v2", method, complete: held.length === 0, held,
     // Do not bind a moving wall clock: immutable run IDs/hashes and the selected sources bind this report.
     inputHash: sha256(dashboardCanonical({ method, query, extras: [...selected.values()], rows: rows.filter(r => selected.has(r.extraId)) })),
-    totals: totals(contributions), contributions, groups: groups.slice(query.offset, query.offset + query.limit), groupCount: groups.length };
+    totals: totals(contributions), ...pages(contributions, query), groups: groups.slice(query.offset, query.offset + query.limit), groupCount: groups.length };
   return dashboardFreeze({ ...result, outputHash: sha256(dashboardCanonical(result)) });
 }

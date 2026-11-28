@@ -27,10 +27,12 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return value as T;
 }
 export function DashboardView({ activity, billing }: { activity: Activity; billing: Billing }) {
-  const { report, signals } = activity;
+  const { report } = activity, signals = "observations" in activity.signals ? activity.signals : null;
+  const partial = !report.contributionPage.complete || report.groups.some(g => !g.contributionPage.complete) || !billing.contributionPage.complete;
   return <>
     <h2>Captured and approved extras</h2>
     <p>Activity and billing are separate server reads. Reload to refresh both. Group pages show a subset; each total below has its complete source drill-down.</p>
+    {partial && <p role="status">Long lists show their first {report.contributionPage.limit} sources per total ({report.groups[0]?.contributionPage.limit ?? 20} per group figure). Every total still counts all of its sources.</p>}
     {Object.entries(report.totals).filter(([, value]) => value !== null).map(([stage, total]) => total && <details key={stage}>
       <summary>{stageLabels[stage]}: {total.count}{(stage === "captured" || stage === "approved") && <> · known net {pounds(total.known.pence)} · unknown values {total.unknownCount}</>}</summary>
       <ul>{report.contributions.filter(c => c.stage === stage).map((c, i) => <li key={i}>Job {c.jobId} · extras {c.extraIds.join(", ") || "none"} · {c.value ? pounds(c.value.pence) : "Value unknown / not applicable"} · sources {c.sourceIds.join(", ")}</li>)}</ul>
@@ -47,10 +49,10 @@ export function DashboardView({ activity, billing }: { activity: Activity; billi
     <h3>Billing groups ({billing.groupCount} total)</h3>
     {billing.groups.map(g => <details key={g.id ?? "unattributed"}><summary>{g.id ?? "Unattributed"} · billed {exactPounds(g.totals.billed.exactPence)} · paid {exactPounds(g.totals.paid.exactPence)}</summary>
       <ul>{billing.contributions.filter(c => c.group === g.id).map((c, i) => <li key={i}>{c.stage} · job {c.jobId} · extra {c.extraId} · {exactPounds(c.exactPence)}</li>)}</ul></details>)}
-    <h2>Advisory signals</h2><p>Advisory only. These observations never change prices, counts, states, fees or statements.</p>
+    {signals ? <><h2>Advisory signals</h2><p>Advisory only. These observations never change prices, counts, states, fees or statements.</p>
     <p>Unmatched “other” invoice lines may be variations; review the cited invoice fact and allocation run. They do not prove a variation or fee entitlement. Unattributed invoice lines are excluded from operative views and filters. “No” close-out outliers: {signals.outliers.status}. {signals.outliers.status === "supplied_synthetic_policy" ? signals.outliers.policy?.text : "No answered visits in the selected population."}</p>
-    {signals.observations.length ? <ul>{signals.observations.map(s => <li key={s.id}>{signalLabels[s.kind]} · job {s.jobId} · extras {s.extraIds.join(", ") || "none"} · sources {s.sourceIds.join(", ")}</li>)}</ul> : <p>No observations from the available sources.</p>}
-    <details><summary>Methods and reproducibility</summary>{[report, billing, signals].map(r => <section key={r.method.version}><p>{r.method.version}: {r.method.text}</p><p>Input {r.inputHash} · output {r.outputHash}</p></section>)}</details>
+    {signals.observations.length ? <ul>{signals.observations.map(s => <li key={s.id}>{signalLabels[s.kind]} · job {s.jobId} · extras {s.extraIds.join(", ") || "none"} · sources {s.sourceIds.join(", ")}</li>)}</ul> : <p>No observations from the available sources.</p>}</> : <p role="status">Advisory signals were not computed: this selection has more than {"bound" in activity.signals ? activity.signals.bound : 0} source rows. Narrow the period or filter.</p>}
+    <details><summary>Methods and reproducibility</summary>{[report, billing, ...(signals ? [signals] : [])].map(r => <section key={r.method.version}><p>{r.method.version}: {r.method.text}</p><p>Input {r.inputHash} · output {r.outputHash}</p></section>)}</details>
     <button type="button" onClick={() => download(JSON.stringify({ activity, billing }), "contractor-dashboard.json")}>Export reports and methods (JSON)</button>
   </>;
 }

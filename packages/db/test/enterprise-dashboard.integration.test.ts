@@ -9,6 +9,7 @@ import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from ".
 import { chainWorld, submitted, approveInput, cluster, command, type Cluster } from "./extra-approval-chain-fixtures.js";
 import { world as billingWorld } from "./contractor-billing-fixtures.js";
 import { direct } from "./site-extra-fixtures.js";
+import { expectSameAsReference } from "./enterprise-dashboard-bounded-fixtures.js";
 vi.setConfig({ testTimeout: 120000, hookTimeout: 240000 });
 let c: Cluster;
 const query = { version: "enterprise-dashboard-query.v1", from: "2000-01-01T00:00:00Z", until: "2099-01-01T00:00:00Z", dimension: "team", filters: {}, offset: 0, limit: 20 };
@@ -339,7 +340,7 @@ it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and 
   // Each SELECT has a fresh cutoff, which legitimately changes both report hashes.
   // Compare every field against the original facts at that read's cutoff instead.
   for (const report of [activity.report, (await read(sa)).report])
-    expect(report).toEqual(projectEnterpriseDashboard({ ...activityFacts, cutoff: report.cutoff }, query));
+    expectSameAsReference(report, projectEnterpriseDashboard({ ...activityFacts, cutoff: report.cutoff }, query));
   expect(await a.repo.read(a.ctx, a.session, a.s.jobId)).toEqual(authoritative);
   for (const [i, type] of ["credited", "rejected"].entries()) {
     const { own, invoice } = imported[i]!;
