@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-07": {
+      "branches": [
+        "codex/sandbox/rt-07"
+      ],
+      "note": "RT-07 injection attack corpus (#1071). HEAD_UNDER_TEST=ac8065af7305d9cc3db110eff4eb38d47248fa51. Corpus, tests and findings only. The lane checker automatically permits config/lanes/v2-rt-07.json as this lane's own file; explicit lane-register grants are forbidden.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-07-injection.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
