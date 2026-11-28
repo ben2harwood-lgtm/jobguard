@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobSummary, SessionView } from "../lib/contracts";
 import { jobsResponseV1, sessionResponseV1, UiRequestError } from "../lib/contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
-import { Card, Note } from "../(designed)/designed-ui";
+import { Card, Note, PRACTICE_SESSION_GENERATION_KEY, startPracticeSession } from "../(designed)/designed-ui";
 import { LocalDictation } from "./local-dictation";
 import { DecisionInbox } from "./decision-inbox";
 import { VariationFlow } from "./variation-flow";
@@ -47,7 +47,7 @@ export function JobGuardApp({ hasCompanySession = false, blankPractice = false, 
   const loadJobs=useCallback(async(selected:string)=>{const ownRequest=++requestId.current;setLoading(true);setError(null);setJobs([]);try{const parsed=jobsResponseV1.safeParse(await responseJson(await fetch(`/api/jobs?tenantId=${encodeURIComponent(selected)}`,{cache:"no-store"})));if(!parsed.success||parsed.data.tenantId!==selected)throw new UiRequestError("INVALID_RESPONSE");if(ownRequest===requestId.current)setJobs(parsed.data.jobs);}catch(caught){if(ownRequest===requestId.current){setError(caught instanceof UiRequestError?caught:new UiRequestError("UNAVAILABLE"));if(caught instanceof UiRequestError&&caught.code==="UNAUTHENTICATED"){setSession(null);setTenantId("");setJobs([]);setDecisionCounts({mandatory:0,advisory:0,pending:0});}}}finally{if(ownRequest===requestId.current)setLoading(false);}},[]);
   useEffect(()=>{if(session&&tenantId)void loadJobs(tenantId);},[session,tenantId,loadJobs]);
   useEffect(()=>{if(!session||!tenantId)return;let current=true;void fetch(`/api/decisions?tenantId=${encodeURIComponent(tenantId)}`,{cache:"no-store"}).then(async response=>response.ok?response.json():null).then((value:{counts?:typeof decisionCounts}|null)=>{if(current&&value?.counts)setDecisionCounts(value.counts)}).catch(()=>{});return()=>{current=false;};},[session,tenantId]);
-  async function signIn(){setChecking(true);setError(null);try{await responseJson(await fetch("/api/session",{method:"POST"}));await checkSession();}catch{setError(new UiRequestError("UNAVAILABLE"));setChecking(false);}}
+  async function signIn(){setChecking(true);setError(null);try{await responseJson(await startPracticeSession());await checkSession();}catch{setError(new UiRequestError("UNAVAILABLE"));setChecking(false);}}
   async function resetCompany(){
     setResetting(true);setError(null);
     try {
@@ -96,7 +96,7 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     [result,setResult]=useState<CaptureResult|null>(null),
     [message,setMessage]=useState(""),
     [busy,setBusy]=useState(false);
-  // A capture ID belongs to exact source bytes and provenance, not this mounted form.
+  // A capture ID belongs to one session's exact source bytes and provenance.
   // Retain earlier attempts too: returning to their input must retry the same save.
   const captureIds=useRef(new Map<string,string>()), submitting=useRef(false);
   if(reviewing&&result)return <ReviewProposal result={result} back={()=>setReviewing(false)}/>;
@@ -117,13 +117,32 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
       fixtureId:"deterministic-local-v1"
     };
     const snapshot=JSON.stringify(input);
-    let captureId=captureIds.current.get(snapshot);
-    if(!captureId){captureId=crypto.randomUUID();captureIds.current.set(snapshot,captureId);}
     // The ref closes the same-tick double-click window before React renders disabled controls.
     submitting.current=true;setBusy(true);setMessage("Making your draft…");
     try {
-      const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
-      if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
+      const generation=sessionStorage.getItem(PRACTICE_SESSION_GENERATION_KEY)??crypto.randomUUID();
+      sessionStorage.setItem(PRACTICE_SESSION_GENERATION_KEY,generation);
+      // Survive a reload after an unknown outcome without storing source words or credentials.
+      const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(snapshot));
+      const key=`jobguard-capture-v1:${generation}:${tenantId}:${Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("")}`;
+      const stored=captureIds.current.get(key)??sessionStorage.getItem(key);
+      let captureId=stored===null?crypto.randomUUID():z.uuid().parse(stored);
+      // Fail before sending if retry identity cannot be retained for a reload.
+      sessionStorage.setItem(key,captureId);
+      captureIds.current.set(key,captureId);
+      const send=()=>fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
+      let response=await send();
+      if(!response.ok){
+        const {code}=await response.json() as {code?:string};
+        if(code!=="NOT_FOUND"||stored===null)throw new Error(code);
+        // A credential replaced elsewhere can leave an inaccessible retry ID behind.
+        // Only an explicit NOT_FOUND permits one fresh attempt, never an unknown outcome.
+        sessionStorage.removeItem(key);captureIds.current.delete(key);
+        captureId=crypto.randomUUID();
+        sessionStorage.setItem(key,captureId);captureIds.current.set(key,captureId);
+        response=await send();
+        if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
+      }
       const captured=await response.json() as CaptureResult;
       setResult(captured);onCaptured?.(captured);
       setMessage("Your draft is ready. Check it below — nothing has been sent.");

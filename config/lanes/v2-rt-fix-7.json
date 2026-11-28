@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-7": {
+      "branches": ["codex/sandbox/rt-fix-7"],
+      "note": "RT-FIX-7: RV4-01..04 screen retry identity, confirmation edit lock, invalid-price submission guard and transcript-preserving cancel. Based on RT-FIX-4 (79e7ce83). No recogniser lifecycle or result changes. RED price handling requires independent review of the exact head before merge.",
+      "test": "pnpm --filter @jobguard/web test --maxWorkers=2",
+      "allow": [
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/walk-it-retry.test.tsx",
+        "apps/web/app/ui/review-proposal.test.tsx",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}

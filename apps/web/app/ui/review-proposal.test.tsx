@@ -140,6 +140,73 @@ function validFixture(): ReviewCaptureResult {
   };
 }
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+
+it("RV4-02: locks every review control while confirmation is pending, so no unsaved edit is hidden", async () => {
+  const result = validFixture(), respond = server(result);
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const fetch = vi.fn(async (url: string, options: RequestInit) => {
+    if (url.endsWith("/confirm")) await pending;
+    return respond(url, options);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  p.button(p.render(), "Confirm scope").props.onClick(); await settle();
+  expect(fetch.mock.calls.map(call => call[0].split("/").at(-1))).toEqual(["review", "confirm"]);
+  const tree = p.render();
+  // Native fieldset disabling covers inputs, selects, row actions, questions and room tools.
+  const locked = all(tree, n => n.type === "fieldset" && n.props.disabled === true);
+  expect(locked).toHaveLength(1);
+  for (const control of all(tree, n => ["input", "select", "textarea", "button"].includes(String(n.type)))) {
+    expect(control.props.disabled === true || all(locked[0], n => n === control).length === 1, `Unlocked ${control.props["aria-label"] ?? text(control)}`).toBe(true);
+  }
+  release(); await settle();
+  expect(text(p.render())).toContain("Scope confirmed");
+  const saved = JSON.parse(fetch.mock.calls[0]![1].body as string);
+  expect(saved.review.lines[0].description).toBe("Protect room");
+});
+
+it.each(["Save review", "Confirm scope"])("RV4-03: %s blocks an invalid price, retains typed text, and submits only after correction", async action => {
+  const result = validFixture();
+  result.review!.lines[0]!.unitPricePence = 20000;
+  const fetch = server(result); vi.stubGlobal("fetch", fetch);
+  const p = panel(result);
+  const price = () => all(p.render(), n => n.props["aria-label"] === "Price Protect room")[0]!;
+  price().props.onChange({ target: { value: "250.001" } });
+  const tree = p.render();
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain("decimal");
+  expect(price().props.value).toBe("250.001");
+  // Call the handler too: submission must fail closed beyond disabled styling.
+  p.button(tree, action).props.onClick(); await settle();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(p.button(p.render(), action).props.disabled).toBe(true);
+  expect(price().props.value).toBe("250.001");
+  price().props.onChange({ target: { value: "250.00" } });
+  expect(p.button(p.render(), action).props.disabled).toBe(false);
+  p.button(p.render(), action).props.onClick(); await settle();
+  const saved = JSON.parse(fetch.mock.calls[0]![1].body as string);
+  expect(saved.review.lines[0].unitPricePence).toBe(25000);
+  expect(fetch).toHaveBeenCalledTimes(action === "Confirm scope" ? 2 : 1);
+});
+
+it("blocks both submissions for an invalid visible room price, then permits returning to itemised prices", async () => {
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const p = panel(validFixture());
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Room" && !n.props.checked)[0]!.props.onChange();
+  all(p.render(), n => n.props["aria-label"] === "Room price Room")[0]!.props.onChange({ target: { value: "250.001" } });
+  p.button(p.render(), "Set one price for Room").props.onClick();
+  const tree = p.render();
+  expect(text(tree)).toContain("decimal");
+  for (const action of ["Save review", "Confirm scope"]) {
+    expect(p.button(tree, action).props.disabled).toBe(true);
+    p.button(tree, action).props.onClick();
+  }
+  await settle();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(all(p.render(), n => n.props["aria-label"] === "Room price Room")[0]!.props.value).toBe("250.001");
+  all(p.render(), n => n.type === "input" && n.props.name === "mode-Room" && !n.props.checked)[0]!.props.onChange();
+  expect(p.button(p.render(), "Save review").props.disabled).toBe(false);
+});
 function server(result: ReviewCaptureResult, confirmStatus = 200) {
   return vi.fn(async (url: string, options: RequestInit) => {
     if (url.endsWith("/review")) {

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalkIt } from "./jobguard-app";
+import { StateScreen } from "../(designed)/designed-ui";
 import { cancelLocalSpeech, createLocalSpeechAdapter } from "./local-speech";
 import { dictationMessage, LocalDictation, speechFailure, type LocalAvailability, type LocalSpeechAdapter } from "./local-dictation";
 
@@ -48,36 +49,47 @@ const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 type CaptureBody = { captureId: string; source: { kind: string; text: string; acquisition?: unknown }; [key: string]: unknown };
 
 function captureServer() {
-  const saved = new Map<string, { snapshot: string; result: Record<string, unknown> }>();
+  let session = 0;
+  const saved = new Map<string, { session: number; snapshot: string; result: Record<string, unknown> }>();
   const requests: CaptureBody[] = [];
-  const fetcher = vi.fn(async (_url: unknown, init: RequestInit) => {
+  const replaceSession = () => { session++; };
+  const fetcher = vi.fn(async (url: unknown, init: RequestInit) => {
+    if (url === "/api/session" && init.method === "POST") {
+      replaceSession();
+      return Response.json({}); // The practice credential is an HttpOnly cookie, never response data.
+    }
     const body = JSON.parse(init.body as string) as CaptureBody;
     requests.push(body);
     const { captureId, ...input } = body;
     const snapshot = JSON.stringify(input);
     const existing = saved.get(captureId);
+    if (existing && existing.session !== session) return Response.json({ code: "NOT_FOUND" }, { status: 404 });
     if (existing && existing.snapshot !== snapshot) return new Response(JSON.stringify({ code: "CAPTURE_ID_REUSED" }), { status: 409 });
     const result = existing?.result ?? {
       jobId: `job-${saved.size + 1}`,
       source: body.source,
       proposal: { lines: [{ description: { value: body.source.text }, unitPricePence: { value: 20000 } }], questions: [] },
     };
-    saved.set(captureId, { snapshot, result });
+    saved.set(captureId, { session, snapshot, result });
     return new Response(JSON.stringify(result), { status: 201 });
   });
   vi.stubGlobal("fetch", fetcher);
-  return { saved, requests, fetcher };
+  return { saved, requests, fetcher, replaceSession };
 }
-function panel() {
+function panel(tenantId = "tenant") {
   const captured = vi.fn();
-  const render = () => { hooks.render(); return WalkIt({ tenantId: "tenant", initialText: firstSource, close: vi.fn(), onCaptured: captured }); };
+  const render = () => { hooks.render(); return WalkIt({ tenantId, initialText: firstSource, close: vi.fn(), onCaptured: captured }); };
   const source = (tree: React.ReactNode) => all(tree, node => node.type === "textarea")[0]!;
   const button = (tree: React.ReactNode) => all(tree, node => node.type === "button" && text(node.props.children) === "Make my draft")[0]!;
   const edit = (value: string) => source(render()).props.onChange({ target: { value } });
-  const submit = async () => { button(render()).props.onClick(); await flush(); };
+  const submit = async () => { button(render()).props.onClick(); await vi.waitFor(() => expect(button(render()).props.disabled).toBe(false)); };
   return { render, source, button, edit, submit, captured };
 }
-beforeEach(() => { hooks.reset(); vi.stubGlobal("React", React); });
+beforeEach(() => {
+  hooks.reset(); vi.stubGlobal("React", React);
+  const stored = new Map<string, string>();
+  vi.stubGlobal("sessionStorage", { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value), removeItem: (key: string) => stored.delete(key) });
+});
 afterEach(() => { hooks.cleanup(); vi.unstubAllGlobals(); });
 
 it("makes a new draft from edited source, preserves earlier drafts, and reuses each exact submitted snapshot", async () => {
@@ -113,6 +125,119 @@ it("reuses the full request after a lost response without making another saved d
   expect(p.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-1" }));
 });
 
+it("RV4-01: reload after a lost capture response retries the original identity and recovers one job", async () => {
+  const server = captureServer(), p = panel();
+  const persist = server.fetcher.getMockImplementation()!;
+  server.fetcher.mockImplementationOnce(async (...args) => { await persist(...args); throw new Error("Connection lost after save"); });
+  await p.submit();
+  expect(server.saved.size).toBe(1);
+  hooks.reset(); // Reload loses all React state, while browser session storage survives.
+  const reloaded = panel();
+  await reloaded.submit();
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(1);
+  expect(reloaded.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-1" }));
+});
+
+it("a new example practice session captures the same words with a new identity in the same tab", async () => {
+  const server = captureServer(), p = panel();
+  await p.submit();
+  hooks.render("session-start");
+  const retry = vi.fn();
+  const screen = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  all(screen, node => node.type === "button" && text(node.props.children) === "Look around an example firm")[0]!.props.onClick();
+  await vi.waitFor(() => expect(retry).toHaveBeenCalledOnce());
+  // Even a still-mounted capture form must not retain the earlier session's ID.
+  await p.submit();
+  expect(server.requests).toHaveLength(2);
+  expect(server.requests[1]!.captureId).not.toBe(server.requests[0]!.captureId);
+  expect(server.requests[1]!.source).toEqual(server.requests[0]!.source);
+  expect(p.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-2" }));
+  hooks.reset();
+  const reloaded = panel(); await reloaded.submit();
+  expect(server.requests[2]).toEqual(server.requests[1]);
+  expect(server.saved.size).toBe(2);
+});
+
+it("NOT_FOUND on a stored capture drops that identity and retries once with a fresh reload-safe ID", async () => {
+  const server = captureServer();
+  await panel().submit();
+  // Credential replacement outside this screen: the old persisted ID is now unavailable.
+  server.replaceSession(); hooks.reset();
+  const reloaded = panel(); await reloaded.submit();
+  expect(server.requests).toHaveLength(3);
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.requests[2]!.captureId).not.toBe(server.requests[0]!.captureId);
+  expect(reloaded.captured).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "job-2" }));
+  hooks.reset(); await panel().submit();
+  expect(server.requests[3]).toEqual(server.requests[2]);
+  expect(server.saved.size).toBe(2);
+});
+
+it("does not loop when NOT_FOUND also rejects the one fresh retry", async () => {
+  const server = captureServer();
+  await panel().submit(); hooks.reset();
+  const requests: CaptureBody[] = [];
+  server.fetcher.mockImplementation(async (_url, init) => {
+    requests.push(JSON.parse(init.body as string) as CaptureBody);
+    return Response.json({ code: "NOT_FOUND" }, { status: 404 });
+  });
+  const p = panel(); await p.submit();
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEqual(server.requests[0]);
+  expect(requests[1]!.captureId).not.toBe(requests[0]!.captureId);
+  expect(p.captured).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+  expect(text(p.render())).toContain("NOT_FOUND");
+});
+
+it("does not retry NOT_FOUND for a newly minted capture ID", async () => {
+  const server = captureServer();
+  server.fetcher.mockImplementation(async () => Response.json({ code: "NOT_FOUND" }, { status: 404 }));
+  const p = panel(); await p.submit();
+  expect(server.fetcher).toHaveBeenCalledOnce();
+  expect(p.captured).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+});
+
+it("a refused example session start preserves the current session's retry identity", async () => {
+  const server = captureServer(), p = panel();
+  await p.submit();
+  server.fetcher.mockResolvedValueOnce(Response.json({ code: "UNAVAILABLE" }, { status: 503 }));
+  hooks.render("session-start");
+  const retry = vi.fn();
+  const screen = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  all(screen, node => node.type === "button" && text(node.props.children) === "Look around an example firm")[0]!.props.onClick();
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+  await flush();
+  expect(retry).not.toHaveBeenCalled();
+  await p.submit();
+  expect(server.requests[1]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(1);
+});
+
+it("keeps persisted capture identities separate for another business and edited source after reload", async () => {
+  const server = captureServer();
+  await panel().submit();
+  hooks.reset();
+  const edited = panel(); edited.edit(editedSource); await edited.submit();
+  hooks.reset(); await panel("another-tenant").submit();
+  expect(new Set(server.requests.map(request => request.captureId)).size).toBe(3);
+  hooks.reset(); await panel().submit();
+  expect(server.requests[3]).toEqual(server.requests[0]);
+  expect(server.saved.size).toBe(3);
+});
+
+it("does not send a capture until its retry identity can survive reload", async () => {
+  const server = captureServer();
+  vi.stubGlobal("sessionStorage", { getItem: () => null, setItem: () => { throw new Error("Storage unavailable"); } });
+  const p = panel(); await p.submit();
+  expect(server.fetcher).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+  expect(text(p.render())).toContain("Your original text is still here");
+  expect(p.button(p.render()).props.disabled).toBe(false);
+});
+
 it("suppresses same-tick double clicks while the first draft request is pending", async () => {
   const server = captureServer(), p = panel();
   const persist = server.fetcher.getMockImplementation()!;
@@ -121,6 +246,8 @@ it("suppresses same-tick double clicks while the first draft request is pending"
   server.fetcher.mockImplementationOnce(async (...args) => { await pending; return persist(...args); });
   const button = p.button(p.render());
   button.props.onClick(); button.props.onClick();
+  expect(p.button(p.render()).props.disabled).toBe(true);
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(1));
   expect(server.fetcher).toHaveBeenCalledTimes(1);
   expect(p.button(p.render()).props.disabled).toBe(true);
   expect(p.source(p.render()).props.disabled).toBe(true);
@@ -170,6 +297,7 @@ it.each(["Stop listening", "Cancel dictation"])("keeps %s usable during a pendin
   callbacks.final(editedSource, "fictional-speech-1");
   expect(adapter.start).toHaveBeenCalledTimes(1);
   p.button(p.render()).props.onClick();
+  await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(1));
   expect(server.fetcher).toHaveBeenCalledTimes(1);
   expect(p.source(p.render()).props.disabled).toBe(true);
   // Native fieldset disabling overrides each child's own disabled prop.
@@ -253,6 +381,32 @@ function fakeAdapter(availability: LocalAvailability, install: LocalSpeechAdapte
     start: vi.fn(() => ({ stop: vi.fn(), cancel: vi.fn() })),
   } satisfies LocalSpeechAdapter;
 }
+
+it.each(["interim", "final"] as const)("RV4-04: cancelling a second dictation with a %s segment keeps the completed transcript and its raw provenance", async segment => {
+  let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
+  const cancel = vi.fn(), onUse = vi.fn();
+  const adapter: LocalSpeechAdapter = {
+    ...fakeAdapter("installed"),
+    start: vi.fn(next => { callbacks = next; return { stop: () => callbacks.end(), cancel }; }),
+  };
+  const solo = soloDictation(adapter, { onUse });
+  solo.render(); await flush();
+  solo.button()!.props.onClick(); await flush();
+  callbacks.final("Paint walls", "first"); callbacks.end();
+  solo.button()!.props.onClick(); await flush();
+  if (segment === "final") callbacks.final("and fit shelves", "second");
+  else callbacks.interim("and fit shelves");
+  const recording = solo.render();
+  if (segment === "final") expect(all(recording, node => node.type === "textarea")[0]?.props.value).toBe("Paint walls and fit shelves");
+  else expect(text(recording)).toContain("and fit shelves");
+  solo.button("Cancel dictation")!.props.onClick();
+  expect(cancel).toHaveBeenCalledTimes(1);
+  const tree = solo.render();
+  expect(text(tree)).not.toContain("and fit shelves");
+  expect(all(tree, node => node.type === "textarea")[0]?.props.value).toBe("Paint walls");
+  solo.button("Use these words")!.props.onClick();
+  expect(onUse).toHaveBeenCalledExactlyOnceWith("Paint walls", "Paint walls");
+});
 
 it("gives each microphone failure its own message, and says how to allow a refused one", () => {
   expect(dictationMessage("denied")).toBe("JobGuard can't use your microphone. To allow it, open this site's settings from the address bar, allow Microphone, then press Talk through a quote again. You can type the job below instead.");
