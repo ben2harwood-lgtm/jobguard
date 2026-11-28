@@ -1208,6 +1208,106 @@ Golden scores have no drop: 32/32 cases; scope recall 41/41; valid citations 119
 
 Invariants touched: exact cited line prices survive harmless comma tails; a condition opens only its own price; totals and later work retain separate amounts. No migrations, interface changes, new alerts or commercial-policy changes. Database, browser/native and live-provider checks are inapplicable to this deterministic parser-only change. This is test execution, not independent RED review or release approval; exact-head review remains required before merge. Commit only, no push. `.pnpm-store/` is excluded.
 
+
+## RT-08 tenant-and-job attack receipt — 28 November 2026
+
+HEAD_UNDER_TEST / branch base: `bfac404e2058da7759001cc0321c859f393a7ca1`.
+Branch: `codex/sandbox/rt-08`. Plan read from the newer `lanes-ref/docs/testing/spoken-quote-hardening`
+README (invariants and corpus format) and RT-08 lane. Practice-only synthetic inputs; no paid API,
+web server, browser, deployment, push or demo-port use. Tests and this receipt only; no source repairs.
+
+### Case accounting and findings
+
+62 new executable cases: **24 passed, 38 not executed because PostgreSQL initialization is blocked**.
+New open findings by severity: **P0 0 / P1 0 / P2 0**. P0 list: **none confirmed**.
+These are P0-risk isolation/authorization/money-integrity cases; passing cases are not defects with a
+severity. No P1/P2 defect is claimed. No new finding row is justified by an initialization failure.
+F-005, F-006, F-007, F-008 and existing FINDINGS rows are not reported again.
+This is **not** a clean tenant-isolation sign-off: all database behavior below remains unverified here.
+Existing corpus open findings remain enforced by the shared expected-failure runner, unchanged.
+
+| New file | Cases | Local outcome |
+| --- | ---: | --- |
+| `apps/api/src/capture/rt08-tenant-and-job.integration.test.ts` | 38 | beforeAll fails at initdb; all 38 bodies unrun, leave for CI |
+| `apps/api/src/capture/rt08-invalid-session.test.ts` | 20 | pass; malformed credential rejection before database access, unit evidence only |
+| `packages/ai/src/redteam/rt08-reader-isolation.test.ts` | 4 | pass; interleaved fixture calls and Reader A, exact spoken prices, source-specific citations and mutation isolation |
+
+Exactly which integration cases remain unrun (parameterized expansions count separately):
+RT-08-001 view/save/confirm/discard (4); 002 different SQL tenant, same four operations (4);
+003 missing/malformed/valid-shape forged sessions (3); 004 expired/revoked (2);
+005 forged requested_tenant_id values (2); 006 foreign capture replay (1);
+007 changed foreign replay (1); 008 exact owner replay (1); 009 changed owner replay (1);
+010 wrong-job save path/body (1); 011 proposal/line/scope/parent/review identity substitution (5);
+012 cross-session proposal transplant (1); 013 concurrent session reads (1);
+014 customer/job names spoken as data (1); 015 forged extra routing fields (1);
+016 repository reads across actual SQL tenants (1); 017 seven capture/review table RLS/runtime-role checks (7);
+018 legitimate save/reopen/confirm on only its own job, with the spoken £350 preserved as 35000 pence (1).
+Refusal cases compare complete protected rows before/after, including source, job, proposal, review,
+canonical scope, authorization, receipt, audit, outbox and party bindings, rather than just counts.
+
+### Source review (source-inspected, not independent RED review)
+
+- `apps/web/app/api/jobs/capture/route.ts`: parses the body, checks cookie shape, then calls the request's
+  workspace capture application. Cookie shape alone is not authorization. `workspace-server.ts` reads the
+  current cookie and creates a new application per request. The shared pool holds connections, not a last
+  tenant, job or transcript. `practiceFailure` returns fixed code responses for typed access refusals.
+  HTTP response/header behavior and log output were source-inspected, not exercised by these application tests.
+- `apps/api/src/practice-access.ts` and `packages/db/src/practice-session.ts`: persisted authentication,
+  expiry/revocation/membership and immutable job ownership precede projection/save/confirm/discard.
+  Practice companies share DEMO_TENANT_ID and are separated by authenticated owner digest; the tests also
+  provision a genuinely different PostgreSQL tenant with an independently bound persisted credential.
+- `CaptureApplication.capture` uses the authenticated context to persist; requested_tenant_id is a DEMO
+  allow-check, never the context constructor. Capture creates a new job rather than appending to a client
+  supplied active job. Speech cannot invoke a customer-binding command. Explicit tests cover attempted
+  routing through spoken job IDs and untrusted extra body fields.
+- `CaptureRepository`: tenant-qualified advisory lock before capture lookup; existing replay checks owner
+  digest before returning data; immutable source/hash and full payload comparison; tenant-qualified reads
+  and joins. `ProposalReviewRepository`: tenant/job/proposal filters, row locking of current review,
+  reconciliation of original line/scope pairs, and job-qualified scope/parent foreign keys. Confirmation
+  rechecks the persisted review revision/state and draft job. RLS/catalog checks remain CI evidence to obtain.
+- Reader/parser state is local to each call. Four executed tests interleave callers using the same fixture
+  label and different source IDs, then mutate returned drafts and re-read to detect shared mutable state.
+  This establishes deterministic reader behavior only, not Worker/browser or database isolation.
+
+LATER / SIMPLICITY (initial review): `apps/api/src/capture/capture.application.ts: view / saidPrices`
+parses the same transcript separately for labels and prices. Reuse one local Reader A result when this
+area is next changed, retaining the existing fallback behavior; this reduces duplicate parsing and
+keeps label/price interpretation aligned. Non-blocking; no change made in this attack lane.
+
+### Executed checks and CI hold
+
+- Direct package builds for core, config, storage, ai and db: exit 0. Turbo initially could not create its
+  shared cache outside this worktree, so direct package scripts were used.
+- `pnpm --dir packages/ai test --maxWorkers=2`: exit 0, **29 files / 1263 tests**. Includes all four new
+  reader cases, existing qualified-price cases and corpus expected failures. Existing corpus table:
+  RT-00 3 pass / 2 open; RT-01 410 / 101; RT-02 127 / 48; RT-03 24 / 0. No status or expectation changed.
+- `pnpm --dir apps/api exec vitest run src/capture/rt08-invalid-session.test.ts src/capture/capture-state.test.ts src/capture/plan-safe-category.test.ts src/capture/said-prices.test.ts src/capture/deepgram-fixture.service.test.ts --maxWorkers=2`:
+  exit 0, **5 files / 43 tests**, including 20 new cases.
+- AI and API package typechecks: exit 0. `pnpm --dir apps/api openapi:check`: exit 0.
+- `node packages/ai/dist/evaluation-cli.js`: PASS and verifies the unchanged recorded golden run.
+  Recorded baseline and fresh run agree: 32 cases, scope recall 41/41, citations 119/119,
+  unsupported monetary facts 0, ambiguity 63/63. No parser/model/prompt/golden file changed.
+- `pnpm --dir apps/api exec vitest run src/capture/rt08-tenant-and-job.integration.test.ts --maxWorkers=2`:
+  suite setup fails; **38 skipped by failed hook**, not asserted passes or product findings.
+  First the installed native dependency lacked ICU/zstd/lz4/z library links. Restoring links inside
+  ignored node_modules allowed an isolated initdb diagnostic to reach bootstrap, where it failed:
+  `FATAL: could not create shared memory segment: Operation not permitted`;
+  `Failed system call was shmget(key=1165426401, size=56, 03600)` (exit 1).
+  No test skip flag or mock database fallback was added. CI must run the same command against the existing
+  PostgreSQL 16 fixture/current migrations and non-owner runtime login before acceptance. Its selected port
+  is in 59200..59499; neither 3000 nor 55432 is used.
+
+No migrations, backwards-compatibility changes, operational alerts, security/commercial approvals or
+production-release claims. Full API/database/browser/native suites were not run; the PostgreSQL hold
+prevents database acceptance. Commit only; no push. .pnpm-store is excluded from the commit.
+
+Final boundary checks: `git diff --check` passes. The lane checker's `mergeLanePolicy` plus `inspectLane`
+validates RT-08's schema, branch, exact base and all five committed paths with only the RT-08 config
+supplied. The repository-wide command
+`LANE_BASE_REF=bfac404e2058da7759001cc0321c859f393a7ca1 node tools/agent-lane-boundary-lint.mjs --lane=v2-rt-08`
+is held by the **pre-existing** `config/lanes/v2-rt-12.json` entry granting its own lane-register path.
+The same invalid entry is present at this branch's base SHA. It is outside this lane's allow-list and
+was left unchanged. The focused check is not reported as a repository-wide lint pass.
 ## RT-FIX-6 repair round 2 — merge-forward prerequisite
 
 Normal merge of `origin/codex/sandbox/rt-fix-5` into `819c2c7e`. The single
