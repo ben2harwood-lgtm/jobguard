@@ -1917,6 +1917,181 @@ test("F8: the attendance route answers the signed-in builder and refuses typed c
   assert.equal((await request(`/jobs/${jobId}/records`, { cookies })).status, 200);
 });
 
+// V2-C6 (Q70): the builder adds a line to a priced quote before it is sent. The line is a new confirmed
+// scope item with no price; it reaches the quote at the next draft save, so totals change only by its price.
+const addLine = (description = "Skip or waste removal", changes = {}) => ({ version: "v2-quote-add-line.v1", commandId: randomUUID(),
+  description, promptId: "waste", ...changes });
+const addedScope = async jobRef => (await admin.query(`SELECT count(*)::int AS n FROM app.scope_identity WHERE job_id=$1`, [jobRef])).rows[0].n;
+const lineAddedEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type='job' AND subject_ref=$1 AND event_type='v2.quote.line_added' ORDER BY sequence`, [jobRef])).rows;
+async function c6Quote() {
+  const plan = await draftForPlan();
+  const { quote, quoteLines, parties } = createWorkspaceApplication({ pool: runtime, sessionId: plan.sessionId });
+  const partyView = await parties.view({ sessionId: plan.sessionId }, plan.draftJob);
+  await parties.command({ sessionId: plan.sessionId }, plan.draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional C6 Customer", email: "customer@jobguard-v2.invalid", phone: "+447700900043" },
+    customerRef: null, site: { version: "site.v1", addressLines: ["6 Pretend Parade"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const latest = async () => (await quote.get(plan.draftJob)).revisions.at(-1);
+  const preview = () => quote.preview(plan.draftJob, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
+  return { ...plan, quote, quoteLines, latest, preview };
+}
+const pricedLine = (receipt, changes = {}) => ({ id: randomUUID(), scopeItemId: receipt.scopeItemId, scopeRevisionId: receipt.scopeRevisionId,
+  description: receipt.description, origin: "human", included: true, exclusionReason: null, quantity: "1", unit: "item",
+  unitRatePence: null, discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: null, category: null, region: null,
+  ...changes });
+
+test("C6 done when: a line added from a prompt is unpriced, blocks preview until priced, and adds exactly £240, £48 and £288", async () => {
+  const { draftJob, lines, save, quoteLines, latest, preview, quote } = await c6Quote();
+  const first = await latest();
+  const receipt = await quoteLines.add(draftJob, addLine());
+  assert.equal(receipt.replayed, false);
+  const { scope } = await quote.get(draftJob);
+  assert.deepEqual(scope.find(item => item.scopeItemId === receipt.scopeItemId),
+    { ...scope.find(item => item.scopeItemId === receipt.scopeItemId), scopeRevisionId: receipt.scopeRevisionId,
+      description: "Skip or waste removal" });
+  assert.deepEqual((await latest()).id, first.id, "adding a line writes no quote revision");
+  // The saved revision does not cover the new item, so nothing can be previewed from it.
+  await assert.rejects(preview(), error => error.code === "QUOTE_NOT_ISSUABLE"
+    && error.blockers.some(blocker => blocker.code === "missing_scope" && blocker.scopeItemId === receipt.scopeItemId));
+  await save(1, [...lines, pricedLine(receipt)]);
+  const unpriced = await latest();
+  assert.equal(unpriced.revision, 2);
+  assert.equal(unpriced.issuable, false, "an unpriced included line blocks issue");
+  assert.equal(unpriced.lines.at(-1).origin, "human");
+  // Plan check: the line reaches the editor unpriced. The scope row stores 0 only because scope revisions need a
+  // number; the saved quote line keeps null, never that 0, and preview stays refused until it is priced or excluded.
+  assert.equal((await quote.get(draftJob)).scope.find(item => item.scopeItemId === receipt.scopeItemId).unitRatePence, 0);
+  assert.equal(unpriced.lines.at(-1).unitRatePence, null, "the added line is saved unpriced, not at the scope's 0");
+  assert.equal(unpriced.lines.at(-1).rateProvenance, null);
+  await assert.rejects(preview(), error => error.code === "QUOTE_NOT_ISSUABLE");
+  await save(2, [...lines, pricedLine(receipt, { unitRatePence: 24000, rateProvenance: "entered" })]);
+  const priced = await latest();
+  assert.equal(priced.issuable, true);
+  assert.deepEqual([priced.netPence - first.netPence, priced.taxPence - first.taxPence, priced.totalPence - first.totalPence],
+    [24000, 4800, 28800]);
+  const strip = line => ({ ...line, id: undefined });
+  assert.deepEqual(priced.lines.slice(0, lines.length).map(strip), first.lines.map(strip), "every other line is unchanged");
+  assert.ok((await preview()).view.documentId);
+  const events = await lineAddedEvents(draftJob);
+  assert.equal(events.length, 1);
+  // 0758 (main's audit attribution) adds auditActorKind, auditActorRef and auditTrust to every audit's references.
+  const { auditActorKind, auditActorRef, auditTrust, ...references } = events[0].payload.references;
+  assert.deepEqual(references, { commandId: references.commandId, jobId: draftJob,
+    scopeItemId: receipt.scopeItemId, scopeRevisionId: receipt.scopeRevisionId, promptId: "waste" });
+  assert.deepEqual([auditActorKind, auditTrust], ["bound_member", "lower_trust"]);
+  assert.match(auditActorRef, /^membership:[0-9a-f-]{36}$/u);
+  assert.doesNotMatch(JSON.stringify(events), /Skip|waste removal/iu, "no description text in the audit");
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+// A preview made before the add no longer covers every confirmed scope item, so the server refuses to send it
+// (missing_scope, the check main already runs at preview, document and send). Saving and previewing again sends.
+const sentRows = async jobRef => (await admin.query(`SELECT count(*)::int AS n FROM app.quote_send WHERE job_id=$1`, [jobRef])).rows[0].n;
+const sendCommand = view => ({ version: "quote-send-command.v1", commandId: randomUUID(), documentId: view.documentId,
+  contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+test("C6 a preview made before the add cannot be sent; revision 2 previews and sends with the new line", async () => {
+  const { draftJob, lines, save, quoteLines, preview, quote } = await c6Quote();
+  const before = await preview();
+  const receipt = await quoteLines.add(draftJob, addLine("Parking permit", { promptId: "parking" }));
+  await assert.rejects(quote.issue(draftJob, sendCommand(before.view)), error => error.code === "QUOTE_NOT_ISSUABLE"
+    && error.blockers.some(blocker => blocker.code === "missing_scope" && blocker.scopeItemId === receipt.scopeItemId));
+  assert.equal(await sentRows(draftJob), 0, "the refused send wrote nothing");
+  await save(1, [...lines, pricedLine(receipt, { unitRatePence: 4500, rateProvenance: "entered" })]);
+  const after = await preview();
+  assert.notEqual(after.view.documentId, before.view.documentId);
+  assert.doesNotMatch(JSON.stringify(before.document), /Parking permit/u);
+  assert.match(JSON.stringify(after.document), /Parking permit/u);
+  await quote.issue(draftJob, sendCommand(after.view));
+  assert.equal(await sentRows(draftJob), 1);
+});
+
+test("C6 an add racing a send: either the send goes without the line and the add refuses, or the add lands and the send refuses", async () => {
+  const { draftJob, quoteLines, preview, quote } = await c6Quote();
+  const { view } = await preview();
+  const [sent, added] = await Promise.allSettled([quote.issue(draftJob, sendCommand(view)), quoteLines.add(draftJob, addLine())]);
+  if (sent.status === "fulfilled") {
+    assert.equal(added.status, "rejected");
+    assert.equal(added.reason.code, "QUOTE_NOT_EDITABLE");
+    assert.equal(await sentRows(draftJob), 1);
+  } else {
+    assert.equal(added.status, "fulfilled");
+    assert.equal(sent.reason.code, "QUOTE_NOT_ISSUABLE");
+    assert.equal(await sentRows(draftJob), 0);
+  }
+});
+
+test("C6 after the quote is sent or accepted, add refuses QUOTE_NOT_EDITABLE and writes nothing", async () => {
+  const { draftJob, quoteLines, preview, quote } = await c6Quote();
+  await quote.issue(draftJob, sendCommand((await preview()).view));
+  const before = [await addedScope(draftJob), (await lineAddedEvents(draftJob)).length];
+  await assert.rejects(quoteLines.add(draftJob, addLine()), { code: "QUOTE_NOT_EDITABLE" });
+  const { cookies } = await signIn("builder");
+  assert.equal((await json(await request(`/api/v2-backend/jobs/${draftJob}/quotes/lines`, { cookies, body: addLine() }), 409)).code,
+    "QUOTE_NOT_EDITABLE");
+  assert.deepEqual([await addedScope(draftJob), (await lineAddedEvents(draftJob)).length], before);
+});
+
+test("C6 replay returns the same item, a changed body under the same command id conflicts, and a race adds one", async () => {
+  const { draftJob, quoteLines } = await c6Quote();
+  const command = addLine("Making good", { promptId: "making-good" });
+  const [one, two] = await Promise.all([quoteLines.add(draftJob, command), quoteLines.add(draftJob, command)]);
+  assert.deepEqual([one.scopeItemId, one.scopeRevisionId], [two.scopeItemId, two.scopeRevisionId]);
+  assert.deepEqual([one.replayed, two.replayed].sort(), [false, true]);
+  const replay = await quoteLines.add(draftJob, command);
+  assert.deepEqual({ ...replay, replayed: false }, one.replayed ? { ...two, replayed: false } : one);
+  await assert.rejects(quoteLines.add(draftJob, { ...command, description: "Making good twice" }), { code: "QUOTE_COMMAND_CONFLICT" });
+  await assert.rejects(quoteLines.add(draftJob, { ...command, promptId: "parking" }), { code: "QUOTE_COMMAND_CONFLICT" });
+  await assert.rejects(quoteLines.add(draftJob, { ...command, description: " " }), { code: "QUOTE_ADD_LINE_INVALID" });
+  await assert.rejects(quoteLines.add(draftJob, { ...command, unitRatePence: 100 }), { code: "QUOTE_ADD_LINE_INVALID" });
+  assert.equal((await lineAddedEvents(draftJob)).length, 1, "one event for one effect");
+});
+
+test("C6 an added line excluded with a reason lets the quote issue unpriced, and shows under exclusions", async () => {
+  const { draftJob, lines, save, quoteLines, latest, preview } = await c6Quote();
+  const receipt = await quoteLines.add(draftJob, addLine("Contingency", { promptId: "contingency" }));
+  const first = await latest();
+  await save(1, [...lines, pricedLine(receipt, { included: false, exclusionReason: "Customer will cover this" })]);
+  const excluded = await latest();
+  assert.equal(excluded.issuable, true);
+  assert.equal(excluded.netPence, first.netPence, "an excluded line adds nothing");
+  const { document } = await preview();
+  assert.ok(document.exclusions.includes("Contingency: Customer will cover this"), "the reason reaches the document's exclusions");
+  // A long description and reason are wrapped at word boundaries into entries that fit a PDF row, never cut.
+  const long = await quoteLines.add(draftJob, addLine("Long ".repeat(100).trim(), { promptId: "contingency" }));
+  await save(2, [...lines, pricedLine(receipt, { included: false, exclusionReason: "Customer will cover this" }),
+    pricedLine(long, { included: false, exclusionReason: "Not part of this job" })]);
+  const split = (await preview()).document.exclusions;
+  const start = split.findIndex(entry => entry.startsWith("Long Long"));
+  const entries = split.slice(start, split.findIndex((entry, index) => index >= start && entry.endsWith("this job")) + 1);
+  assert.equal(entries.join(" "), `${long.description}: Not part of this job`);
+  assert.ok(entries.every(entry => entry.length <= 84));
+});
+
+test("C6 the second firm gets 404 and sees none of the added rows; off local V2 the add refuses", async () => {
+  const { draftJob, quoteLines } = await c6Quote();
+  const receipt = await quoteLines.add(draftJob, addLine("Protection and cleaning", { promptId: "protection" }));
+  const outsider = await signIn("second-builder");
+  assert.equal((await json(await request(`/api/v2-backend/jobs/${draftJob}/quotes/lines`,
+    { cookies: outsider.cookies, body: addLine() }), 404)).code, "NOT_FOUND");
+  const outsiderLines = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).quoteLines;
+  await assert.rejects(outsiderLines.add(draftJob, addLine()), { code: "NOT_FOUND" });
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  for (const scope of [outsider.realContext, context]) {
+    const { rows } = await withTenant(runtime, scope, db => db.$client.query(`SELECT 1 FROM app.job j JOIN app.scope_identity s
+      ON (s.tenant_id,s.job_id)=(j.tenant_id,j.id) WHERE s.id=$1`, [receipt.scopeItemId]));
+    assert.equal(rows.length, 0, "rule 30: firm B reads none of firm A's added line");
+  }
+  const local = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try { await assert.rejects(quoteLines.add(draftJob, addLine()), { code: "SYNTHETIC_MODE_REQUIRED" }); }
+  finally { if (local !== undefined) process.env.JOBGUARD_LOCAL_V2 = local; }
+});
+
 // V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
 
 test("FL guard: every job-bound table runtime can touch is firm-locked or named in a pending slice", async () => {
