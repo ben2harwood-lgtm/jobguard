@@ -54,8 +54,8 @@ function signIn(localPart) {
   return sessions.get(localPart);
 }
 
-async function openSession(localPart) {
-  const input = { email: localPart + "@jobguard-v2.invalid", purpose: "signin" };
+async function openSession(localPart, purpose = "signin") {
+  const input = { email: localPart + "@jobguard-v2.invalid", purpose };
   const { fixtureCode } = await json(await request("/api/auth/request", {
     body: { version: "identity-request.v1", ...input },
   }));
@@ -1689,6 +1689,168 @@ test("FL-1: the core firm lock migration is safe to run twice", async () => {
   const before = await policies();
   await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
   assert.deepEqual(await policies(), before);
+});
+
+// V2-K10: read-only profit, leak pair and access boundaries. Reuse suite sign-in.
+async function k10PricedJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines.map((line, index) => ({ ...line, unitRatePence: index === 0 ? 1840000 : 0 })));
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional K10 Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900042" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["10 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional K10 Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await app.quote.activate(draftJob, switchLive());
+  const variationId = randomUUID();
+  const proposed = await app.variation.command(draftJob, { version: "variation-command.v1", action: "propose",
+    proposalId: variationId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "Fictional approved extra", captureText: "Fictional extra agreed by builder",
+    price: { quantity: "1", unit: "item", unitRatePence: 125000, direction: "addition" } });
+  await app.variation.command(draftJob, { version: "variation-command.v1", action: "approve",
+    variationId, revisionId: proposed.variations.find(item => item.id === variationId).currentRevisionId,
+    approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const { documentId: costDocument } = await app.supplierDocuments.intake(draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-invoice",
+    channel: "picker", expectedRevision: 0,
+  });
+  await app.supplierDocuments.confirm(draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: costDocument, documentType: "invoice", quantity: "1", unitPricePence: 910000,
+    netPence: 910000, expectedRevision: 0, disposition: "manual_transcription" });
+  return { draftJob, costDocument, app };
+}
+
+test("K10 exact stored figures, complete hidden-finding pair, no write on repeated reads, second firm refused", async () => {
+  const { cookies, sessionId } = await signIn("builder");
+  const plain = await k10PricedJob(), planted = await k10PricedJob();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  // Test setup alone writes a held finding; the read runs with the unprivileged builder pool.
+  await admin.query(`INSERT INTO app.shadow_commercial_signal
+    (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,
+     description,estimated_value_pence,confidence_band,state)
+    VALUES($1,$2,$3,$4,'possible_extra','deterministic','k10.fixture.v1',clock_timestamp(),
+     'K10 hidden money canary',99999999,'low','held_for_final_check')`,
+  [context.tenantId, planted.draftJob, randomUUID(), randomUUID()]);
+  const read = async (id, options = { cookies }) => {
+    const response = await request(`/api/jobs/${id}/profit-so-far`, options);
+    assert.match(response.headers.get("cache-control"), /no-store/u);
+    return json(response);
+  };
+  const auditCount = async () => (await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n;
+  const before = await auditCount();
+  const response = await read(plain.draftJob);
+  assert.deepEqual(response, await read(planted.draftJob));
+  assert.deepEqual(await read(plain.draftJob), response);
+  assert.equal(await auditCount(), before, "reads must not append audit events");
+  assert.deepEqual(response.quoted, { pence: 1840000, currency: "GBP" }); assert.deepEqual(response.approvedExtras, { pence: 125000, currency: "GBP" });
+  assert.deepEqual(response.jobTotal, { pence: 1965000, currency: "GBP" }); assert.deepEqual(response.recordedCosts, { pence: 910000, currency: "GBP" });
+  assert.deepEqual(response.leftInBudget, { pence: 1055000, currency: "GBP" }); assert.equal(response.spentPercent, "46.31");
+  assert.equal(response.taxBasis, "ex-VAT"); assert.equal(response.notice, "Costs recorded so far only.");
+  assert.doesNotMatch(JSON.stringify(response), /hidden|canary|forecast|99999999/iu);
+  const stranger = await signIn("second-builder");
+  const path = `/api/jobs/${plain.draftJob}/profit-so-far`;
+  assert.equal((await request(path, { cookies: stranger.cookies })).status, 404);
+  // Cases (a) to (d) are in the K10-R test below; capability-link refusal waits for F6 (SX rev 4).
+  // A fresh draft has no accepted price and no percentage, despite its priced working scope.
+  const draft = await draftForPlan();
+  const noPrice = await read(draft.draftJob);
+  assert.equal(noPrice.spentPercent, null); assert.equal(noPrice.jobTotal, null);
+  assert.match(noPrice.summary, /No accepted price yet/u);
+  // Only the latest confirmed facts count; unconfirmed documents and repeated intake do not add spend.
+  await plain.app.supplierDocuments.intake(plain.draftJob, { version: "supplier-document-intake.v1",
+    commandId: randomUUID(), fixtureId: "materials-320-invoice", channel: "picker", expectedRevision: 1 });
+  assert.deepEqual(await read(plain.draftJob), response);
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: plain.costDocument, documentType: "invoice", quantity: "1", unitPricePence: 900000,
+    netPence: 900000, expectedRevision: 1, disposition: "manual_transcription" });
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 900000, currency: "GBP" });
+  const { documentId: replacement } = await plain.app.supplierDocuments.intake(plain.draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-revised-invoice",
+    channel: "picker", expectedRevision: 2,
+  });
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: replacement, documentType: "invoice", quantity: "8", unitPricePence: 2000,
+    netPence: 16000, expectedRevision: 0, disposition: "source_verified" });
+  const facts = (await plain.app.supplierDocuments.view(plain.draftJob)).state.facts;
+  await plain.app.thingsToCheck.supersede(plain.draftJob, { version: "supplier-bill-supersession.v1", commandId: randomUUID(),
+    originalFactRevisionId: facts.find(fact => fact.document_id === plain.costDocument).confirmed.id,
+    replacementFactRevisionId: facts.find(fact => fact.document_id === replacement).confirmed.id, expectedRevision: 0 });
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 16000, currency: "GBP" }, "do not count a replaced invoice twice");
+  const { documentId: credit } = await plain.app.supplierDocuments.intake(plain.draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "practice-credit-300",
+    channel: "picker", expectedRevision: 3,
+  });
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: credit, documentType: "credit", quantity: "1", unitPricePence: 5000,
+    netPence: 5000, expectedRevision: 0, disposition: "manual_transcription" });
+  assert.deepEqual((await read(plain.draftJob)).recordedCosts, { pence: 11000, currency: "GBP" }, "supplier credits reduce recorded spend");
+});
+
+test("K10 invalid customer cookie is refused", async () => {
+  const { draftJob } = await draftForPlan();
+  const refused = await request(`/api/jobs/${draftJob}/profit-so-far`, { cookies: "jg_customer_session=fictional-customer-token" });
+  assert.equal(refused.status, 401);
+  assert.doesNotMatch(await refused.text(), /quoted|recordedCosts|spentPercent/u);
+});
+
+// K10-R: SX revision 4 cases (a) to (d), kept inline under its own name. The shared
+// V2-SX helper (tools/v2/test/refusals.mjs) takes route objects, not this path form.
+const k10Deny = /profit|margin|cost|amount|quoted|spent|leftInBudget|jobTotal|approvedExtras|£|pence/iu;
+async function k10AssertRouteRefuses({ path, deny, signedOut, secondFirm }) {
+  const cases = {
+    "(a) no session": undefined,
+    "(b) invalid session": `jg_session=${randomUUID()}`,
+    "(c) signed out": signedOut,
+    "(d) second firm": secondFirm,
+  };
+  for (const [name, cookies] of Object.entries(cases)) {
+    const response = await request(path, { cookies });
+    assert.ok([401, 403, 404].includes(response.status), `${name}: ${response.status}`);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/u, name);
+    assert.doesNotMatch(await response.text(), deny, `${name} must not return money fields`);
+  }
+}
+
+test("K10-R the job profit route refuses no session, an invalid session, a signed-out session and the second firm", async () => {
+  const { draftJob } = await draftForPlan();
+  const path = `/api/jobs/${draftJob}/profit-so-far`;
+  const owner = await signIn("builder");
+  assert.match(JSON.stringify(await json(await request(path, { cookies: owner.cookies }))), /recordedCosts/u);
+  // A separate fictional firm signs up, proves its session reads its own job, then signs out.
+  // Only catcher addresses may sign up on V2; the fictional tiler has no other session here.
+  const leaver = await openSession("tiler", "signup");
+  const { capture } = createWorkspaceApplication({ pool: runtime, sessionId: leaver.sessionId });
+  const own = await capture.create({ contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID,
+    captureId: randomUUID(), fixtureId: "v2-c2-draft-editing",
+    source: { kind: "text", text: "JOB: K10-R fictional sign-out job\nITEM: Fit a shelf | QTY: 1 | UNIT: item | RATE: £95.00" } });
+  const ownPath = `/api/jobs/${own.jobId}/profit-so-far`;
+  await json(await request(ownPath, { cookies: leaver.cookies }));
+  await json(await request("/api/auth/signout", { cookies: leaver.cookies, csrf: leaver.csrfToken, body: {} }));
+  const after = await request(ownPath, { cookies: leaver.cookies });
+  assert.ok([401, 403, 404].includes(after.status), `signed out on own job: ${after.status}`);
+  assert.doesNotMatch(await after.text(), k10Deny);
+  const outsider = await signIn("second-builder");
+  const auditBefore = (await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n;
+  await k10AssertRouteRefuses({ path, deny: k10Deny, signedOut: leaver.cookies, secondFirm: outsider.cookies });
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n, auditBefore,
+    "refused reads write nothing");
 });
 
 // must stay the last test: it signs the cached builder out

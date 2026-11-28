@@ -5,9 +5,9 @@ const nextConfig = {
   // OpenNext copies the full external package, including its workerd exports.
   // Next's Node trace otherwise includes only pg-cloudflare's empty fallback.
   serverExternalPackages: ["pg-cloudflare"],
-  // V2 only: lets the quote screen ask for "don't forget" prompts. Outside V2
+  // V2 only: lets the quote screen ask for "don't forget" prompts and the job page read profit so far. Outside V2
   // the flag is absent, so the browser makes no extra request.
-  ...(process.env.JOBGUARD_LOCAL_V2 === "1" ? { env: { NEXT_PUBLIC_JOBGUARD_V2_QUOTE_PROMPTS: "1" } } : {}),
+  ...(process.env.JOBGUARD_LOCAL_V2 === "1" ? { env: { NEXT_PUBLIC_JOBGUARD_V2_QUOTE_PROMPTS: "1", NEXT_PUBLIC_JOBGUARD_V2_PROFIT: "1" } } : {}),
   ...(localV2Api ? {
     allowedDevOrigins: [new URL(process.env.AUTH_ALLOWED_ORIGIN).hostname],
     async rewrites() {

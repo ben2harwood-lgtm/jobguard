@@ -194,3 +194,6 @@ export * from "./merchant-reliability.js";
 export * from "./rate-baseline.js";
 export * from "./operative-view-models.js";
 export * from "./offline-upload-contract.js";
+
+// V2-K10: builder-only recorded job profit.
+export * from "./v2-job-profit.js";

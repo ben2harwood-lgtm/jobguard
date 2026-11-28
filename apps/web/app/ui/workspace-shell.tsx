@@ -1,4 +1,5 @@
 "use client";
+import { V2JobProfit } from "./v2-job-profit";
 import { SimulationFeeStatements } from "./simulation-fee-statements";
 import { PracticeFacts } from "./practice-facts";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -112,6 +113,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
    <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope" onClick={event=>{event.preventDefault();navigateSection("#scope");}}>Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote" onClick={event=>{event.preventDefault();navigateSection("#quote");}}>Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof" onClick={event=>{event.preventDefault();navigateSection("#work-proof");}}>Work and proof</a><a href="#final-account-title" onClick={event=>{event.preventDefault();navigateSection("#final-account-title");}}>Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
    <JobParties jobId={jobId}/>
+   <V2JobProfit key={`profit:${jobId}`} jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
    <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    <hr/>
