@@ -10,6 +10,7 @@
         "apps/web/app/ui/rt10-mobile.test.tsx",
         "apps/web/app/ui/rt10-mobile-markup.test.tsx",
         "apps/web/e2e/RT-10-mobile.spec.ts",
+        "apps/web/playwright.config.ts",
         "apps/web/playwright.rt10.config.ts",
         "docs/testing/spoken-quote-hardening/FINDINGS.md"
       ]

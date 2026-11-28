@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { ARTIFACT_DIR, HEAD_UNDER_TEST } from "../app/ui/rt10-mobile.fixtures";
 
+test.skip(process.env.JOBGUARD_RT10 !== "1", "Opt in with JOBGUARD_RT10=1 using playwright.rt10.config.ts.");
+
 // Component layout tests, not a deployed-flow acceptance run. SSR markup/CSS
 // comes from this branch; the actual preview still runs b25b5ee9. No parse API,
 // session creation or shared practice database is used. All HTTP is intercepted.
