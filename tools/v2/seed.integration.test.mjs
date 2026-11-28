@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
 // V2-F8
@@ -280,7 +280,7 @@ test("the V2 accepted quote produces one plan after concurrent generation, reope
   const hall = first.tasks.filter(task => task.trade === "decorator");
   assert.deepEqual(hall.map(task => task.scopeItemId), [decoratingId, decoratingId]);
   assert.deepEqual(hall.map(task => task.dependsOn), [
-    [], [{ scopeItemId: decoratingId, templateTaskKey: "prepare-hall" }],
+    [], [{ scopeItemId: decoratingId, templateTaskKey: "decorating-prepare" }],
   ]);
   assert.deepEqual(await counts(), before);
 });
@@ -390,11 +390,10 @@ test("forced work plan policies isolate the second firm's real and shared practi
 const planQuery = { version: "work-plan-query.v1" };
 const customTaskKey = "custom-scope-item";
 
-async function draftForPlan() {
+async function draftForPlan(categories = ["Tiling", "Decorating", "Joinery", "Metalwork"],
+  descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"]) {
   const { sessionId, realContext } = await signIn("builder");
   const { capture, quote, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId });
-  const categories = ["Tiling", "Decorating", "Joinery", "Metalwork"];
-  const descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"];
   const saved = await capture.create({
     contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
     fixtureId: "v2-c2-draft-editing",
@@ -438,6 +437,60 @@ async function draftForPlan() {
   const edit = command => workPlan.edit(draftJob, command);
   return { draftJob, realContext, sessionId, lines, save, read, edit };
 }
+
+// V2-SQ-F: new plans use trades.v1; a stored plan keeps its own template on read and on refresh.
+test("SQ-F a spoken bathroom job plans in stage order with no splashback or hall task; Other stays unplanned", async () => {
+  const categories = ["Tiling", "Decorating", "Plumbing", "Electrics", "Plastering", "Other"];
+  const { lines, read, edit, save } = await draftForPlan(categories,
+    ["Tile the walls", "Paint the ceiling", "Fit the new suite", "Move two sockets", "Skim the walls", "Fit a mirror"]);
+  const [tiling, decorating, plumbing, electrics, plastering, other] = lines.map(line => line.scopeItemId);
+  const plan = await read();
+  assert.equal(plan.templateKey, "trades.v1");
+  assert.deepEqual(plan.tasks.map(task => [task.key, task.scopeItemId, task.position]), [
+    ["plumbing-first-fix", plumbing, 1], ["electrics-first-fix", electrics, 2],
+    ["plastering-plaster", plastering, 3], ["plastering-dry", plastering, 4],
+    ["plumbing-second-fix", plumbing, 5], ["electrics-second-fix", electrics, 6],
+    ["tiling-prepare", tiling, 7], ["tiling-tile", tiling, 8],
+    ["decorating-prepare", decorating, 9], ["decorating-paint", decorating, 10],
+  ]);
+  assert.equal(plan.tasks.some(task => /splashback|hall/iu.test(`${task.key} ${task.title}`)), false);
+  assert.deepEqual(plan.tasks.find(task => task.key === "plumbing-second-fix").dependsOn,
+    [{ scopeItemId: plumbing, templateTaskKey: "plumbing-first-fix" }]);
+  assert.deepEqual(plan.unplanned.map(item => item.scopeItemId), [other]);
+  assert.equal("stage" in plan.tasks[0], false, "stage orders the stored rows and is not part of a task");
+  // An Other line takes a custom task, an edit replays, and a quote save refreshes the plan under trades.v1.
+  const custom = planEdit(plan, { scopeItemId: other, key: customTaskKey }, { position: 11, trade: "joiner", durationMinutes: 60 });
+  const receipt = await edit(custom);
+  assert.deepEqual(await edit(custom), receipt);
+  const edited = await read();
+  assert.deepEqual(edited.tasks.at(-1).scopeItemId, other);
+  await save(1);
+  const refreshed = await read();
+  assert.equal(refreshed.templateKey, "trades.v1");
+  assert.notEqual(refreshed.quoteRevisionId, plan.quoteRevisionId);
+  assert.deepEqual(refreshed.tasks.slice(0, 10).map(task => task.key), plan.tasks.map(task => task.key));
+  assert.equal(refreshed.tasks.at(-1).scopeItemId, other, "the custom task follows the refresh");
+});
+
+test("SQ-F a plan stored under the splashback template reads back identically and its refresh stays on it", async () => {
+  const { draftJob, sessionId, save, read } = await draftForPlan();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const splashback = workPlanTemplates.get("splashback-decorating.v1");
+  const { rows: [{ current_revision_id: revision }] } = await admin.query(
+    "SELECT current_revision_id FROM app.quote_draft WHERE job_id=$1", [draftJob]);
+  const stored = await new WorkPlanRepository(runtime, splashback).generate(context, planSource(draftJob, revision));
+  assert.equal(stored.templateKey, "splashback-decorating.v1");
+  assert.deepEqual(stored.tasks.map(task => task.key), ["prepare-splashback", "tile-splashback", "prepare-hall", "paint-hall"]);
+  assert.deepEqual(await new WorkPlanRepository(runtime).read(context, planSource(draftJob, revision)), stored);
+  assert.deepEqual(await read(), stored);
+  await save(1);
+  const refreshed = await read();
+  assert.equal(refreshed.templateKey, "splashback-decorating.v1");
+  assert.notEqual(refreshed.quoteRevisionId, revision);
+  assert.deepEqual(refreshed.tasks.map(task => task.key), stored.tasks.map(task => task.key));
+  const { rows } = await admin.query("SELECT template_key FROM app.v2_work_plan WHERE job_id=$1 ORDER BY created_at", [draftJob]);
+  assert.deepEqual(rows.map(row => row.template_key), ["splashback-decorating.v1", "splashback-decorating.v1"]);
+});
 
 function planEdit(plan, task, changes) {
   return { version: "work-plan-edit.v1", commandId: randomUUID(), quoteRevisionId: plan.quoteRevisionId,
