@@ -36,3 +36,6 @@ If a case looks wrong to you, report it to the planner. Don't change it. `HISTOR
 - Exact prices, including after a punctuation dash, are unchanged.
 - CI1 is green, and the desktop Codex verdict names the head and is clean or answered.
 - Then the builder adds it to the preview head #1061, with a note on #1061 naming Codex's finding as closed.
+
+## Plan check (Claude stand-in, 28 Nov 13:45 UK)
+Astra did not reply to #3 7238728305. This check passed with no new conditions. It was built as #1064 (Q77, ac7945f) and #1063 (Q75, 6d7c0b7), desktop Codex was clean on both, and both landed on preview #1061 at b25b5ee. Codex's price-limit tests were copied in unchanged, and packages/ai passes 497 of 497. Any further findings come from the Codex red-team (#1072, #1074) and are fixed by Codex under the hardening plan (#1065), not here.
