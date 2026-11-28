@@ -17,6 +17,9 @@ Severity: **P0** wrong money (invented, wrong sign, qualified kept as fixed) or 
 | RV4-04 | RV-4 | 79e7ce836 | cancel-second-dictation | Finish Paint walls; start again with provisional and fit shelves; cancel | Keep the earlier completed words for review | Cancel cleared the transcript and Use these words | P1 | fixed | RT-FIX-7 (commit only) |
 | RT-FIX-7-R1 | Codex review | f48dfc88 | new-session-same-source | Fictional room. Protect room £200.00. | A new anonymous practice session captures the same words successfully | Shared demo tenant caused reuse of the previous session's capture ID and permanent NOT_FOUND | P1 | fixed | #1088 repair round 1 (commit only) |
 | RT-FIX-7-R2 | Codex review | 554bea9e | cancel-second-dictation-final | Finish Paint walls; start again with FINAL and fit shelves; cancel | Restore the earlier completed transcript and raw provenance | Cancel retained the second recording's final words in review and submission | P2 | fixed | #1088 repair round 2 (commit only) |
+| RT-09-F001 | RT-09 | 49755b620ccf0223e64575006cd4590c77595ca2 | RT-09-B11; RT-09-B13 | Fictional kitchen. Fit shelves £200.00. Human review adds “and brackets” to Fit shelves, then Back/reopen or reload before Save. | Keep the unsaved work clause recoverable, or guard navigation so it is not lost silently. One recording still has one job. | Returning to the same review URL or reloading restores “Fit shelves”; “and brackets” and the unsaved Accept choice disappear, with no recovery or navigation warning. The original source survives. | P1 | open | — |
+| RT-09-F002 | RT-09 | 49755b620ccf0223e64575006cd4590c77595ca2 | RT-09-B16-error; RT-09-B16-end | Completed speech: “Fit shelves”; visible provisional speech: “and fit brackets”; recognizer reports permission loss or end. | Retain the partial clause visibly as provisional text or a question so the builder can review it; never silently lose the work. | Both error and end clear the provisional clause. Only “Fit shelves” remains available in Words to review; “and fit brackets” disappears from the dictation region. Permission loss even says the words so far are kept. | P1 | open | — |
+| RT-09-F003 | RT-09 | 49755b620ccf0223e64575006cd4590c77595ca2 | RT-09-A10 | Fictional kitchen. Fit shelves £200.00. Confirm the accepted review, then deliver the old draft screen’s Discard command with expectedRevision 0. | Preserve the one confirmed scope and return a clear typed REVIEW_REVISION_CONFLICT for the stale Discard. | Scope/source remain intact, but CaptureApplication.discard rejects with raw PostgreSQL code 40001 rather than a typed application conflict. Source inspection shows the discard HTTP handler maps such an untyped error to 503 DATABASE_UNAVAILABLE. | P2 | open | — |
 
 ## RT-FIX-7 verification — 28 November 2026
 
@@ -98,3 +101,91 @@ microphone/browser verification or independent review. No migrations, providers,
 or contract changes. No build, database suites, Playwright configuration, browser server or
 port 3000 used in this round. Existing exact-head review and CI gates remain. Commit only;
 no push. The pre-existing untracked `.pnpm-store/` is excluded from the commit.
+
+## RT-09 attack evidence — 28 November 2026
+
+HEAD_UNDER_TEST / branch base: `49755b620ccf0223e64575006cd4590c77595ca2`;
+branch `codex/sandbox/rt-09`. Read the newer `lanes-ref` README invariants/corpus contract
+and RT-09 lane. Only new tests, this register and `config/lanes/v2-rt-09.json` change.
+No product-source, parser, model, policy, schema or migration changes. No deployment or push.
+
+40 new attack cases: 10 offline-planner cases, 12 real API/PostgreSQL cases and 18 Chromium
+cases at 360 px. Expectations come from the synthetic words and user actions. The four browser
+open cases use Playwright `test.fail(true, findingId)` immediately before their product
+assertion; A10 uses Vitest `it.fails` with RT-09-F003 in its title. An unexpected
+pass fails the suite. Browser setup/navigation failures are not expected.
+
+| Risk severity | Passing cases | Open cases | New open findings |
+| --- | ---: | ---: | ---: |
+| P0 | 1 | 0 | 0 |
+| P1 | 34 | 4 | 2 |
+| P2 | 0 | 1 | 1 |
+| Total | 35 | 5 | 3 |
+
+Passing-case severity identifies the risk guarded: A03 prevents a changed £250 input from
+overwriting the original £200 capture (P0). A10 guards safe conflict reporting (P2); the other cases guard lost/doubled work
+or clear conflicts (P1). **P0 list: none.** Known F-005 supply-and-fit splits, F-006 per-metre rate left open, F-007 trailing
+comma and F-008 mic hang are excluded, as are the existing register entries.
+Their descriptions were recovered from the sibling RT-12 order; none overlaps these rows. RV4-01..04 retain their existing fixed status.
+
+Executed checks (two workers maximum per runner):
+
+- `pnpm --filter @jobguard/core test --maxWorkers=2 src/RT-09-offline-exactly-once.test.ts src/offline-capture.test.ts` — 233 files / 4,905 tests passed. The package script includes all `src`, so this exercised the full core suite, including the 10 new cases.
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/RT-09-exactly-once.integration.test.ts test/capture.integration.test.ts test/review.integration.test.ts test/later-capture-review.integration.test.ts test/discard-draft-job.integration.test.ts` — 5 files / 36 tests passed, including the initial 12 API cases; the stricter final A10 result is recorded below. Actual practice authorization, persistence, locking and command dispatch on fresh PostgreSQL 16; deterministic synthetic extraction, no provider calls.
+- Final API run: `pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/RT-09-exactly-once.integration.test.ts` — exit 0: 11 ordinary passes and 1 expected failure. Strengthening the earlier race test exposed raw 40001; A10 now pins confirmation before the stale Discard to make that failure deterministic.
+- `pnpm --filter @jobguard/web test --maxWorkers=2 app/ui/walk-it-retry.test.tsx app/ui/review-proposal.test.tsx -t RV4` — all 6 RV4 regressions passed. The complete two-file run passed 61 tests. An earlier complete run hit two existing asynchronous harness failures; the unchanged repeat passed all 61.
+- `pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts'` — 262 files / 3,793 tests passed. This is the web unit suite, not the excluded PostgreSQL suites.
+- `pnpm --filter @jobguard/web test --maxWorkers=2` — full package: 267 files / 3,835 tests passed, including all five PostgreSQL suites. The earlier unit-only exclusions are not needed for this final full run.
+- `PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/rt09-browser-report.json pnpm --filter @jobguard/web exec playwright test -c e2e/RT-09.playwright.config.ts --max-failures=1 --reporter=list,json` — exit 0; all 18 cases enforced: 14 ordinary passes and 4 expected failures, zero unexpected results. JSON inspection verified both finding IDs on exactly their two cases each.
+- `pnpm --filter @jobguard/web typecheck`, `pnpm --filter @jobguard/web lint`, `pnpm --filter @jobguard/core typecheck`, `pnpm --filter @jobguard/db typecheck` — passed.
+- `pnpm --filter @jobguard/web build --webpack` — passed: optimized compilation, TypeScript and all 79 static pages.
+- Dependency build: `pnpm exec turbo run build --filter='@jobguard/web^...' --concurrency=2 --cache-dir=/tmp/jobguard-rt09-turbo` — all 7 dependency packages passed. No feature build or release is inferred.
+
+Browser tests load the actual capture/review screens and use intercepted API responses for
+latency, response loss and competing edits. The two-tab case uses two real pages sharing
+one recording identity. The API suite separately proves the database behavior; mocked
+browser responses do not. The 10-second capture case holds the reply while the synchronous
+submit guard is exercised. Offline tests cover the pure planner/receipt reducer, not a
+claim that web dictation has a durable offline audio queue. Speech uses the existing
+injected local adapter; no real microphone, audio upload or live speech provider was used.
+
+Local test setup: restored the installed embedded-PostgreSQL package's missing ICU data
+file and symlinks from its exact pinned npm tarball, in ignored dependencies only.
+PostgreSQL and Chromium needed execution outside the filesystem sandbox for macOS shared
+memory/Mach ports. Disposable database fixtures used their existing safe port ranges;
+the isolated browser config uses port 3199 and clears DATABASE_URL. Default Playwright,
+ports 3000/55432, paid APIs and deployments were not used. Next's generated agent file
+and route-type import changes are excluded, as is `.pnpm-store/`.
+
+Lane policy shape and all six actual changed paths validated against the exact allow-list.
+Repository-wide lint initially compared the inherited feature branch against main and
+refused unrelated inherited files; final lane checks use the recorded task base and exclude
+only the local untracked dependency cache. The final `node tools/lint.mjs` run passed
+with `LANE_BASE_REF` set to the recorded base and a temporary excludes file containing
+only `.pnpm-store/`; lane output listed exactly the six authorized files.
+`git diff --check` passed.
+
+Initial review — **LATER / SIMPLICITY**: `apps/web/app/ui/jobguard-app.tsx`, `WalkIt`
+retains an inline `reviewing` branch although Check and edit navigates to the saved job
+and no handler sets that flag true. A later cleanup can remove that obsolete branch
+after checking callers, leaving one review entry path and reducing stale state ownership.
+Non-blocking; no simplification or product-source change is part of this attack.
+
+## RT-09 A10 review repair — PR #1100, 28 November 2026
+
+Base: `2e59ff733d53b0cd0c00e7f414d73340e2a12401`. A10 now uses a shared
+`beforeAll` for capture/save/confirm/stale-discard setup, an ordinary test for quoting
+status, preserved source and one scope revision, and an `it.fails` containing only the
+RT-09-F003 typed-conflict assertion. Setup and preservation failures fail the suite;
+RT-09-F003 remains open. The original 40 attack scenarios now have 41 test checks.
+
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/RT-09-exactly-once.integration.test.ts` — **12 passed, 1 expected failure** on real PostgreSQL.
+- `pnpm --filter @jobguard/core exec vitest run --maxWorkers=1 src/RT-09-offline-exactly-once.test.ts` — **10 passed**.
+- `pnpm --filter @jobguard/web exec playwright test -c e2e/RT-09.playwright.config.ts` — exit 0; **14 ordinary passes, 4 existing expected failures**.
+- `pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 app/ui/walk-it-retry.test.tsx app/ui/review-proposal.test.tsx -t RV4` — **6 passed, 55 outside the filter skipped**.
+- `git diff --check` — passed.
+
+Initial sandbox runs could not initialize PostgreSQL or launch Chromium (Mach-port
+permission denied); both passed when rerun outside the sandbox. No dependency repair,
+product-source change, deployment or push. Next's generated files and `.pnpm-store/`
+are excluded from the commit.
