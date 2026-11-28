@@ -7,6 +7,7 @@ import { HandoverPack, handoverEmpty, handoverIntro, handoverProblem, handoverPr
   handoverTitle, handoverVersionLine } from "./v2-handover-label";
 import { HandoverReleases } from "./v2-handover-release";
 import { ReviewRequest } from "./v2-review-request";
+import { Aftercare } from "./v2-aftercare";
 
 const sections: { key: HandoverSectionKey; title: string }[] = [{ key: "done", title: "What was done" }, { key: "changes", title: "Changes" },
   { key: "photos", title: "Photos" }, { key: "certificates", title: "Manuals and certificates" }, { key: "snags", title: "Outstanding snags" },
@@ -133,6 +134,7 @@ export function HandoverScreen({ jobId }: { jobId: string }) {
       </div>) : <p>No version saved yet.</p>}
       {versions.length > 0 && <HandoverReleases jobId={jobId} versions={versions.map(row => row.version)} onChanged={() => setReleased(n => n + 1)}/>}
       {versions.length > 0 && <ReviewRequest jobId={jobId} refresh={released}/>}
+      {versions.length > 0 && <Aftercare jobId={jobId} refresh={released}/>}
     </div></Card>
   </div>;
 }

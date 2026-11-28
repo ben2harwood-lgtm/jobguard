@@ -178,6 +178,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/handover/releases": "pre_live_allowed",
   // V2-G8: the review request after handover is a practice message; it is not site work.
   "/api/jobs/[id]/handover/review-request": "pre_live_allowed",
+  // V2-G9: aftercare offers after handover are practice messages; they are not site work.
+  "/api/jobs/[id]/handover/aftercare": "pre_live_allowed",
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",

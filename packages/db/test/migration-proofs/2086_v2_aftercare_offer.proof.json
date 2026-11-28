@@ -1,0 +1,6 @@
+{
+  "migration": "2086_v2_aftercare_offer.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
