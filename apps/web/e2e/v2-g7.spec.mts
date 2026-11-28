@@ -9,7 +9,6 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 import { Pool } from "pg";
 import { createWorkspaceApplication } from "../../api/dist/workspace/index.js";
 import { authenticatePracticeSession, withTenant } from "../../../packages/db/dist/index.js";
-import { validateSettings } from "../../../tools/v2/settings.mjs";
 
 test.skip(!process.env.V2_TEST_ORIGIN, "Requires the running V2 launcher.");
 test.describe.configure({ mode: "serial" });
@@ -69,6 +68,9 @@ test.beforeAll(async ({ browser }) => {
     jobId = (await api<{ jobs: { id: string }[] }>(page, `/api/jobs?tenantId=${tenantId}`)).jobs[0]!.id;
     await api(page, `/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" }).catch(() => undefined);
     // One crew member, so a second person can check the snag. Recorded as the G1 browser test does.
+    // The launcher's own settings reader (an untyped .mjs, so loaded by path).
+    const settingsModule = "../../../tools/v2/settings.mjs";
+    const { validateSettings } = await import(settingsModule);
     const pool = new Pool({ connectionString: validateSettings({}).settings.DATABASE_URL, max: 1 });
     try {
       crewName = `Jordan Featherstonehaugh-Cholmondeley ${randomUUID().slice(0, 4)}`;
