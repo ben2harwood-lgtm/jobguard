@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-i3": {
+      "branches": [
+        "claude/project-thread-trp08u-sqi3"
+      ],
+      "note": "T2 Q69 V2-SQ-I-3: final account, lock, final check, invoices, receipts and paid report on V2 get #918's designed look, and the designed money tab mounts JobInvoices and the designed ValuePage (copied read only from #918 @ 32decb2c1; never merged or cherry-picked). Look only: labels, aria, test ids, order, disabled rules and money unchanged; designed=false markup pinned by hash. Mounts on main-owned files: apps/web/app/ui/customer-invoices.tsx, customer-receipts.tsx, final-account-lock.tsx, final-check-reveal.tsx, job-final-account.tsx, job-value.tsx (designed prop and classes), quote-editor.tsx (final account gets designed, leaves legacy), workspace-shell.tsx (FinalCheckReveal gets designed). Mounts on apps/web/app/(designed)/design-fit.css (appended block, #918 lines 133-196 less the money-stack and records-stack selectors) and apps/web/app/(designed)/jobs/[id]/money/page.tsx (JobInvoices and designed ValuePage). New apps/web/app/(designed)/job-invoices.tsx. Base claude/project-thread-trp08u-sqi2 (#1045) at d7c3d3c45. No route, table or migration.",
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/job-invoices.tsx",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/customer-receipts.tsx",
+        "apps/web/app/ui/designed-screens-v2-money.test.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/job-value.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/V2-DUI-3.spec.ts",
+        "apps/web/e2e/V2-DUI-4-found-extra-to-paid.spec.ts",
+        "apps/web/e2e/V2-DUI-4-own-job-to-paid.spec.ts",
+        "apps/web/e2e/helpers/designed-v2-money.ts"
+      ]
+    }
+  }
+}
