@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sent-pair": {
+      "branches": [
+        "claude/project-thread-trp08u-sentpair"
+      ],
+      "note": "V2-SQ-A repair: the practice Sent list checks a linked session's browser pairing, as the RAMS and workspace reads do. No migration.",
+      "allow": [
+        "apps/web/app/api/practice-sent/route.ts",
+        "apps/web/app/api/practice-sent/route.test.ts"
+      ]
+    }
+  }
+}
