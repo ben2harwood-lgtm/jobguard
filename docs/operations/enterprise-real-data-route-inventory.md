@@ -14,7 +14,7 @@ A repo-wide search of `apps/` and `packages/` (tests, fixtures and comments excl
 - **Gate:** deliberately written to keep real data out until approval, such as a mode check with an error code, an input schema that takes only `synthetic_demo`, a `.invalid` recipient rule (BUILD_PLAN §9.2: "All recipients use `.invalid`"), or a database CHECK or routine guard.
 - **Incidental:** an assumption that the data is made up, such as a hard-wired fake adapter, fixed fixture values, a UI default, an output schema that stamps `synthetic_demo`, or a join that quietly drops pilot rows. These do not protect anything on their own, but each one breaks or hides real data once the gates open.
 
-Where a later migration replaces a database routine, only the definition now in force is listed, with what it supersedes. "Demo-DB check" means the routine refuses unless `current_database() = 'jobguard_synthetic_demo'`. "Synthetic track" means a join or check on `job_commercial_track.environment = 'synthetic_demo'`. That column already allows `pilot_no_charge` (migration 0053), so a synthetic-track join silently drops pilot contractor jobs rather than raising an error.
+For the database, a script also read every migration in filename order, kept the latest `CREATE [OR REPLACE] FUNCTION` body for each routine, and flagged the 287 routines whose current body checks the demo database, `synthetic_demo`, `.invalid` or fictional values. Each one on a contractor path is listed below by routine name. The rest are small-builder routines (recovery, final check, subscriptions and meter, practice company and invoices, customer portal, privacy and retention, purchase orders, readiness plans, snags, sync snapshot) and are out of scope. Where a later migration replaces a database routine, only the definition now in force is listed, with what it supersedes. "Demo-DB check" means the routine refuses unless `current_database() = 'jobguard_synthetic_demo'`. "Synthetic track" means a join or check on `job_commercial_track.environment = 'synthetic_demo'`. That column already allows `pilot_no_charge` (migration 0053), so a synthetic-track join silently drops pilot contractor jobs rather than raising an error.
 
 ## 1. Central gates (configuration)
 
@@ -89,6 +89,8 @@ Where a later migration replaces a database routine, only the definition now in 
 | `apps/api/src/contractor/billing.application.ts:14-15` | Delivery adapters hard-wired to `createSyntheticBillingAdapter`. | Any real delivery channel. | Incidental |
 | `apps/api/src/contractor/billing.adapters.ts:5-6,12` | Settings `mode: z.literal("synthetic_demo")`, `fake_*` channels; recipient must end `.invalid`. | Real adapter settings and recipients. | Gate |
 | `apps/api/src/contractor/enterprise-fee.executor.ts:16-17,27` | `production_billing` → SYNTHETIC_REFERENCE_FORBIDDEN; other non-synthetic → FEE_GATE_CLOSED; then `refuseEnterpriseFeeExecution`. | Fee accrue, collect, invoice in every mode. | Gate |
+| `apps/api/src/native-capture-upload.application.ts:31` | `transfer` refuses unless enabled and `JOBGUARD_ENV === "synthetic_demo"` (DISABLED). | Operative photo and voice uploads from the native app. | Gate |
+| `apps/api/src/native-capture-upload.application.ts:42` | Job must be on the synthetic track (and contractor `extra.log` permission). | Uploads to pilot or real contractor jobs. | Gate |
 | `apps/api/src/audit-export/audit-export.application.ts:7` | `assertAuditExportMode` (used by `admin/contractor/audit-exports` route lines 10, 14). | Audit exports (AUDIT_EXPORT_MODE_HELD). | Gate |
 | `apps/api/src/evidence-bundle.application.ts:28` | SQL demo-DB check. | Bundle checks on a real database. | Gate |
 | `apps/api/src/site-day-summary.application.ts:16-18` | G1 pilot check, then `!== "synthetic_demo"` → SYNTHETIC_MODE_REQUIRED. | Site-day summaries in pilot or production. | Gate |
@@ -126,6 +128,8 @@ Where a later migration replaces a database routine, only the definition now in 
 | `apps/api/src/auth/persisted-auth-provider.ts:16` | Default email adapter is `FixtureIdentityEmail`; composition (`identity.application.ts:96`) passes none. | Any real email transport. | Incidental |
 | `apps/api/src/auth/persisted-auth-provider.ts:25-27` | `assertRecipient` (G1 for pilot plus fixture rule), used at 35, 72, 169. | Codes requested, verified or emergency-proved for real addresses. | Gate |
 | `apps/api/src/auth/identity.application.ts:78` | `invite()` → `assertRecipient`. | `POST /auth/invitations` with real addresses. | Gate |
+| `apps/api/src/auth/customer-signin.ts:39-41` | Client and customer sign-in accepts only `synthetic_demo` or `pilot_no_charge`. Shared by the small-builder customer portal and **contractor client approval links**. | Client sign-in in any other mode. | Gate |
+| `apps/api/src/auth/customer-signin.ts:63-64,73-74` | Outside pilot, sign-in and session use try `identity.extra_customer_use` (contractor client approval) and then `customer_portal_use`. In pilot they call **only** `customer_portal_use`. | In pilot, a contractor client cannot sign in or use an approval link at all; only the small-builder portal is reachable. | Gate |
 | `apps/api/src/auth/mobile-auth.application.ts:157` | Enabled, mode `synthetic_demo`, source is `MemoryAuthProvider`. | Mobile auth with persisted or real identity, or in real modes. | Gate |
 
 ## 6. API: connectors
@@ -205,6 +209,7 @@ Where a later migration replaces a database routine, only the definition now in 
 | `packages/db/src/signed-evidence-export-store.ts:28` | Mode → SIGNED_EXPORT_MODE_HELD. | Signed evidence export storage. | Gate |
 | `packages/db/src/extra-evidence-pack-writer.ts:23` | Mode → EXTRA_PACK_FORBIDDEN (exported, no app caller yet). | Writing site-extra evidence packs. | Gate |
 | `packages/db/src/evidence-bundle-sources.ts:76` | SQL demo-DB check. | Bundle sources on a real database. | Gate |
+| `packages/db/src/resumable-evidence.ts:51` | Resumable upload access needs the job on the synthetic track. | Resumable evidence uploads for pilot or real jobs. | Gate |
 | `packages/db/src/sso-required-repository.ts:8,12` | State and detail env literals. | Parsing real SSO state. | Incidental |
 | `packages/db/src/mobile-auth-store.ts:14-15,21` | Reads and writes only the `synthetic_demo` row. | Non-demo mobile auth state. | Incidental |
 | `packages/db/src/tenant-key-registry.ts:28,31` | `NODE_ENV !== production`; DB must be `jobguard_synthetic_demo`. | Tenant keys on real databases. | Gate |
@@ -259,6 +264,32 @@ Where a later migration replaces a database routine, only the definition now in 
 | `0749_lp6d_remaining_routines.sql:3534,3543` | `xa_begin` demo-DB check and synthetic track. | Site-extra commands. | Gate |
 | `0749_lp6d_remaining_routines.sql:834,5450,5524,5577` | `ent3c_record_sor_revision`, `ent3_supervisor_query` (supersedes 0573:34), `ent3_work_status`, `ent3_proceed_comparison` demo-DB checks. | SoR revisions, supervisor queries, work status, proceed comparison. | Gate |
 | `0749_lp6d_remaining_routines.sql:6113` | `ent3_extra_work_status` returns rows only on the demo DB. | NULL status on a real database. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:5824` | `identity.extra_customer_use` demo-DB check. | Contractor client sign-in and session use (approval links). | Gate |
+| `0765_lp11_bound_tenant_rls.sql:5584` | `app.lp11_open_extra_customer` demo-DB check. | Opening a client approval scope. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:5959` | `identity.extra_customer_approval` reads only `synthetic_demo` sessions. | Client approve and reject decisions from a real session. | Gate |
+| `0749_lp6d_remaining_routines.sql:1253,1283,7631` | `app.xa_client_decide` synthetic-only join; `app.xa_client_view_authority` and `app.lp6d_client_view_authority` demo-DB checks. | Client decisions and client approval views. | Gate |
+| `0686_extra_client_authority_loss.sql:13`; `0749_lp6d_remaining_routines.sql:7548` | `app.xc_link_current` and `app.lp6d_xc_link_current` treat a client link as current only on the demo DB. | Every client link on a real database (treated as not current). | Gate |
+| `0765_lp11_bound_tenant_rls.sql:5998` | `app.xc_cancel_authority_loss` returns false unless demo DB. | Cancelling client approvals when the client loses authority. | Gate |
+| `0760_extra_proceed_raiser_authority.sql:9` | `app.xa_proceed` demo-DB check. | Operatives recording a decision to proceed. | Gate |
+| `0634_extra_proceed_statement.sql:97` | `app.xa_proceed_breaches` returns rows only on the demo DB. | Proceed-statement reads on a real database. | Gate |
+| `0749_lp6d_remaining_routines.sql:3211` | `app.xa_escalate` demo-DB check. | Approval escalation. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:6144,6179` | `app.lp6d_xa_escalate` and `app.lp6d_escalate_overdue_worker` demo-DB checks. | Escalating ordinary overdue approvals (worker). | Gate |
+| `0765_lp11_bound_tenant_rls.sql:6055,6111` | `app.lp11_open_extra_escalation` and `infrastructure.discover_extra_escalations` demo-DB checks. | Finding and opening overdue approvals. | Gate |
+| `0623_extra_duplicate_disposition.sql:69`; `0729_duplicate_disposition_command_lifecycle.sql:16` | `app.extra_duplicate_candidates` and `app.extra_duplicate_resolve` demo-DB checks. | Duplicate-extra candidates and resolution. | Gate |
+| `0744_extra_pack_source_bijection.sql:8` | `app.store_extra_pack_artifact` demo-DB check. | Storing site-extra evidence packs. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:6315` | `app.lp11_record_visit_refusal` demo-DB check. | Recording a refused site visit. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:6288` | `app.lp11_visit_refusal_event` stamps `synthetic_demo`. | Correct labelling of real refusals. | Incidental |
+| `0749_lp6d_remaining_routines.sql:1676` | `app.lp_sources` emits `enterprise-completion-input.v1` with `synthetic_demo`. | Real completion inputs (the core schema refuses them). | Incidental |
+| `0200_contractor_retained_workspace.sql:66` | `app.mon8_retained_contractor_workspace` emits `synthetic_demo`. | Real retained workspace views. | Incidental |
+| `0762_northside_hosted_agreement.sql:14` | `app.northside_register` demo-DB check. | Registering a hosted agreement. | Gate |
+| `0138_practice_session_hardening.sql:41` | `app.contractor_practice_session_live` needs a synthetic session. | Contractor practice sessions outside the demo. | Gate |
+| `0749_lp6d_remaining_routines.sql:4764` | `app.lp6d_contractor_session_identity` demo-DB check. | Contractor session identity resolution. | Gate |
+| `0765_lp11_bound_tenant_rls.sql:1525` | `app.revoke_contractor_practice_session` demo-DB check. | Revoking contractor sessions. | Gate |
+| `0165_practice_worker_switch.sql:47,201,218` | `app.practice_company_made_up` (returns nothing), `app.practice_company_marker_guard`, `app.practice_worker_switch_guard` demo-DB checks. | Worker-switch companies and guards outside the demo. | Gate |
+| `0749_lp6d_remaining_routines.sql:2995,3065,3107` | `app.practice_worker_switch_on`, `_off`, `_state` demo-DB checks. | Acting-as on, off and state. | Gate |
+| `0548_server_plan_entitlements.sql:227` | `app.practice_worker_switch_decision` needs `finance@northside-fictional.invalid`. | Worker-switch entitlement for any other company. | Incidental |
+| `0765_lp11_bound_tenant_rls.sql:876` | `identity.emergency_owner` demo-DB check. | Emergency owner access. | Gate |
+| `0763_member_administration.sql:19,81` | `identity.member_remove` and `identity.member_change_role` need a `synthetic_demo` session. | Removing members and changing roles from a pilot or real session. | Gate |
 | `0554_connector_intake.sql:17-18` | `connector.binding` `environment='synthetic_demo'`, `endpoint_kind='fake'`. | Real connector bindings. | Gate |
 | `0765_lp11_bound_tenant_rls.sql:3374,3467` | `connector.intake` and `connector.machine_stage` binding env and fake endpoint. | Real connector input and machine staging. | Gate |
 | `0621_connector_machine.sql:60,138,143` | `connector_machine_command` and `machine_authority` demo-DB checks; fake endpoint. | Machine connector commands and real credentials. | Gate |
@@ -310,7 +341,7 @@ Where a later migration replaces a database routine, only the definition now in 
 | `apps/mobile/src/CaptureScreen.tsx:11,18-19`; `OperativeScreen.tsx:26,29-30` | Screens offer only fictional notes, fixture photo and WAV attachments, and existing fictional photo IDs. | Real capture from the operative's device. | Incidental |
 | `apps/mobile/src/native-store.ts:7,14` | Synthetic key name and `m31-synthetic.db`. | A separate real local store. | Incidental |
 
-Not listed as refusal points: refusals that block charging rather than real data (`contractor-fee-mandate.ts:64`, `contractor-mandate.ts:87,105`, `enterprise-domain/fee.ts:171`, `origin.ts:72`); test-only issuers (`test-oidc-issuer.ts`, `test-identity-provider.ts`); SME-only checks (`workspace/application.ts:164,176`, `auth/customer-*`, `accounting-export.contracts.ts:23`, job evidence holds (`evidence-hold-server.ts:34`), recovery evidence packs (`evidence-pack-v3-sources.ts`, `0306`), `0505_onsite_diary_admission.sql`, small-builder practice-session routines in `0660` and `0741`, the latter's `lp6_session_authority` superseded by `0765`); OpenAPI descriptions; and plain display labels with no effect on what is accepted.
+Not listed as refusal points: refusals that block charging rather than real data (`contractor-fee-mandate.ts:64`, `contractor-mandate.ts:87,105`, `enterprise-domain/fee.ts:171`, `origin.ts:72`); test-only issuers (`test-oidc-issuer.ts`, `test-identity-provider.ts`); SME-only checks (`workspace/application.ts:164,176`, the small-builder half of `auth/customer-*` (`customer_portal_*`), `accounting-export.contracts.ts:23`, job evidence holds (`evidence-hold-server.ts:34`), recovery evidence packs (`evidence-pack-v3-sources.ts`, `0306`), `0505_onsite_diary_admission.sql`, small-builder practice-session routines in `0660` and `0741`, the latter's `lp6_session_authority` superseded by `0765`); OpenAPI descriptions; and plain display labels with no effect on what is accepted.
 
 ## What a reviewed real mode must satisfy
 
@@ -332,3 +363,4 @@ Drawn only from existing rules. This section proposes no new policy.
 5. **Whether a pilot contractor uses SSO at all.** Every SAML, OIDC and SCIM path refuses real providers, and deployed OIDC has no issuer. G5 governs each live SSO capability, but nothing says whether the first pilot needs one or uses email codes.
 6. **How synthetic-track joins should treat pilot jobs.** About a dozen routines join on `job_commercial_track.environment='synthetic_demo'` and silently drop `pilot_no_charge` jobs. The repo does not say whether a real mode should include those jobs, refuse them loudly or keep them separate.
 7. **Whether `requireEnterpriseRealData` gains callers in place of the existing mode checks or alongside them.** About 40 application-level mode checks and about 60 database routine guards each refuse independently. No plan text says whether the reviewed route replaces them with one server-resolved gate or adds that gate in front of each.
+8. **How contractor clients sign in under a pilot.** In `pilot_no_charge`, `customer-signin.ts` calls only the small-builder `customer_portal_use`, never `extra_customer_use`. The repo does not say whether contractor client approval links should work in a contractor pilot, or through which route.
