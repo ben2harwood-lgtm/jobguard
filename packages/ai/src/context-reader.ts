@@ -118,7 +118,7 @@ export function tradeOf(description: string, room: string | null): { trade: JobT
   // "fit new ones" in the kitchen: the room says what is being fitted.
   if (room && /kitchen/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(description)) return { trade: "Kitchen fitting", word: "kitchen" };
   // "supply and fit" in a bathroom: the room says the suite is being fitted. ("strip out" already matched Strip-out.)
-  if (room && /\b(?:bath ?room|en-?suite|wc|cloakroom)\b/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(description)) return { trade: "Plumbing", word: "bathroom" };
+  if (room && /\b(?:bath ?room|en[- ]?suite|wc|cloakroom)\b/iu.test(room) && /^(?:fit|install|supply)\b/iu.test(description)) return { trade: "Plumbing", word: "bathroom" };
   return { trade: "Other", word: null };
 }
 

@@ -55,7 +55,7 @@ describe("V2-SQ-K bathroom suite work gets the plumbing trade", () => {
   it.each(["new suite", "fit the bath", "a new basin", "shower tray", "toilet", "WC pan"])("%s is Plumbing", words => {
     expect(tradeOf(words, null).trade).toBe("Plumbing");
   });
-  it.each(["Upstairs bathroom", "En-suite", "Downstairs WC", "Cloakroom"])("in %s, a fit, install or supply row with no trade word is Plumbing", room => {
+  it.each(["Upstairs bathroom", "En-suite", "En suite", "Ensuite", "Downstairs WC", "Cloakroom"])("in %s, a fit, install or supply row with no trade word is Plumbing", room => {
     for (const words of ["supply and fit", "fit the new one", "install it"]) expect(tradeOf(words, room)).toEqual({ trade: "Plumbing", word: "bathroom" });
   });
   it("an earlier, more specific trade word still wins in a bathroom", () => {
