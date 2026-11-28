@@ -1,6 +1,6 @@
 # Q75 · V2-SQ-L: "Bedroom two £500 all in" gets its room price, because a room's number is never part of an amount
 
-**Tier:** T2 (reader only; no route, table or migration). **Builder:** Opus 5.5 thread. **Checker:** Codex, through the desktop-review route while GitHub Codex is out of quota. **Base:** SQ-K #1049 (`claude/project-thread-trp08u-sqk` @ eb52456ac) at its head when you start; record the sha. **Branch:** the builder thread's own branch, in a new lane `config/lanes/v2-sq-l.json`. **Migration:** none. **Plan:** the known limit logged on the preview head #1061. **Plan check:** Claude stand-in after 2 hours. Rules 1 to 30 apply. Planner: 28 Nov 11:08 UK.
+**Tier:** T2 (reader only; no route, table or migration). **Builder:** Opus 5.5 thread. **Checker:** Codex, through the desktop-review route while GitHub Codex is out of quota. **Base:** Q77 V2-SQ-M's branch (itself on SQ-K #1049 @ eb52456ac), at its head when you start; record the sha. Build Q77 first. **Branch:** the builder thread's own branch, in a new lane `config/lanes/v2-sq-l.json`. **Migration:** none. **Plan:** the known limit logged on the preview head #1061. **Plan check:** Claude stand-in after 2 hours. Rules 1 to 30 apply. Planner: 28 Nov 11:08 UK.
 
 ## What it is
 On the preview, "Bedroom two £500 all in." gives no room price, and the room shows "Price needed for this room." "The kitchen £500 all in." works. Most house quotes have numbered bedrooms, so builders will hit this on day one of the demo. Spoken quote is Ben's top priority (28 Nov 10:11 UK).
