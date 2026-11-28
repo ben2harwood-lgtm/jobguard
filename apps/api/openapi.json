@@ -1,6 +1,34 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/jobs/{id}/payment-schedule": {
+      "get": {
+        "operationId": "PaymentScheduleController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the builder's V2 practice payment schedule; no invoices or sends",
+        "tags": [
+          "payment-schedule"
+        ]
+      },
+      "post": {
+        "operationId": "PaymentScheduleController_set",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Set one immutable V2 practice payment schedule on an accepted quote",
+        "tags": [
+          "payment-schedule"
+        ]
+      }
+    },
     "/jobs/{id}/rams": {
       "get": {
         "operationId": "RamsController_read",

@@ -168,6 +168,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
+  // V2-K5A: practice schedule on an accepted quote; no invoice, send or job-status change.
+  "/api/jobs/[id]/payment-schedule": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance": "pre_live_allowed",
   "/api/jobs/[id]/quotes/activation": "pre_live_allowed",
@@ -336,6 +338,7 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "nest:/jobs/:id/proof": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/placement": "watchdog_live_only",
   "nest:/jobs/:id/purchase-orders/revisions": "watchdog_live_only",
+  "nest:/jobs/:id/payment-schedule": "pre_live_allowed",
   "nest:/jobs/:id/quotes": "pre_live_allowed",
   "nest:/jobs/:id/quotes/preview": "pre_live_allowed",
   "nest:/jobs/:id/quotes/acceptance": "pre_live_allowed",
