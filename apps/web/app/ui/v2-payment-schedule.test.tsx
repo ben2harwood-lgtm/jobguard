@@ -6,7 +6,7 @@ it("shows a loading state and the net practice boundary without invoice actions"
   const html = renderToStaticMarkup(<V2PaymentSchedule jobId="11111111-1111-4111-8111-111111111111"/>);
   expect(html).toContain("Payment schedule");
   expect(html).toContain("Every amount here is ex-VAT");
-  expect(html).toContain("No invoice is drafted or issued");
+  expect(html).toContain("No invoice is issued or sent");
   expect(html).toContain("nothing is sent or charged");
   expect(html).toContain("Loading payment schedule");
   expect(html).not.toContain("Send invoice");

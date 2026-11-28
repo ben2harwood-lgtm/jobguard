@@ -24,11 +24,20 @@ export const paymentScheduleTaskDoneV1 = z.strictObject({
   quoteRevisionId: z.uuid(), expectedVersion: z.number().int().min(1).max(2_147_483_647),
   scopeItemId: z.uuid(), taskKey: z.string().min(1).max(40),
 });
+// V2-K5B-1: a draft of a deposit or stage invoice, made from the stage's frozen row. Never issued or sent.
+export const stageDraftCommandV1 = z.strictObject({
+  version: z.literal("v2-stage-draft-command.v1"), commandId: z.uuid(), stageIndex: z.number().int().min(0).max(19),
+});
+export const stageDraftWithdrawCommandV1 = z.strictObject({
+  version: z.literal("v2-stage-draft-withdraw-command.v1"), commandId: z.uuid(), stageIndex: z.number().int().min(0).max(19),
+  draftNo: z.number().int().min(1).max(1000), reason: z.string().trim().min(1).max(200),
+});
 export type PaymentStage = z.infer<typeof paymentStageV1>;
 export type PaymentScheduleSet = z.infer<typeof paymentScheduleSetV1>;
 export class PaymentScheduleError extends Error {
   constructor(readonly code: "SCHEDULE_INVALID" | "SCHEDULE_STALE" | "SCHEDULE_REPLAY_CONFLICT" |
-    "SCHEDULE_ACCEPTANCE_REQUIRED" | "SCHEDULE_BUILDER_REQUIRED") { super(code); }
+    "SCHEDULE_ACCEPTANCE_REQUIRED" | "SCHEDULE_BUILDER_REQUIRED" | "STAGE_NOT_DUE" | "STAGE_DRAFT_LIVE" |
+    "STAGE_DRAFT_NOT_FOUND" | "STAGE_DRAFT_COMMAND_CONFLICT") { super(code); }
 }
 export const pounds = (pence: number) => {
   const exact = BigInt(money(pence).pence);
