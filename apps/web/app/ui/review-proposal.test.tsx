@@ -2,6 +2,7 @@ import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
+import { reviewDraftKey } from "./review-draft";
 
 // Exercise event handlers with the existing job-sources hook-harness pattern.
 const hooks = vi.hoisted(() => {
@@ -140,6 +141,37 @@ function validFixture(): ReviewCaptureResult {
   };
 }
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+
+it("RT-FIX-13 restores incomplete edits and invalid price text on remount, isolates jobs/revisions and clears a saved draft", async () => {
+  const stored = new Map<string, string>();
+  vi.stubGlobal("sessionStorage", { getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value), removeItem: (key: string) => stored.delete(key) });
+  const result = validFixture(), p = panel(result);
+  const input = (tree: React.ReactNode, label: string) => all(tree, n => n.props["aria-label"] === label)[0]!;
+  input(p.render(), "Description Protect room").props.onChange({ target: { value: "" } });
+  input(p.render(), "Price ").props.onChange({ target: { value: "250.001" } });
+  p.render();
+  const key = reviewDraftKey(result.jobId, result.proposalId, 3);
+  expect(stored.has(key)).toBe(true);
+  hooks.reset(); // Back/reopen or reload drops React state, keeping this tab's storage.
+  const reopened = panel({ ...result, reviewId: crypto.randomUUID() });
+  expect(input(reopened.render(), "Description ").props.value).toBe("");
+  expect(input(reopened.render(), "Price ").props.value).toBe("250.001");
+  hooks.reset();
+  expect(input(panel(validFixture()).render(), "Description Protect room").props.value).toBe("Protect room");
+  hooks.reset();
+  expect(input(panel({ ...result, review: { ...result.review!, revision: 4 } }).render(), "Description Protect room").props.value).toBe("Protect room");
+  hooks.reset();
+  const recovered = panel(result);
+  input(recovered.render(), "Description ").props.onChange({ target: { value: "Protect room and doorway" } });
+  input(recovered.render(), "Price Protect room and doorway").props.onChange({ target: { value: "250.00" } });
+  recovered.render();
+  const fetch = server(result); vi.stubGlobal("fetch", fetch);
+  await recovered.button(recovered.render(), "Save review").props.onClick(); await settle(); recovered.render();
+  expect(stored.size).toBe(0);
+  const request = JSON.parse(fetch.mock.calls[0]![1].body as string);
+  expect(request.review.lines[0]).toMatchObject({ description: "Protect room and doorway", unitPricePence: 25000 });
+});
 
 it("RV4-02: locks every review control while confirmation is pending, so no unsaved edit is hidden", async () => {
   const result = validFixture(), respond = server(result);

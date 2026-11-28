@@ -47,7 +47,8 @@ export class CaptureApplication{ private readonly access: PracticeAccess;
    }, new DiscardDraftJob(practice.context.tenantId));
   } catch (error) {
    const failure = error as { code?: string; message?: string };
-   if (failure.code === "40001" && failure.message === "DISCARD_DRAFT_REVISION_CONFLICT") {
+   // Revision checks in the dispatcher may fail before the discard routine's own check.
+   if (failure.code === "40001") {
     throw new CaptureApplicationError("REVIEW_REVISION_CONFLICT");
    }
    if ((failure.code === "22023" && failure.message === "DISCARD_DRAFT_REFUSED") ||

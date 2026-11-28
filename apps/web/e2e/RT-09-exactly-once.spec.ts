@@ -185,7 +185,6 @@ test("RT-09-B11 back from review retains an unsaved added work clause", async ({
   const reviewUrl = page.url();
   await button(page, "← Walk the job").click(); await page.goto(reviewUrl);
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F001");
   await expect(page.getByLabel(`Description ${changed}`, { exact: true })).toHaveValue(changed);
 });
 
@@ -202,7 +201,6 @@ test("RT-09-B13 reload mid-review retains the added unsaved work clause", async 
   const f = await fixture(page); await f.review();
   await page.getByLabel("Description Fit shelves", { exact: true }).fill(changed);
   await page.reload(); await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F001");
   await expect(page.getByLabel(`Description ${changed}`, { exact: true })).toHaveValue(changed);
 });
 
@@ -244,7 +242,6 @@ for (const event of ["error", "end"] as const) test(`RT-09-B16-${event} interrup
   await expect(page.getByTestId("interim-transcript")).toContainText("and fit brackets");
   await page.evaluate(event => { if (event === "error") (window as any).__rt09Speech.error("not-allowed"); else (window as any).__rt09Speech.end(); }, event);
   await expect(page.getByLabel("Words to review", { exact: true })).toBeVisible();
-  test.fail(true, "RT-09-F002");
   // The uncertain recognition may be labelled provisional or asked about, but
   // the work clause must remain available rather than being silently erased.
   await expect.poll(() => page.getByRole("region", { name: "On-device dictation" }).evaluate(region =>

@@ -382,6 +382,34 @@ function fakeAdapter(availability: LocalAvailability, install: LocalSpeechAdapte
   } satisfies LocalSpeechAdapter;
 }
 
+it.each(["error", "end"] as const)("RT-FIX-13: %s retains interim-only speech as editable provisional words and ignores late callbacks", async event => {
+  let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
+  const onUse = vi.fn();
+  const adapter: LocalSpeechAdapter = { ...fakeAdapter("installed"),
+    start: next => { callbacks = next; return { stop: () => callbacks.end(), cancel: () => callbacks.end() }; } };
+  const solo = soloDictation(adapter, { onUse });
+  solo.render(); await flush(); solo.button()!.props.onClick(); await flush();
+  callbacks.interim("and fit brackets");
+  if (event === "error") callbacks.error("not-allowed"); else callbacks.end();
+  callbacks.final("late duplicate words", "late"); callbacks.end();
+  let tree = solo.render();
+  expect(text(tree)).toContain("Provisional words are kept");
+  expect(all(tree, node => node.props.id === "dictation-provisional")[0]!.props.value).toBe("and fit brackets");
+  all(tree, node => node.props.id === "dictation-provisional")[0]!.props.onChange({ target: { value: "and fit shelf brackets" } });
+  const interrupted = callbacks;
+  solo.button()!.props.onClick(); await flush();
+  interrupted.error("not-allowed"); // A late old error cannot cancel the new recording.
+  const cancelled = callbacks;
+  callbacks.final("cancelled recording", "second"); callbacks.interim("cancelled interim");
+  solo.button("Cancel dictation")!.props.onClick();
+  cancelled.final("late cancelled words", "late-cancelled"); cancelled.end();
+  tree = solo.render();
+  expect(all(tree, node => node.props.id === "dictation-provisional")[0]!.props.value).toBe("and fit shelf brackets");
+  expect(text(tree)).not.toContain("cancelled recording");
+  solo.button("Use these words")!.props.onClick();
+  expect(onUse).toHaveBeenCalledExactlyOnceWith("and fit shelf brackets", "");
+});
+
 it.each(["interim", "final"] as const)("RV4-04: cancelling a second dictation with a %s segment keeps the completed transcript and its raw provenance", async segment => {
   let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
   const cancel = vi.fn(), onUse = vi.fn();

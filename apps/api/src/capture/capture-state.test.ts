@@ -2,7 +2,7 @@ import { PracticeAccess } from "../practice-access.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { jobStatuses } from "@jobguard/core";
-import { CaptureRepository, ProposalReviewRepository } from "@jobguard/db";
+import { CaptureRepository, ProposalReviewRepository, UserCommandDispatcher } from "@jobguard/db";
 import { CaptureApplication } from "./capture.application.js";
 import { captureWorkspaceResponseV1 } from "./contracts.js";
 
@@ -12,6 +12,12 @@ const fixture=(status:string)=>({capture_id:"d2000000-0000-4000-8000-00000000000
 beforeEach(()=>vi.spyOn(PracticeAccess.prototype,"job").mockResolvedValue({context:{tenantId:"11111111-1111-4111-8111-111111111111"}} as never));
 afterEach(()=>vi.restoreAllMocks());
 describe("capture workspace lifecycle projection",()=>{
+ it.each([0, 2])("maps stale Discard revision %s to a typed conflict without changing its expected revision",async expectedRevision=>{
+  const dispatch=vi.spyOn(UserCommandDispatcher.prototype,"dispatch").mockRejectedValue(Object.assign(new Error("stale revision"),{code:"40001"}));
+  await expect(new CaptureApplication({} as Pool).discard(jobId,{contractVersion:"draft_discard_v1",commandId:crypto.randomUUID(),expectedRevision}))
+   .rejects.toMatchObject({code:"REVIEW_REVISION_CONFLICT"});
+  expect(dispatch.mock.calls[0]![1]).toMatchObject({action:{aggregateRevision:expectedRevision}});
+ });
  it.each(jobStatuses)("preserves persisted %s instead of coercing it to draft",async status=>{
   vi.spyOn(CaptureRepository.prototype,"readByJob").mockResolvedValue(fixture(status));
   vi.spyOn(ProposalReviewRepository.prototype,"read").mockResolvedValue(null);
