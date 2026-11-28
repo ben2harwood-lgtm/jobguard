@@ -7,6 +7,7 @@ import type { JobSummary, SessionView } from "../lib/contracts";
 import { jobsResponseV1, sessionResponseV1, UiRequestError } from "../lib/contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
 import { Card, Note } from "../(designed)/designed-ui";
+import { captureErrorMessage } from "./capture-error-message";
 import { LocalDictation } from "./local-dictation";
 import { DecisionInbox } from "./decision-inbox";
 import { VariationFlow } from "./variation-flow";
@@ -128,9 +129,7 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
       setResult(captured);onCaptured?.(captured);
       setMessage("Your draft is ready. Check it below — nothing has been sent.");
     } catch(error) {
-      setMessage((error as Error).message==="CAPTURE_ID_REUSED"
-        ? "These work details conflict with an earlier draft (CAPTURE_ID_REUSED). Your text is still here and the earlier draft is unchanged. Copy your text before returning to Jobs to start a new draft."
-        : `We could not make the draft (${(error as Error).message}). Your original text is still here; change it or try again.`);
+      setMessage(captureErrorMessage((error as Error).message,textValue.trim()===""));
     } finally {
       submitting.current=false;setBusy(false);
     }

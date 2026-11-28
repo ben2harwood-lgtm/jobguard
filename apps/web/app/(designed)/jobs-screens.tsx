@@ -220,7 +220,8 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
 function WorkTab({ children }: { children?: ReactNode }) {
   return <>
     <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
-    <Legacy label="Job workspace" cards>{children}</Legacy>
+    {/* V2-SQ-I-1 (copied from #918): the work page wraps its own legacy panels, so its designed cards are not inside one. */}
+    <section className="job-work-tools" aria-label="Job workspace">{children}</section>
   </>;
 }
 

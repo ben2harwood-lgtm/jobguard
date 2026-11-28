@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-i1": {
+      "branches": [
+        "claude/project-thread-trp08u-sqi1"
+      ],
+      "note": "T2 V2-SQ-I-1: the designed look for the V2 review, quote editor and customer-and-site card, copied read-only from #918 @ 32decb2c1 (never merged), plus the plain empty-draft message. Classes only: designed=false keeps today's markup (pinned). Mounts on main-owned files: apps/web/app/ui/review-proposal.tsx, quote-editor.tsx, job-parties.tsx (designed prop), jobguard-app.tsx (captureErrorMessage), workspace-shell.tsx (designed prop, legacy wrappers), (designed)/jobs-screens.tsx (WorkTab no longer wraps the work page in one legacy box), (designed)/jobs/[id]/work/page.tsx (passes designed). On SQ1's (designed)/design-fit.css: appended rules only. Base claude/project-thread-trp08u-sqe (#1042). No route, table or migration.",
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/ui/capture-error-message.test.ts",
+        "apps/web/app/ui/capture-error-message.ts",
+        "apps/web/app/ui/designed-screens-v2.test.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/V2-DUI-1a.spec.ts",
+        "apps/web/e2e/V2-DUI-1b.spec.ts",
+        "apps/web/e2e/helpers/designed-v2.ts"
+      ]
+    }
+  }
+}
