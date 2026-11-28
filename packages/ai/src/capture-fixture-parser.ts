@@ -101,6 +101,18 @@ const unreadAfter = new RegExp(`^(?:[\\s-]+(?:and|a|an|of)(?![\\p{L}]))*[\\s-]+$
 export function readInPart(before: string, after: string): boolean {
   return fractionOrRange.test(before) || unreadBefore.test(before) || unreadAfter.test(after);
 }
+/** A rate qualifier right after an amount: "a/an/per <noun>" (group 1 is the noun) or "each". The amount is then a rate. */
+const rateQualifier = /^\s+(?:(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])|(?:each|apiece)(?![\p{L}]))/iu;
+export function rateAfter(after: string): RegExpExecArray | null {
+  return rateQualifier.exec(after);
+}
+/**
+ * The pair of said-amount guards every price passes, line prices and room and whole-job totals alike: the amount was
+ * read in part (readInPart), or a rate qualifier follows it (rateAfter). A total with either is left open and asked about.
+ */
+export function saidAmountOpen(before: string, after: string): boolean {
+  return readInPart(before, after) || rateAfter(after) !== null;
+}
 // The other end of a range or alternative said after the amount: "£400 to £500", "fifty pounds or sixty".
 const rangePhrase = `(?:\\d[\\d,.]*|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*)`;
 // Only an amount counts as the other end: "to a high standard" or "to one coat" is not a range.
@@ -269,7 +281,8 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         // VAT words after the per-item word ("a door plus VAT") do not hide it.
         // Rate qualifier guard: "a/an/per <noun>" right after the amount is a rate whatever follows it.
         const whole = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu").exec(after);
-        const per = whole ?? /^\s+(?:per|an?)\s+([\p{L}-]+)(?![\p{L}])/iu.exec(after);
+        const qualifier = rateAfter(after);
+        const per = whole ?? (qualifier?.[1] !== undefined ? qualifier : null);
         const perCount = found && per ? spokenQuantity(chunk.value.slice(0, found.at).trimEnd().replace(/\s+(?:for|at)$/iu, "")) : null;
         const each = new RegExp(`^\\s+(?:each|apiece|a piece)${vatTail}?\\.?$`, "iu").test(after) || (!!per && !!perCount && !!per[1] && sameUnit(perCount.unit, per[1]));
         // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
