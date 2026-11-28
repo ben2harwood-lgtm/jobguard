@@ -1,5 +1,5 @@
 -- V2-D1 measurement firm lock (migration 2059). Loaded only by the checked V2 bootstrap, outside the shared migration runner.
--- V2's linked practice firms share one backing tenant, so 2028's tenant RLS doesn't separate them.
+-- V2's linked practice firms share one backing tenant, so 2062's tenant RLS doesn't separate them.
 -- Add 2001's restrictive firm rule to the measurement table, as 2047 does for the V2 core tables.
 -- Policies are created only when missing; no grants, other policies or main migrations change.
 DO $v2$
