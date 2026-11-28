@@ -1,0 +1,6 @@
+{
+  "migration": "2073_v2_walk_record.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

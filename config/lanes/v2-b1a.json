@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b1a": {
+      "branches": [
+        "claude/project-thread-tjgrce",
+        "claude/project-thread-trp08u-b1a"
+      ],
+      "note": "RED. V2 walk session record: rooms, note segments, stated measurements and photos filed by capture order, with device, receipt and verification times kept apart. The validator includes config/lanes/v2-b1a.json implicitly. Based on v2/main.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/walk.application.ts",
+        "packages/db/migration-notes/2073_v2_walk_record.md",
+        "packages/db/migrations/2073_v2_walk_record.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-walk-repository.ts",
+        "packages/db/test/migration-proofs/2073_v2_walk_record.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-B1A.checks.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
