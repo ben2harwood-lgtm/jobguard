@@ -96,3 +96,16 @@ it("ignores an unmounted same-job shell read without aborting it", async () => {
  requests[0]!.resolve(snapshot()); await settle();
  expect(journey(render())).toBeUndefined();
 });
+it("re-reads after another card switches the job live and keeps the mounted workspace", async () => {
+ const { requests, fetch, render } = setup();
+ render();
+ requests[0]!.resolve({ ...snapshot(), status: "accepted" }); await settle();
+ expect(journey(render())).toBeDefined();
+ window.dispatchEvent(new CustomEvent("job-lifecycle-changed", { detail: otherJobId }));
+ expect(fetch).toHaveBeenCalledTimes(1);
+ window.dispatchEvent(new CustomEvent("job-lifecycle-changed", { detail: jobId }));
+ expect(fetch).toHaveBeenCalledTimes(2);
+ expect(journey(render())).toBeDefined(); // The workspace stays mounted while it re-reads.
+ requests[1]!.resolve(snapshot()); await settle();
+ expect(journey(render())?.props).toMatchObject({ jobId, status: "live" });
+});
