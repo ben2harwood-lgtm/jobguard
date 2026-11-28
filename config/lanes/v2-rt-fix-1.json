@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-fix-1": {
+      "branches": [
+        "codex/sandbox/rt-fix-1"
+      ],
+      "note": "RT-FIX-1 (#1071): linear-time spoken-quote description trim only, preserving existing output. Base b25b5ee9. Pure reader repair; no web workflow, provider, route or migration. The lane file itself is permitted automatically by the lane checker.",
+      "allow": [
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/redteam/redos-trim.test.ts"
+      ]
+    }
+  }
+}
