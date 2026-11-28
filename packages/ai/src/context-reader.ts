@@ -138,9 +138,22 @@ const plainCommaTail = /^\s*,(?![^]*(?:\d|\b(?:or|no|nah|actually|sorry|make tha
 const measure = new RegExp(`(?:(about|around|roughly|approximately)\\s+)?(\\d{1,4}(?:\\.\\d{1,2})?|${numberWord})\\s+(square\\s+met(?:re|er)s?|sq(?:uare)?\\.?\\s?m|m2|m²|linear\\s+met(?:re|er)s?|met(?:re|er)s?)(?![\\p{L}])`, "iu");
 const perMetre = new RegExp(`(?:\\bat|,)\\s+(£?\\d[\\d,]*(?:\\.\\d{1,2})?(?:\\s*(?:pounds|quid))?|${numberWord}(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred))*\\s+(?:pounds|quid))\\s+(?:a|per|each)\\s+(?:square\\s+|linear\\s+)?met(?:re|er)\\b`, "iu");
 // "for 2400", "at 300", ", 650" at the end: a bare figure in a price position is a price in pounds.
-const pricedBare = /(?:\b(?:for|at)\s+|,\s*)(£?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?(?:\s*(?:grand|k))?)(?=\s*(?:each|apiece|a piece)?\s*$|\s*,)/iu;
+const pricedBare = /(?:\b(?:for|at)\s+|,\s*)(£?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?(?:\s*(?:grand|k))?)(?=\s*(?:each|apiece|a piece)?\s*$|\s*,|\s+(?:a|an|per)\s+[\p{L}-]+\s*$)/iu;
 const strayNumber = /(?<![\p{L}\p{N}£.,])(\d{2,}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*(?:grand|k))(?![\p{L}\p{N}])/iu;
 const strayWords = new RegExp(`(?:(?:${numberWord}|a)[\\s-]+(?:and\\s+)?)+(?:hundred|thousand|grand)(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred))*`, "iu");
+// VAT words after a price never change the number; they add a VAT question (the parser's rule, #1033).
+const vatTail = "(?:\\s+(?:plus|\\+|inc|incl|including|inclusive\\s+of|ex|excl|excluding|exclusive\\s+of|no)\\.?(?:\\s+vat)?)";
+const vatWords = /\bvat\b|\b(?:inc|incl|ex|excl)\.?$/iu;
+const vatOnly = new RegExp(`^${vatTail}\\.?$`, "iu");
+const eachAfter = new RegExp(`^\\s*(?:each|apiece|a piece)${vatTail}?\\.?\\s*$`, "iu");
+const perAfter = new RegExp(`^\\s+(?:per|an?)\\s+([\\p{L}-]+)${vatTail}?\\.?$`, "iu");
+/** "a door" or "per door" is per-item only for the line's own counted thing: "six doors at fifty pounds a door". */
+const countedBefore = new RegExp(`(?:\\d{1,4}|${numberWord})\\s+(?:[\\p{L}-]+\\s+){0,2}([\\p{L}-]+)\\s+(?:for|at)\\s*$`, "iu");
+function sameUnit(unit: string, perWord: string): boolean {
+  const a = unit.toLowerCase(), b = perWord.toLowerCase();
+  return [a, `${a}s`, `${a}es`].includes(b) || [`${b}s`, `${b}es`].includes(a);
+}
+const vatQuestion = (value: string) => `Confirm VAT: you said “${value.slice(0, 400)}”. The price is kept as said; VAT is not added or taken off.`;
 const notCounted = /^(?:coats?|days?|weeks?|hours?|men|lads|pounds|quid|grand|hundred|thousand|times|layers|percent|metres?|meters?|square|sq|m2|m²|of|the|a|an|and|or|to|in|on|for|at)$/iu;
 
 type Field<T> = { value: T; provenance: { kind: "extracted"; span: { sourceId: string; sourceVersion: 1; start: number; end: number } }
@@ -168,9 +181,14 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     if (rate && !inTotalClause) {
       const pence = spokenNumbers.money(rate[1]!);
       // A second rate or a correction after this one ("60 a metre, or 80 a metre") leaves the rate open.
-      if (pence !== null && !plainCommaTail.test(`,${value.slice(rate.index + rate[0].length)}`) && value.slice(rate.index + rate[0].length).trim().replace(/^[.,;]$/u, ""))
+      const tail = value.slice(rate.index + rate[0].length);
+      const vat = vatOnly.test(tail);
+      if (pence !== null && !vat && !plainCommaTail.test(`,${tail}`) && tail.trim().replace(/^[.,;]$/u, ""))
         questions.push(`Confirm the rate: ${value.slice(0, 450)}`);
-      else if (pence !== null) { price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit"; }
+      else if (pence !== null) {
+        price = { value: pence, provenance: cite(rate.index + rate[0].indexOf(rate[1]!), rate[1]!.length) }; priceBasis = "per_unit";
+        if (vat) questions.push(vatQuestion(value));
+      }
     }
     // "14 square metres of vinyl at 32 a metre": words after the measure still name the work.
     const between = value.slice(m.index + m[0].length, rate?.index ?? value.length);
@@ -186,12 +204,15 @@ function readLine(sourceId: string, chunk: Cell, areaKey: string, room: string |
     if (candidates.length === 1 && candidates[0]!.pence !== null && !approximate.test(value.slice(0, candidates[0]!.at))) {
       const found = candidates[0]!;
       const after = value.slice(found.at + found.text.length);
-      const each = /^\s*(?:each|apiece|a piece)\s*$/iu.test(after);
-      if (after.trim() && !each && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
+      const per = perAfter.exec(after), counted = countedBefore.exec(value.slice(0, found.at));
+      const each = eachAfter.test(after) || !!per && !!counted && sameUnit(counted[1]!, per[1]!);
+      const vat = vatOnly.test(after);
+      if (after.trim() && !each && !vat && !plainCommaTail.test(after)) questions.push(`Confirm price: ${value.slice(0, 450)}`);
       else {
         price = { value: found.pence!, provenance: cite(found.at, found.text.length) };
         priceBasis = each ? "each" : "line";
         descriptionEnd = found.at;
+        if (vatWords.test(after)) questions.push(vatQuestion(value));
       }
     } else if (candidates.length) questions.push(`Confirm price: ${value.slice(0, 450)}`);
     else {

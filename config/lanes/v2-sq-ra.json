@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sq-ra": {
+      "branches": [
+        "claude/project-thread-trp08u-sqra"
+      ],
+      "note": "T2 Reader A matches the parser's per-item and VAT rule (planner follow-up to #1033). Base claude/project-thread-trp08u-sqproof. Carries #1033's two parser commits (cherry-picked, its lane file left out) so one shared test runs both readers; they merge cleanly once #1033 lands. Files: packages/ai/src/context-reader.ts (per-item for the counted thing, VAT question), packages/ai/src/per-item-vat-readers.test.ts (shared sentences), and #1033's parser, its test and the golden record hash.",
+      "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
+        "packages/ai/src/context-reader.ts",
+        "packages/ai/src/per-item-vat-readers.test.ts"
+      ]
+    }
+  }
+}
