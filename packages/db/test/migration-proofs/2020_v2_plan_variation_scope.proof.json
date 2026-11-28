@@ -1,0 +1,6 @@
+{
+  "migration": "2020_v2_plan_variation_scope.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
