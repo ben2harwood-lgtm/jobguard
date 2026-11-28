@@ -1804,12 +1804,15 @@ test("C6 an added line excluded with a reason lets the quote issue unpriced, and
   assert.equal(excluded.netPence, first.netPence, "an excluded line adds nothing");
   const { document } = await preview();
   assert.ok(document.exclusions.includes("Contingency: Customer will cover this"), "the reason reaches the document's exclusions");
-  // A description and reason too long for one entry are split into two, never cut.
+  // A long description and reason are wrapped at word boundaries into entries that fit a PDF row, never cut.
   const long = await quoteLines.add(draftJob, addLine("Long ".repeat(100).trim(), { promptId: "contingency" }));
   await save(2, [...lines, pricedLine(receipt, { included: false, exclusionReason: "Customer will cover this" }),
     pricedLine(long, { included: false, exclusionReason: "Not part of this job" })]);
   const split = (await preview()).document.exclusions;
-  assert.ok(split.includes(long.description) && split.includes("Reason: Not part of this job"));
+  const start = split.findIndex(entry => entry.startsWith("Long Long"));
+  const entries = split.slice(start, split.findIndex((entry, index) => index >= start && entry.endsWith("this job")) + 1);
+  assert.equal(entries.join(" "), `${long.description}: Not part of this job`);
+  assert.ok(entries.every(entry => entry.length <= 84));
 });
 
 test("C6 the second firm gets 404 and sees none of the added rows; off local V2 the add refuses", async () => {

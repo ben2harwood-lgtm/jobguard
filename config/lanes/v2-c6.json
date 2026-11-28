@@ -25,6 +25,7 @@
         "packages/db/src/quote-document-repository.ts",
         "packages/db/src/quote-repository.ts",
         "packages/db/src/v2-quote-add-line-repository.ts",
+        "packages/db/test/v2-quote-exclusion-entries.test.ts",
         "tools/v2/seed.integration.test.mjs"
       ]
     }

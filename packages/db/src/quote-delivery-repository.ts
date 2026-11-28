@@ -12,14 +12,23 @@ const synchronousFakeExecutions=new Map<string,Promise<void>>();
 // Additive fields are optional for existing supplied views; repository responses populate both.
 export type QuoteDeliveryView={documentId:string;reference?:string;documentVersion:number;quoteRevision:number;acceptedDocumentReferences?:Record<string,{reference:string;documentVersion:number}>;contentHash:string;recipient:string;status:"previewed"|"queued"|"simulated_delivery"|"outcome_unknown"|"cancelled";attempts:number;receiptCount:number;effects:{platformDebt:0;chargeAttempts:0;realExternalActions:0}};
 // V2-C6: on the local V2 launcher a line excluded with a reason reaches the document's exclusions, in the
-// editor's own wording. Main's preview is unchanged.
+// editor's own wording ("description: reason"). The PDF prints each exclusion entry as one row of at most 84
+// characters (the width it wraps included work to), so the text is wrapped at word boundaries into as many entries
+// as it needs. No word is cut; joined with spaces the entries give back the full text. Main's preview is unchanged.
+export const V2_EXCLUSION_ROW_WIDTH=84;
+export function v2ExclusionEntries(description:string,reason:string):string[]{
+ const out:string[]=[];let row="";
+ for(const word of `${description}: ${reason}`.split(/\s+/u).filter(Boolean)){
+  if(row&&`${row} ${word}`.length>V2_EXCLUSION_ROW_WIDTH){out.push(row);row=word;}else row=row?`${row} ${word}`:word;
+ }
+ if(row)out.push(row);
+ return out;
+}
 async function v2Exclusions(db:TenantTransaction,quoteRevisionId:string){
  if(process.env.JOBGUARD_LOCAL_V2!=="1")return [];
  const rows=(await db.$client.query<{description:string;exclusion_reason:string}>(`SELECT description,exclusion_reason FROM app.quote_line
   WHERE quote_revision_id=$1 AND NOT included AND nullif(exclusion_reason,'') IS NOT NULL ORDER BY ordinal`,[quoteRevisionId])).rows;
- // Each document entry holds 500 characters. A line's description (500) and reason (200) always fit as two
- // entries, so when together they are too long they are split, never cut.
- return rows.flatMap(row=>{const joined=`${row.description}: ${row.exclusion_reason}`;return joined.length<=500?[joined]:[row.description,`Reason: ${row.exclusion_reason}`];});
+ return rows.flatMap(row=>v2ExclusionEntries(row.description,row.exclusion_reason));
 }
 export class QuoteDeliveryRepository{
  constructor(private readonly pool:Pool){}
