@@ -51,6 +51,9 @@ beforeAll(async () => {
     // V2-K5A: absent from the shared synthetic upgrade fixture; applied on the second pass.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") &&
       String(values?.[0]).endsWith("_v2_payment_schedule.sql")) return { rows: [{}], rowCount: 1 };
+    // Q06 V2-K9: V2-only migration is exercised by the dedicated seed suite.
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
+      && String(values?.[0]).endsWith("_v2_rams_draft.sql")) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);

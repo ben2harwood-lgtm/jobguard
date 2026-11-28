@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant, workPlanTemplates } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { createHash } from "node:crypto";
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
@@ -281,7 +281,7 @@ test("the V2 accepted quote produces one plan after concurrent generation, reope
   const hall = first.tasks.filter(task => task.trade === "decorator");
   assert.deepEqual(hall.map(task => task.scopeItemId), [decoratingId, decoratingId]);
   assert.deepEqual(hall.map(task => task.dependsOn), [
-    [], [{ scopeItemId: decoratingId, templateTaskKey: "prepare-hall" }],
+    [], [{ scopeItemId: decoratingId, templateTaskKey: "decorating-prepare" }],
   ]);
   assert.deepEqual(await counts(), before);
 });
@@ -391,11 +391,10 @@ test("forced work plan policies isolate the second firm's real and shared practi
 const planQuery = { version: "work-plan-query.v1" };
 const customTaskKey = "custom-scope-item";
 
-async function draftForPlan() {
+async function draftForPlan(categories = ["Tiling", "Decorating", "Joinery", "Metalwork"],
+  descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"]) {
   const { sessionId, realContext } = await signIn("builder");
   const { capture, quote, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId });
-  const categories = ["Tiling", "Decorating", "Joinery", "Metalwork"];
-  const descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"];
   const saved = await capture.create({
     contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
     fixtureId: "v2-c2-draft-editing",
@@ -439,6 +438,60 @@ async function draftForPlan() {
   const edit = command => workPlan.edit(draftJob, command);
   return { draftJob, realContext, sessionId, lines, save, read, edit };
 }
+
+// V2-SQ-F: new plans use trades.v1; a stored plan keeps its own template on read and on refresh.
+test("SQ-F a spoken bathroom job plans in stage order with no splashback or hall task; Other stays unplanned", async () => {
+  const categories = ["Tiling", "Decorating", "Plumbing", "Electrics", "Plastering", "Other"];
+  const { lines, read, edit, save } = await draftForPlan(categories,
+    ["Tile the walls", "Paint the ceiling", "Fit the new suite", "Move two sockets", "Skim the walls", "Fit a mirror"]);
+  const [tiling, decorating, plumbing, electrics, plastering, other] = lines.map(line => line.scopeItemId);
+  const plan = await read();
+  assert.equal(plan.templateKey, "trades.v1");
+  assert.deepEqual(plan.tasks.map(task => [task.key, task.scopeItemId, task.position]), [
+    ["plumbing-first-fix", plumbing, 1], ["electrics-first-fix", electrics, 2],
+    ["plastering-plaster", plastering, 3], ["plastering-dry", plastering, 4],
+    ["plumbing-second-fix", plumbing, 5], ["electrics-second-fix", electrics, 6],
+    ["tiling-prepare", tiling, 7], ["tiling-tile", tiling, 8],
+    ["decorating-prepare", decorating, 9], ["decorating-paint", decorating, 10],
+  ]);
+  assert.equal(plan.tasks.some(task => /splashback|hall/iu.test(`${task.key} ${task.title}`)), false);
+  assert.deepEqual(plan.tasks.find(task => task.key === "plumbing-second-fix").dependsOn,
+    [{ scopeItemId: plumbing, templateTaskKey: "plumbing-first-fix" }]);
+  assert.deepEqual(plan.unplanned.map(item => item.scopeItemId), [other]);
+  assert.equal("stage" in plan.tasks[0], false, "stage orders the stored rows and is not part of a task");
+  // An Other line takes a custom task, an edit replays, and a quote save refreshes the plan under trades.v1.
+  const custom = planEdit(plan, { scopeItemId: other, key: customTaskKey }, { position: 11, trade: "joiner", durationMinutes: 60 });
+  const receipt = await edit(custom);
+  assert.deepEqual(await edit(custom), receipt);
+  const edited = await read();
+  assert.deepEqual(edited.tasks.at(-1).scopeItemId, other);
+  await save(1);
+  const refreshed = await read();
+  assert.equal(refreshed.templateKey, "trades.v1");
+  assert.notEqual(refreshed.quoteRevisionId, plan.quoteRevisionId);
+  assert.deepEqual(refreshed.tasks.slice(0, 10).map(task => task.key), plan.tasks.map(task => task.key));
+  assert.equal(refreshed.tasks.at(-1).scopeItemId, other, "the custom task follows the refresh");
+});
+
+test("SQ-F a plan stored under the splashback template reads back identically and its refresh stays on it", async () => {
+  const { draftJob, sessionId, save, read } = await draftForPlan();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const splashback = workPlanTemplates.get("splashback-decorating.v1");
+  const { rows: [{ current_revision_id: revision }] } = await admin.query(
+    "SELECT current_revision_id FROM app.quote_draft WHERE job_id=$1", [draftJob]);
+  const stored = await new WorkPlanRepository(runtime, splashback).generate(context, planSource(draftJob, revision));
+  assert.equal(stored.templateKey, "splashback-decorating.v1");
+  assert.deepEqual(stored.tasks.map(task => task.key), ["prepare-splashback", "tile-splashback", "prepare-hall", "paint-hall"]);
+  assert.deepEqual(await new WorkPlanRepository(runtime).read(context, planSource(draftJob, revision)), stored);
+  assert.deepEqual(await read(), stored);
+  await save(1);
+  const refreshed = await read();
+  assert.equal(refreshed.templateKey, "splashback-decorating.v1");
+  assert.notEqual(refreshed.quoteRevisionId, revision);
+  assert.deepEqual(refreshed.tasks.map(task => task.key), stored.tasks.map(task => task.key));
+  const { rows } = await admin.query("SELECT template_key FROM app.v2_work_plan WHERE job_id=$1 ORDER BY created_at", [draftJob]);
+  assert.deepEqual(rows.map(row => row.template_key), ["splashback-decorating.v1", "splashback-decorating.v1"]);
+});
 
 function planEdit(plan, task, changes) {
   return { version: "work-plan-edit.v1", commandId: randomUUID(), quoteRevisionId: plan.quoteRevisionId,
@@ -963,6 +1016,253 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
   const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
+});
+
+// Q06 V2-K9 RAMS: own block, using the suite's shared sign-in and real V2 database.
+import { RamsApplication } from "../../apps/api/dist/workspace/index.js";
+import { RamsRepository } from "../../packages/db/dist/index.js";
+
+async function ramsFixture() {
+  const fixture = await draftForPlan();
+  const app = new RamsApplication(runtime, fixture.sessionId);
+  const { context } = await authenticatePracticeSession(runtime, fixture.sessionId);
+  const run = async (action, extra = {}) => {
+    const view = await app.read(fixture.draftJob);
+    return app.command(fixture.draftJob, { version: "rams-command.v1", commandId: randomUUID(), action,
+      expectedVersion: view.drafts.at(-1)?.revision ?? 0, quoteRevisionId: view.plan.quoteRevisionId,
+      expectedPlanVersion: view.plan.planVersion, ...extra });
+  };
+  return { ...fixture, app, context, run };
+}
+const ramsEvents = async job => (await admin.query(`SELECT event_type,actor_ref,payload FROM app.audit_event
+  WHERE subject_ref=$1 AND event_type LIKE 'v2.rams_draft.%' ORDER BY sequence`, [job])).rows;
+const ramsRows = async job => (await admin.query("SELECT snapshot FROM app.v2_rams_draft WHERE job_id=$1 ORDER BY revision", [job])).rows;
+
+test("Q06 RAMS: hazards, completion, signing, persistence and plan regeneration retain the signed version", async () => {
+  const f = await ramsFixture();
+  let draft = await f.run("generate");
+  assert.match(JSON.stringify(draft.sections), /Tile-cutting dust/u);
+  assert.match(JSON.stringify(draft.sections), /Occupied home/u);
+  assert.doesNotMatch(JSON.stringify(draft), /pence|£|signedDeltaPence|shadow/u);
+  await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_INCOMPLETE" });
+  const hazard = draft.sections.find(section => section.key.includes("tile-splashback"));
+  draft = await f.run("edit", { sectionKey: hazard.key, text: "Fictional builder checked the protected cutting area." });
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
+  }
+  const signed = await f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" });
+  assert.equal(signed.status, "signed"); assert.ok(signed.signedBy); assert.ok(signed.signedAt);
+  for (const sql of ["UPDATE app.v2_rams_draft SET revision=revision WHERE job_id=$1 AND snapshot->>'status'='signed'",
+    "DELETE FROM app.v2_rams_draft WHERE job_id=$1 AND snapshot->>'status'='signed'"]) {
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.draftJob])), { code: "42501" });
+  }
+  const frozen = JSON.stringify(signed);
+  assert.deepEqual((await new RamsApplication(runtime, f.sessionId).read(f.draftJob)).drafts.at(-1), signed);
+  await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_DRAFT_REQUIRED" });
+  const plan = await f.read();
+  await f.edit(planEdit(plan, plan.tasks.find(task => task.key === "tile-splashback"), { durationMinutes: 300 }));
+  await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_PLAN_CHANGED" });
+  const regenerated = await f.run("generate");
+  assert.equal(regenerated.status, "draft"); assert.equal(regenerated.documentVersion, 2);
+  assert.equal(regenerated.planVersion, 1);
+  assert.equal(regenerated.sections.find(section => section.key === hazard.key).text, "Fictional builder checked the protected cutting area.");
+  assert.equal(regenerated.sections.find(section => section.key === hazard.key).needsReview, true);
+  assert.equal(JSON.stringify((await f.app.read(f.draftJob)).drafts.find(row => row.revision === signed.revision)), frozen);
+  await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_INCOMPLETE" });
+  const editedAfterSign = await f.run("edit", { sectionKey: hazard.key, text: "Fictional controls checked against the changed task." });
+  assert.equal(editedAfterSign.signedBy, null);
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("Q06 RAMS: a signed version keeps the site address it was signed with after a later correction", async () => {
+  const f = await ramsFixture();
+  const { parties } = createWorkspaceApplication({ pool: runtime, sessionId: f.sessionId });
+  const customer = { version: "customer.v1", type: "person", name: "Fictional RAMS Customer",
+    email: "rams-customer@jobguard-v2.invalid", phone: "+447700900043" };
+  const saveSite = async line => {
+    const view = await parties.view({ sessionId: f.sessionId }, f.draftJob);
+    await parties.command({ sessionId: f.sessionId }, f.draftJob, {
+      version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+      expectedJobRevision: view.jobRevision, expectedBindingId: view.currentIds?.bindingId ?? null, customer, customerRef: null,
+      site: { version: "site.v1", addressLines: [line], town: "Sampleford", postcode: "ZY1 0AA" },
+      savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+      payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+    });
+  };
+  await saveSite("44 Make-Believe Mews");
+  let draft = await f.run("generate");
+  assert.equal(draft.job.address, "44 Make-Believe Mews, Sampleford, ZY1 0AA");
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
+  }
+  // A correction between drafting and signing does not slip into the version the builder checked.
+  await saveSite("46 Make-Believe Mews");
+  const signed = await f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" });
+  assert.deepEqual(signed.job, draft.job, "signing keeps the details shown on the checked draft");
+  await saveSite("45 Make-Believe Mews");
+  const view = await f.app.read(f.draftJob);
+  assert.equal(view.job.address, "45 Make-Believe Mews, Sampleford, ZY1 0AA", "the screen shows the corrected job details");
+  assert.deepEqual(view.drafts.find(row => row.revision === signed.revision), signed, "the signed version is unchanged");
+  assert.equal(view.drafts.find(row => row.revision === signed.revision).job.address, "44 Make-Believe Mews, Sampleford, ZY1 0AA");
+  const fresh = await f.run("generate");
+  assert.equal(fresh.job.address, "45 Make-Believe Mews, Sampleford, ZY1 0AA", "a new draft takes the corrected details");
+});
+
+test("Q06 RAMS: an extra approved without a plan edit blocks signing, even mid-command, until regenerated", async () => {
+  // A real live practice job with a real approved extra (no plan edit, so the plan version stays the same).
+  const { jobId: liveJob, sessionId } = await pxLiveJob();
+  const app = new RamsApplication(runtime, sessionId);
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { variation } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const run = async (action, extra = {}) => {
+    const view = await app.read(liveJob);
+    return app.command(liveJob, { version: "rams-command.v1", commandId: randomUUID(), action,
+      expectedVersion: view.drafts.at(-1)?.revision ?? 0, quoteRevisionId: view.plan.quoteRevisionId,
+      expectedPlanVersion: view.plan.planVersion, ...extra });
+  };
+  let draft = await run("generate");
+  assert.match(draft.planHash, /^[a-f0-9]{64}$/u);
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
+  }
+  const view = await app.read(liveJob);
+  assert.equal(view.canSign, true);
+  // The caller's plan is read before the command takes the lock (as RamsApplication does).
+  const plans = new WorkPlanRepository(runtime);
+  const stale = await plans.open(context, liveJob);
+  const proposalId = randomUUID(), scopeItemId = randomUUID();
+  const vary = (action, fields) => variation.command(liveJob, { version: "variation-command.v1", action, ...fields });
+  const proposed = await vary("propose", { proposalId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "Add trim", captureText: "Customer asks about trim",
+    price: { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" } });
+  await vary("approve", { variationId: proposalId, revisionId: proposed.variations.find(item => item.id === proposalId).currentRevisionId,
+    approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const fresh = await plans.open(context, liveJob);
+  assert.equal(fresh.version, stale.version, "the approval is not a plan edit");
+  assert.ok(fresh.unplanned.some(item => item.scopeItemId === scopeItemId));
+  const sign = { version: "rams-command.v1", commandId: randomUUID(), action: "sign", expectedVersion: view.drafts.at(-1).revision,
+    quoteRevisionId: stale.quoteRevisionId, expectedPlanVersion: stale.version, checkedAllSections: true, signerName: "Fictional Builder" };
+  const before = (await ramsRows(liveJob)).length;
+  // The approval landed between the caller's read and the lock: the sign re-reads the work under the lock.
+  await assert.rejects(new RamsRepository(runtime).command(context, liveJob, sessionId, sign, stale, view.job),
+    { code: "RAMS_PLAN_CHANGED" });
+  // With the current plan too, the draft no longer matches the work.
+  assert.equal((await app.read(liveJob)).canSign, false);
+  await assert.rejects(run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_PLAN_CHANGED" });
+  assert.equal((await ramsRows(liveJob)).length, before, "nothing is signed");
+  const regenerated = await run("generate");
+  assert.ok(regenerated.sections.some(section => section.key === `hazards:${scopeItemId}:unplanned` && section.required),
+    "the regenerated draft lists the new work for the builder's own hazards");
+});
+
+
+test("Q06 RAMS: each generate/edit/sign audits once; replay, stale input and forced audit failures", async () => {
+  const f = await ramsFixture();
+  const failing = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client), release = client.release.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced RAMS audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  const exercise = async (action, extra = {}) => {
+    const view = await f.app.read(f.draftJob), plan = await f.read();
+    const command = { version: "rams-command.v1", commandId: randomUUID(), action,
+      expectedVersion: view.drafts.at(-1)?.revision ?? 0, quoteRevisionId: plan.quoteRevisionId,
+      expectedPlanVersion: plan.version, ...extra };
+    const before = (await ramsEvents(f.draftJob)).length;
+    const rowCount = (await ramsRows(f.draftJob)).length;
+    await assert.rejects(new RamsRepository(failing).command(f.context, f.draftJob, f.sessionId, command, plan, view.job), { code: "FORCED" });
+    assert.equal((await ramsRows(f.draftJob)).length, rowCount, `${action} snapshot rolls back`);
+    assert.equal((await ramsEvents(f.draftJob)).length, before, `${action} audit rolls back`);
+    const saved = await f.app.command(f.draftJob, command);
+    const replays = await Promise.all([f.app.command(f.draftJob, command), f.app.command(f.draftJob, command)]);
+    for (const replay of replays) assert.deepEqual(replay, saved);
+    assert.equal((await ramsEvents(f.draftJob)).length, before + 1);
+    const event = (await ramsEvents(f.draftJob)).at(-1);
+    assert.equal(event.actor_ref, `membership:${saved.actorMembershipId}`);
+    assert.equal(event.payload.references.commandId, command.commandId);
+    assert.equal("version" in event.payload.references, false);
+    assert.match(event.payload.hashes.snapshot, /^[a-f0-9]{64}$/u);
+    assert.doesNotMatch(JSON.stringify(event.payload), /Fictional|@|To complete|Tile-cutting/u);
+    if (action === "edit") await assert.rejects(f.app.command(f.draftJob, { ...command, text: command.text + " Changed" }), { code: "RAMS_COMMAND_CONFLICT" });
+    if (action === "sign") await assert.rejects(f.app.command(f.draftJob, { ...command, signerName: "Another fictional person" }), { code: "RAMS_COMMAND_CONFLICT" });
+    await assert.rejects(f.app.command(f.draftJob, { ...command, expectedVersion: command.expectedVersion + 1 }), { code: "RAMS_COMMAND_CONFLICT" });
+    await assert.rejects(f.app.command(f.draftJob, { ...command, commandId: randomUUID() }), { code: "RAMS_VERSION_CONFLICT" });
+    return saved;
+  };
+  let draft = await exercise("generate");
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await exercise("edit", { sectionKey: section.key, text: "Fictional site details checked." });
+  }
+  const signed = await exercise("sign", { checkedAllSections: true, signerName: "Fictional Builder" });
+  assert.equal(signed.status, "signed");
+  assert.deepEqual(new Set((await ramsEvents(f.draftJob)).map(event => event.event_type)),
+    new Set(["v2.rams_draft.generated", "v2.rams_draft.section_edited", "v2.rams_draft.signed"]));
+  // Editing a signed document appends a new draft, and cannot overwrite its signature.
+  const next = await f.run("edit", { sectionKey: "site-rules", text: "Fictional new site rules." });
+  assert.equal(next.documentVersion, 2); assert.equal(next.status, "draft"); assert.equal(next.signedAt, null);
+  assert.deepEqual((await ramsRows(f.draftJob)).find(row => row.snapshot.revision === signed.revision).snapshot, signed);
+  const old = await f.read();
+  await f.edit(planEdit(old, old.tasks[0], { durationMinutes: 91 }));
+  await assert.rejects(f.app.command(f.draftJob, { version: "rams-command.v1", commandId: randomUUID(), action: "generate",
+    expectedVersion: next.revision, quoteRevisionId: old.quoteRevisionId, expectedPlanVersion: old.version }), { code: "RAMS_PLAN_CHANGED" });
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("Q06 RAMS: forced RLS, append-only grants, second firm and wrong-job FK; migration reapplies without rewriting", async () => {
+  const f = await ramsFixture(), draft = await f.run("generate");
+  const outsider = await signIn("second-builder");
+  const { context: otherPractice } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { rows: [acl] } = await admin.query(`SELECT relforcerowsecurity AND relrowsecurity AS forced,
+    pg_get_userbyid(relowner) AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access
+    FROM pg_class WHERE oid='app.v2_rams_draft'::regclass`);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false, worker_access: false });
+  const insert = `INSERT INTO app.v2_rams_draft
+    (tenant_id,job_id,command_id,revision,quote_revision_id,plan_version,request_hash,snapshot,actor_membership_id)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`;
+  const values = [f.context.tenantId, f.draftJob, randomUUID(), 2, draft.quoteRevisionId, draft.planVersion,
+    "a".repeat(64), JSON.stringify({ ...draft, revision: 2 }), draft.actorMembershipId];
+  for (const context of [outsider.realContext, otherPractice]) {
+    const query = (sql, args) => withTenant(runtime, context, db => db.$client.query(sql, args));
+    assert.equal((await query("SELECT * FROM app.v2_rams_draft WHERE job_id=$1", [f.draftJob])).rowCount, 0);
+    await assert.rejects(query(insert, values), { code: "42501" });
+    await assert.rejects(query("UPDATE app.v2_rams_draft SET revision=revision WHERE job_id=$1", [f.draftJob]), { code: "42501" });
+    await assert.rejects(query("DELETE FROM app.v2_rams_draft WHERE job_id=$1", [f.draftJob]), { code: "42501" });
+  }
+  assert.equal((await runtime.query("SELECT * FROM app.v2_rams_draft")).rowCount, 0);
+  const ownQuery = (sql, args) => withTenant(runtime, f.context, db => db.$client.query(sql, args));
+  await assert.rejects(ownQuery("UPDATE app.v2_rams_draft SET revision=revision WHERE job_id=$1", [f.draftJob]), { code: "42501" });
+  await assert.rejects(ownQuery("DELETE FROM app.v2_rams_draft WHERE job_id=$1", [f.draftJob]), { code: "42501" });
+  const otherJob = await draftForPlan();
+  const wrong = [...values]; wrong[1] = otherJob.draftJob;
+  wrong[7] = JSON.stringify({ ...draft, jobId: otherJob.draftJob, revision: 2 });
+  await assert.rejects(ownQuery(insert, wrong), { code: "23503" });
+  const before = await ramsRows(f.draftJob);
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2068_v2_rams_draft.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await ramsRows(f.draftJob), before);
+  await assert.rejects(new RamsApplication(runtime, outsider.sessionId).read(f.draftJob), { code: "NOT_FOUND" });
+});
+
+test("Q06 RAMS: V2 off and non-synthetic modes refuse before reading or writing", async () => {
+  const { sessionId } = await signIn("builder");
+  const app = new RamsApplication(runtime, sessionId), original = process.env.JOBGUARD_LOCAL_V2;
+  try {
+    process.env.JOBGUARD_LOCAL_V2 = "0";
+    await assert.rejects(app.read(jobId), { code: "SYNTHETIC_MODE_REQUIRED" });
+    await assert.rejects(app.command(jobId, {}), { code: "SYNTHETIC_MODE_REQUIRED" });
+    process.env.JOBGUARD_LOCAL_V2 = "1";
+    for (const mode of ["pilot_no_charge", "production_billing"]) {
+      const saved = process.env.JOBGUARD_ENV; process.env.JOBGUARD_ENV = mode;
+      try { await assert.rejects(app.read(jobId), { code: "SYNTHETIC_MODE_REQUIRED" }); }
+      finally { process.env.JOBGUARD_ENV = saved; }
+    }
+  } finally { process.env.JOBGUARD_LOCAL_V2 = original; }
 });
 
 const generatedEvents = async quoteRevisionId => (await admin.query(`SELECT tenant_id, actor_ref, subject_ref, payload
