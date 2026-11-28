@@ -617,9 +617,11 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
         ? (rateCells[0]!.value.startsWith("RATE:") ? explicit(rateCells, "RATE:") : rateCells[0]!) : null;
       // Apply the spoken guard to each said description amount and to the description around RATE.
       // Fixture attributes never override a deduction, condition, correction or other qualification.
-      const said = amounts(description.value);
-      const qualified = said.some(amount => amount.pence === null || saidAmountOpen(description.value.slice(0, amount.index), description.value.slice(amount.index + amount.text.length)))
-        || said.length > 1 || saidAmountOpen(description.value, "");
+      // Give the room normaliser the following RATE context, then keep only the same-length description copy.
+      const read = hideRoomNumbers(`${description.value} ${rate?.value ?? ""}`).slice(0, description.value.length);
+      const said = amounts(read);
+      const qualified = said.some(amount => amount.pence === null || saidAmountOpen(read.slice(0, amount.index), read.slice(amount.index + amount.text.length)))
+        || said.length > 1 || saidAmountOpen(read, "");
       const suppliedRate = rate ? exactRate(rate.value) : null;
       const rateValue = qualified ? null : suppliedRate;
       if (rateCells.length && suppliedRate === null) questions.push(question(`Confirm rate for ${label}`));

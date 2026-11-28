@@ -2597,3 +2597,72 @@ profiled regex call: **3.836 ms**. Local logs:
 No database, migration, provider, model or UI changes; no live-model or
 browser acceptance claimed. Independent review of the exact repair commit,
 CI, merge and release remain separate gates. Commit only; no push.
+
+## RT-FIX-11 repair round 2 (last) — PR #1107, Codex comment 4728073864
+
+Base: `b20e878d2b3dd4e599283ae154e7733d9fe393bb` on
+`codex/sandbox/rt-fix-11`. Practice data only.
+
+The ITEM guards now reuse `hideRoomNumbers` once before checking the
+description. The supplied RATE provides the following amount context the
+existing helper requires; slicing back to the original description length
+keeps its recognition offsets unchanged. Both description-amount and
+whole-description guards use that copy. Original descriptions and RATE
+citations remain unchanged; no second room-number rule was introduced.
+
+Three parser regressions cover `ITEM: Paint bedroom two | RATE: £150` and
+`ITEM: Paint bedroom 2 | RATE: £150` retaining **15000 pence**, exact `£150`
+provenance and no price/rate question, plus
+`ITEM: Paint 3 walls 40 | RATE: £150` retaining a null price and price question.
+Before the repair the two room cases failed and the stray-number control
+passed. Existing injection and compound-number corpus expectations remain
+unchanged and pass their declared statuses. The initial review's existing
+LATER / SIMPLICITY note remains non-blocking; this final repair adds no
+unrelated refactor.
+
+Executed locally with existing dependencies (Node 24.17.0, pnpm 10.28.1,
+Vitest 4.1.12); no clean install or independent acceptance claimed:
+
+- First, `pnpm --filter @jobguard/core build` — exit 0, before parser tests.
+- Before repair: `pnpm --filter @jobguard/ai exec vitest run
+  src/capture-qualified-price.test.ts --maxWorkers=2 -t 'structured ITEM'`
+  — **2 failed, 1 passed**, 19 unrelated tests intentionally skipped.
+- Final parser check: `pnpm --filter @jobguard/ai exec vitest run
+  src/capture-qualified-price.test.ts src/capture.test.ts
+  src/capture-plain-words.test.ts src/capture-typed-rooms.test.ts
+  --maxWorkers=2` — **4 files, 130 passed**. The earlier post-edit run had
+  only the expected stale golden-hash failure; the hash-only refresh and
+  final run resolved it.
+- `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts
+  --maxWorkers=2 -t 'RT-07-|RT-EXT-'` — **143 passed** against their declared
+  statuses: RT-07 **112 pass / 12 declared open**, RT-EXT **19 pass / 0 open**;
+  unrelated tests intentionally skipped in this focused run.
+- **FULL `pnpm eval --maxWorkers=2`** — exit 0, **38 files, 2758 passed +
+  45 expected failures = 2803 tests**, **0 unexpected failures**, no skips.
+  All **1665 corpus cases** ran: **1275 pass / 390 declared open**, unchanged.
+- All **10 RT-06 performance attacks passed** in that full eval. Slowest
+  reader: **341.90 ms**, below **1000 ms**. Largest reported profiled regex
+  call: **0.331 ms**, below **50 ms**.
+- `pnpm --filter @jobguard/ai --filter @jobguard/core
+  --workspace-concurrency=1 typecheck` and the same command with `lint` —
+  both packages pass. `pnpm --filter @jobguard/core build` and
+  `pnpm --filter @jobguard/ai build` — both pass.
+- Compiled `runCaptureEvaluation` / `createGoldenRunRecord` deep-equal the
+  checked-in golden record: **32/32 cases**, **41/41 scope intents**,
+  **119/119 citations**, **0 unsupported monetary facts**, **63/63 ambiguity
+  checks**. Deep comparison with the base confirms the only record change
+  is the parser implementation SHA-256:
+  `8063fbcc5f64f72c976f7246af47c04c99df7b1aaa096e42fb3a4cfecc954d7d`
+  → `bd3a1ea9126c7688c7858962114e8c9bbc2fe58c76484e303fc8cd98b1fa9a72`.
+
+Logs: `/tmp/rt-fix11-r2-before.log`, `/tmp/rt-fix11-r2-parser.log`,
+`/tmp/rt-fix11-r2-parser-final.log`, `/tmp/rt-fix11-r2-corpus.log`,
+`/tmp/rt-fix11-r2-eval.log`, `/tmp/rt-fix11-r2-typecheck.log`,
+`/tmp/rt-fix11-r2-lint.log`, `/tmp/rt-fix11-r2-core-build.log` and
+`/tmp/rt-fix11-r2-ai-build.log`.
+
+Only the parser, parser unit test, this receipt and golden parser hash are
+changed. `git diff --check` passes; `.pnpm-store/` is excluded from staging.
+No sq-preview alias access, deployment, push, live provider, database,
+migration or UI change. Release remains `NOT_AUTHORIZED`; review of the
+exact repair head, CI and merge remain separate gates.
