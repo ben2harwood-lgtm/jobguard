@@ -8,5 +8,5 @@ export const metadata = { title: "JobGuard · Job records" };
 export default async function JobRecordsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (process.env.JOBGUARD_ENV === "pilot_no_charge") return <PilotJobs screen="review" jobId={id}/>;
-  return <DesignedJob jobId={id} tab="records">{process.env.JOBGUARD_LOCAL_V2 === "1" && <SiteAttendanceCard key={id} jobId={id}/>}<JobDiary jobId={id} extrasHref={`/jobs/${id}/work#variations-title`}/><CustomerMessages jobId={id}/></DesignedJob>;
+  return <DesignedJob jobId={id} tab="records">{/* V2-G1 mount: one link to Snags. */}{process.env.JOBGUARD_LOCAL_V2 === "1" && <p><a href={`/jobs/${id}/snags`}>Snags</a></p>}{process.env.JOBGUARD_LOCAL_V2 === "1" && <SiteAttendanceCard key={id} jobId={id}/>}<JobDiary jobId={id} extrasHref={`/jobs/${id}/work#variations-title`}/><CustomerMessages jobId={id}/></DesignedJob>;
 }

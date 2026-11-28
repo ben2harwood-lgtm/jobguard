@@ -170,6 +170,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/snags": "watchdog_live_only",
   "/api/jobs/[id]/snags/[snagId]/events": "watchdog_live_only",
   "/api/jobs/[id]/snags/[snagId]/photos": "watchdog_live_only",
+  // V2-G1: owner, the person on each event and the agreed mark; events are site work, as main's are.
+  "/api/jobs/[id]/snag-register": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",

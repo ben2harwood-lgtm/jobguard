@@ -251,6 +251,7 @@ export * from "./snag-repository.js";
 
 // V2-C3C crew records.
 export * from "./v2-crew-contact-repository.js";
+export * from "./v2-snag-register-repository.js";
 
 // V2-F8 who was on site today.
 export * from "./v2-site-attendance-repository.js";
