@@ -18,7 +18,20 @@ type PlanView = {
   variationRevisions?: Record<string, string>;
   // V2-SQ-F: trades.v1 durations are round defaults, labelled as typical times.
   templateKey?: string;
+  // Approved extras the plan can't place; each shows under "Not planned yet" with its reason.
+  extrasNotPlanned?: NotPlannedExtra[];
 };
+export type NotPlannedExtra = { scopeItemId: string; title: string; reason: "omission" | "direction_unknown"; planningDropped: boolean };
+
+/** Why an approved extra is not in the plan, in plain words. */
+export function notPlannedReason(item: Pick<NotPlannedExtra, "reason" | "planningDropped">): string {
+  if (item.reason === "omission") return item.planningDropped
+    ? "Became an omission, so it was taken out of the plan"
+    : "Approved omission: it removes work, so there is nothing to plan";
+  return item.planningDropped
+    ? "Approved extra with no direction yet, so it was taken out of the plan: say whether it adds work or removes it"
+    : "Approved extra with no direction yet: say whether it adds work or removes it";
+}
 type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
   Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee" | "assigneeRef">>;
@@ -52,8 +65,9 @@ export function editFields(fields: FormData, task: EditableTask): TaskChanges {
 
 // An approved extra's edit names the approved revision it was planned from.
 // The expected version is the one the form opened on, so a later re-read cannot hide another edit.
-export function editCommand(plan: PlanView, task: EditableTask, changes: TaskChanges, expectedVersion = plan.version) {
-  const variationRevisionId = plan.variationRevisions?.[task.scopeItemId];
+// The approved revision is the one the form opened on too, so an approval that lands while it is open is refused as stale.
+export function editCommand(plan: PlanView, task: EditableTask, changes: TaskChanges, expectedVersion = plan.version,
+  variationRevisionId = plan.variationRevisions?.[task.scopeItemId]) {
   return { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId,
     expectedVersion, taskKey: task.key, scopeItemId: task.scopeItemId, changes,
     ...(variationRevisionId && { variationRevisionId }) } as const;
@@ -96,6 +110,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
   const editReplay = useRef<{ payload: string; commandId: string }>(null);
   const activationId = useRef<string>(null);
   const openedVersion = useRef<number>(null);
+  const openedRevision = useRef<string | undefined>(undefined);
 
   // Each read takes a number; only the newest read may replace the card.
   const reads = useRef(0);
@@ -146,7 +161,8 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     setBusy(true);
     setProblem(null);
     setNotice("");
-    const command = editCommand(plan, task, changes, openedVersion.current ?? plan.version);
+    const command = editCommand(plan, task, changes, openedVersion.current ?? plan.version,
+      openedVersion.current === null ? plan.variationRevisions?.[task.scopeItemId] : openedRevision.current);
     const payload = JSON.stringify(command);
     if (editReplay.current?.payload !== payload) editReplay.current = { payload, commandId: crypto.randomUUID() };
     try {
@@ -200,7 +216,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       ? <TaskForm task={task} positions={(plan?.tasks.length ?? 0) + Number(!existing)} busy={busy}
           save={changes => void save(task, changes)} cancel={() => { setEditing(null); setProblem(null); }}/>
       : <button type="button" className="btn small" aria-label={`${action} ${task.title}`} disabled={busy || problem?.reload}
-          onClick={() => { openedVersion.current = plan?.version ?? null; setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
+          onClick={() => { openedVersion.current = plan?.version ?? null; openedRevision.current = plan?.variationRevisions?.[task.scopeItemId]; setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
   }
 
   return <Card title="Plan" id="work-plan">
@@ -215,7 +231,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         <div className="form-actions"><button type="button" className="btn primary" disabled={busy || problem?.reload || editing !== null}
           onClick={() => void switchLive()}>Switch live</button></div>}
     </div>}
-    {(plan === null || (plan && !plan.tasks.length && !plan.unplanned.length)) &&
+    {(plan === null || (plan && !plan.tasks.length && !plan.unplanned.length && !plan.extrasNotPlanned?.length)) &&
       <Empty title="No planned tasks yet" text="Start with the scope from a quote revision."/>}
     {plan?.tasks.map(task => {
       const changed = plan.changes.added.some(row => taskId(row) === taskId(task)) ||
@@ -241,6 +257,13 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         <h4>{item.title}</h4>
         <p>Needs a trade, duration and place in the plan</p>
         {taskEditor(item)}
+      </article>)}
+    </div>}
+    {!!plan?.extrasNotPlanned?.length && <div className="card-body">
+      <h3>Not planned yet</h3>
+      {plan.extrasNotPlanned.map(item => <article key={item.scopeItemId}>
+        <h4>{item.title}</h4>
+        <p>{notPlannedReason(item)}</p>
       </article>)}
     </div>}
   </Card>;
