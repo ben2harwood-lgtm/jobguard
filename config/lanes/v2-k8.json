@@ -3,7 +3,8 @@
   "lanes": {
     "v2-k8": {
       "branches": [
-        "codex/sandbox/v2-k8"
+        "codex/sandbox/v2-k8",
+        "claude/project-thread-trp08u-k8"
       ],
       "note": "RED Q05. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only, owned by main (live Work tab). One import plus one V2-only element; other c2/c3 sources remain unchanged.",
       "allow": [
@@ -17,11 +18,14 @@
         "apps/web/app/ui/v2-hire-links.ts",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2064_v2_hire.md",
+        "packages/db/migration-notes/2075_v2_hire.md",
         "packages/db/migrations/2064_v2_hire.sql",
+        "packages/db/migrations/2075_v2_hire.sql",
         "packages/db/src/index.ts",
         "packages/db/src/v2-hire-repository.ts",
         "packages/db/src/v2-hire.ts",
         "packages/db/test/migration-proofs/2064_v2_hire.proof.json",
+        "packages/db/test/migration-proofs/2075_v2_hire.proof.json",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "packages/db/test/v2-hire-application.test.ts",
         "packages/db/test/v2-hire.test.ts",

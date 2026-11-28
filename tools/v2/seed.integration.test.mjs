@@ -807,6 +807,22 @@ test("existing Switch live activates a plan once and only approved variation rev
   await verifyTenantChain(context.tenantId);
   assert.deepEqual(await effectCounts(), beforeApproval, "planning the extra schedules, sends, books, orders and charges nothing");
 
+  // K8: hire offers the extra's planned task, so a hire links to it although it is not a quote line.
+  const { hires } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const extraHire = randomUUID();
+  const hire = (action, expectedVersion, fields) => hires.command(jobId, { version: "hire-command.v1",
+    commandId: randomUUID(), hireId: extraHire, expectedVersion, action, ...fields });
+  assert.ok((await hires.list(jobId)).tasks.some(task => task.scopeItemId === scopeItemId && task.templateTaskKey === customTaskKey));
+  await hire("add", 0, { details: { kind: "scaffold", supplier: "Fictional trim scaffold", bookedFrom: "2026-12-01",
+    weeklyCost: "40.00", neededUntil: null } });
+  await hire("link", 1, { tasks: [{ quoteRevisionId: updated.quoteRevisionId, scopeItemId, templateTaskKey: customTaskKey }] });
+  const [linked] = (await hires.list(jobId)).items.filter(item => item.hireId === extraHire);
+  assert.deepEqual(linked.tasks, [{ quoteRevisionId: updated.quoteRevisionId, scopeItemId, templateTaskKey: customTaskKey }]);
+  // A link kept from an earlier quote revision still matches by scope item and task key, and moves to this revision.
+  await hire("link", 2, { tasks: [{ quoteRevisionId: randomUUID(), scopeItemId, templateTaskKey: customTaskKey }] });
+  const [relinked] = (await hires.list(jobId)).items.filter(item => item.hireId === extraHire);
+  assert.deepEqual(relinked.tasks, linked.tasks);
+
   // The database refuses an extra's edit that names no approved revision of its scope item.
   const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_work_plan_edit WHERE command_id = $1",
     [placed.commandId]);

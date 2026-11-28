@@ -10,6 +10,8 @@ export type HireReceipt = { hireId: string; itemVersion: number; actorMembership
 type HireRow = HireReceipt & { state: HireState };
 /** The job's current work plan, as the work-plan application opens it. */
 export type CurrentPlan = { tasks: readonly { scopeItemId: string; key: string; scheduledDate?: string | null }[] };
+/** The plan the hire panel offers tasks from, approved extras included. */
+export type OfferedPlan = CurrentPlan & { quoteRevisionId: string };
 const taskKey = (task: HireTask) => `${task.quoteRevisionId}/${task.scopeItemId}/${task.templateTaskKey}`;
 
 export class HireRepository {
@@ -54,7 +56,7 @@ export class HireRepository {
     });
   }
 
-  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, input: HireCommand) {
+  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, input: HireCommand, offered?: OfferedPlan) {
     const parsed = hireCommandV1.safeParse(input);
     if (!parsed.success) throw new HireError("HIRE_INVALID");
     const command = parsed.data;
@@ -90,8 +92,8 @@ export class HireRepository {
         ? { ...command.details!, tasks: [], status: "on_hire", offHireDate: null }
         : { ...prior!.state, ...(command.details ?? {}) };
       if (command.action === "link") {
-        await this.checkTasks(client, context.tenantId, jobId, command.tasks!);
-        state.tasks = command.tasks!;
+        if (offered) state.tasks = this.checkOffered(offered, command.tasks!);
+        else { await this.checkTasks(client, context.tenantId, jobId, command.tasks!); state.tasks = command.tasks!; }
       }
       if (command.action === "request_off_hire") state.status = "off_hire_requested";
       if (command.action === "off_hire") { state.status = "off_hire"; state.offHireDate = clock!.today; }
@@ -116,6 +118,18 @@ export class HireRepository {
       "SELECT app.v2_work_plan_editor($1) AS id", [createHash("sha256").update(sessionId).digest("hex")]);
     if (!editor?.id) throw new HireError("HIRE_EDITOR_REQUIRED");
     return editor.id;
+  }
+
+  // The tasks the panel offers come from the effective plan, which includes approved extras that
+  // are not quote lines, so a link is checked against that same plan. Links match by scope item and
+  // task key, as list() reads them, so a link kept from an earlier quote revision moves to this one.
+  private checkOffered(plan: OfferedPlan, tasks: HireTask[]) {
+    return tasks.map(task => {
+      if (!plan.tasks.some(entry => entry.scopeItemId === task.scopeItemId && entry.key === task.templateTaskKey)) {
+        throw new HireError("HIRE_TASK_NOT_FOUND");
+      }
+      return { ...task, quoteRevisionId: plan.quoteRevisionId };
+    });
   }
 
   private async checkTasks(client: PoolClient, tenant: string, job: string, tasks: HireTask[]) {
