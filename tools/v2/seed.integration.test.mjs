@@ -2197,6 +2197,69 @@ test("G4 migration 2084 reruns without changing policies, triggers, function bod
   assert.deepEqual(await catalog(), before);
 });
 
+// V2-G5: hidden findings stay hidden. The handover pack, its preview and the customer's link page read the same
+// before and after hidden findings are planted on the job, and match a clean twin job. Test only: no migration.
+const g5 = {
+  async placed(sql, values = []) {
+    const fixture = await admin.connect();
+    try { await fixture.query("BEGIN"); await fixture.query("SET LOCAL session_replication_role=replica");
+      await fixture.query(sql, values); await fixture.query("COMMIT"); }
+    catch (error) { await fixture.query("ROLLBACK"); throw error; }
+    finally { fixture.release(); }
+  },
+  // What the builder and the customer can see of the pack: the sources, a preview of v1's choice, the releases and the link page.
+  async seen(f, token, choice) {
+    const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+    const { preview } = await f.post({ version: "v2-handover-preview.v1", choice });
+    const page = (await (await g3.open(token)).text()).replace(/\snonce="[^"]*"/gu, "");
+    return { sources: view.sources, versions: view.versions, preview, releases: await g3.releases(f), page };
+  },
+  // Every hidden finding V2 keeps about a job: commercial integrity facts, an overcharge case against a merchant, a customer
+  // recovery case, and an unpaid invoice. None may reach the pack. Each id is returned so the rows can be removed again.
+  async plant(f) {
+    const t = f.context.tenantId, ids = { value: randomUUID(), activity: randomUUID(), supplier: randomUUID(), customer: randomUUID(), invoice: randomUUID() };
+    await g5.placed(`INSERT INTO app.commercial_integrity_value_fact (id, tenant_id, job_id, value_kind, net_value_pence, currency, source_ref,
+      occurred_at, synthetic) VALUES ($1, $2, $3, 'final', 1, 'GBP', $4, now(), true)`, [ids.value, t, f.job, randomUUID()]);
+    await g5.placed(`INSERT INTO app.commercial_integrity_activity_fact (id, tenant_id, job_id, activity_kind, occurred_at, synthetic)
+      VALUES ($1, $2, $3, 'outside_app_settlement', now(), true)`, [ids.activity, t, f.job]);
+    await g5.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic)
+      VALUES($1,$2,$3,4321,'GBP','active',0,true)`, [ids.supplier, t, f.job]);
+    await g5.placed(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,book,source_type)
+      VALUES($1,$2,$3,8765,'GBP','active',0,true,'withheld_customer_payment','builder_customer','customer_invoice')`, [ids.customer, t, f.job]);
+    await g5.placed(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,
+      issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+      VALUES($1,$2,$3,$4,$5,$6,'2026-12-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')`,
+    [ids.invoice, t, f.job, randomUUID(), randomUUID(), `G5-${ids.invoice.slice(0, 8)}`, "e".repeat(64)]);
+    return ids;
+  },
+  async unplant(ids) {
+    await g5.placed("DELETE FROM app.customer_invoice WHERE id=$1", [ids.invoice]);
+    await g5.placed("DELETE FROM app.recovery_case WHERE id IN ($1, $2)", [ids.supplier, ids.customer]);
+    await g5.placed("DELETE FROM app.commercial_integrity_activity_fact WHERE id=$1", [ids.activity]);
+    await g5.placed("DELETE FROM app.commercial_integrity_value_fact WHERE id=$1", [ids.value]);
+  },
+};
+
+test("G5 done when: planted hidden findings leave the handover pack, its preview and the link page unchanged, and a clean twin reads the same", async () => {
+  const f = await g3.ready();
+  const choice = { sections: ["done", "snags", "contacts"], lineIds: [f.line], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const { result } = await g3.direct(f, g3.release(1));
+  const before = await g5.seen(f, result.token, choice);
+  const ids = await g5.plant(f);
+  try {
+    assert.deepEqual(await g5.seen(f, result.token, choice), before, "nothing the builder or the customer sees changes");
+    // A version saved now, with the same choice, holds exactly the text of the version saved before the findings.
+    const { saved: v2 } = await f.post(g2.save(choice, 1));
+    assert.deepEqual(v2.content, f.v1.content);
+    assert.equal(v2.contentHash, f.v1.contentHash);
+    const text = [g2Text(v2.content), before.page].join("\n");
+    assert.doesNotMatch(text, /4321|8765|43\.21|87\.65|120\.00|outside|settlement|recovery|overcharge|dispute|invoice|G5-/iu);
+    // The twin: a second job built the same way with no findings saves the same pack text.
+    const twin = await g3.ready();
+    assert.equal(g2Text(twin.v1.content), g2Text(v2.content));
+  } finally { await g5.unplant(ids); }
+});
+
 // V2-F8 (Q10, migration 2061): who was on site today. The builder taps each person; no location is stored.
 const attendanceTable = "app.v2_site_attendance";
 const attendanceApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).siteAttendance;

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-g5": {
+      "branches": [
+        "claude/project-thread-trp08u-g5"
+      ],
+      "note": "RED. V2-G5 hidden findings stay hidden: the handover pack, its preview, releases and the customer's link page are unchanged by planted commercial-integrity facts, recovery cases and an unpaid invoice, and match a clean twin job. Test only, no migration. The validator includes config/lanes/v2-g5.json implicitly. Compare against the G4 base (claude/project-thread-trp08u-g4).",
+      "allow": [
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
