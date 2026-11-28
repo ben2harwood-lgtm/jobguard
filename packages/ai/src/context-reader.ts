@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amountPoints, amounts, correctionQuestion, invisibleFormat, leadingContentOffset, numberWords, plainDraft, plainItemBoundary, plainNextItem, priceCondition, saidAmountOpen, spokenCorrection, spokenCount, spokenVerb, spokenPounds, timing, total, trimSourceText, visibleWorkText, workClause, type Cell } from "./capture-fixture-parser.js";
 import { hideRoomNumbers, roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -26,11 +26,12 @@ function thousands(words: string): number | null {
   return value !== null && value > 0 && value < 1000 ? value * 100_000 : null;
 }
 /** Keep number checks inside the same item boundaries that the context reader passes to plainDraft. */
+const isNextItem = (next: string) => plainNextItem(next, isWork, isTiming);
 function itemClauses(text: string): string[] {
   const clauses: string[] = [];
   let start = 0;
   for (let i = 0; i < text.length; i++) {
-    const separator = plainItemBoundary(text, i, start, isWork);
+    const separator = plainItemBoundary(text, i, start, isNextItem);
     if (separator) {
       clauses.push(text.slice(start, i)); start = i + separator; i = start - 1;
     }
@@ -542,7 +543,11 @@ export function readSpokenJob(sourceId: string, text: string): JobUnderstanding 
   let wholeJobPrice: JobUnderstanding["wholeJobPrice"] = null;
   let wholeJobConflict = false;
   for (const price of priced) {
-    if (price.pence === null) { questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue; }
+    if (price.pence === null) {
+      // An unresolved whole-job total cannot leave another total looking definite.
+      if (!price.room) wholeJobConflict = true;
+      questions.push({ text: `You said “${price.text.slice(0, 300)}”. Check that price; it was not read exactly.` }); continue;
+    }
     const provenance = { kind: "extracted" as const, span: { sourceId, sourceVersion: 1 as const, start: price.start, end: price.end } };
     const tail = price.tail;
     if (vatWords.test(tail)) questions.push({ text: vatQuestion(price.text) });

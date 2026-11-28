@@ -4229,5 +4229,93 @@
       "questionsInclude": []
     },
     "status": "pass"
+  },
+  {
+    "id": "RV1-R2-T03",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500 and fit doors £300 then all in £800",
+    "why": "Conflicting totals separated by later work stay open with a question; the later item keeps its own price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-T04",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, then fit doors £300 and all in £800",
+    "why": "Conflicting totals separated by later work stay open with a question; the later item keeps its own price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P05",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200, three days",
+    "why": "The numeric checker shares the draft timing boundary, retaining the exact line price and asking about timing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "timing"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P06",
+    "lane": "RT-01",
+    "transcript": "Fit doors £300, two weeks",
+    "why": "The numeric checker shares the draft timing boundary, retaining the exact line price and asking about timing",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Fit doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "timing"
+      ]
+    },
+    "status": "pass"
   }
 ]

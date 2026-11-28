@@ -1241,3 +1241,50 @@ are inapplicable to this deterministic parser-only repair. These are executed
 checks, not independent review, merge acceptance or release approval; exact-head
 review remains pending. The initial LATER / SIMPLICITY note is retained. Commit
 only, no push; `.pnpm-store/` is excluded.
+
+## RT-FIX-6 repair round 2 — RT-FIX-5 regression follow-up (#1085)
+
+Base `c578323ca`, branch `codex/sandbox/rt-fix-6`; same repair round, following
+merged RT-FIX-5 repair 2 (`bfac404e2`). Both reported regressions are repaired:
+
+- An unresolved whole-job total now retains the conflict state, so the earlier
+  £500 cannot survive as definite in “Paint walls. All in £500 and fit doors £300
+  then all in £800”. The total stays open with a price question, while the door
+  line retains its cited £300. Existing overlapping-total ambiguity guards stay
+  intact, including repeated identical totals within one clause.
+- `plainNextItem` extracts the draft's existing work/timing/total predicate once.
+  Both `plainDraft` and the reader's numeric-check item boundaries call it with
+  the same work and timing recognizers. “Paint walls £200, three days” retains
+  its cited £200 and timing question. No second boundary or amount guard is added.
+- RV-01 appends four pass cases: both supplied transcripts, an and/then connector
+  variant of the conflicting totals, and “Fit doors £300, two weeks”. All original
+  corpus entries, statuses and expectations, `rt03-corrections.test.ts`, and
+  `capture-qualified-price.test.ts` are unchanged.
+
+Commands actually run (Node 24.17.0; pnpm 10.28.1; Vitest maximum two workers):
+
+| Check | Result |
+| --- | --- |
+| Baseline: `pnpm eval --maxWorkers=2` | exit 0; 29 files / 1,420 tests passed |
+| New cases on unrepaired source: `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts src/redteam/rt03-corrections.test.ts src/capture-qualified-price.test.ts --maxWorkers=2` | expected exit 1; exactly four new failures / 942 passes |
+| Repaired: same targeted command | exit 0; 3 files / 946 tests passed |
+| Final: `pnpm eval --maxWorkers=2` | exit 0; 29 files / 1,424 tests passed |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai typecheck` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai lint` | exit 0 |
+| `pnpm --filter @jobguard/core --filter @jobguard/ai build` | exit 0 |
+| Fresh compiled evaluation, golden-record verification and before/after equality assertion | exit 0; entire record equal except parser implementation hash |
+| Corpus preservation, unique IDs, allowed-path assertions and `git diff --check` | exit 0 |
+
+No score drop: 32/32 golden cases, scope recall 41/41, valid citations 119/119,
+unsupported monetary facts 0, ambiguity checks 63/63. Shared corpus: RT-00
+3 pass / 2 open; RT-01 (including RV-01) 414 / 101; RT-02 127 / 48; RT-03
+152 / 0. Existing open findings remain open. Only the parser implementation
+SHA-256 changes in `golden-run.v1.json`; scores, targets and prediction hashes
+are unchanged. The initial LATER / SIMPLICITY note above is retained.
+
+Invariants: ambiguous money stays open, exact line prices and source citations
+survive timing tails. No migration, prompt/model/provider, commercial-policy,
+interface or alert change. Database, browser/native and live-provider checks are
+inapplicable to this deterministic parser-only repair. These are executed checks;
+independent exact-head RED review and merge/release approval remain pending.
+Commit only, no push; `.pnpm-store/` is excluded.

@@ -222,6 +222,12 @@ export function plainItemBoundary(text: string, i: number, start: number,
   return 0;
 }
 
+/** The draft's next-item predicate, shared with numeric checks. */
+export function plainNextItem(next: string, isWork: (value: string) => boolean,
+  isTiming: (value: string) => boolean): boolean {
+  return isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!);
+}
+
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
  * every line. Offsets always refer to the untouched source, including prices.
  * ITEM: records never enter this path. No source text is executed or fetched.
@@ -243,7 +249,7 @@ export function plainDraft(text: string, isWork: (value: string) => boolean = wo
       chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
     } else chunks.push({ value, start: at });
   };
-  const isNext = (next: string) => isWork(next) || isTiming(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!);
+  const isNext = (next: string) => plainNextItem(next, isWork, isTiming);
   const party = suggestCapturePartyClause(text);
   const correctionEnds = new Map([...text.matchAll(new RegExp(spokenCorrection.source, "giu"))]
     .map(match => [match.index, match.index + match[0].length]));
