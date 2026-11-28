@@ -1045,7 +1045,7 @@ test("Q06 RAMS: hazards, completion, signing, persistence and plan regeneration 
   assert.match(JSON.stringify(draft.sections), /Occupied home/u);
   assert.doesNotMatch(JSON.stringify(draft), /pence|£|signedDeltaPence|shadow/u);
   await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_INCOMPLETE" });
-  const hazard = draft.sections.find(section => section.key.includes("tile-splashback"));
+  const hazard = draft.sections.find(section => section.key.includes(":tiling-tile"));
   draft = await f.run("edit", { sectionKey: hazard.key, text: "Fictional builder checked the protected cutting area." });
   for (const section of draft.sections.filter(section => section.required)) {
     draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
@@ -1060,7 +1060,7 @@ test("Q06 RAMS: hazards, completion, signing, persistence and plan regeneration 
   assert.deepEqual((await new RamsApplication(runtime, f.sessionId).read(f.draftJob)).drafts.at(-1), signed);
   await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_DRAFT_REQUIRED" });
   const plan = await f.read();
-  await f.edit(planEdit(plan, plan.tasks.find(task => task.key === "tile-splashback"), { durationMinutes: 300 }));
+  await f.edit(planEdit(plan, plan.tasks.find(task => task.key === "tiling-tile"), { durationMinutes: 300 }));
   await assert.rejects(f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }), { code: "RAMS_PLAN_CHANGED" });
   const regenerated = await f.run("generate");
   assert.equal(regenerated.status, "draft"); assert.equal(regenerated.documentVersion, 2);

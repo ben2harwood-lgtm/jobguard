@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { ramsCommandV1, ramsPlanHash, ramsSections, editRamsSections, ramsReadyToSign, RamsError, type RamsDraft } from "../src/v2-rams-draft.js";
 import type { WorkPlan } from "../src/v2-work-plan-repository.js";
 import { splashbackDecoratingTemplate } from "../src/v2-splashback-decorating-template.js";
+import { workPlanTemplates } from "../src/v2-work-plan-templates.js";
+import { ramsHazards } from "../src/v2-rams-hazards.js";
 
 const scope = randomUUID();
 const plan = {
@@ -96,5 +98,11 @@ describe("Q06 V2-K9 deterministic safety draft", () => {
     }
     expect(ramsCommandV1.safeParse({ ...command, action: "sign" }).success).toBe(false);
     expect(ramsCommandV1.safeParse({ ...command, action: "edit", sectionKey: "welfare", text: " " }).success).toBe(false);
+  });
+
+  it("lists standard hazards for every task of every work-plan template", () => {
+    for (const [key, template] of workPlanTemplates) {
+      for (const task of template.tasks) expect(ramsHazards[key]?.[task.key]?.length, `${key} ${task.key}`).toBeGreaterThan(0);
+    }
   });
 });
