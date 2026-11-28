@@ -1,6 +1,6 @@
 import { checkUnderstandingNumbers, JOB_UNDERSTANDING_VERSION, jobUnderstandingV1, type JobTrade, type JobUnderstanding,
   type SpokenNumberReader } from "@jobguard/core";
-import { amounts, numberWords, plainDraft, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
+import { amounts, numberWords, plainDraft, readInPart, spokenCount, spokenPounds, timing, total, workClause, type Cell } from "./capture-fixture-parser.js";
 import { roomLead, roomOnly, roomPart } from "./room-words.js";
 
 /**
@@ -324,7 +324,10 @@ function totals(text: string): TotalPrice[] {
     const unsure = !!price && (/\b(?:about|around|roughly|approximately|approx|say|call it|maybe|reckon)\s+$/iu.test(clause.slice(0, price.index))
       || /^[\s,]*(?:no|sorry|actually|oh|wait)[,\s]+(?:make (?:that|it)|it'?s|i mean)\b/iu.test(text.slice(clauseStart + priceEnd, clauseStart + priceEnd + 60)));
     const single = !!price && (prices.length === 1 || prices.filter(match => match.index > lo - 40 && match.index < hi + 40).length === 1);
-    const pence = single && !unsure ? spokenNumbers.money(words) : null;
+    // Totals pass the same unread-number guard as line prices: "a quarter of a thousand pounds" or "one million two
+    // hundred pounds" is never read as £1,000 or £200; the price stays open and is asked about with the whole phrase.
+    const partial = !!price && readInPart(text.slice(0, clauseStart + priceAt), text.slice(clauseStart + priceEnd));
+    const pence = single && !unsure && !partial ? spokenNumbers.money(words) : null;
     found.push({ start: clauseStart + priceAt, end: clauseStart + priceEnd, pence: price ? pence : null, room: room ? roomName(room[0]) : null,
       text: clause.trim(), clauseStart: phraseStart, clauseEnd: phraseStop, phraseStart, phraseEnd: phraseStop });
   }

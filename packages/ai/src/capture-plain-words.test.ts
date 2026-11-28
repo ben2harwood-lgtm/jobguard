@@ -288,8 +288,8 @@ describe("continuous spoken quotes", () => {
   // question; never a different figure.
   it("never proposes a different figure for amounts with unread numbers or rate words around them", () => {
     const amounts: [string, number][] = [["fifty pounds", 5000], ["a hundred pounds", 10000], ["two hundred pounds", 20000], ["£300", 30000]];
-    const prefixes = ["", "one thousand and ", "half ", "two or three ", "about "];
-    const suffixes = ["", " a door including hinges", " a day including materials", " each plus VAT", " and five"];
+    const prefixes = ["", "one thousand and ", "half ", "two or three ", "about ", "a quarter of ", "one million ", "a dozen ", "a score and ", "3k and "];
+    const suffixes = ["", " a door including hinges", " a day including materials", " each plus VAT", " and five", " and a grand", " and 2k"];
     for (const [said, pence] of amounts) for (const prefix of prefixes) for (const suffix of suffixes) {
       const text = `fit six doors at ${prefix}${said}${suffix}`;
       const result = citations(text);

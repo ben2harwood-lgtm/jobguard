@@ -5,10 +5,14 @@
       "branches": [
         "claude/project-thread-trp08u-sqk"
       ],
-      "note": "T2 Q71 V2-SQ-K: bathroom suite work gets the plumbing trade. Labels only: no row, price, route, table or migration change. Mount: packages/ai/src/context-reader.ts (one bathroom rule in tradeOf, after the kitchen rule). Q68's fixture capture-typed-rooms.v1.json: the recogniser-form Smith bathroom row's trade goes from Other to Plumbing, the behaviour this packet changes. Base claude/project-thread-trp08u-sqj (#1044) at da636aa45.",
+      "note": "T2 Q71 V2-SQ-K: bathroom suite work gets the plumbing trade. Labels only: no row, price, route, table or migration change. Mount: packages/ai/src/context-reader.ts (one bathroom rule in tradeOf, after the kitchen rule). Q68's fixture capture-typed-rooms.v1.json: the recogniser-form Smith bathroom row's trade goes from Other to Plumbing, the behaviour this packet changes. Base claude/project-thread-trp08u-sqj (#1044) at da636aa45. Codex P2 on #1061 (preview): room and whole-job totals pass the parser's one unread-number guard (readInPart, exported from capture-fixture-parser.ts), which also reads million/billion/dozen/score/k/grand and digits with k; golden record = parser hash only.",
       "allow": [
+        "docs/fixtures/ai/golden-run.v1.json",
         "docs/fixtures/ai/spoken-quote-understanding/capture-typed-rooms.v1.json",
+        "packages/ai/src/capture-fixture-parser.ts",
+        "packages/ai/src/capture-plain-words.test.ts",
         "packages/ai/src/capture-typed-rooms.test.ts",
+        "packages/ai/src/context-reader.test.ts",
         "packages/ai/src/context-reader.ts"
       ]
     }
