@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 // The parser is not a package export; the test reads its source so the four examples run end to end.
 import { parseCaptureFixture } from "../../../../packages/ai/src/capture-fixture-parser";
-import { combinedPrice, combineLabel, countsTowardTotal, lineTotalPence, moveToRoom, onePriceForRoom, onePriceNote, originNote, priceFromText,
+import { combinedPrice, combineLabel, countsTowardTotal, lineTotalPence, moveToRoom, onePriceDescription, onePriceForRoom, onePriceNote, originNote, priceFromText,
   renameRoom, roomName, roomsOf, roomTotal, roomTotalLabel, runningTotal, splitBeforeLabel, totalLabel, wholeJobLabel, wholeJobWords } from "./review-pricing";
 
 type Row = { scopeItemId: string; quantity: string | null; unit: string | null; unitPricePence: number | null; disposition: string; parentScopeItemIds: string[] };
@@ -140,6 +140,11 @@ describe("V2-SQ-D rooms", () => {
       if (before.length > 1) {
         expect(counted[0]!.parentScopeItemIds).toEqual(before.map(line => line.scopeItemId));
         expect(before.every(row => after.find(line => line.id === row.id)!.disposition === "merged")).toBe(true);
+        // The quote still names each task: the absorbed rows' own words, in order.
+        expect(counted[0]!.description).toBe(onePriceDescription(room, before.map(line => line.description)));
+        expect(counted[0]!.description).toBe(`${room}: ${before.map(line => line.description).join("; ")}`);
+        // Every other row is unchanged apart from being marked merged, so undo (the saved rows) restores them exactly.
+        for (const row of before) expect({ ...after.find(line => line.id === row.id)!, disposition: row.disposition }).toEqual(row);
       }
       for (const other of roomsOf(lines)) if (other !== room) expect(roomTotal(after, other)).toEqual(roomTotal(lines, other));
       expect(sumRooms(after)).toBe(runningTotal(after).pence);
@@ -169,5 +174,19 @@ describe("V2-SQ-D rooms", () => {
     expect(roomName("  Loft  ")).toBe("Loft");
     expect(roomName("   ")).toBeNull();
     expect(roomName("x".repeat(101))).toBeNull();
+  });
+});
+
+describe("V2-SQ-D one-price scope text", () => {
+  it("lists the absorbed rows' own words in order, and says how many more never fitted the 500-character description", () => {
+    expect(onePriceDescription("Bathroom", ["tile the floor", " fit two sockets "])).toBe("Bathroom: tile the floor; fit two sockets");
+    const many = Array.from({ length: 40 }, (_, i) => `task number ${i + 1} with some words`);
+    const text = onePriceDescription("Bathroom", many);
+    expect(text.length).toBeLessThanOrEqual(500);
+    const shown = text.replace(/^Bathroom: /u, "").replace(/; and \d+ more items$/u, "").split("; ");
+    expect(shown).toEqual(many.slice(0, shown.length));
+    expect(text).toBe(`Bathroom: ${many.slice(0, shown.length).join("; ")}; and ${many.length - shown.length} more items`);
+    expect(onePriceDescription("Bathroom", ["x".repeat(470), "tile the floor and walls"])).toBe(`Bathroom: ${"x".repeat(470)}; and 1 more item`);
+    expect(onePriceDescription("Bathroom", ["x".repeat(600), "tile"])).toBe("Bathroom: 2 items");
   });
 });

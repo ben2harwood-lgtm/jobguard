@@ -82,7 +82,8 @@ export function originNote<L extends Priced & { scopeItemId: string; parentScope
   const room = (line as L & { room?: string; description?: string }).room;
   // A one-price room row says what the rows came to beside the room price, never "Combined from N rows · £sum".
   if (parents.length > 1 && parents.every(parent => parent.disposition === "merged") && room !== undefined
-    && (line as L & { description?: string }).description === onePriceDescription(room) && line.unitPricePence !== null)
+    && (line as L & { description?: string }).description === onePriceDescription(room, parents.map(parent => (parent as L & { description?: string }).description ?? ""))
+    && line.unitPricePence !== null)
     return onePriceNote(combinedPrice(parents), line.unitPricePence);
   if (parents.length > 1 && parents.every(parent => parent.disposition === "merged")) return combineLabel(parents.length, combinedPrice(parents));
   return null;
@@ -125,7 +126,22 @@ export function renameRoom<L extends Pick<RoomRow, "room">>(lines: readonly L[],
   return lines.map(line => line.room === from ? { ...line, room: to } : line);
 }
 
-export const onePriceDescription = (room: string) => `${room}: all work as described`.slice(0, 500);
+/**
+ * The one-price row's scope text: the absorbed rows' own descriptions, in order, so the quote still names the work
+ * ("Bathroom: tile the floor; fit two sockets"). Only their existing words; as many as fit the 500-character
+ * description, then "and N more items". Nothing is dropped without saying so.
+ */
+export function onePriceDescription(room: string, descriptions: readonly string[]): string {
+  const items = descriptions.map(description => description.trim()).filter(Boolean);
+  if (!items.length) return `${room}: all work as described`.slice(0, 500);
+  const countItems = (count: number) => `${count} ${count === 1 ? "item" : "items"}`;
+  for (let shown = items.length; shown > 0; shown--) {
+    const rest = items.length - shown;
+    const text = `${room}: ${items.slice(0, shown).join("; ")}${rest ? `; and ${rest} more ${rest === 1 ? "item" : "items"}` : ""}`;
+    if (text.length <= 500) return text;
+  }
+  return `${room}: ${countItems(items.length)}`.slice(0, 500);
+}
 
 /**
  * "One price for the room". One counted row: its price is set in place, as one item, so the room comes to the
@@ -139,7 +155,7 @@ export function onePriceForRoom<L extends RoomRow & { origin: "proposal" | "huma
   if (absorbed.length === 1) return lines.map(line => line.id === absorbed[0]!.id
     ? { ...line, quantity: "1", unit: "item", unitPricePence: pence, disposition: "accepted" } : line);
   const first = absorbed[0]!;
-  const child = { ...first, id: newId(), scopeItemId: newId(), origin: "human" as const, description: onePriceDescription(room), room,
+  const child = { ...first, id: newId(), scopeItemId: newId(), origin: "human" as const, description: onePriceDescription(room, absorbed.map(line => line.description)), room,
     quantity: "1", unit: "item", unitPricePence: pence, disposition: "accepted", dismissalReason: null,
     parentScopeItemIds: absorbed.map(line => line.scopeItemId), sourceExcerpt: null } as L;
   return lines.map(line => absorbed.includes(line) ? { ...line, disposition: "merged" } : line).concat(child);
