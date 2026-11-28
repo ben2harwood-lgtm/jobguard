@@ -4162,14 +4162,6 @@ test("SQ-E: the room layout migration is safe to run twice", async () => {
   assert.deepEqual(await shape(), before);
 });
 
-// must stay the last test: it signs the cached builder out
-// Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
-test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
-  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
-  await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
-    record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
-  });
-});
 
 // V2-K5B-1 (Q58): a due stage gets a draft of its invoice from the frozen row. Nothing is issued, posted or sent.
 const k5bDraft = (stageIndex, commandId = randomUUID()) => ({ version: "v2-stage-draft-command.v1", commandId, stageIndex });
@@ -4434,4 +4426,13 @@ test("G6 a same-tenant session from a different firm gets 404 on a stage draft, 
     { code: "NOT_FOUND" });
   assert.equal((await request(`/api/jobs/${draftJob}/payment-schedule`, { cookies: outsider.cookies, csrf: outsider.csrfToken, body: k5bDraft(0) })).status, 404);
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_stage_invoice_draft WHERE job_id=$1", [draftJob])).rows[0].n, 0);
+});
+
+// must stay the last test: it signs the cached builder out
+// Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
+test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
+  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
+  await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
+    record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
+  });
 });
