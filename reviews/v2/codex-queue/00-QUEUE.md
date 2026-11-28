@@ -91,6 +91,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D31 | Q66 | V2-SQ-I-1 designed review, quote and customer-and-site screens on V2 (copied from #918, read only) + plain empty-draft message | **Opus** | SQ-E (Q64) PR | none | T2 |
 | D32 | Q67 | V2-SQ-I-2 designed acceptance, start, proof and extras on V2 (copied from #918, read only) | **Opus** | SQ-I-1 #1043 | none | T2 |
 | D33 | Q68 | V2-SQ-J typed/punctuated text gets spoken rooms; room-only sentence never a row; per-unit price never a whole-line price | **Opus** | #1037 (+#1033) | none | T2 |
+| D34 | Q69 | V2-SQ-I-3 designed money tab on V2: invoices card, final account lock, final check reveal, receipts, through to Paid (copied from #918, read only) | **Opus** | SQ-I-2 (Q67) PR | none | T2 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
