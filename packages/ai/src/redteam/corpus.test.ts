@@ -3,8 +3,9 @@ import { isDeepStrictEqual } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JobRecordProposal, JobUnderstanding } from "@jobguard/core";
-import { parseCaptureFixture } from "../capture-fixture-parser.js";
+import { numberWords, parseCaptureFixture } from "../capture-fixture-parser.js";
 import { checkSpokenNumbers, readSpokenJob, spokenNumbers } from "../context-reader.js";
+import { hideRoomNumbers } from "../room-words.js";
 
 const pence = z.number().int().nonnegative().safe();
 const expectedLine = z.strictObject({
@@ -13,7 +14,7 @@ const expectedLine = z.strictObject({
   trade: z.string().optional(),
   quantity: z.string().nullable().optional(),
   unit: z.string().nullable().optional(),
-  unitPricePence: pence.nullable().optional(),
+  unitPricePence: z.union([pence.nullable(), z.array(pence.nullable()).min(1)]).optional(),
   priceBasis: z.enum(["line", "each", "per_unit", "none"]).optional(),
 });
 const corpusCase = z.strictObject({
@@ -39,10 +40,19 @@ const corpusDir = new URL("./corpus/", import.meta.url);
 const files = readdirSync(corpusDir).filter(file => file.endsWith(".v1.json")).sort();
 const cases = files.flatMap(file => z.array(corpusCase).min(1)
   .parse(JSON.parse(readFileSync(new URL(file, corpusDir), "utf8"))));
+const numberWord = `(?:${Object.keys(numberWords).join("|")}|hundred|thousand|grand|half|point)`;
+const numberBefore = new RegExp(`(?:\\d|£|\\b${numberWord}(?:[\\s-]+and)?)[\\s-]*$`, "iu");
+const numberAfter = new RegExp(`^[\\s-]*(?:\\d|£|(?:and[\\s-]+)?${numberWord}\\b)`, "iu");
+const unitWords = (words: string) => words.trim().toLowerCase().replace(/\s+/gu, " ")
+  .replace(/^(?:square met(?:re|er)s?|sq(?:uare)?\.?\s?m|m2|m²)$/u, "m²")
+  .replace(/^(?:linear met(?:re|er)s?|met(?:re|er)s?)$/u, "m");
 
 // Collect rather than throw: every invariant runs even when an expectation already failed.
 function invariants(output: { lines: Lines }, transcript: string, money: Money[]): string[] {
   const failures: string[] = [];
+  // A numbered room ("Bedroom two £500") names the price's home, not a larger amount.
+  // Keep the original transcript for citation content; masking preserves every offset.
+  const moneyContext = hideRoomNumbers(transcript);
   const visit = (value: unknown, path: string) => {
     if (value === null || typeof value !== "object") return;
     const object = value as Record<string, unknown>;
@@ -52,10 +62,17 @@ function invariants(output: { lines: Lines }, transcript: string, money: Money[]
         || span.start < 0 || span.end > transcript.length || span.start >= span.end
         || span.sourceId !== sourceId || span.sourceVersion !== 1) failures.push(`S4 ${path}: invalid source span`);
     }
-    if ((path.endsWith(".description") || path.endsWith(".title")) && typeof object.value === "string") {
-      const provenance = object.provenance as Provenance;
-      if (provenance.kind === "extracted" && transcript.slice(provenance.span.start, provenance.span.end) !== object.value)
-        failures.push(`S4 ${path}: span points at different words`);
+    const provenance = object.provenance as Provenance | undefined;
+    if ("value" in object && provenance?.kind === "extracted" && typeof object.value !== "number") {
+      const words = transcript.slice(provenance.span.start, provenance.span.end);
+      let matches = words === object.value;
+      if (typeof object.value === "string") {
+        if (path.endsWith(".quantity")) matches = spokenNumbers.count(words) !== null
+          && spokenNumbers.count(words) === Number(object.value);
+        if (path.endsWith(".name")) matches = words.toLowerCase() === object.value.toLowerCase();
+        if (path.endsWith(".unit")) matches = unitWords(words) === unitWords(object.value);
+      }
+      if (!matches) failures.push(`S4 ${path}: span points at different words`);
     }
     for (const [key, child] of Object.entries(object)) visit(child, `${path}.${key}`);
   };
@@ -65,10 +82,23 @@ function invariants(output: { lines: Lines }, transcript: string, money: Money[]
     const provenance = price.provenance;
     if (provenance.kind !== "extracted"
       || !Number.isSafeInteger(price.value)
-      || spokenNumbers.money(transcript.slice(provenance.span.start, provenance.span.end)) !== price.value) {
+      || spokenNumbers.money(transcript.slice(provenance.span.start, provenance.span.end)) !== price.value
+      || numberBefore.test(moneyContext.slice(0, provenance.span.start))
+      || numberAfter.test(transcript.slice(provenance.span.end))
+      || (/[.,]$/u.test(transcript.slice(0, provenance.span.start)) && /^\d/u.test(transcript.slice(provenance.span.start)))
+      || /^[.,]\d/u.test(transcript.slice(provenance.span.end))) {
       failures.push(`M1 ${price.value}: no exact cited money`);
     }
   }
+  money.forEach((price, index) => {
+    if (price.value === null || price.provenance.kind !== "extracted") return;
+    const own = price.provenance.span;
+    for (const other of money.slice(0, index)) {
+      if (other.value !== null && other.provenance.kind === "extracted"
+        && own.start < other.provenance.span.end && other.provenance.span.start < own.end)
+        failures.push(`S2 money ${index}: overlaps another money span`);
+    }
+  });
   output.lines.forEach((line, index) => {
     const own = line.description.provenance;
     for (const other of output.lines.slice(0, index)) {
@@ -78,11 +108,7 @@ function invariants(output: { lines: Lines }, transcript: string, money: Money[]
         && own.span.start < previous.span.end && previous.span.start < own.span.end;
       const inferredDuplicate = (own.kind !== "extracted" || previous.kind !== "extracted")
         && line.description.value.trim().toLowerCase() === other.description.value.trim().toLowerCase();
-      const price = line.unitPricePence.provenance, otherPrice = other.unitPricePence.provenance;
-      const sharedPrice = line.unitPricePence.value !== null && other.unitPricePence.value !== null
-        && price.kind === "extracted" && otherPrice.kind === "extracted"
-        && price.span.start < otherPrice.span.end && otherPrice.span.start < price.span.end;
-      if (overlap || inferredDuplicate || sharedPrice) failures.push(`S2 line ${index}: duplicates one said item`);
+      if (overlap || inferredDuplicate) failures.push(`S2 line ${index}: duplicates one said item`);
     }
   });
   return failures;
@@ -102,7 +128,10 @@ function checkLines(lines: Lines, expected: Case["expect"], understanding?: JobU
     used.add(index);
     const line = lines[index]!;
     for (const field of ["quantity", "unit", "unitPricePence"] as const) {
-      if (wanted[field] !== undefined) equal(line[field].value, wanted[field], `${wanted.descriptionIncludes}.${field}`);
+      const value = wanted[field];
+      if (Array.isArray(value)) {
+        if (!value.includes(line.unitPricePence.value)) failures.push(`${wanted.descriptionIncludes}.${field}: expected one of ${JSON.stringify(value)}`);
+      } else if (value !== undefined) equal(line[field].value, value, `${wanted.descriptionIncludes}.${field}`);
     }
     // v1 has no room, trade or basis fields; Reader A owns those assertions.
     if (understanding) {
@@ -190,6 +219,105 @@ describe("spoken-quote red-team corpus", () => {
 describe("corpus runner guards", () => {
   const text = "Fit the door for £150";
   const clean = () => parseCaptureFixture(sourceId, text);
+  const guardText = "In the kitchen. Fit six doors for £150. Paint walls for £200. The kitchen all in £300. For the whole job £400.";
+  const cite = (transcript: string, words: string): Extract<Provenance, { kind: "extracted" }> => {
+    const start = transcript.indexOf(words);
+    expect(start).toBeGreaterThanOrEqual(0);
+    return { kind: "extracted", span: { sourceId, sourceVersion: 1, start, end: start + words.length } };
+  };
+  const handmade = (): JobUnderstanding => ({
+    version: "job-understanding.v1",
+    title: { value: "Work", provenance: { kind: "defaulted", note: "No title" } },
+    areas: [{ key: "kitchen", kind: "room", name: { value: "Kitchen", provenance: cite(guardText, "kitchen") } }],
+    lines: [
+      { description: { value: "Fit six doors", provenance: cite(guardText, "Fit six doors") },
+        quantity: { value: "6", provenance: cite(guardText, "six") }, unit: { value: "doors", provenance: cite(guardText, "doors") },
+        unitPricePence: { value: 15000, provenance: cite(guardText, "£150") }, areaKey: "kitchen", priceBasis: "line",
+        trade: { value: "Carpentry", provenance: { kind: "inferred", note: "From doors" } } },
+      { description: { value: "Paint walls", provenance: cite(guardText, "Paint walls") },
+        quantity: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
+        unit: { value: null, provenance: { kind: "defaulted", note: "Not said" } },
+        unitPricePence: { value: 20000, provenance: cite(guardText, "£200") }, areaKey: "kitchen", priceBasis: "line",
+        trade: { value: "Decorating", provenance: { kind: "inferred", note: "From paint" } } },
+    ],
+    areaPrices: [{ areaKey: "kitchen", pence: 30000, provenance: cite(guardText, "£300") }],
+    wholeJobPrice: { pence: 40000, provenance: cite(guardText, "£400") }, questions: [],
+  });
+  const guardCase = (transcript: string): Case => ({ id: "guard", lane: "RT-00", transcript, why: "Runner guard", expect: {}, status: "pass" });
+
+  it("accepts number-word quantities, room capitalisation and distinct money spans", () => {
+    expect(checkOutput(handmade(), guardCase(guardText))).toEqual([]);
+  });
+  it.each(["quantity", "unit", "name"] as const)("rejects an in-bounds but unrelated %s citation", field => {
+    const output = handmade();
+    const target = field === "name" ? output.areas[0]!.name : output.lines[0]![field];
+    target.provenance = cite(guardText, "Paint walls");
+    expect(checkOutput(output, guardCase(guardText))).toContain(`S4 output.${field === "name" ? "areas.0.name" : `lines.0.${field}`}: span points at different words`);
+  });
+  it.each(["metres", "linear metres", "square metres", "sq m", "m2"])("accepts the unit read from %s", words => {
+    const transcript = `Fit six ${words}`;
+    const line = handmade().lines[0]!;
+    line.description = { value: transcript, provenance: cite(transcript, transcript) };
+    line.quantity.provenance = cite(transcript, "six");
+    line.unit = { value: /square|sq|m2/u.test(words) ? "m²" : "m", provenance: cite(transcript, words) };
+    line.unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Not said" } };
+    expect(invariants({ lines: [line] }, transcript, [line.unitPricePence])).toEqual([]);
+  });
+  it.each([
+    ["£150", "50", 5000], ["£1500", "£150", 15000], ["£150", "150", 15000],
+    ["150.50", "50", 5000], ["1,500", "500", 50000],
+    ["£150.50", "£150", 15000], ["£1,500", "£1", 100],
+    ["1 50 pounds", "50 pounds", 5000], ["£50 6", "£50", 5000], ["50£", "50", 5000],
+    ["one hundred and fifty pounds", "fifty pounds", 5000],
+    ["one-hundred-and-fifty pounds", "fifty pounds", 5000],
+    ["twenty-five pounds", "five pounds", 500], ["fifty pounds six", "fifty pounds", 5000],
+    ["£50 and six", "£50", 5000], ["half £50", "£50", 5000], ["£50 thousand", "£50", 5000],
+  ] as const)("rejects partial money in %s citing %s", (transcript, words, value) => {
+    const price = { value, provenance: cite(transcript, words) };
+    expect(invariants({ lines: [] }, transcript, [price])).toContain(`M1 ${value}: no exact cited money`);
+  });
+  it.each(["Fit a door for £150.", "Fit a door for £150, then paint walls", "Fit a door for £150 each", "Bedroom two £150 all in"])("accepts a complete amount in %s", transcript => {
+    expect(invariants({ lines: [] }, transcript, [{ value: 15000, provenance: cite(transcript, "£150") }])).toEqual([]);
+  });
+  for (const words of ["£150", "150"]) {
+    it.each([
+      ["line", "line"], ["line", "area"], ["line", "whole-job"], ["area", "area"], ["area", "whole-job"],
+    ] as const)(`rejects overlapping %s / %s money spans citing £150 and ${words}`, (first, second) => {
+      const output = handmade();
+      for (const line of output.lines) line.unitPricePence = { value: null, provenance: { kind: "defaulted", note: "Not priced" } };
+      output.areaPrices = []; output.wholeJobPrice = null;
+      let lineIndex = 0;
+      for (const [target, said] of [[first, "£150"], [second, words]] as const) {
+        const provenance = cite(guardText, said);
+        if (target === "line") output.lines[lineIndex++]!.unitPricePence = { value: 15000, provenance };
+        else if (target === "area") output.areaPrices.push({ areaKey: "kitchen", pence: 15000, provenance });
+        else output.wholeJobPrice = { pence: 15000, provenance };
+      }
+      expect(checkOutput(output, guardCase(guardText)).some(failure => /^S2 money \d+: overlaps another money span$/u.test(failure))).toBe(true);
+    });
+  }
+  it("accepts either safe correction outcome but rejects the old amount, extra lines or a missing question", () => {
+    const item = cases.find(item => item.finding === "RT-00-F002")!;
+    const output = handmade();
+    output.areas = [{ key: "kitchen", kind: "room", name: { value: "Kitchen", provenance: cite(item.transcript, "kitchen") } }];
+    const line = output.lines[1]!;
+    line.description = { value: "Paint the kitchen", provenance: cite(item.transcript, "Paint the kitchen") };
+    output.lines = [line]; output.areaPrices = []; output.wholeJobPrice = null;
+    output.questions = [{ text: "Check this correction", lineIndex: 0 }];
+    for (const value of [45000, null]) {
+      line.unitPricePence = { value, provenance: value === null ? { kind: "defaulted", note: "Correction left open" } : cite(item.transcript, "£450") };
+      expect(checkOutput(output, item)).toEqual([]);
+    }
+    line.unitPricePence = { value: 40000, provenance: cite(item.transcript, "£400") };
+    const failures = checkOutput(output, item);
+    expect(failures).toContain("Forbidden pence: 40000");
+    expect(failures).toContain("Paint.unitPricePence: expected one of [45000,null]");
+    line.unitPricePence = { value: 45000, provenance: cite(item.transcript, "£450") };
+    output.lines.push(structuredClone(line));
+    expect(checkOutput(output, item)).toContain("lineCount: got 2, expected 1");
+    output.lines.pop(); output.questions = [];
+    expect(checkOutput(output, item)).toContain("Missing question: check");
+  });
   it("detects invented money, duplicated source words and out-of-bounds spans", () => {
     const output = clean();
     const line = output.lines[0]!;
