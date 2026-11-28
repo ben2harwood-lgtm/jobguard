@@ -2024,7 +2024,7 @@ async function k5bSchedule(triggers) {
   await fixture.app.quote.activate(fixture.draftJob, switchLive());
   const view = await fixture.app.paymentSchedule.read(fixture.draftJob);
   await fixture.app.paymentSchedule.set(fixture.draftJob, k5Command(view, triggers));
-  return fixture;
+  return { ...fixture, view: await fixture.app.paymentSchedule.read(fixture.draftJob) };
 }
 
 test("K5B-1 done when: the deposit's draft equals its frozen row; withdraw and draft again with the same amount; nothing else moves", async () => {
@@ -2049,7 +2049,7 @@ test("K5B-1 done when: the deposit's draft equals its frozen row; withdraw and d
   assert.equal(second.amount, first.amount);
   assert.deepEqual(await k5bFrozen(draftJob, 0), [frozen], "the frozen row never changes");
   const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.billing_stage.draft_%'
-    ORDER BY created_at`, [draftJob])).rows.map(row => row.event_type);
+    ORDER BY sequence`, [draftJob])).rows.map(row => row.event_type);
   assert.deepEqual(events, ["v2.billing_stage.draft_made", "v2.billing_stage.draft_withdrawn", "v2.billing_stage.draft_made"]);
   assert.deepEqual({ effects: await effectCounts(), money: await k5bMoney(draftJob) }, before, "no invoice, lock, fee or send");
   await verifyTenantChain(DEMO_TENANT_ID);
