@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-rt-03": {
+      "branches": [
+        "codex/sandbox/rt-03"
+      ],
+      "note": "RT-03 attack only: correction corpus, focused semantic tests and findings. HEAD_UNDER_TEST a44f5d35b363a5182b166ff724d2d09ca5c1060f. Own config/lanes/v2-rt-03.json is implicitly editable under the lane-register rule. No production source changes.",
+      "allow": [
+        "packages/ai/src/redteam/corpus/RT-03-corrections.v1.json",
+        "packages/ai/src/redteam/**",
+        "docs/testing/spoken-quote-hardening/FINDINGS.md"
+      ]
+    }
+  }
+}
