@@ -2,6 +2,8 @@ export * from "./application.js";
 export * from "./work-plan.application.js";
 export * from "./crew-contact.application.js";
 export * from "./site-attendance.application.js";
+// V2-C6
+export * from "./quote-add-line.application.js";
 export * from "./contracts.js";
 export * from "./workspace.service.js";
 export * from "./workspace-session.js";

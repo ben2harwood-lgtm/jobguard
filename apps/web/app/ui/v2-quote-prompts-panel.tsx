@@ -6,9 +6,10 @@ import { openPrompts, readDismissed, writeDismissed, type PromptLine, type Quote
 // renders nothing (the route also answers 404 there). It never blocks sending and never saves a line.
 // In Scope review, onAdd uses the existing "Add omitted line" action: the new
 // line has no price and is saved only when the builder confirms the scope.
-// On the quote there is no add-line route once the scope is confirmed, so the
-// panel can only remind or dismiss.
-export function V2QuotePrompts({ jobId, lines, onAdd }: { jobId: string; lines: readonly PromptLine[]; onAdd?: (prompt: QuotePrompt) => void }) {
+// On the quote (V2-C6) onAdd posts the add-line command and resolves to the notice to show,
+// because the line is saved there and then, still without a price.
+export function V2QuotePrompts({ jobId, lines, onAdd }: { jobId: string; lines: readonly PromptLine[];
+  onAdd?: (prompt: QuotePrompt) => void | Promise<string> }) {
   const [templateKey, setTemplateKey] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
@@ -53,7 +54,7 @@ export function V2QuotePrompts({ jobId, lines, onAdd }: { jobId: string; lines: 
                 <strong>{prompt.label}</strong>
                 <small style={{ display: "block" }}>{prompt.hint}</small>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
-                  {onAdd && <button type="button" aria-label={`Add a line for ${prompt.label}`} onClick={() => { onAdd(prompt); setNotice(`${prompt.label} line added without a price. It is saved only when you confirm the scope, and you price it on the quote.`); }}>Add a line</button>}
+                  {onAdd && <button type="button" aria-label={`Add a line for ${prompt.label}`} onClick={() => { const added = onAdd(prompt); if (added) void added.then(setNotice); else setNotice(`${prompt.label} line added without a price. It is saved only when you confirm the scope, and you price it on the quote.`); }}>Add a line</button>}
                   <button type="button" aria-label={`Not needed: ${prompt.label}`} onClick={() => dismiss(prompt.key, prompt.label)}>Not needed</button>
                 </div>
               </li>
