@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-bundle-hosted-v2-main": {
+      "branches": ["claude/ci-bundle-hosted-v2-main"],
+      "note": "CI-BUNDLE-HOSTED (T2): the Cloudflare bundle job goes back to GitHub-hosted runners; its Next.js build outgrows the Mac runners. Own lane file is implicitly permitted.",
+      "allow": [".github/workflows/cloudflare-build.yml"]
+    }
+  }
+}
