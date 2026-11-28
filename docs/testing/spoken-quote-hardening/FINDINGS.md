@@ -1992,3 +1992,45 @@ suffix once per separator and reuse it within that iteration while retaining ori
 This keeps one splitter and one source-coordinate scheme, reduces duplicate recognition work,
 and makes future separator changes easier to maintain. This suggestion is not a gate or a source
 change in this attack lane.
+
+## RT-FIX-8 repair round 2 (last) — Codex review of #1102 at 990d7e6e
+
+- P1 fixed: the shared `plainItemBoundary` checks the existing spoken-correction
+  recognizer before either whitespace or explicit-separator work detection.
+  `new price`, `revised` and `instead` join that same recognizer; `make that`,
+  `actually` and `sorry` reuse its existing grammar. Alternatives with `or` keep
+  the existing range guard. Revisions stay in the original clause, with open
+  prices and an explicit price/correction question. Capture, Reader A and numeric
+  checks share this boundary; there is no second splitter or correction grammar.
+- P2 fixed: `multipleJobQuestion` consumes coordinated titles and their shared
+  surname as one household. Mr and Mrs, Mr & Mrs, Dr and Mrs, and Ms and Mr Smith
+  retain the stated £500 whole-job total without a job-split warning. Mrs Jones
+  and Mr Smith still receive the explicit split question and keep their own
+  per-line prices, preserving the existing multi-job contract.
+- Added nine B6 cases (`B6-026`–`B6-034`): the seven revision phrases after £500,
+  a comma-led new-price correction, and a separately priced new-skirting control.
+  Added five RT-04 cases (`RT-04-150`–`RT-04-154`): four households and the distinct
+  customer control. All 25 existing B6 and 149 existing RT-04 rows, statuses and
+  expectations are unchanged. The initial LATER / SIMPLICITY note is retained;
+  this final repair adds no unrelated refactor.
+
+Executed on Node 24.17.0 / pnpm 10.28.1, maximum two Vitest workers:
+
+| Check | Result |
+| --- | --- |
+| `pnpm eval --maxWorkers=2` (FULL suite) | PASS: 34 files; 1,932 passes + 13 expected failures = 1,945 checks; **0 unexpected failures** |
+| `pnpm --filter @jobguard/ai exec vitest run src/redteam/corpus.test.ts --maxWorkers=2` | PASS: 1,254 checks; every one of 1,207 corpus cases exercised (939 pass cases, 268 recorded open findings); all 14 additions pass |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core typecheck` | PASS for both packages |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core lint` | PASS for both packages |
+| `pnpm --filter @jobguard/ai --filter @jobguard/core build` | PASS for both packages |
+| `pnpm --filter @jobguard/core test --maxWorkers=2` | PASS: 232 files, 4,895 tests |
+| Compiled adversarial numeric-check assertions | PASS: 14 proposed outputs across all seven phrases (one falsely priced line and two falsely priced lines per phrase); every price cleared and questioned |
+| Compiled household / distinct-customer assertions | PASS: four households keep £500 with no split question; the two-customer example still requires a split |
+| Compiled `runCaptureEvaluation` / `createGoldenRunRecord` / `verifyGoldenRunRecord`; comparison to 990d7e6e | PASS: 32/32 cases, recall 41/41, citations 119/119, unsupported money 0, ambiguity 63/63; golden record differs only in parser source SHA-256 |
+| Corpus comparison to 990d7e6e | PASS: all existing rows identical; nine B6 and five RT-04 additions |
+
+No database, web, model, prompt, provider or release change. These are executed
+synthetic deterministic checks, not independent review or live-model evidence.
+Independent RED review of the new exact head remains required before merge.
+Commit only; no push, merge or deployment. `.pnpm-store/` stays untracked and is
+excluded from the commit.
