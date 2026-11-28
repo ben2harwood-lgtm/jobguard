@@ -350,6 +350,8 @@ Track-specific additions: contractor track §9.3; small-builder track §10.5. Sh
 
 ## 7. What's built
 
+> **28 Nov 2026:** the contractor-track status in this section (§7.2, §7.3) is superseded by [`docs/status/contractor-inventory-2026-11-28.md`](docs/status/contractor-inventory-2026-11-28.md), pinned at `main` `daaa927c`.
+
 ### 7.1 Baseline
 
 - **Repository state inspected:** `main` at `694e9e1` (30 September 2026). Migrations `0000`–`0041` in `packages/db/migrations`. 59 Next route handlers under `apps/web/app/api` (one is `/api/test-support/drain`); the Nest API exposes the same services (`apps/api/openapi.json`). 72 CI runs on `main`; the latest (`694e9e1`) is green on the full suite (PostgreSQL 16, browser projects `mobile-360` and `desktop`, secrets and dependency audit). Many earlier merge commits on `main` have at least one failed CI run (every M0 merge before #15, which repaired main's CI, and several later merges including `9a8241e` #81 and `5e4ab21` #88), so test evidence for a task must be read from that PR's own CI run for its exact commit, not inferred from today's green main.
