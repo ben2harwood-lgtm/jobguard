@@ -109,9 +109,10 @@ for (const [gate, dependencies] of Object.entries({
   assert.equal(execute({}).status, 1, "all results and scope absent");
 });
 
-const v2Scope = "github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main'";
+// Every pull request on V2 code runs the seed suite, stacked piece and train PRs included.
+const v2Scope = "github.event_name == 'pull_request' || github.event_name == 'push' && github.ref == 'refs/heads/v2/main'";
 
-test("v2-seed runs the V2 seed suite only for V2 pull requests and v2/main pushes", () => {
+test("v2-seed runs the V2 seed suite for every V2 pull request and v2/main pushes", () => {
   const body = jobs["v2-seed"];
   assert.ok(body.includes(`    if: \${{ ${v2Scope} }}\n`));
   assert.ok(jobs.checks.includes(`          V2_SEED_REQUIRED: \${{ ${v2Scope} }}\n`));

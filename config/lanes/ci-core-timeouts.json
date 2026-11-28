@@ -5,10 +5,12 @@
       "branches": [
         "claude/project-thread-h334d4"
       ],
-      "note": "CI-only: give two slow packages/core tests (small-builder-demo-scenarios r1 B parser, receipt-allocation working-size bound) a 20 s timeout instead of vitest's 5 s default; they time out on busy runners. Test-only, T1.",
+      "note": "CI-only: give two slow packages/core tests (small-builder-demo-scenarios r1 B parser, receipt-allocation working-size bound) a 20 s timeout instead of vitest's 5 s default; they time out on busy runners. Test-only, T1. Also CI-only (T2): run the v2-seed job on every V2 pull request, including stacked PRs into piece and train branches, not only PRs into v2/main or codex/sandbox/v2-*.",
       "allow": [
         "packages/core/src/receipt-allocation.test.ts",
-        "packages/core/src/small-builder-demo-scenarios.test.ts"
+        "packages/core/src/small-builder-demo-scenarios.test.ts",
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs"
       ]
     }
   }
