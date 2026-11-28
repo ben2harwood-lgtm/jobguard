@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   bundle:
-    runs-on: ${{ vars.CI_MAC_RUNNER != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_MAC_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest  # The Next.js Cloudflare build is too heavy for the Mac runners (x64 under Rosetta).
     timeout-minutes: 30
     env:
       CI: "true"
