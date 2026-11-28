@@ -5,7 +5,7 @@ import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
-import { workPlanTemplates } from "./v2-work-plan-templates.js";
+import { isStaged, workPlanTemplates } from "./v2-work-plan-templates.js";
 import { applyWorkPlanEdits, type WorkPlanEditRow, type WorkPlanScopeRow, type WorkPlanTask } from "./v2-work-plan-edits.js";
 import type { WorkPlanTemplate } from "./v2-work-plan-repository.js";
 
@@ -229,13 +229,14 @@ export class CrewBriefRepository {
       FROM app.quote_line l LEFT JOIN app.v2_work_plan_task t
         USING (tenant_id, job_id, quote_revision_id, scope_item_id)
       WHERE (l.tenant_id, l.job_id, l.quote_revision_id) = ($1, $2, $3) AND l.included
-      ORDER BY l.ordinal, t.position
+      ORDER BY ${isStaged(template) ? "t.position NULLS LAST, l.ordinal" : "l.ordinal, t.position"}
     `, key);
+    // Same order as WorkPlanRepository.loadTasks: a staged plan keeps its stored stage order.
     const base = scope.flatMap((row, index): WorkPlanTask[] => {
       if (row.template_task_key === null) return [];
       const task = template.tasks.find(entry => entry.key === row.template_task_key);
       if (!task) throw new CrewBriefError("CREW_BRIEF_TEMPLATE_UNAVAILABLE");
-      const { category: _category, ...details } = task;
+      const { category: _category, stage: _stage, ...details } = task as WorkPlanTemplate["tasks"][number];
       return [{ ...details, position: index + 1, scopeItemId: row.scope_item_id,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) }];
     });
