@@ -55,8 +55,7 @@ export function DesignedNewJob() {
 function NewJob({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
-    <Head kicker="NEW JOB" title="Describe the work" text="Type or paste what you plan to do. You can check and change everything before a quote."/>
-    <Legacy label="Start a new job" cards><WalkIt mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
+    <WalkIt designed mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/>
   </Shell>;
 }
 
@@ -221,7 +220,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
 function WorkTab({ children }: { children?: ReactNode }) {
   return <>
     <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
-    <Legacy label="Job workspace" cards>{children}</Legacy>
+    <section className="job-work-tools" aria-label="Job workspace">{children}</section>
   </>;
 }
 
