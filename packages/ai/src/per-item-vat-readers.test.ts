@@ -65,6 +65,8 @@ describe("Reader A per-item reads", () => {
     const text = "fit six switches at fifty pounds a switch";
     const checked = readChecked(text);
     expect(checked.lines[0]).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
+    const hyphen = readChecked("fit six down-lights at fifty pounds a down-light");
+    expect(hyphen.lines[0]).toMatchObject({ quantity: { value: "6" }, unitPricePence: { value: 5000 }, priceBasis: "each" });
     const other = "fit six switches at fifty pounds a day";
     expect(readChecked(other).lines[0]!.unitPricePence.value).toBeNull();
   });
