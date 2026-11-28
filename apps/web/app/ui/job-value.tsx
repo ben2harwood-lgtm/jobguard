@@ -1,5 +1,6 @@
 "use client";
 import { INVOICE_CHANGED_EVENT } from "./customer-payment-status";
+import { JOB_SAVED_EVENT } from "./job-page-fetch";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { jobValueResponseV1, type JobValueResponse } from "@jobguard/api/value-contracts";
@@ -55,8 +56,10 @@ export function ValuePage({jobId,designed=false}:{jobId:string;designed?:boolean
   const changed = (event: Event) => {
    if ((event as CustomEvent<{ jobId?: string }>).detail?.jobId === jobId) void load(false, true);
   };
+  // A credit note or other correction saved on this page publishes a job save, not an invoice change.
   window.addEventListener(INVOICE_CHANGED_EVENT, changed);
-  return () => window.removeEventListener(INVOICE_CHANGED_EVENT, changed);
+  window.addEventListener(JOB_SAVED_EVENT, changed);
+  return () => { window.removeEventListener(INVOICE_CHANGED_EVENT, changed); window.removeEventListener(JOB_SAVED_EVENT, changed); };
  }, [designed, jobId, load]);
  useEffect(() => {
   if (state.jobId === jobId && state.status === "failed" && state.focusError && (document.activeElement === document.body || document.activeElement === retry.current)) heading.current?.focus();
