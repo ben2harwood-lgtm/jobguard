@@ -654,6 +654,16 @@ test("forced draft edit policies hide receipts and reject writes from the second
 
 const switchLive = () => ({ version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
 
+// The worker's per-minute crontab (apps/api/src/worker.ts). A tick can land inside a test's before/after window: one
+// full-suite run saw graphile_worker._private_jobs go 0 -> 5 between Switch live and its replay check, the five rows
+// being exactly these discover_* ticks waiting for a busy worker. A tick is not something the code under test enqueued,
+// so effectCounts leaves out a job only when it is both a crontab tick (graphile-worker stamps _cron in its payload)
+// and one of these tasks. Every job the app adds is still counted; the guard test below proves both halves.
+const CRONTAB_TASKS = ["discover_outbox", "discover_final_check_requests", "discover_evidence_pack_requests",
+  "discover_demo_source_holds", "discover_retention_reviews"];
+const appJobs = `(SELECT count(*)::int FROM graphile_worker._private_jobs j JOIN graphile_worker._private_tasks t ON t.id = j.task_id
+  WHERE NOT (j.payload::jsonb ? '_cron' AND t.identifier = ANY('{${CRONTAB_TASKS.join(",")}}'::text[])))`;
+
 async function effectCounts() {
   const tables = ["graphile_worker._private_jobs", "app.scheduled_readiness_plan", "app.practice_exposure_schedule",
     "app.action_outbox", "infrastructure.outbox_signal", "app.job_assignment", "app.site_visit",
@@ -662,9 +672,30 @@ async function effectCounts() {
     "app.success_fee_journal", "app.platform_fee_statement", "app.payment_fee_statement",
     "app.job_activation", "app.job_activation_terms", "app.cap_snapshot"];
   const { rows: [counts] } = await admin.query(`SELECT ${tables.map(table =>
-    `(SELECT count(*)::int FROM ${table}) AS "${table}"`).join(", ")}`);
+    `${table === "graphile_worker._private_jobs" ? appJobs : `(SELECT count(*)::int FROM ${table})`} AS "${table}"`).join(", ")}`);
   return counts;
 }
+
+test("effectCounts leaves out only the worker's own crontab ticks: every job the app adds is still counted", async () => {
+  const known = (await admin.query("SELECT identifier FROM graphile_worker._private_known_crontabs ORDER BY identifier")).rows
+    .map(row => row.identifier);
+  assert.deepEqual(known.filter(task => !CRONTAB_TASKS.includes(task)), [], "every crontab task the worker knows is listed here");
+  const future = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const add = (task, payload) => admin.query("SELECT (graphile_worker.add_job($1, $2::json, run_at => $3::timestamptz)).id",
+    [task, JSON.stringify(payload), future]).then(result => result.rows[0].id);
+  const before = await effectCounts();
+  const ids = [await add("execute_outbox", {}), await add("discover_outbox", {}), await add("execute_outbox", { _cron: { ts: future } })];
+  try {
+    const during = await effectCounts();
+    assert.equal(during["graphile_worker._private_jobs"], before["graphile_worker._private_jobs"] + 3,
+      "an app job, a crontab task the app enqueued itself, and a _cron payload on a non-crontab task all count");
+    const tick = await add("discover_outbox", { _cron: { ts: future, backfilled: false } });
+    ids.push(tick);
+    assert.deepEqual(await effectCounts(), during, "only a real crontab tick is left out");
+  } finally {
+    await admin.query("DELETE FROM graphile_worker._private_jobs WHERE id = ANY($1::bigint[])", [ids]);
+  }
+});
 
 test("exact acceptance freezes the issued revision without scheduling, sending, booking, ordering or charging", async () => {
   const { draftJob, lines, save, read, edit } = await draftForPlan();
