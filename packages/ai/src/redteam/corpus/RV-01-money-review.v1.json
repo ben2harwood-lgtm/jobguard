@@ -3807,5 +3807,427 @@
       ]
     },
     "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T01",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, all in £600",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T02",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, all in £600, all in £700",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T03",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, all in £500",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T04",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500. All in £500.",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": 50000,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T05",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500. All in £600. All in £700.",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T06",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500 all in £600",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-T07",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, all in £600, all in £500",
+    "why": "Overlapping or conflicting totals stay open; a separate identical total is kept once",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-C01",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry, then fit six doors £300",
+    "why": "A condition leaves its own line open and never swallows the next explicit work item or its price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-C02",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry. Fit six doors £300",
+    "why": "A condition leaves its own line open and never swallows the next explicit work item or its price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-C03",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry and fit six doors £300",
+    "why": "A condition leaves its own line open and never swallows the next explicit work item or its price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-C04",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry fit six doors £300",
+    "why": "A condition leaves its own line open and never swallows the next explicit work item or its price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R1-C05",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry then fit six doors £300",
+    "why": "A condition leaves its own line open and never swallows the next explicit work item or its price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P01",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200, including preparation",
+    "why": "A harmless comma tail keeps the exact line price and its original citation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P02",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200, to a high standard",
+    "why": "A harmless comma tail keeps the exact line price and its original citation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P03",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200, including cleanup",
+    "why": "A harmless comma tail keeps the exact line price and its original citation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-P04",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200, to a smooth finish",
+    "why": "A harmless comma tail keeps the exact line price and its original citation",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": 20000
+        }
+      ],
+      "lineCount": 1,
+      "wholeJobPricePence": null,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-C01",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry, move two sockets £300",
+    "why": "The numeric checker uses the draft boundary: a condition opens only its own price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "move two sockets",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-C02",
+    "lane": "RT-01",
+    "transcript": "Paint walls £200 if dry, then move three sockets £350",
+    "why": "The numeric checker uses the draft boundary: a condition opens only its own price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "move three sockets",
+          "unitPricePence": 35000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": null,
+      "questionsInclude": [
+        "price"
+      ]
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-T01",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, then fit six doors £300",
+    "why": "A connector-led work item ends the total clause and retains its separate price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": 50000,
+      "questionsInclude": []
+    },
+    "status": "pass"
+  },
+  {
+    "id": "RV1-R2-T02",
+    "lane": "RT-01",
+    "transcript": "Paint walls. All in £500, and fit six doors £300",
+    "why": "A connector-led work item ends the total clause and retains its separate price",
+    "expect": {
+      "lines": [
+        {
+          "descriptionIncludes": "Paint walls",
+          "unitPricePence": null
+        },
+        {
+          "descriptionIncludes": "fit six doors",
+          "unitPricePence": 30000
+        }
+      ],
+      "lineCount": 2,
+      "wholeJobPricePence": 50000,
+      "questionsInclude": []
+    },
+    "status": "pass"
   }
 ]
